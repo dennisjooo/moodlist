@@ -2,13 +2,9 @@ import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import MoodCard from '@/components/MoodCard';
 
-interface PopularMoodsProps {
-  isLoggedIn: boolean;
-}
 
-export default function PopularMoods({ isLoggedIn }: PopularMoodsProps) {
+export default function PopularMoods() {
   const containerRef = useRef(null);
-  const isInView = useInView(containerRef, { once: true, margin: "-100px" });
 
   // Now we just need mood names - colors and genres are auto-generated!
   const allMoodExamples = [
@@ -24,8 +20,6 @@ export default function PopularMoods({ isLoggedIn }: PopularMoodsProps) {
 
   // Show only first 4 moods on mobile, all on desktop
   const moodExamples = allMoodExamples;
-
-  if (isLoggedIn) return null;
 
   return (
     <div ref={containerRef} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-16">
