@@ -1,8 +1,7 @@
 'use client';
 
-import * as React from 'react';
-import { useTheme } from 'next-themes';
 import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler';
+import { useTheme } from 'next-themes';
 
 export function ThemeToggle() {
   const { setTheme, theme } = useTheme();

@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
 import Typewriter from 'typewriter-effect';
 
 interface TypewriterTextProps {

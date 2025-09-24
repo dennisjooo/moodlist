@@ -1,6 +1,6 @@
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { motion } from 'framer-motion';
 import { useRef } from 'react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 export default function SocialProof() {
   const containerRef = useRef(null);

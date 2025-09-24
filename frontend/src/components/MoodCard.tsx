@@ -1,5 +1,5 @@
-import { Music, Coffee, Zap, BookOpen, Car, Heart, Cloud, PartyPopper, Sun, Headphones, Gamepad2, Sparkles } from 'lucide-react';
 import { generateMoodGradient, getMoodGenre } from '@/lib/moodColors';
+import { BookOpen, Car, Cloud, Coffee, Gamepad2, Headphones, Heart, Music, PartyPopper, Sparkles, Sun, Zap } from 'lucide-react';
 
 interface MoodCardProps {
   mood: string;

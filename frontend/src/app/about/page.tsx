@@ -1,9 +1,9 @@
+import Navigation from '@/components/Navigation';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { cn } from '@/lib/utils';
-import Navigation from '@/components/Navigation';
-import { Music, Heart, Zap, Users, Target, Headphones } from 'lucide-react';
+import { Headphones, Heart, Music, Target, Zap } from 'lucide-react';
 
 export default function AboutPage() {
   const features = [

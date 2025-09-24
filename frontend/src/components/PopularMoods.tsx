@@ -1,6 +1,6 @@
-import { motion, useInView } from 'framer-motion';
-import { useRef } from 'react';
 import MoodCard from '@/components/MoodCard';
+import { motion } from 'framer-motion';
+import { useRef } from 'react';
 
 
 export default function PopularMoods() {

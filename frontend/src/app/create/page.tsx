@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { DotPattern } from '@/components/ui/dot-pattern';
-import { cn } from '@/lib/utils';
-import MoodInput from '@/components/MoodInput';
 import MoodCard from '@/components/MoodCard';
+import MoodInput from '@/components/MoodInput';
 import Navigation from '@/components/Navigation';
 import { Badge } from '@/components/ui/badge';
+import { DotPattern } from '@/components/ui/dot-pattern';
+import { cn } from '@/lib/utils';
 import { Music } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 export default function CreatePage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);

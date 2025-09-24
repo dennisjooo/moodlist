@@ -1,9 +1,9 @@
 "use client";
 
-import { Moon, Sun } from "lucide-react";
-import { useState, useEffect, useRef, useCallback } from "react";
-import { flushSync } from "react-dom";
 import { cn } from "@/lib/utils";
+import { Moon, Sun } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 type Props = {
   className?: string;
