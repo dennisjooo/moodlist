@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { DotPattern } from '@/components/ui/dot-pattern';
-import { cn } from '@/lib/utils';
-import Navigation from '@/components/Navigation';
-import HeroSection from '@/components/HeroSection';
-import PopularMoods from '@/components/PopularMoods';
 import FeaturesSection from '@/components/FeaturesSection';
+import HeroSection from '@/components/HeroSection';
+import Navigation from '@/components/Navigation';
+import PopularMoods from '@/components/PopularMoods';
 import SocialProof from '@/components/SocialProof';
+import { DotPattern } from '@/components/ui/dot-pattern';
 import { ToastContainer, useToast } from '@/components/ui/toast';
+import { cn } from '@/lib/utils';
+import { useEffect, useState } from 'react';
 
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);

@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { generateMoodGradient } from '@/lib/moodColors';
-import { Music, Calendar, Play, ExternalLink } from 'lucide-react';
+import { Calendar, ExternalLink, Music, Play } from 'lucide-react';
 
 interface PlaylistCardProps {
   mood: string;

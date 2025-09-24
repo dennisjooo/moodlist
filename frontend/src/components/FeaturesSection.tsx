@@ -1,6 +1,6 @@
-import { motion, useInView } from 'framer-motion';
+import { motion } from 'framer-motion';
+import { Brain, MessageCircle, Music } from 'lucide-react';
 import { useRef } from 'react';
-import { MessageCircle, Brain, Music, ArrowDown } from 'lucide-react';
 
 interface TimelineStep {
   icon: React.ComponentType<{ className?: string }>;

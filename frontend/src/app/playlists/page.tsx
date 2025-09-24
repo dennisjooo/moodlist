@@ -1,11 +1,11 @@
 'use client';
 
+import Navigation from '@/components/Navigation';
+import PlaylistCard from '@/components/PlaylistCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { cn } from '@/lib/utils';
-import Navigation from '@/components/Navigation';
-import PlaylistCard from '@/components/PlaylistCard';
 import { Music } from 'lucide-react';
 
 export default function PlaylistsPage() {

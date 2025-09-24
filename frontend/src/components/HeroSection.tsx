@@ -1,9 +1,9 @@
+import SpotifyLoginButton from '@/components/SpotifyLoginButton';
+import TypewriterText from '@/components/TypewriterText';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Music } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import SpotifyLoginButton from '@/components/SpotifyLoginButton';
-import TypewriterText from '@/components/TypewriterText';
 
 interface HeroSectionProps {
   isLoggedIn: boolean;
