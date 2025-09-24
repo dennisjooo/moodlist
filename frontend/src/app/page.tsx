@@ -26,21 +26,21 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background relative">
       {/* Fixed Dot Pattern Background */}
-      <div className="fixed inset-0 z-0">
+      <div className="fixed inset-0 z-0 opacity-0 animate-[fadeIn_1s_ease-in-out_forwards]">
         <DotPattern
           className={cn(
             "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
           )}
         />
       </div>
-      
+
       {/* Navigation */}
       <Navigation />
 
       {/* Main Content */}
       <main className="relative z-10">
         {/* Hero Section */}
-        <HeroSection 
+        <HeroSection
           isLoggedIn={isLoggedIn}
           onSpotifyLogin={handleSpotifyLogin}
           onMoodSubmit={handleMoodSubmit}
