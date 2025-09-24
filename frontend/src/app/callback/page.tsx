@@ -70,9 +70,7 @@ export default function CallbackPage() {
 
           if (profileResponse.ok) {
             const profileData = await profileResponse.json();
-            console.log('Profile data fetched:', profileData);
             localStorage.setItem('spotify_user_profile', JSON.stringify(profileData));
-            console.log('Profile stored in localStorage');
 
             // Dispatch custom event to notify other components
             window.dispatchEvent(new CustomEvent('spotify-profile-update'));

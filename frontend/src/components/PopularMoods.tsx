@@ -53,7 +53,6 @@ export default function PopularMoods() {
               >
                 <MoodCard
                   mood={mood}
-                  onClick={() => console.log(`Selected mood: ${mood}`)}
                   className={hiddenOnMobile ? 'hidden md:flex' : ''}
                 />
               </motion.div>

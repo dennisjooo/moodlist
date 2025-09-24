@@ -18,20 +18,10 @@ export default function Home() {
   useEffect(() => {
     const accessToken = localStorage.getItem('spotify_access_token');
     const refreshToken = localStorage.getItem('spotify_refresh_token');
-
-    if (accessToken && refreshToken) {
-      setIsLoggedIn(true);
-    }
+    if (accessToken && refreshToken) setIsLoggedIn(true);
   }, []);
 
-  const handleSpotifyLogin = () => {
-    // OAuth flow will handle the login state via callback
-    console.log('Spotify login initiated');
-  };
-
-  const handleLoginSuccess = () => {
-    setIsLoggedIn(true);
-  };
+  const handleLoginSuccess = () => setIsLoggedIn(true);
 
   return (
     <div className="min-h-screen bg-background relative">
@@ -55,7 +45,6 @@ export default function Home() {
         {/* Hero Section */}
         <HeroSection
           isLoggedIn={isLoggedIn}
-          onSpotifyLogin={handleSpotifyLogin}
           onLoginSuccess={handleLoginSuccess}
         />
 

@@ -7,11 +7,10 @@ import TypewriterText from '@/components/TypewriterText';
 
 interface HeroSectionProps {
   isLoggedIn: boolean;
-  onSpotifyLogin: () => void;
   onLoginSuccess?: () => void;
 }
 
-export default function HeroSection({ isLoggedIn, onSpotifyLogin, onLoginSuccess }: HeroSectionProps) {
+export default function HeroSection({ isLoggedIn, onLoginSuccess }: HeroSectionProps) {
   const router = useRouter();
 
   return (
@@ -48,7 +47,7 @@ export default function HeroSection({ isLoggedIn, onSpotifyLogin, onLoginSuccess
           <div className="mt-10 flex flex-col items-center">
             {!isLoggedIn ? (
               <div className="flex flex-col items-center space-y-4 min-h-[120px] justify-center">
-                <SpotifyLoginButton onLogin={onSpotifyLogin} />
+                <SpotifyLoginButton />
                 <p className="text-sm text-muted-foreground">
                   Connect your Spotify account to get started
                 </p>
