@@ -1,16 +1,19 @@
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Music } from 'lucide-react';
-import MoodInput from '@/components/MoodInput';
+import { useRouter } from 'next/navigation';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import TypewriterText from '@/components/TypewriterText';
 
 interface HeroSectionProps {
   isLoggedIn: boolean;
   onSpotifyLogin: () => void;
-  onMoodSubmit: (mood: string) => void;
+  onLoginSuccess?: () => void;
 }
 
-export default function HeroSection({ isLoggedIn, onSpotifyLogin, onMoodSubmit }: HeroSectionProps) {
+export default function HeroSection({ isLoggedIn, onSpotifyLogin, onLoginSuccess }: HeroSectionProps) {
+  const router = useRouter();
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="py-16 lg:py-24">
@@ -21,7 +24,7 @@ export default function HeroSection({ isLoggedIn, onSpotifyLogin, onMoodSubmit }
               AI-Powered Playlist Generation
             </Badge>
           </div>
-          
+
           <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-6xl lg:text-7xl">
             Turn your mood into<br />{' '}
             <span className="bg-gradient-to-r from-primary to-primary bg-clip-text text-transparent">
@@ -41,18 +44,24 @@ export default function HeroSection({ isLoggedIn, onSpotifyLogin, onMoodSubmit }
             Describe how you're feeling and we'll create the perfect Spotify playlist for your moment.
             Powered by AI, personalized for you.
           </p>
-          
+
           <div className="mt-10 flex flex-col items-center">
             {!isLoggedIn ? (
-              <div className="flex flex-col items-center space-y-4">
+              <div className="flex flex-col items-center space-y-4 min-h-[120px] justify-center">
                 <SpotifyLoginButton onLogin={onSpotifyLogin} />
                 <p className="text-sm text-muted-foreground">
                   Connect your Spotify account to get started
                 </p>
               </div>
             ) : (
-              <div className="w-full max-w-md">
-                <MoodInput onSubmit={onMoodSubmit} />
+              <div className="w-full max-w-md min-h-[120px] flex items-center justify-center">
+                <Button
+                  onClick={() => router.push('/create')}
+                  className="w-full"
+                  size="lg"
+                >
+                  Create Playlist
+                </Button>
               </div>
             )}
           </div>
