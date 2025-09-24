@@ -2,6 +2,8 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DotPattern } from '@/components/ui/dot-pattern';
+import { cn } from '@/lib/utils';
 import Navigation from '@/components/Navigation';
 import PlaylistCard from '@/components/PlaylistCard';
 import { Music } from 'lucide-react';
@@ -60,15 +62,27 @@ export default function PlaylistsPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative">
+      {/* Fixed Dot Pattern Background */}
+      <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
+        <DotPattern
+          className={cn(
+            "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
+          )}
+        />
+      </div>
+
+      {/* Navigation */}
       <Navigation />
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+
+      {/* Main Content */}
+      <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="text-center mb-12">
           <Badge variant="outline" className="px-4 py-1 flex items-center gap-2 w-fit mx-auto mb-6">
             <Music className="w-4 h-4" />
             Your Music History
           </Badge>
-          
+
           <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl mb-4">
             My Playlists
           </h1>
