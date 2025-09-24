@@ -10,7 +10,6 @@ import { Music } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export default function CreatePage() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
