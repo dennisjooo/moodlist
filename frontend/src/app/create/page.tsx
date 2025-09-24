@@ -21,7 +21,6 @@ export default function CreatePage() {
   }, []);
 
   const handleMoodSubmit = (mood: string) => {
-    console.log('Mood submitted:', mood);
     // This will be connected to the backend later
   };
 

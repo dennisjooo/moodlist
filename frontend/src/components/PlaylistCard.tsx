@@ -4,7 +4,6 @@ import { generateMoodGradient } from '@/lib/moodColors';
 import { Music, Calendar, Play, ExternalLink } from 'lucide-react';
 
 interface PlaylistCardProps {
-  id: number;
   mood: string;
   title: string;
   createdAt: string;

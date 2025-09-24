@@ -105,7 +105,6 @@ export default function PlaylistsPage() {
             {playlists.map((playlist) => (
               <PlaylistCard
                 key={playlist.id}
-                id={playlist.id}
                 mood={playlist.mood}
                 title={playlist.title}
                 createdAt={playlist.createdAt}

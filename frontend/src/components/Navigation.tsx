@@ -27,13 +27,9 @@ export default function Navigation() {
       const profileData = localStorage.getItem('spotify_user_profile');
       const accessToken = localStorage.getItem('spotify_access_token');
 
-      console.log('Navigation - Profile data from localStorage:', profileData);
-      console.log('Navigation - Access token exists:', !!accessToken);
-
       if (profileData && accessToken) {
         try {
           const parsedProfile = JSON.parse(profileData);
-          console.log('Navigation - Parsed profile:', parsedProfile);
           setUserProfile(parsedProfile);
           setIsLoggedIn(true);
         } catch (error) {
@@ -51,7 +47,6 @@ export default function Navigation() {
     // Listen for storage changes (when user logs in on another tab)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'spotify_user_profile' || e.key === 'spotify_access_token') {
-        console.log('Navigation - Storage changed, rechecking profile');
         checkProfile();
       }
     };
@@ -60,7 +55,6 @@ export default function Navigation() {
 
     // Also listen for custom events (when user logs in on same tab)
     const handleProfileUpdate = () => {
-      console.log('Navigation - Profile update event received');
       checkProfile();
     };
 

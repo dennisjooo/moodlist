@@ -4,8 +4,6 @@ export async function GET(request: NextRequest) {
   try {
     const accessToken = request.headers.get('authorization')?.replace('Bearer ', '');
 
-    console.log('Profile API - Access token received:', !!accessToken);
-
     if (!accessToken) {
       console.error('Profile API - No access token provided');
       return NextResponse.json(
@@ -29,7 +27,6 @@ export async function GET(request: NextRequest) {
     }
 
     const profileData = await profileResponse.json();
-    console.log('Profile API - Spotify response:', profileData);
 
     const responseData = {
       id: profileData.id,
@@ -40,7 +37,6 @@ export async function GET(request: NextRequest) {
       followers: profileData.followers?.total || 0,
     };
 
-    console.log('Profile API - Response data:', responseData);
     return NextResponse.json(responseData);
 
   } catch (error) {
