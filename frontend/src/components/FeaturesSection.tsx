@@ -1,4 +1,5 @@
-import { BoxReveal } from '@/components/ui/box-reveal';
+import { motion, useInView } from 'framer-motion';
+import { useRef } from 'react';
 import { MessageCircle, Brain, Music, ArrowDown } from 'lucide-react';
 
 interface TimelineStep {
@@ -9,6 +10,8 @@ interface TimelineStep {
 }
 
 export default function FeaturesSection() {
+  const containerRef = useRef(null);
+
   const steps: TimelineStep[] = [
     {
       icon: MessageCircle,
@@ -31,11 +34,17 @@ export default function FeaturesSection() {
   ];
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-16">
+    <div ref={containerRef} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-16">
       <div className="flex flex-col items-center">
-        <BoxReveal boxColor="#8b5cf6" duration={0.5}>
-          <h2 className="text-3xl font-bold text-center mb-16">How It Works</h2>
-        </BoxReveal>
+        <motion.h2
+          className="text-3xl font-bold text-center mb-16"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+        >
+          How It Works
+        </motion.h2>
 
         <div className="relative w-full">
           {/* Vertical line - mobile: left-aligned, desktop: centered */}
@@ -51,23 +60,37 @@ export default function FeaturesSection() {
                 <div key={index} className="relative">
                   {/* Timeline dot - mobile: left-aligned, desktop: centered */}
                   <div className="absolute left-6 lg:left-1/2 transform -translate-x-1/2 lg:-translate-x-1/2 -translate-y-1/2 top-1/2 z-20">
-                    <BoxReveal boxColor="#8b5cf6" duration={0.5}>
-                      <div className={`w-12 h-12 lg:w-16 lg:h-16 rounded-full bg-gradient-to-br ${step.color} flex items-center justify-center shadow-xl border-4 border-background`}>
-                        <IconComponent className="w-6 h-6 lg:w-8 lg:h-8 text-white" />
-                      </div>
-                    </BoxReveal>
+                    <motion.div
+                      className={`w-12 h-12 lg:w-16 lg:h-16 rounded-full bg-gradient-to-br ${step.color} flex items-center justify-center border-4 border-background`}
+                      style={{
+                        boxShadow: `0 0 0 4px rgba(0,0,0,0.1), 0 8px 32px rgba(0,0,0,0.12)`
+                      }}
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      viewport={{ once: true, margin: "-50px" }}
+                      transition={{ duration: 0.6, delay: index * 0.1, ease: "easeOut" }}
+                    >
+                      <IconComponent className="w-6 h-6 lg:w-8 lg:h-8 text-white" />
+                    </motion.div>
                   </div>
 
                   {/* Mobile layout: simple left timeline + right content */}
                   <div className="lg:hidden pl-16 ml-4 pr-8">
-                    <BoxReveal boxColor="#8b5cf6" duration={0.5}>
-                      <div className="bg-white/5 dark:bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-white/10 shadow-lg">
-                        <h3 className="text-xl font-semibold mb-3">{step.title}</h3>
-                        <p className="text-muted-foreground leading-relaxed">
-                          {step.description}
-                        </p>
-                      </div>
-                    </BoxReveal>
+                    <motion.div
+                      className="bg-white/5 dark:bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-white/10"
+                      style={{
+                        boxShadow: `0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)`
+                      }}
+                      initial={{ opacity: 0, x: 20 }}
+                      whileInView={{ opacity: 1, x: 0 }}
+                      viewport={{ once: true, margin: "-50px" }}
+                      transition={{ duration: 0.6, delay: index * 0.1, ease: "easeOut" }}
+                    >
+                      <h3 className="text-xl font-semibold mb-3">{step.title}</h3>
+                      <p className="text-muted-foreground leading-relaxed">
+                        {step.description}
+                      </p>
+                    </motion.div>
                   </div>
 
                   {/* Desktop layout: alternating sides with symmetric spacing */}
@@ -75,28 +98,42 @@ export default function FeaturesSection() {
                     {/* Left side content - always has padding on the right to leave space for center icon */}
                     <div className={`${isLeft ? 'order-1' : 'order-2 lg:order-1'} lg:pr-12`}>
                       {isLeft && (
-                        <BoxReveal boxColor="#8b5cf6" duration={0.5}>
-                          <div className="bg-white/5 dark:bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-white/10 shadow-lg lg:text-right">
-                            <h3 className="text-xl font-semibold mb-3">{step.title}</h3>
-                            <p className="text-muted-foreground leading-relaxed">
-                              {step.description}
-                            </p>
-                          </div>
-                        </BoxReveal>
+                        <motion.div
+                          className="bg-white/5 dark:bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-white/10 lg:text-right"
+                          style={{
+                            boxShadow: `0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)`
+                          }}
+                          initial={{ opacity: 0, x: -20 }}
+                          whileInView={{ opacity: 1, x: 0 }}
+                          viewport={{ once: true, margin: "-50px" }}
+                          transition={{ duration: 0.6, delay: index * 0.1, ease: "easeOut" }}
+                        >
+                          <h3 className="text-xl font-semibold mb-3">{step.title}</h3>
+                          <p className="text-muted-foreground leading-relaxed">
+                            {step.description}
+                          </p>
+                        </motion.div>
                       )}
                     </div>
 
                     {/* Right side content - always has padding on the left to leave space for center icon */}
                     <div className={`${isLeft ? 'order-2' : 'order-1 lg:order-2'} lg:pl-12`}>
                       {!isLeft && (
-                        <BoxReveal boxColor="#8b5cf6" duration={0.5}>
-                          <div className="bg-white/5 dark:bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-white/10 shadow-lg">
-                            <h3 className="text-xl font-semibold mb-3">{step.title}</h3>
-                            <p className="text-muted-foreground leading-relaxed">
-                              {step.description}
-                            </p>
-                          </div>
-                        </BoxReveal>
+                        <motion.div
+                          className="bg-white/5 dark:bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-white/10"
+                          style={{
+                            boxShadow: `0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)`
+                          }}
+                          initial={{ opacity: 0, x: 20 }}
+                          whileInView={{ opacity: 1, x: 0 }}
+                          viewport={{ once: true, margin: "-50px" }}
+                          transition={{ duration: 0.6, delay: index * 0.1, ease: "easeOut" }}
+                        >
+                          <h3 className="text-xl font-semibold mb-3">{step.title}</h3>
+                          <p className="text-muted-foreground leading-relaxed">
+                            {step.description}
+                          </p>
+                        </motion.div>
                       )}
                     </div>
                   </div>
@@ -106,13 +143,17 @@ export default function FeaturesSection() {
           </div>
         </div>
 
-        <BoxReveal boxColor="#8b5cf6" duration={0.5}>
-          <div className="mt-16 text-center">
-            <p className="text-lg text-muted-foreground">
-              Ready to discover your perfect playlist?
-            </p>
-          </div>
-        </BoxReveal>
+        <motion.div
+          className="mt-16 text-center"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.6, delay: 0.3, ease: "easeOut" }}
+        >
+          <p className="text-lg text-muted-foreground">
+            Ready to discover your perfect playlist?
+          </p>
+        </motion.div>
       </div>
     </div>
   );
