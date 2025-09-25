@@ -1,0 +1,30 @@
+# FastAPI and web framework
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+pydantic[email]
+
+# Database
+sqlalchemy
+asyncpg
+alembic
+
+# Authentication and security
+pyjwt
+bcrypt
+python-multipart
+passlib
+
+# HTTP client
+httpx
+
+# Environment and configuration
+python-dotenv
+
+# Logging and monitoring
+structlog
+
+# Development dependencies
+pytest
+pytest-asyncio
