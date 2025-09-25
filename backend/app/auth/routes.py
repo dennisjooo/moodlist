@@ -1,10 +1,12 @@
+import structlog
+import httpx
+
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
-import structlog
 
 from app.core.database import get_db
 from app.models.user import User
@@ -14,14 +16,14 @@ from app.auth.security import (
     create_refresh_token, 
     verify_token,
     generate_session_token,
-    get_token_expiration_time,
     encrypt_token
 )
 from app.auth.dependencies import get_current_user_optional
 from app.auth.schemas import (
-    UserCreate, 
-    UserResponse, 
-    LoginRequest, 
+    UserCreate,
+    UserCreateInternal,
+    UserResponse,
+    LoginRequest,
     TokenResponse,
     RefreshTokenRequest,
     SessionResponse,
@@ -109,36 +111,70 @@ async def register(
     response: Response,
     db: AsyncSession = Depends(get_db)
 ):
-    """Register a new user."""
-    logger.info("Registration attempt", spotify_id=user_data.spotify_id)
+    """Register a new user by fetching profile from Spotify."""
+    logger.info("Registration attempt with Spotify token")
+    
+    # Fetch user profile from Spotify using access token
+    async with httpx.AsyncClient() as client:
+        try:
+            profile_response = await client.get(
+                "https://api.spotify.com/v1/me",
+                headers={"Authorization": f"Bearer {user_data.access_token}"}
+            )
+            profile_response.raise_for_status()
+            profile_data = profile_response.json()
+            
+        except httpx.HTTPStatusError as e:
+            logger.error("Failed to fetch Spotify profile", error=str(e), status_code=e.response.status_code)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid Spotify access token or failed to fetch profile"
+            )
+    
+    logger.info("Profile fetched successfully", spotify_id=profile_data["id"])
     
     # Check if user already exists
     result = await db.execute(
-        select(User).where(User.spotify_id == user_data.spotify_id)
+        select(User).where(User.spotify_id == profile_data["id"])
     )
     existing_user = result.scalar_one_or_none()
     
     if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User already exists"
+        # Update existing user's tokens and profile
+        existing_user.access_token = encrypt_token(user_data.access_token)
+        existing_user.refresh_token = encrypt_token(user_data.refresh_token)
+        existing_user.token_expires_at = user_data.token_expires_at
+        existing_user.display_name = profile_data.get("display_name", existing_user.display_name)
+        existing_user.email = profile_data.get("email", existing_user.email)
+        if profile_data.get("images"):
+            existing_user.profile_image_url = profile_data["images"][0]["url"]
+        existing_user.is_active = True
+        
+        await db.commit()
+        await db.refresh(existing_user)
+        user = existing_user
+        logger.info("Updated existing user", user_id=user.id, spotify_id=user.spotify_id)
+    else:
+        # Create new user
+        profile_image_url = None
+        if profile_data.get("images") and len(profile_data["images"]) > 0:
+            profile_image_url = profile_data["images"][0]["url"]
+            
+        user = User(
+            spotify_id=profile_data["id"],
+            email=profile_data.get("email"),
+            display_name=profile_data.get("display_name", "Unknown User"),
+            access_token=encrypt_token(user_data.access_token),
+            refresh_token=encrypt_token(user_data.refresh_token),
+            token_expires_at=user_data.token_expires_at,
+            profile_image_url=profile_image_url,
+            is_active=True
         )
-    
-    # Create new user
-    user = User(
-        spotify_id=user_data.spotify_id,
-        email=user_data.email,
-        display_name=user_data.display_name,
-        access_token=encrypt_token(user_data.access_token),
-        refresh_token=encrypt_token(user_data.refresh_token),
-        token_expires_at=user_data.token_expires_at,
-        profile_image_url=user_data.profile_image_url,
-        is_active=True
-    )
-    
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
+        
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        logger.info("Created new user", user_id=user.id, spotify_id=user.spotify_id)
     
     # Create session
     session_token = generate_session_token()

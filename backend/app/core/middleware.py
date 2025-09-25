@@ -77,17 +77,23 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     
     async def _get_request_data(self, request: Request) -> Dict[str, Any]:
         """Extract relevant request data for logging."""
-        try:
-            body = await request.body()
-            if body:
-                try:
-                    body_data = json.loads(body)
-                except json.JSONDecodeError:
-                    body_data = {"raw_body": body.decode("utf-8", errors="ignore")}
-            else:
+        # Don't consume request body for POST/PUT/PATCH requests as it prevents route handlers from reading it
+        body_data = None
+        if request.method in ["GET", "DELETE", "HEAD", "OPTIONS"]:
+            try:
+                body = await request.body()
+                if body:
+                    try:
+                        body_data = json.loads(body)
+                    except json.JSONDecodeError:
+                        body_data = {"raw_body": body.decode("utf-8", errors="ignore")}
+            except Exception:
                 body_data = None
-        except Exception:
-            body_data = None
+        else:
+            # For POST/PUT/PATCH, just log that body was present but don't consume it
+            content_length = request.headers.get("content-length")
+            if content_length and int(content_length) > 0:
+                body_data = {"body_present": True, "content_length": content_length}
         
         return {
             "method": request.method,

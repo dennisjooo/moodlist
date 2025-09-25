@@ -41,8 +41,13 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: Optional[str] = Field(default=None, env="AWS_SECRET_ACCESS_KEY")
     
     # CORS
-    FRONTEND_URL: str = Field(default="http://localhost:3000", env="FRONTEND_URL")
-    ALLOWED_ORIGINS: List[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+    FRONTEND_URL: str = Field(default="http://127.0.0.1:3000", env="FRONTEND_URL")
+    ALLOWED_ORIGINS: List[str] = Field(default_factory=lambda: [
+        "http://127.0.0.1:3000",
+        "http://localhost:3000",
+        "http://127.0.0.1:8000",
+        "http://localhost:8000"
+    ])
     
     # Redis
     REDIS_URL: Optional[str] = Field(default=None, env="REDIS_URL")
