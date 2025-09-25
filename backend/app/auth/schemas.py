@@ -4,7 +4,14 @@ from datetime import datetime
 
 
 class UserCreate(BaseModel):
-    """Schema for creating a new user."""
+    """Schema for creating a new user (simplified - profile fetched from Spotify)."""
+    access_token: str = Field(..., description="Spotify access token")
+    refresh_token: str = Field(..., description="Spotify refresh token")
+    token_expires_at: datetime = Field(..., description="Token expiration time")
+
+
+class UserCreateInternal(BaseModel):
+    """Internal schema for creating a user with profile data."""
     spotify_id: str = Field(..., description="Spotify user ID")
     email: Optional[EmailStr] = Field(None, description="User email")
     display_name: str = Field(..., description="Display name")
