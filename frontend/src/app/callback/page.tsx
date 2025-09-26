@@ -41,13 +41,10 @@ export default function CallbackPage() {
       }
 
       try {
-        // Exchange code for tokens
-        const tokenResponse = await fetch('/api/spotify/token', {
+        // Exchange code for tokens using backend
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+        const tokenResponse = await fetch(`${backendUrl}/api/spotify/token?code=${encodeURIComponent(code)}`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ code }),
         });
 
         if (!tokenResponse.ok) {
@@ -60,12 +57,10 @@ export default function CallbackPage() {
         localStorage.setItem('spotify_access_token', tokenData.access_token);
         localStorage.setItem('spotify_refresh_token', tokenData.refresh_token);
 
-        // Fetch and store user profile
+        // Fetch and store user profile using backend
         try {
-          const profileResponse = await fetch('/api/spotify/profile', {
-            headers: {
-              'Authorization': `Bearer ${tokenData.access_token}`,
-            },
+          const profileResponse = await fetch(`${backendUrl}/api/spotify/profile/public?access_token=${encodeURIComponent(tokenData.access_token)}`, {
+            method: 'GET',
           });
 
           if (profileResponse.ok) {
