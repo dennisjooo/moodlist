@@ -23,7 +23,7 @@ export function initiateSpotifyAuth(): void {
 
   // Generate random state for security
   const state = Math.random().toString(36).substring(2, 15);
-  localStorage.setItem('spotify_auth_state', state);
+  sessionStorage.setItem('spotify_auth_state', state);
 
   // Construct Spotify authorization URL
   const authUrl = new URL('https://accounts.spotify.com/authorize');

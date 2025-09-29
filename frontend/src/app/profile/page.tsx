@@ -2,50 +2,44 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuth } from '@/lib/authContext';
+import { getAuthCookies } from '@/lib/cookies';
 import { ArrowLeft, Mail, MapPin, Music, User, Users } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-interface UserProfile {
+interface SpotifyProfile {
   id: string;
   display_name: string;
-  email: string;
+  email?: string;
   images: Array<{ url: string; height: number; width: number }>;
-  country: string;
+  country?: string;
   followers: number;
 }
 
 export default function ProfilePage() {
   const router = useRouter();
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const [spotifyProfile, setSpotifyProfile] = useState<SpotifyProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   useEffect(() => {
-    const profileData = localStorage.getItem('spotify_user_profile');
-    const accessToken = localStorage.getItem('spotify_access_token');
-
-    if (!profileData || !accessToken) {
+    if (!isLoading && !isAuthenticated) {
       router.push('/');
       return;
     }
 
-    try {
-      const parsedProfile = JSON.parse(profileData);
-      setUserProfile(parsedProfile);
-    } catch (error) {
-      console.error('Failed to parse profile data:', error);
-      router.push('/');
-    } finally {
-      setLoading(false);
+    if (isAuthenticated && user) {
+      fetchSpotifyProfile();
     }
-  }, [router]);
+  }, [isAuthenticated, user, isLoading, router]);
 
-  const handleBack = () => {
-    router.back();
-  };
+  // Only show loading if we're actually checking auth and have a session
+  const hasSessionCookie = typeof document !== 'undefined' && document.cookie.includes('session_token');
+  const shouldShowLoading = isLoading && hasSessionCookie;
 
-  if (loading) {
+  if (shouldShowLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted">
         <div className="flex items-center space-x-2">
@@ -57,13 +51,50 @@ export default function ProfilePage() {
     );
   }
 
-  if (!userProfile) {
+  const fetchSpotifyProfile = async () => {
+    if (!user) return;
+
+    try {
+      setProfileLoading(true);
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+
+      const response = await fetch(`${backendUrl}/api/spotify/profile`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthCookies(),
+        },
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const profileData = await response.json();
+        setSpotifyProfile(profileData);
+      } else if (response.status === 401) {
+        // Not authenticated, redirect to home
+        router.push('/');
+      } else {
+        console.error('Failed to fetch Spotify profile');
+      }
+    } catch (error) {
+      console.error('Error fetching Spotify profile:', error);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handleBack = () => {
+    router.back();
+  };
+
+
+  if (!isAuthenticated || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-muted-foreground mb-4">Profile not found</p>
+              <p className="text-muted-foreground mb-4">Please log in to view your profile</p>
               <Button onClick={handleBack}>
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Go Back
@@ -112,10 +143,10 @@ export default function ProfilePage() {
             <div className="flex flex-col md:flex-row gap-6">
               {/* Profile Picture */}
               <div className="flex-shrink-0">
-                {userProfile.images?.[0]?.url ? (
+                {spotifyProfile?.images?.[0]?.url ? (
                   <Image
-                    src={userProfile.images[0].url}
-                    alt={userProfile.display_name}
+                    src={spotifyProfile.images[0].url}
+                    alt={spotifyProfile.display_name}
                     width={120}
                     height={120}
                     className="rounded-full"
@@ -130,24 +161,28 @@ export default function ProfilePage() {
               {/* Profile Details */}
               <div className="flex-1 space-y-4">
                 <div>
-                  <h2 className="text-2xl font-semibold">{userProfile.display_name}</h2>
-                  <p className="text-muted-foreground">@{userProfile.id}</p>
+                  <h2 className="text-2xl font-semibold">{user.display_name}</h2>
+                  <p className="text-muted-foreground">@{user.spotify_id}</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center space-x-2">
-                    <Mail className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm">{userProfile.email}</span>
-                  </div>
+                  {user.email && (
+                    <div className="flex items-center space-x-2">
+                      <Mail className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm">{user.email}</span>
+                    </div>
+                  )}
 
-                  <div className="flex items-center space-x-2">
-                    <MapPin className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm">{userProfile.country}</span>
-                  </div>
+                  {spotifyProfile?.country && (
+                    <div className="flex items-center space-x-2">
+                      <MapPin className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm">{spotifyProfile.country}</span>
+                    </div>
+                  )}
 
                   <div className="flex items-center space-x-2">
                     <Users className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm">{userProfile.followers.toLocaleString()} followers</span>
+                    <span className="text-sm">{spotifyProfile?.followers.toLocaleString() || 0} followers</span>
                   </div>
                 </div>
               </div>

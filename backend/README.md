@@ -104,8 +104,7 @@ The API will be available at `http://localhost:8000`
 
 ### Authentication
 
-- `POST /api/auth/login` - Login with Spotify tokens
-- `POST /api/auth/register` - Register a new user
+- `POST /api/auth/login` - Login with Spotify tokens or create one
 - `POST /api/auth/refresh` - Refresh access token
 - `POST /api/auth/logout` - Logout user
 - `GET /api/auth/me` - Get current user info

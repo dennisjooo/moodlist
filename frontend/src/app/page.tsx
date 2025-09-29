@@ -7,21 +7,29 @@ import PopularMoods from '@/components/PopularMoods';
 import SocialProof from '@/components/SocialProof';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { ToastContainer, useToast } from '@/components/ui/toast';
+import { useAuth } from '@/lib/authContext';
 import { cn } from '@/lib/utils';
-import { useEffect, useState } from 'react';
 
 export default function Home() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const { toasts, removeToast } = useToast();
+  const { isAuthenticated, isLoading } = useAuth();
 
-  // Check for existing Spotify tokens on page load
-  useEffect(() => {
-    const accessToken = localStorage.getItem('spotify_access_token');
-    const refreshToken = localStorage.getItem('spotify_refresh_token');
-    if (accessToken && refreshToken) setIsLoggedIn(true);
-  }, []);
+  // Only show loading if we're actually checking auth (not just initializing)
+  // If isLoading is true but we have no session cookie, don't show loading
+  const hasSessionCookie = typeof document !== 'undefined' && document.cookie.includes('session_token');
+  const shouldShowLoading = isLoading && hasSessionCookie;
 
-  const handleLoginSuccess = () => setIsLoggedIn(true);
+  if (shouldShowLoading) {
+    return (
+      <div className="min-h-screen bg-background relative flex items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <div className="w-4 h-4 bg-primary rounded-full animate-bounce"></div>
+          <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+          <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background relative">
@@ -44,8 +52,7 @@ export default function Home() {
       <main className="relative z-10">
         {/* Hero Section */}
         <HeroSection
-          isLoggedIn={isLoggedIn}
-          onLoginSuccess={handleLoginSuccess}
+          isLoggedIn={isAuthenticated}
         />
 
         {/* Popular Moods */}

@@ -19,14 +19,14 @@ export default function CallbackPage() {
       const error = searchParams.get('error');
 
       // Validate state parameter for security
-      const storedState = localStorage.getItem('spotify_auth_state');
+      const storedState = sessionStorage.getItem('spotify_auth_state');
       if (state !== storedState) {
         setStatus('error');
         setErrorMessage('Security validation failed');
-        localStorage.removeItem('spotify_auth_state');
+        sessionStorage.removeItem('spotify_auth_state');
         return;
       }
-      localStorage.removeItem('spotify_auth_state');
+      sessionStorage.removeItem('spotify_auth_state');
 
       if (error) {
         setStatus('error');
@@ -53,35 +53,43 @@ export default function CallbackPage() {
 
         const tokenData = await tokenResponse.json();
 
-        // Store tokens in localStorage or state management
-        localStorage.setItem('spotify_access_token', tokenData.access_token);
-        localStorage.setItem('spotify_refresh_token', tokenData.refresh_token);
-
-        // Fetch and store user profile using backend
+        // Use new authentication system
         try {
-          const profileResponse = await fetch(`${backendUrl}/api/spotify/profile/public?access_token=${encodeURIComponent(tokenData.access_token)}`, {
-            method: 'GET',
+          // Register/Login through backend API (this will set session cookies)
+          const response = await fetch(`${backendUrl}/api/auth/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              access_token: tokenData.access_token,
+              refresh_token: tokenData.refresh_token,
+              token_expires_at: Date.now() + (tokenData.expires_in * 1000),
+            }),
           });
 
-          if (profileResponse.ok) {
-            const profileData = await profileResponse.json();
-            localStorage.setItem('spotify_user_profile', JSON.stringify(profileData));
-
-            // Dispatch custom event to notify other components
-            window.dispatchEvent(new CustomEvent('spotify-profile-update'));
-          } else {
-            console.error('Profile fetch failed:', profileResponse.status, profileResponse.statusText);
+          if (!response.ok) {
+            throw new Error(`Authentication failed: ${response.status}`);
           }
-        } catch (profileError) {
-          console.error('Failed to fetch user profile:', profileError);
-          // Continue with login even if profile fetch fails
+
+          // Add a small delay to ensure cookie is set before dispatching auth update
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+          // Dispatch custom event to notify other components to refresh auth state
+          window.dispatchEvent(new CustomEvent('auth-update'));
+        } catch (authError) {
+          console.error('Authentication failed:', authError);
+          setStatus('error');
+          setErrorMessage('Authentication failed - please try again');
+          return;
         }
 
         setStatus('success');
 
-        // Redirect to create page after a short delay
+        // Redirect to home page after a short delay
         setTimeout(() => {
-          router.push('/create');
+          router.push('/');
         }, 2000);
 
       } catch (error) {
