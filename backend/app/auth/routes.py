@@ -21,12 +21,10 @@ from app.auth.security import (
 from app.auth.dependencies import get_current_user_optional
 from app.auth.schemas import (
     UserCreate,
-    UserCreateInternal,
     UserResponse,
     LoginRequest,
     TokenResponse,
     RefreshTokenRequest,
-    SessionResponse,
     AuthResponse
 )
 
