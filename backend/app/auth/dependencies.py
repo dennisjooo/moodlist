@@ -90,8 +90,11 @@ async def get_current_session(
     """Get current session from session token."""
     session_token = request.cookies.get("session_token")
     if not session_token:
+        logger.debug("No session token found in cookies")
         return None
-    
+
+    logger.debug("Looking up session", session_token=session_token[:10] + "...")
+
     result = await db.execute(
         select(Session).where(
             and_(
@@ -101,6 +104,12 @@ async def get_current_session(
         )
     )
     session = result.scalar_one_or_none()
+
+    if session:
+        logger.debug("Session found", session_id=session.id, user_id=session.user_id)
+    else:
+        logger.debug("No valid session found")
+
     return session
 
 
@@ -110,14 +119,18 @@ async def require_auth(
     db: AsyncSession = Depends(get_db)
 ) -> User:
     """Require authentication via either JWT token or session."""
+    logger.debug("require_auth called", has_user=bool(user), has_session=bool(session))
+
     if not user and not session:
+        logger.debug("No user or session found")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
         )
-    
+
     # If we have a session but no user, get user from session
     if not user and session:
+        logger.debug("Getting user from session", session_id=session.id, user_id=session.user_id)
         result = await db.execute(
             select(User).where(
                 and_(
@@ -127,13 +140,15 @@ async def require_auth(
             )
         )
         user = result.scalar_one_or_none()
-    
+        logger.debug("User from session", found=bool(user))
+
     if not user:
+        logger.debug("No user found after session lookup")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
         )
-    
+
     return user
 
 

@@ -18,7 +18,7 @@ from app.auth.security import (
     generate_session_token,
     encrypt_token
 )
-from app.auth.dependencies import get_current_user_optional
+from app.auth.dependencies import require_auth
 from app.auth.schemas import (
     UserCreate,
     UserResponse,
@@ -33,76 +33,8 @@ router = APIRouter()
 security = HTTPBearer(auto_error=False)
 
 
+
 @router.post("/login", response_model=TokenResponse)
-async def login(
-    request: Request,
-    login_data: LoginRequest,
-    response: Response,
-    db: AsyncSession = Depends(get_db)
-):
-    """Login with Spotify tokens and get JWT tokens."""
-    logger.info("Login attempt", ip=request.client.host)
-    
-    # Find user by tokens (in production, tokens should be encrypted)
-    result = await db.execute(
-        select(User).where(
-            and_(
-                User.access_token == login_data.access_token,
-                User.refresh_token == login_data.refresh_token,
-                User.is_active == True
-            )
-        )
-    )
-    user = result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials"
-        )
-    
-    # Create session
-    session_token = generate_session_token()
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
-    
-    session = Session(
-        user_id=user.id,
-        session_token=session_token,
-        ip_address=request.client.host,
-        user_agent=request.headers.get("user-agent"),
-        expires_at=expires_at
-    )
-    
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
-    
-    # Set session cookie
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=1800  # 30 minutes
-    )
-    
-    # Create JWT tokens
-    token_data = {"sub": user.spotify_id}
-    access_token = create_access_token(token_data)
-    refresh_token = create_refresh_token(token_data)
-    
-    logger.info("Login successful", user_id=user.id, spotify_id=user.spotify_id)
-    
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        expires_in=3600,  # 1 hour
-        user=UserResponse.from_orm(user)
-    )
-
-
-@router.post("/register", response_model=TokenResponse)
 async def register(
     request: Request,
     user_data: UserCreate,
@@ -191,13 +123,17 @@ async def register(
     await db.refresh(session)
     
     # Set session cookie
+    from app.core.config import settings
+    is_production = settings.APP_ENV == "production"
+
     response.set_cookie(
         key="session_token",
         value=session_token,
         httponly=True,
-        secure=True,
+        secure=is_production,  # Only secure in production (HTTPS)
         samesite="lax",
-        max_age=1800
+        max_age=1800,  # 30 minutes
+        path="/"  # Ensure cookie is available for all paths
     )
     
     # Create JWT tokens
@@ -266,26 +202,31 @@ async def refresh_token(
 @router.post("/logout")
 async def logout(
     response: Response,
-    current_user: User = Depends(get_current_user_optional)
+    request: Request,
+    current_user: Optional[User] = Depends(require_auth)
 ):
     """Logout user and clear session."""
     # Clear session cookie
+    from app.core.config import settings
+    is_production = settings.APP_ENV == "production"
+
     response.delete_cookie(
         key="session_token",
         httponly=True,
-        secure=True,
-        samesite="lax"
+        secure=is_production,  # Must match the secure setting used when setting the cookie
+        samesite="lax",
+        path="/"  # Must match the path used when setting the cookie
     )
-    
+
     if current_user:
         logger.info("Logout successful", user_id=current_user.id, spotify_id=current_user.spotify_id)
-    
+
     return {"message": "Logged out successfully"}
 
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(
-    current_user: User = Depends(get_current_user_optional)
+    current_user: User = Depends(require_auth)
 ):
     """Get current user information."""
     if not current_user:
@@ -293,13 +234,14 @@ async def get_current_user_info(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated"
         )
-    
+
     return UserResponse.from_orm(current_user)
 
 
 @router.get("/verify", response_model=AuthResponse)
 async def verify_auth(
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    request: Request,
+    current_user: Optional[User] = Depends(require_auth)
 ):
     """Verify authentication status."""
     if not current_user:
@@ -307,7 +249,7 @@ async def verify_auth(
             user=None,
             requires_spotify_auth=True
         )
-    
+
     return AuthResponse(
         user=UserResponse.from_orm(current_user),
         requires_spotify_auth=False

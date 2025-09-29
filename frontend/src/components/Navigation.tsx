@@ -2,78 +2,59 @@
 
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/lib/authContext';
 import { initiateSpotifyAuth, isSpotifyAuthConfigured } from '@/lib/spotifyAuth';
 import { LogOut, Menu, Music, User, X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
-interface UserProfile {
-  id: string;
-  display_name: string;
-  email: string;
-  images: Array<{ url: string }>;
-  country: string;
-  followers: number;
-}
-
 export default function Navigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const { user, isAuthenticated, logout, isLoading } = useAuth();
 
-  // Check for existing user profile on component mount and when storage changes
+  // Only show loading if we're actually checking auth (not just initializing)
+  // If isLoading is true but we have no user and no session cookie, don't show loading
+  const sessionToken = typeof document !== 'undefined' && document.cookie.includes('session_token');
+  const shouldShowLoading = isLoading && (user !== null || sessionToken);
+
+  if (shouldShowLoading) {
+    return (
+      <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="w-8 h-8 bg-primary/20 rounded-lg animate-pulse"></div>
+          </div>
+        </div>
+      </nav>
+    );
+  }
+
+  // Listen for auth updates
   useEffect(() => {
-    const checkProfile = () => {
-      const profileData = localStorage.getItem('spotify_user_profile');
-      const accessToken = localStorage.getItem('spotify_access_token');
-
-      if (profileData && accessToken) {
-        try {
-          const parsedProfile = JSON.parse(profileData);
-          setUserProfile(parsedProfile);
-          setIsLoggedIn(true);
-        } catch (error) {
-          console.error('Navigation - Failed to parse profile data:', error);
-        }
-      } else {
-        setUserProfile(null);
-        setIsLoggedIn(false);
-      }
+    const handleAuthUpdate = () => {
+      // Force re-render when auth state changes
+      window.location.reload();
     };
 
-    // Check immediately
-    checkProfile();
-
-    // Listen for storage changes (when user logs in on another tab)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'spotify_user_profile' || e.key === 'spotify_access_token') {
-        checkProfile();
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-
-    // Also listen for custom events (when user logs in on same tab)
-    const handleProfileUpdate = () => {
-      checkProfile();
-    };
-
-    window.addEventListener('spotify-profile-update', handleProfileUpdate);
-
+    window.addEventListener('auth-update', handleAuthUpdate);
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('spotify-profile-update', handleProfileUpdate);
+      window.removeEventListener('auth-update', handleAuthUpdate);
     };
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('spotify_access_token');
-    localStorage.removeItem('spotify_refresh_token');
-    localStorage.removeItem('spotify_user_profile');
-    setUserProfile(null);
-    setIsLoggedIn(false);
-    window.location.href = '/';
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setIsDropdownOpen(false);
+      setIsMenuOpen(false);
+      // Force page reload to clear any cached state
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Logout failed:', error);
+      // Even if backend logout fails, redirect to clear frontend state
+      window.location.href = '/';
+    }
   };
 
   const navItems = [
@@ -113,7 +94,7 @@ export default function Navigation() {
 
           {/* Right Side - Profile & Mobile Menu Button */}
           <div className="flex items-center space-x-4 lg:absolute lg:right-0">
-            {isLoggedIn && userProfile ? (
+            {isAuthenticated && user ? (
               <div className="flex items-center space-x-3">
                 {/* Profile Dropdown */}
                 <div className="relative">
@@ -121,10 +102,10 @@ export default function Navigation() {
                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                     className="flex items-center space-x-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
                   >
-                    {userProfile.images?.[0]?.url ? (
+                    {user.profile_image_url ? (
                       <img
-                        src={userProfile.images[0].url}
-                        alt={userProfile.display_name}
+                        src={user.profile_image_url}
+                        alt={user.display_name}
                         className="w-8 h-8 rounded-full"
                       />
                     ) : (
@@ -132,8 +113,8 @@ export default function Navigation() {
                         <User className="w-4 h-4 text-primary" />
                       </div>
                     )}
-                    <span className="hidden sm:block max-w-24 truncate" title={userProfile.display_name}>
-                      {userProfile.display_name}
+                    <span className="hidden sm:block max-w-24 truncate" title={user.display_name}>
+                      {user.display_name}
                     </span>
                   </button>
 
@@ -239,7 +220,7 @@ export default function Navigation() {
             ))}
 
             {/* Profile Link in Mobile Menu */}
-            {isLoggedIn && userProfile ? (
+            {isAuthenticated && user ? (
               <Link
                 href="/profile"
                 className={`block px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-accent transition-all duration-200 transform ${
