@@ -1,8 +1,8 @@
+import bcrypt
 import jwt
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from passlib.context import CryptContext
-import bcrypt
 
 from app.core.config import settings
 
@@ -76,7 +76,3 @@ def generate_session_token() -> str:
     import secrets
     return secrets.token_urlsafe(32)
 
-
-def get_token_expiration_time() -> datetime:
-    """Get the token expiration time."""
-    return datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRATION_MINUTES)

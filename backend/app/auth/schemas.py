@@ -36,12 +36,6 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
-class TokenData(BaseModel):
-    """Schema for token data."""
-    spotify_id: Optional[str] = None
-    email: Optional[str] = None
-
-
 class LoginRequest(BaseModel):
     """Schema for login request."""
     access_token: str = Field(..., description="Spotify access token")
@@ -60,13 +54,6 @@ class TokenResponse(BaseModel):
 class RefreshTokenRequest(BaseModel):
     """Schema for refresh token request."""
     refresh_token: str = Field(..., description="Refresh token")
-
-
-class SessionCreate(BaseModel):
-    """Schema for creating a session."""
-    user_id: int
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
 
 
 class SessionResponse(BaseModel):
@@ -90,8 +77,3 @@ class AuthResponse(BaseModel):
     session: Optional[SessionResponse] = None
     requires_spotify_auth: bool = False
 
-
-class ErrorResponse(BaseModel):
-    """Schema for error response."""
-    detail: str
-    error_code: Optional[str] = None

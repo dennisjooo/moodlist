@@ -1,15 +1,16 @@
-from typing import Optional, Dict, Any
+import structlog
+from datetime import datetime, timezone
+from typing import Optional
+
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
-import structlog
 
+from app.auth.security import verify_token
 from app.core.database import get_db
-from app.models.user import User
 from app.models.session import Session
-from app.auth.security import verify_token, verify_encrypted_token
-from app.core.config import settings
+from app.models.user import User
 
 logger = structlog.get_logger(__name__)
 security = HTTPBearer(auto_error=False)
@@ -105,7 +106,8 @@ async def get_current_session(
 
 async def require_auth(
     user: Optional[User] = Depends(get_current_user_optional),
-    session: Optional[Session] = Depends(get_current_session)
+    session: Optional[Session] = Depends(get_current_session),
+    db: AsyncSession = Depends(get_db)
 ) -> User:
     """Require authentication via either JWT token or session."""
     if not user and not session:
@@ -154,6 +156,3 @@ async def get_user_from_spotify_tokens(
     )
     return result.scalar_one_or_none()
 
-
-# Import datetime and timezone for the function above
-from datetime import datetime, timezone
