@@ -150,24 +150,3 @@ async def require_auth(
         )
 
     return user
-
-
-async def get_user_from_spotify_tokens(
-    access_token: str,
-    refresh_token: str,
-    db: AsyncSession = Depends(get_db)
-) -> Optional[User]:
-    """Get user from Spotify tokens (for OAuth callback)."""
-    # Note: In production, tokens should be encrypted in the database
-    # For now, we'll do a simple lookup
-    result = await db.execute(
-        select(User).where(
-            and_(
-                User.access_token == access_token,
-                User.refresh_token == refresh_token,
-                User.is_active == True
-            )
-        )
-    )
-    return result.scalar_one_or_none()
-

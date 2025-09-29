@@ -22,7 +22,6 @@ from app.auth.dependencies import require_auth
 from app.auth.schemas import (
     UserCreate,
     UserResponse,
-    LoginRequest,
     TokenResponse,
     RefreshTokenRequest,
     AuthResponse
