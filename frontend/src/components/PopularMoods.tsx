@@ -45,7 +45,7 @@ export default function PopularMoods() {
             const hiddenOnMobile = index > 3;
             return (
               <motion.div
-                key={index}
+                key={mood}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-50px" }}

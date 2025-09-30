@@ -14,7 +14,7 @@ export interface SpotifyAuthConfig {
 export function initiateSpotifyAuth(): void {
   const clientId = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID;
   const redirectUri = process.env.NEXT_PUBLIC_SPOTIFY_REDIRECT_URI || 'http://localhost:3000/callback';
-  const scope = 'playlist-modify-public playlist-modify-private user-read-private user-read-email';
+  const scope = 'playlist-modify-public playlist-modify-private user-read-private user-read-email user-top-read';
 
   if (!clientId) {
     console.error('Spotify Client ID not configured');

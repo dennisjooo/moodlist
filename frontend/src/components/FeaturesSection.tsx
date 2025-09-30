@@ -49,7 +49,7 @@ export default function FeaturesSection() {
         <div className="relative w-full">
           {/* Vertical line - mobile: left-aligned, desktop: centered */}
           <div className="absolute left-6 lg:left-1/2 transform -translate-x-1/2 lg:-translate-x-1/2 w-1 bg-gradient-to-b from-blue-500 via-purple-600 via-pink-600 to-green-500 opacity-20 rounded-full h-full"
-            ></div>
+          ></div>
 
           <div className="space-y-16 lg:space-y-24">
             {steps.map((step, index) => {
@@ -57,7 +57,7 @@ export default function FeaturesSection() {
               const isLeft = index % 2 === 0;
 
               return (
-                <div key={index} className="relative">
+                <div key={step.title} className="relative">
                   {/* Timeline dot - mobile: left-aligned, desktop: centered */}
                   <div className="absolute left-6 lg:left-1/2 transform -translate-x-1/2 lg:-translate-x-1/2 -translate-y-1/2 top-1/2 z-20">
                     <motion.div

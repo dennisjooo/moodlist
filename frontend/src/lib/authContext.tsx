@@ -55,11 +55,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (response.ok) {
         const data = await response.json();
         if (data.user) {
+          console.log('Auth check successful, user found:', data.user.display_name);
           setUser(data.user);
         } else {
+          console.log('Auth check successful, no user found');
           setUser(null);
         }
       } else if (response.status === 401) {
+        console.log('Auth check failed with 401 - unauthorized');
         setUser(null);
       } else {
         // Other error - if it's our first attempt, try again after a short delay
@@ -142,11 +145,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   useEffect(() => {
-    // Only check auth status if we have cookies (indicating a potential existing session)
-    const sessionToken = getCookie('session_token');
-    if (sessionToken) {
-      checkAuthStatus();
-    }
+    // Always check auth status on mount to ensure we have the latest state
+    checkAuthStatus();
 
     // Listen for auth update events (from callback page)
     const handleAuthUpdate = () => {
