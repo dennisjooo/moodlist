@@ -8,6 +8,7 @@ from app.core.database import engine, Base
 from app.core.middleware import LoggingMiddleware, InvocationStatusMiddleware
 from app.auth.routes import router as auth_router
 from app.spotify.routes import router as spotify_router
+from app.agents.routes import router as agent_router
 
 
 @asynccontextmanager
@@ -65,6 +66,11 @@ def create_application() -> FastAPI:
         spotify_router,
         prefix="/api/spotify",
         tags=["spotify"]
+    )
+    app.include_router(
+        agent_router,
+        prefix="/api/agents",
+        tags=["agents"]
     )
     
     return app
