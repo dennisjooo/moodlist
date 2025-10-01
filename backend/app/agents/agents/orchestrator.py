@@ -55,10 +55,10 @@ class OrchestratorAgent(BaseAgent):
         self.cohesion_threshold = cohesion_threshold
 
     async def execute(self, state: AgentState) -> AgentState:
-        """Execute orchestration with quality evaluation and iterative improvement.
+        """Execute orchestration with seed gathering, recommendations, and iterative improvement.
 
         Args:
-            state: Current agent state with initial recommendations
+            state: Current agent state after mood analysis
 
         Returns:
             Updated agent state with optimized recommendations
@@ -74,6 +74,17 @@ class OrchestratorAgent(BaseAgent):
             if "improvement_actions" not in state.metadata:
                 state.metadata["improvement_actions"] = []
 
+            # Initial seed gathering and recommendation generation
+            logger.info("Initial seed gathering...")
+            state.current_step = "gathering_seeds"
+            state.status = RecommendationStatus.GATHERING_SEEDS
+            state = await self.seed_gatherer.run_with_error_handling(state)
+
+            logger.info("Initial recommendation generation...")
+            state.current_step = "generating_recommendations"
+            state.status = RecommendationStatus.GENERATING_RECOMMENDATIONS
+            state = await self.recommendation_generator.run_with_error_handling(state)
+
             # Iterative improvement loop
             for iteration in range(self.max_iterations):
                 state.metadata["orchestration_iterations"] = iteration + 1
@@ -82,8 +93,6 @@ class OrchestratorAgent(BaseAgent):
 
                 # Evaluate current playlist quality
                 quality_evaluation = await self.evaluate_playlist_quality(state)
-                with open(f"self.evaluate_playlist_quality_{iteration+1}.txt", "w") as f:
-                    f.write(str(quality_evaluation))
                 state.metadata["quality_scores"].append(quality_evaluation)
 
                 logger.info(
@@ -106,8 +115,6 @@ class OrchestratorAgent(BaseAgent):
                 improvement_strategies = await self.decide_improvement_strategy(
                     quality_evaluation, state
                 )
-                with open(f"self.decide_improvement_strategy_{iteration+1}.txt", "w") as f:
-                    f.write(str(improvement_strategies))
                 logger.info(f"Applying improvement strategies: {improvement_strategies}")
 
                 state = await self.apply_improvements(
@@ -117,25 +124,17 @@ class OrchestratorAgent(BaseAgent):
                 # Small delay between iterations
                 await asyncio.sleep(0.1)
 
-                # Determine if we should continue improving
-                if iteration == self.max_iterations - 1:
-                    logger.warning(
-                        f"Reached maximum iterations ({self.max_iterations}), "
-                        f"accepting current results"
-                    )
-                    state.current_step = "recommendations_ready"
-                
             # Final state update
             state.current_step = "recommendations_ready"
             state.metadata["final_quality_evaluation"] = quality_evaluation
 
+            # Remove duplicates
+            state.recommendations = self._remove_duplicates(state.recommendations)
+
             logger.info(
-                f"Orchestration completed with {len(state.recommendations)} recommendations "
+                f"Orchestration completed with {len(state.recommendations)} unique recommendations "
                 f"after {state.metadata['orchestration_iterations']} iteration(s)"
             )
-
-            # Remove duplicates
-            state.recommendations = self.remove_duplicates(state.recommendations)
 
         except Exception as e:
             logger.error(f"Error in orchestration: {str(e)}", exc_info=True)
@@ -143,14 +142,29 @@ class OrchestratorAgent(BaseAgent):
 
         return state
 
-    def remove_duplicates(self, recommendations: List[TrackRecommendation]) -> List[TrackRecommendation]:
-        """Remove duplicates from a list of recommendations."""
-        # Go through all the recommendations and remove duplicates rec.track_id or rec.id
-        new_recommendations = []
+    def _remove_duplicates(self, recommendations: List[TrackRecommendation]) -> List[TrackRecommendation]:
+        """Remove duplicate tracks from recommendations.
+
+        Args:
+            recommendations: List of track recommendations
+
+        Returns:
+            List with duplicates removed, preserving order and keeping first occurrence
+        """
+        seen_track_ids = set()
+        unique_recommendations = []
+        
         for rec in recommendations:
-            if rec.track_id not in new_recommendations:
-                new_recommendations.append(rec)
-        return new_recommendations
+            if rec.track_id not in seen_track_ids:
+                seen_track_ids.add(rec.track_id)
+                unique_recommendations.append(rec)
+            else:
+                logger.debug(f"Removing duplicate: {rec.track_name} by {', '.join(rec.artists)}")
+        
+        if len(unique_recommendations) < len(recommendations):
+            logger.info(f"Removed {len(recommendations) - len(unique_recommendations)} duplicate tracks")
+        
+        return unique_recommendations
     
     async def evaluate_playlist_quality(self, state: AgentState) -> Dict[str, Any]:
         """Evaluate the quality of current recommendations against mood criteria.
@@ -264,13 +278,30 @@ class OrchestratorAgent(BaseAgent):
         Args:
             recommendations: List of track recommendations
             target_features: Target audio features from mood analysis
-            feature_weights: Importance weights for each feature
+            feature_weights: Importance weights for each feature (0-1)
 
         Returns:
             Dictionary with cohesion score and list of outlier track IDs
         """
         if not target_features or not recommendations:
             return {"score": 0.5, "outliers": [], "track_scores": {}}
+
+        # Use provided feature weights or defaults
+        if not feature_weights:
+            feature_weights = {
+                "energy": 0.8,
+                "valence": 0.8,
+                "speechiness": 0.7,
+                "instrumentalness": 0.7,
+                "danceability": 0.6,
+                "acousticness": 0.6,
+                "tempo": 0.4,
+                "mode": 0.4,
+                "loudness": 0.3,
+                "liveness": 0.2,
+                "key": 0.2,
+                "popularity": 0.1
+            }
 
         # Stricter tolerance thresholds for cohesion checking
         tolerance_thresholds = {
@@ -286,8 +317,11 @@ class OrchestratorAgent(BaseAgent):
             "popularity": 25
         }
 
-        # Critical features that cause outlier status if violated
-        critical_features = ["speechiness", "instrumentalness", "energy", "valence"]
+        # Critical features are those with high weights (>0.65)
+        critical_features = [
+            feature for feature, weight in feature_weights.items()
+            if weight > 0.65
+        ]
 
         track_scores = {}
         outliers = []
@@ -301,8 +335,8 @@ class OrchestratorAgent(BaseAgent):
                 continue
 
             violations = []
-            critical_violations = 0
-            feature_matches = []
+            weighted_violations = 0.0  # Sum of weights for violated features
+            weighted_matches = []
 
             for feature_name, target_value in target_features.items():
                 if feature_name not in rec.audio_features:
@@ -313,6 +347,9 @@ class OrchestratorAgent(BaseAgent):
 
                 if tolerance is None:
                     continue
+
+                # Get weight for this feature (default to 0.5 if not specified)
+                weight = feature_weights.get(feature_name, 0.5)
 
                 # Convert target value to single number if it's a range
                 if isinstance(target_value, list) and len(target_value) == 2:
@@ -327,28 +364,35 @@ class OrchestratorAgent(BaseAgent):
                 
                 # Calculate match score for this feature (1.0 = perfect, 0.0 = max difference)
                 match_score = max(0.0, 1.0 - (difference / tolerance))
-                feature_matches.append(match_score)
+                
+                # Weight the match score
+                weighted_matches.append((match_score, weight))
 
-                # Check for violations
+                # Check for violations with weighted importance
                 if difference > tolerance:
                     violations.append(feature_name)
-                    if feature_name in critical_features:
-                        critical_violations += 1
+                    weighted_violations += weight
 
-            # Calculate overall track cohesion score
-            if feature_matches:
-                track_cohesion = sum(feature_matches) / len(feature_matches)
+            # Calculate weighted average track cohesion score
+            if weighted_matches:
+                total_weight = sum(w for _, w in weighted_matches)
+                weighted_sum = sum(score * w for score, w in weighted_matches)
+                track_cohesion = weighted_sum / total_weight if total_weight > 0 else 0.0
             else:
                 track_cohesion = 0.7  # Neutral score if no features to compare
 
             track_scores[rec.track_id] = track_cohesion
 
-            # Mark as outlier if multiple critical violations
-            if critical_violations >= 2 or (critical_violations >= 1 and track_cohesion < 0.5):
+            # Mark as outlier based on weighted violations and cohesion score
+            # Outlier if: high weighted violations (>1.5) OR critical feature + low cohesion
+            is_critical_violation = any(f in critical_features for f in violations)
+            
+            if weighted_violations > 1.5 or (is_critical_violation and track_cohesion < 0.5):
                 outliers.append(rec.track_id)
                 logger.debug(
                     f"Outlier detected: {rec.track_name} by {', '.join(rec.artists)} "
-                    f"(score={track_cohesion:.2f}, critical_violations={critical_violations})"
+                    f"(score={track_cohesion:.2f}, weighted_violations={weighted_violations:.2f}, "
+                    f"violations={violations})"
                 )
             else:
                 cohesion_scores.append(track_cohesion)
@@ -590,9 +634,9 @@ class OrchestratorAgent(BaseAgent):
             LLM assessment with quality score and insights
         """
         try:
-            # Prepare playlist summary for LLM
+            # Prepare playlist summary for LLM (first 10 tracks for brevity)
             tracks_summary = []
-            for i, rec in enumerate(state.recommendations, 1):  # Show first 10 tracks
+            for i, rec in enumerate(state.recommendations[:10], 1):
                 tracks_summary.append(
                     f"{i}. {rec.track_name} by {', '.join(rec.artists)} "
                     f"(confidence: {rec.confidence_score:.2f})"
@@ -600,11 +644,6 @@ class OrchestratorAgent(BaseAgent):
             
             mood_interpretation = state.mood_analysis.get("mood_interpretation", "N/A")
             target_features = state.metadata.get("target_features", {})
-            
-            with open("target_features.txt", "w") as f:
-                f.write(str(target_features))
-                f.write("\n")
-                f.write(str(mood_interpretation))
             
             prompt = f"""You are a music curator expert evaluating a playlist for quality and cohesion.
 
