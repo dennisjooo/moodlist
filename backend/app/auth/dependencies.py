@@ -106,9 +106,9 @@ async def get_current_session(
     session = result.scalar_one_or_none()
 
     if session:
-        logger.debug("Session found", session_id=session.id, user_id=session.user_id)
+        logger.debug("Session found", session_id=session.id, user_id=session.user_id, expires_at=session.expires_at)
     else:
-        logger.debug("No valid session found")
+        logger.debug("No valid session found", session_token=session_token[:10] + "..." if session_token else "None")
 
     return session
 
