@@ -129,10 +129,8 @@ class WorkflowManager:
 
             # Execute workflow steps
             state = await self._execute_mood_analysis(state)
-            state = await self._execute_seed_gathering(state)
-            state = await self._execute_recommendation_generation(state)
             
-            # Execute orchestration for quality improvement
+            # Execute orchestration (handles seed gathering, recommendations, and quality improvement)
             state = await self._execute_orchestration(state)
             
             # Mark as completed after recommendations are ready
