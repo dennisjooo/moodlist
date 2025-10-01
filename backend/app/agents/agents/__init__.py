@@ -5,11 +5,13 @@ from .seed_gatherer import SeedGathererAgent
 from .recommendation_generator import RecommendationGeneratorAgent
 from .playlist_editor import PlaylistEditorAgent
 from .playlist_creator import PlaylistCreatorAgent
+from .orchestrator import OrchestratorAgent
 
 __all__ = [
     "MoodAnalyzerAgent",
     "SeedGathererAgent",
     "RecommendationGeneratorAgent",
     "PlaylistEditorAgent",
-    "PlaylistCreatorAgent"
+    "PlaylistCreatorAgent",
+    "OrchestratorAgent"
 ]

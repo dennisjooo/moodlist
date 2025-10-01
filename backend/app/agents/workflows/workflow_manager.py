@@ -132,6 +132,9 @@ class WorkflowManager:
             state = await self._execute_seed_gathering(state)
             state = await self._execute_recommendation_generation(state)
             
+            # Execute orchestration for quality improvement
+            state = await self._execute_orchestration(state)
+            
             # Mark as completed after recommendations are ready
             state.status = RecommendationStatus.COMPLETED
             state.current_step = "recommendations_ready"
@@ -206,6 +209,25 @@ class WorkflowManager:
             raise ValueError("Recommendation generator agent not available")
 
         return await recommendation_agent.run_with_error_handling(state)
+
+    async def _execute_orchestration(self, state: AgentState) -> AgentState:
+        """Execute orchestration for quality evaluation and improvement.
+
+        Args:
+            state: Current workflow state
+
+        Returns:
+            Updated state
+        """
+        state.current_step = "evaluating_quality"
+        state.status = RecommendationStatus.EVALUATING_QUALITY
+
+        orchestrator = self.agents.get("orchestrator")
+        if not orchestrator:
+            logger.warning("Orchestrator agent not available, skipping quality optimization")
+            return state
+
+        return await orchestrator.run_with_error_handling(state)
 
     async def _execute_human_loop(self, state: AgentState) -> AgentState:
         """Execute human-in-the-loop step.
