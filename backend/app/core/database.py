@@ -13,7 +13,7 @@ class Base(DeclarativeBase):
 # Create async engine with asyncpg driver
 engine = create_async_engine(
     settings.get_database_url().replace("postgresql://", "postgresql+asyncpg://"),
-    echo=settings.DEBUG,
+    # echo=settings.DEBUG,
     future=True,
     pool_size=10,
     max_overflow=20,
