@@ -131,15 +131,11 @@ class WorkflowManager:
             state = await self._execute_mood_analysis(state)
             state = await self._execute_seed_gathering(state)
             state = await self._execute_recommendation_generation(state)
-
-            if self.config.enable_human_loop:
-                state = await self._execute_human_loop(state)
-
-            state = await self._execute_playlist_creation(state)
-
-            # Mark as completed
+            
+            # Mark as completed after recommendations are ready
             state.status = RecommendationStatus.COMPLETED
-            state.current_step = "completed"
+            state.current_step = "recommendations_ready"
+            state.metadata["playlist_saved_to_spotify"] = False
             self.success_count += 1
 
         except Exception as e:

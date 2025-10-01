@@ -167,6 +167,18 @@ class AddTracksToPlaylistTool(RateLimitedTool):
         """
         try:
             logger.info(f"Adding {len(track_uris)} tracks to playlist {playlist_id}")
+            
+            # Validate track URIs format
+            invalid_uris = [uri for uri in track_uris if not uri or not uri.startswith('spotify:track:')]
+            if invalid_uris:
+                logger.error(f"Found {len(invalid_uris)} invalid URIs: {invalid_uris[:3]}")
+                return ToolResult.error_result(
+                    f"Invalid track URI format. Expected 'spotify:track:ID', got: {invalid_uris[:3]}",
+                    error_type="ValidationError"
+                )
+            
+            # Log sample URIs for debugging
+            logger.debug(f"Sample URIs being added: {track_uris[:3]}")
 
             # Prepare request data
             request_data = {"uris": track_uris}
