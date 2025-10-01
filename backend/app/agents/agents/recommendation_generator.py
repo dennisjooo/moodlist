@@ -100,13 +100,13 @@ class RecommendationGeneratorAgent(BaseAgent):
             List of raw recommendations from RecoBeat
         """
         all_recommendations = []
-
+        
         # Split seeds into smaller chunks for multiple API calls
         seed_chunks = self._chunk_seeds(state.seed_tracks, chunk_size=3)
 
         # Get mood-based features
         mood_features = self._extract_mood_features(state.mood_analysis)
-
+        print("features", mood_features)
         for chunk in seed_chunks:
             try:
                 # Get recommendations for this seed chunk
@@ -119,15 +119,20 @@ class RecommendationGeneratorAgent(BaseAgent):
                 # Convert to TrackRecommendation objects
                 for rec_data in chunk_recommendations:
                     try:
+                        # Use confidence score from RecoBeat if available, otherwise calculate
+                        confidence = rec_data.get("confidence_score")
+                        if confidence is None:
+                            confidence = self._calculate_confidence_score(rec_data, state)
+                        
                         recommendation = TrackRecommendation(
                             track_id=rec_data.get("id", ""),
                             track_name=rec_data.get("track_name", "Unknown Track"),
                             artists=rec_data.get("artists", ["Unknown Artist"]),
                             spotify_uri=rec_data.get("spotify_uri"),
-                            confidence_score=self._calculate_confidence_score(rec_data, state),
+                            confidence_score=confidence,
                             audio_features=rec_data.get("audio_features"),
-                            reasoning=f"Mood-based recommendation using seeds: {', '.join(chunk)}",
-                            source="reccobeat"
+                            reasoning=rec_data.get("reasoning", f"Mood-based recommendation using seeds: {', '.join(chunk)}"),
+                            source=rec_data.get("source", "reccobeat")
                         )
                         all_recommendations.append(recommendation)
 
@@ -159,27 +164,32 @@ class RecommendationGeneratorAgent(BaseAgent):
         logger.info("Generating fallback recommendations without seeds")
 
         # Use mood-based search with artist keywords
-        if state.mood_analysis and state.mood_analysis.get("search_keywords"):
-            keywords = state.mood_analysis["search_keywords"][:3]  # Use top 3 keywords
+        # Support both old format (search_keywords) and new format (keywords)
+        if state.mood_analysis:
+            keywords = state.mood_analysis.get("keywords") or state.mood_analysis.get("search_keywords")
+            
+            if keywords:
+                # Use top 3 keywords
+                keywords_to_use = keywords[:3] if isinstance(keywords, list) else [keywords]
 
-            # Search for artists matching mood keywords
-            matching_artists = await self.reccobeat_service.search_artists_by_mood(
-                keywords,
-                limit=5
-            )
+                # Search for artists matching mood keywords
+                matching_artists = await self.reccobeat_service.search_artists_by_mood(
+                    keywords_to_use,
+                    limit=5
+                )
 
-            if matching_artists:
-                # Use found artists as seeds for recommendations
-                artist_ids = [artist["id"] for artist in matching_artists if artist.get("id")]
+                if matching_artists:
+                    # Use found artists as seeds for recommendations
+                    artist_ids = [artist["id"] for artist in matching_artists if artist.get("id")]
 
-                if artist_ids:
-                    fallback_recommendations = await self.reccobeat_service.get_track_recommendations(
-                        seeds=artist_ids[:3],  # Use up to 3 artists as seeds
-                        size=20
-                    )
+                    if artist_ids:
+                        fallback_recommendations = await self.reccobeat_service.get_track_recommendations(
+                            seeds=artist_ids[:3],  # Use up to 3 artists as seeds
+                            size=20
+                        )
 
-                    logger.info(f"Generated {len(fallback_recommendations)} fallback recommendations using {len(artist_ids)} artists")
-                    return fallback_recommendations
+                        logger.info(f"Generated {len(fallback_recommendations)} fallback recommendations using {len(artist_ids)} artists")
+                        return fallback_recommendations
 
         # If all else fails, return empty list
         logger.warning("Could not generate fallback recommendations")
@@ -213,10 +223,14 @@ class RecommendationGeneratorAgent(BaseAgent):
         """
         features = {}
 
-        if not mood_analysis or not mood_analysis.get("target_features"):
+        if not mood_analysis:
             return features
 
-        target_features = mood_analysis["target_features"]
+        # Support both old format (target_features) and new format (audio_features)
+        target_features = mood_analysis.get("target_features") or mood_analysis.get("audio_features")
+        
+        if not target_features:
+            return features
 
         # Map mood analysis features to RecoBeat API parameters
         feature_mapping = {
@@ -237,14 +251,37 @@ class RecommendationGeneratorAgent(BaseAgent):
             if mood_feature in target_features:
                 value = target_features[mood_feature]
 
-                # Handle range values (take midpoint)
-                if isinstance(value, list) and len(value) == 2:
+                # Handle range values as string (e.g., "0.8-1.0")
+                if isinstance(value, str):
+                    try:
+                        if '-' in value:
+                            # Parse range string
+                            parts = value.split('-')
+                            if len(parts) == 2:
+                                min_val = float(parts[0])
+                                max_val = float(parts[1])
+                                features[api_param] = (min_val + max_val) / 2
+                            else:
+                                # Single value as string
+                                features[api_param] = float(value)
+                        else:
+                            # Single value as string
+                            features[api_param] = float(value)
+                    except (ValueError, IndexError) as e:
+                        logger.warning(f"Could not parse feature value '{value}' for {mood_feature}: {e}")
+                        continue
+                # Handle range values as list (e.g., [0.8, 1.0])
+                elif isinstance(value, list) and len(value) == 2:
                     features[api_param] = sum(value) / 2
-                else:
+                # Handle numeric values
+                elif isinstance(value, (int, float)):
                     features[api_param] = value
 
         # Set feature weight for stronger mood influence
         features["feature_weight"] = 3.0
+        
+        # Make sure mode is in integer
+        features["mode"] = int(features["mode"])
 
         return features
 
@@ -262,20 +299,109 @@ class RecommendationGeneratorAgent(BaseAgent):
         Returns:
             Confidence score (0-1)
         """
-        base_score = 0.5
+        # Check if RecoBeat provided a score/rating
+        if "score" in recommendation_data:
+            # RecoBeat returns scores typically 0-100, normalize to 0-1
+            return min(recommendation_data["score"] / 100.0, 1.0)
+        
+        if "rating" in recommendation_data:
+            # If rating is already 0-1, use it directly
+            rating = recommendation_data["rating"]
+            return rating if rating <= 1.0 else rating / 100.0
+        
+        if "confidence" in recommendation_data:
+            return min(recommendation_data["confidence"], 1.0)
 
+        # Fallback calculation using popularity and mood match
+        base_score = 0.6  # Higher base score
+        
         # Factor in track popularity if available
-        popularity = recommendation_data.get("popularity", 50)
-        popularity_factor = popularity / 100.0
+        popularity = recommendation_data.get("popularity", 0)
+        if popularity > 0:
+            # Scale popularity contribution
+            popularity_factor = min(popularity / 100.0, 1.0)
+            base_score += (0.2 * popularity_factor)
+        
+        # Factor in audio features match with mood
+        if state.mood_analysis and recommendation_data.get("audio_features"):
+            mood_match_score = self._calculate_mood_match(
+                recommendation_data["audio_features"],
+                state.mood_analysis.get("target_features", {})
+            )
+            base_score += (0.2 * mood_match_score)
+        elif state.mood_analysis and state.mood_analysis.get("target_features"):
+            # Boost for having mood analysis even without audio features
+            base_score += 0.1
 
-        # Weight popularity moderately
-        confidence_score = base_score + (0.3 * popularity_factor)
-
-        # Boost confidence if we have strong mood analysis
-        if state.mood_analysis and state.mood_analysis.get("target_features"):
-            confidence_score += 0.2
-
-        return min(confidence_score, 1.0)
+        return min(base_score, 1.0)
+    
+    def _calculate_mood_match(
+        self,
+        audio_features: Dict[str, Any],
+        target_features: Dict[str, Any]
+    ) -> float:
+        """Calculate how well audio features match target mood features.
+        
+        Args:
+            audio_features: Track audio features
+            target_features: Target mood features
+            
+        Returns:
+            Match score (0-1)
+        """
+        if not audio_features or not target_features:
+            return 0.5
+        
+        # Compare key features
+        feature_keys = ["energy", "valence", "danceability", "acousticness"]
+        matches = 0
+        total_features = 0
+        
+        for key in feature_keys:
+            if key in audio_features and key in target_features:
+                track_value = audio_features[key]
+                target_value = target_features[key]
+                
+                # Handle range values as string (e.g., "0.8-1.0")
+                if isinstance(target_value, str):
+                    try:
+                        if '-' in target_value:
+                            parts = target_value.split('-')
+                            if len(parts) == 2:
+                                min_val = float(parts[0])
+                                max_val = float(parts[1])
+                                target_mid = (min_val + max_val) / 2
+                                # Calculate similarity (closer = better)
+                                similarity = 1.0 - abs(track_value - target_mid)
+                                matches += similarity
+                            else:
+                                # Single value as string
+                                target_num = float(target_value)
+                                similarity = 1.0 - abs(track_value - target_num)
+                                matches += similarity
+                        else:
+                            # Single value as string
+                            target_num = float(target_value)
+                            similarity = 1.0 - abs(track_value - target_num)
+                            matches += similarity
+                        total_features += 1
+                    except (ValueError, IndexError) as e:
+                        logger.warning(f"Could not parse target value '{target_value}' for {key}: {e}")
+                        continue
+                # Handle range values as list (e.g., [0.8, 1.0])
+                elif isinstance(target_value, list) and len(target_value) == 2:
+                    target_mid = sum(target_value) / 2
+                    # Calculate similarity (closer = better)
+                    similarity = 1.0 - abs(track_value - target_mid)
+                    matches += similarity
+                    total_features += 1
+                # Handle numeric values
+                elif isinstance(target_value, (int, float)):
+                    similarity = 1.0 - abs(track_value - target_value)
+                    matches += similarity
+                    total_features += 1
+        
+        return matches / total_features if total_features > 0 else 0.5
 
     def _filter_and_rank_recommendations(
         self,

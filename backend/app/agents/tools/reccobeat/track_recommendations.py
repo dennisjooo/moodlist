@@ -52,6 +52,42 @@ class TrackRecommendationsTool(RateLimitedTool):
             rate_limit_per_minute=60  # Conservative rate limit
         )
 
+    def _normalize_spotify_uri(self, href: str, track_id: str) -> str:
+        """Normalize Spotify URI from href or track ID.
+        
+        Args:
+            href: URL or URI from RecoBeat
+            track_id: Track ID as fallback
+            
+        Returns:
+            Properly formatted Spotify URI
+        """
+        if not href and not track_id:
+            return None
+            
+        # If href is already a proper URI
+        if href and href.startswith('spotify:track:'):
+            return href
+            
+        # If href is a URL, extract ID
+        if href and 'spotify.com/track/' in href:
+            track_id = href.split('/track/')[-1].split('?')[0]
+            return f"spotify:track:{track_id}"
+            
+        # If href has spotify: prefix but wrong format
+        if href and 'spotify:' in href:
+            parts = href.split(':')
+            if len(parts) >= 3:
+                return f"spotify:track:{parts[-1]}"
+        
+        # Use track_id as fallback
+        if track_id:
+            # Remove any prefixes
+            clean_id = track_id.split('/')[-1].split('?')[0]
+            return f"spotify:track:{clean_id}"
+            
+        return None
+    
     def _get_input_schema(self) -> Type[BaseModel]:
         """Get the input schema for this tool."""
         return TrackRecommendationsInput
@@ -154,18 +190,33 @@ class TrackRecommendationsTool(RateLimitedTool):
                     artists = [artist.get("name", "Unknown Artist")
                               for artist in track_data.get("artists", [])]
 
+                    # Extract and normalize Spotify URI
+                    href = track_data.get("href", "")
+                    spotify_uri = self._normalize_spotify_uri(href, track_id)
+                    
+                    # Calculate confidence from popularity and relevance
+                    popularity = track_data.get("popularity", 50)
+                    relevance_score = track_data.get("relevanceScore", 0.8)  # RecoBeat's relevance
+                    
+                    # Combine factors for final confidence
+                    confidence_score = min(
+                        (relevance_score * 0.6) + (popularity / 100.0 * 0.4),
+                        1.0
+                    )
+                    
                     # Create recommendation object
                     recommendation = TrackRecommendation(
                         track_id=track_id,
                         track_name=track_name,
                         artists=artists,
-                        spotify_uri=track_data.get("href"),
-                        confidence_score=0.8,  # Default confidence
+                        spotify_uri=spotify_uri,
+                        confidence_score=confidence_score,
                         audio_features={
-                            "popularity": track_data.get("popularity", 50),
-                            "duration_ms": track_data.get("durationMs")
+                            "popularity": popularity,
+                            "duration_ms": track_data.get("durationMs"),
+                            "relevance_score": relevance_score
                         },
-                        reasoning=f"Recommended based on {len(seeds)} seed tracks",
+                        reasoning=f"Recommended based on {len(seeds)} seed tracks (relevance: {int(relevance_score * 100)}%)",
                         source="reccobeat"
                     )
 

@@ -1,13 +1,18 @@
 """FastAPI routes for the agentic recommendation system."""
 
 import logging
+from datetime import datetime
+
 from typing import Dict, List, Optional, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from langchain_openai import ChatOpenAI
 
 from ...core.config import settings
 from ...core.database import get_db
+from ...auth.dependencies import require_auth
+from ...models.user import User
 from ..workflows.workflow_manager import WorkflowManager, WorkflowConfig
 from ..tools.reccobeat_service import RecoBeatService
 from ..tools.spotify_service import SpotifyService
@@ -27,12 +32,20 @@ logger = logging.getLogger(__name__)
 reccobeat_service = RecoBeatService()
 spotify_service = SpotifyService()
 
+llm = ChatOpenAI(
+    model="x-ai/grok-4-fast:free",
+    temperature=0.2,
+    base_url="https://openrouter.ai/api/v1",
+    # api_key="***REMOVED***"
+    api_key="***REMOVED***"
+)
+
 # Create agents
-mood_analyzer = MoodAnalyzerAgent(verbose=True)
+mood_analyzer = MoodAnalyzerAgent(llm, verbose=True)
 seed_gatherer = SeedGathererAgent(spotify_service, verbose=True)
 recommendation_generator = RecommendationGeneratorAgent(reccobeat_service, verbose=True)
 playlist_editor = PlaylistEditorAgent(verbose=True)
-playlist_creator = PlaylistCreatorAgent(spotify_service, verbose=True)
+playlist_creator = PlaylistCreatorAgent(spotify_service, llm, verbose=True)
 
 # Create workflow manager
 workflow_config = WorkflowConfig(
@@ -40,7 +53,7 @@ workflow_config = WorkflowConfig(
     timeout_per_agent=60,
     max_recommendations=30,
     enable_human_loop=True,
-    require_approval=False
+    require_approval=True
 )
 
 agents = {
@@ -59,37 +72,33 @@ router = APIRouter()
 @router.post("/recommendations/start")
 async def start_recommendation(
     mood_prompt: str = Query(..., description="Mood description for playlist generation"),
-    user_id: str = Query(..., description="User ID"),
-    spotify_user_id: Optional[str] = Query(None, description="Spotify user ID"),
-    access_token: str = Query(..., description="Spotify access token"),
+    current_user: User = Depends(require_auth),
     background_tasks: BackgroundTasks = None
 ):
     """Start a new mood-based recommendation workflow.
 
     Args:
         mood_prompt: User's mood description
-        user_id: User identifier
-        spotify_user_id: Optional Spotify user ID
-        access_token: Spotify access token
+        current_user: Authenticated user (from session)
         background_tasks: FastAPI background tasks
 
     Returns:
         Workflow session information
     """
     try:
-        logger.info(f"Starting recommendation workflow for mood: {mood_prompt}")
+        logger.info(f"Starting recommendation workflow for user {current_user.id}, mood: {mood_prompt}")
 
-        # Start the workflow
+        # Start the workflow with authenticated user's information
         session_id = await workflow_manager.start_workflow(
             mood_prompt=mood_prompt,
-            user_id=user_id,
-            spotify_user_id=spotify_user_id
+            user_id=str(current_user.id),
+            spotify_user_id=current_user.spotify_id
         )
 
-        # Store access token in workflow state for later use
+        # Store access token from authenticated user in workflow state
         state = workflow_manager.get_workflow_state(session_id)
         if state:
-            state.metadata["spotify_access_token"] = access_token
+            state.metadata["spotify_access_token"] = current_user.access_token
 
         return {
             "session_id": session_id,
@@ -346,6 +355,88 @@ async def get_playlist_details(session_id: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get playlist details: {str(e)}"
+        )
+
+
+@router.post("/recommendations/{session_id}/save-to-spotify")
+async def save_playlist_to_spotify(
+    session_id: str,
+    current_user: User = Depends(require_auth)
+):
+    """Save the draft playlist to Spotify.
+
+    Args:
+        session_id: Workflow session ID
+        current_user: Authenticated user
+
+    Returns:
+        Playlist creation result
+    """
+    try:
+        state = workflow_manager.get_workflow_state(session_id)
+
+        if not state:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Workflow {session_id} not found"
+            )
+
+        if not state.is_complete():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Workflow is not complete yet"
+            )
+
+        if state.playlist_id:
+            # Already saved
+            return {
+                "session_id": session_id,
+                "already_saved": True,
+                "playlist_id": state.playlist_id,
+                "playlist_name": state.playlist_name,
+                "spotify_url": state.metadata.get("playlist_url"),
+                "message": "Playlist already saved to Spotify"
+            }
+
+        # Add access token to metadata for playlist creation
+        state.metadata["spotify_access_token"] = current_user.access_token
+
+        # Create playlist on Spotify using the playlist creator agent
+        if not playlist_creator:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Playlist creator not available"
+            )
+
+        state = await playlist_creator.run_with_error_handling(state)
+
+        if not state.playlist_id:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create playlist on Spotify"
+            )
+
+        # Mark as saved
+        state.metadata["playlist_saved_to_spotify"] = True
+        state.metadata["spotify_save_timestamp"] = datetime.utcnow().isoformat()
+
+        return {
+            "session_id": session_id,
+            "playlist_id": state.playlist_id,
+            "playlist_name": state.playlist_name,
+            "spotify_url": state.metadata.get("playlist_url"),
+            "spotify_uri": state.metadata.get("playlist_uri"),
+            "tracks_added": len(state.recommendations),
+            "message": "Playlist successfully saved to Spotify!"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error saving playlist to Spotify: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save playlist: {str(e)}"
         )
 
 
