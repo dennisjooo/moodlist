@@ -206,6 +206,7 @@ async def refresh_token(
 async def logout(
     response: Response,
     request: Request,
+    db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(require_auth)
 ):
     """Logout user and clear session."""
@@ -221,7 +222,16 @@ async def logout(
         path="/"  # Must match the path used when setting the cookie
     )
 
+    # Delete session from database if user is authenticated
     if current_user:
+        session_token = request.cookies.get("session_token")
+        if session_token:
+            # Delete the session record from database
+            await db.execute(
+                Session.__table__.delete().where(Session.session_token == session_token)
+            )
+            await db.commit()
+
         logger.info("Logout successful", user_id=current_user.id, spotify_id=current_user.spotify_id)
 
     return {"message": "Logged out successfully"}
