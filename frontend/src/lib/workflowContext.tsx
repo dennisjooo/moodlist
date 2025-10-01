@@ -196,6 +196,28 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     setWorkflowState(prev => ({ ...prev, error: null }));
   };
 
+  // Clear workflow state when user logs out
+  useEffect(() => {
+    const handleLogout = () => {
+      // Clear workflow state when user logs out
+      setWorkflowState({
+        sessionId: null,
+        status: null,
+        currentStep: '',
+        moodPrompt: '',
+        recommendations: [],
+        error: null,
+        isLoading: false,
+        awaitingInput: false,
+      });
+    };
+
+    window.addEventListener('auth-logout', handleLogout);
+    return () => {
+      window.removeEventListener('auth-logout', handleLogout);
+    };
+  }, []);
+
   // Auto-refresh workflow status when there's an active session
   useEffect(() => {
     if (!workflowState.sessionId || workflowState.status === 'completed' || workflowState.status === 'failed') {

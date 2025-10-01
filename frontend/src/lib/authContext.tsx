@@ -118,25 +118,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const logout = async () => {
-    // Immediately clear local state for better UX
-    setUser(null);
-
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
 
-      // Call backend logout to clear session (fire and forget)
-      fetch(`${backendUrl}/api/auth/logout`, {
+      // Call backend logout to clear session
+      const response = await fetch(`${backendUrl}/api/auth/logout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...getAuthCookies(),
         },
         credentials: 'include',
-      }).catch(error => {
-        console.error('Backend logout error:', error);
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Backend logout failed:', response.status, errorText);
+        // Don't throw error - still clear local state for better UX
+      } else {
+        console.log('Backend logout successful');
+      }
     } catch (error) {
       console.error('Logout error:', error);
+      // Don't throw error - still clear local state for better UX
+    } finally {
+      // Always clear local state after attempting backend logout
+      setUser(null);
+
+      // Dispatch logout event to notify other contexts (like workflow context)
+      window.dispatchEvent(new Event('auth-logout'));
     }
   };
 

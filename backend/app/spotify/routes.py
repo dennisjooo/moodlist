@@ -6,7 +6,7 @@ import structlog
 
 from app.core.database import get_db
 from app.models.user import User
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import require_auth
 from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
@@ -93,7 +93,7 @@ async def exchange_token(
 
 @router.get("/profile")
 async def get_spotify_profile(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
     db: AsyncSession = Depends(get_db)
 ):
     """Get user's Spotify profile information."""
@@ -194,7 +194,7 @@ async def get_spotify_profile_public(
 
 @router.get("/token/refresh")
 async def refresh_spotify_token(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
     db: AsyncSession = Depends(get_db)
 ):
     """Refresh the user's Spotify access token."""
@@ -240,7 +240,7 @@ async def refresh_spotify_token(
 
 @router.get("/playlists")
 async def get_user_playlists(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
     limit: int = Query(default=20, le=50),
     offset: int = Query(default=0),
     db: AsyncSession = Depends(get_db)
@@ -277,7 +277,7 @@ async def create_playlist(
     name: str = Query(..., description="Playlist name"),
     description: str = Query(default="", description="Playlist description"),
     public: bool = Query(default=True, description="Whether playlist is public"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new playlist on Spotify."""
@@ -322,7 +322,7 @@ async def add_tracks_to_playlist(
     playlist_id: str,
     track_uris: list = Query(..., description="List of Spotify track URIs"),
     position: Optional[int] = Query(default=None, description="Position to add tracks"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
     db: AsyncSession = Depends(get_db)
 ):
     """Add tracks to a Spotify playlist."""
