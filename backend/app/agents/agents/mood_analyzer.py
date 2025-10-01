@@ -5,11 +5,9 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from langchain_core.language_models.base import BaseLanguageModel
-from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 
 from ..core.base_agent import BaseAgent
 from ..states.agent_state import AgentState, RecommendationStatus
-from ..tools.agent_tools import ToolResult
 
 
 logger = logging.getLogger(__name__)
@@ -36,25 +34,57 @@ class MoodAnalyzerAgent(BaseAgent):
             verbose=verbose
         )
 
-        # Mood analysis prompts
-        self.system_prompt = """You are an expert music curator and mood analyst. Your task is to analyze user mood prompts and translate them into specific audio features and search parameters for music recommendations.
+        # Enhanced mood analysis prompts with full RecoBeat API feature set
+        self.system_prompt = """You are an expert music curator and audio analyst. Your task is to analyze user mood prompts and translate them into comprehensive audio feature profiles for music recommendations.
 
 Analyze the user's mood description and provide:
-1. A clear interpretation of their desired mood
-2. Specific audio features that match the mood
-3. Keywords for searching relevant artists
-4. Reasoning for your choices
+1. A clear interpretation of their desired mood and atmosphere
+2. Comprehensive audio feature targets using all available features
+3. Feature importance weights for different aspects of the mood
+4. Keywords for searching relevant artists and genres
+5. Reasoning for your audio feature choices
 
-Focus on these audio features:
-- Energy: 0-1 (0=calm/relaxed, 1=intense/powerful)
-- Valence: 0-1 (0=sad/negative, 1=happy/positive)
-- Danceability: 0-1 (0=not danceable, 1=very danceable)
-- Acousticness: 0-1 (0=electronic/synthetic, 1=acoustic/natural)
-- Instrumentalness: 0-1 (0=likely vocal, 1=likely instrumental)
-- Tempo: BPM range (0-250)
-- Mode: 0=minor (sadder), 1=major (happier)
+Available Audio Features (use ranges [min, max] for each):
+- acousticness (0-1): Acoustic vs electronic elements (0=electronic/synthetic, 1=acoustic/natural)
+- danceability (0-1): Suitability for dancing (0=not danceable, 1=very danceable)
+- energy (0-1): Intensity and activity level (0=calm/relaxed, 1=intense/powerful)
+- instrumentalness (0-1): Vocal vs instrumental content (0=likely vocal, 1=likely instrumental)
+- key (-1-11): Musical key (0=C, 1=C#/Db, 2=D, etc., -1=no key detected)
+- liveness (0-1): Probability of live performance (0=studio, 1=live recording)
+- loudness (-60-2): Overall loudness in decibels (lower=more dynamic range)
+- mode (0-1): Major (1) vs minor (0) tonality (1=happier/brighter, 0=sadder/darker)
+- speechiness (0-1): Presence of spoken words (0=no speech, 1=mostly speech)
+- tempo (0-250): Estimated tempo in BPM (beats per minute)
+- valence (0-1): Musical positiveness (0=sad/negative, 1=happy/positive)
+- popularity (0-100): Track popularity (0=underground, 100=mainstream)
 
-Provide your analysis in valid JSON format."""
+Example mood analysis:
+For "super indie" you might target:
+- High acousticness [0.7, 1.0] (natural, organic sound)
+- Low-moderate energy [0.2, 0.5] (mellow, not intense)
+- Low popularity [0, 25] (underground artists)
+- Moderate instrumentalness [0.3, 0.8] (less mainstream pop vocals)
+- Natural tempo range [60, 120] (not extreme BPM)
+- Lower loudness [-20, -8] (more dynamic range)
+
+Provide your analysis in valid JSON format with this structure:
+{
+  "mood_interpretation": "Clear description of the intended mood",
+  "primary_emotion": "main emotional character",
+  "energy_level": "overall intensity description",
+  "target_features": {
+    "feature_name": [min_value, max_value],
+    "acousticness": [0.7, 1.0],
+    ...
+  },
+  "feature_weights": {
+    "feature_name": importance_0_to_1,
+    "acousticness": 0.9,
+    ...
+  },
+  "search_keywords": ["indie", "alternative", "underground"],
+  "reasoning": "Explanation of feature choices and mood interpretation"
+}"""
 
     async def execute(self, state: AgentState) -> AgentState:
         """Execute mood analysis on the user's prompt.
@@ -80,14 +110,27 @@ Provide your analysis in valid JSON format."""
             state.current_step = "mood_analyzed"
             state.status = RecommendationStatus.ANALYZING_MOOD
 
-            # Extract target features for recommendations
+            # Extract target features and weights for recommendations
             target_features = self._extract_target_features(mood_analysis)
+            feature_weights = self._extract_feature_weights(mood_analysis)
+
+            # Store in metadata for use by other agents
             if "target_features" not in state.metadata:
                 state.metadata["target_features"] = {}
+            if "feature_weights" not in state.metadata:
+                state.metadata["feature_weights"] = {}
+
             state.metadata["target_features"].update(target_features)
+            state.metadata["feature_weights"].update(feature_weights)
+
+            # Also store mood analysis details for reference
+            state.metadata["mood_interpretation"] = mood_analysis.get("mood_interpretation", "")
+            state.metadata["primary_emotion"] = mood_analysis.get("primary_emotion", "neutral")
+            state.metadata["search_keywords"] = mood_analysis.get("search_keywords", [])
 
             logger.info(f"Mood analysis completed for prompt: {state.mood_prompt}")
-            logger.info(f"Target features: {target_features}")
+            logger.info(f"Target features: {list(target_features.keys())}")
+            logger.info(f"Feature weights: {feature_weights}")
 
         except Exception as e:
             logger.error(f"Error in mood analysis: {str(e)}", exc_info=True)
@@ -130,6 +173,7 @@ Provide your analysis in valid JSON format."""
 
             except json.JSONDecodeError:
                 # Fallback if JSON parsing fails
+                logger.error(f"JSON parsing failed: {response}")
                 analysis = self._parse_llm_response_fallback(response)
 
             return analysis
@@ -139,64 +183,176 @@ Provide your analysis in valid JSON format."""
             return self._analyze_mood_fallback(mood_prompt)
 
     def _analyze_mood_fallback(self, mood_prompt: str) -> Dict[str, Any]:
-        """Fallback rule-based mood analysis.
+        """Enhanced fallback rule-based mood analysis with full feature set.
 
         Args:
             mood_prompt: User's mood description
 
         Returns:
-            Basic mood analysis
+            Comprehensive mood analysis with all 12 audio features
         """
         prompt_lower = mood_prompt.lower()
 
-        # Simple keyword-based analysis
+        # Enhanced analysis structure
         analysis = {
-            "mood_interpretation": f"Mood based on: {mood_prompt}",
+            "mood_interpretation": f"Rule-based analysis of: {mood_prompt}",
             "primary_emotion": "neutral",
             "energy_level": "medium",
             "target_features": {},
+            "feature_weights": {},
             "search_keywords": [],
-            "reasoning": f"Rule-based analysis of prompt: {mood_prompt}"
+            "reasoning": f"Rule-based analysis using keyword matching for: {mood_prompt}"
         }
 
-        # Energy analysis
-        high_energy_keywords = ["energetic", "upbeat", "exciting", "party", "workout", "intense", "powerful"]
-        low_energy_keywords = ["calm", "relaxed", "chill", "peaceful", "sleepy", "mellow", "soft"]
+        # Define mood profiles for common scenarios
+        mood_profiles = {
+            "indie": {
+                "keywords": ["indie", "alternative", "underground", "independent"],
+                "features": {
+                    "acousticness": [0.6, 1.0],
+                    "energy": [0.2, 0.6],
+                    "popularity": [0, 40],
+                    "loudness": [-20, -5],
+                    "instrumentalness": [0.2, 0.8]
+                },
+                "weights": {"acousticness": 0.9, "popularity": 0.8, "energy": 0.7}
+            },
+            "party": {
+                "keywords": ["party", "celebration", "dance", "club", "energetic"],
+                "features": {
+                    "energy": [0.7, 1.0],
+                    "danceability": [0.7, 1.0],
+                    "valence": [0.6, 1.0],
+                    "tempo": [110, 140],
+                    "loudness": [-10, -2]
+                },
+                "weights": {"energy": 0.9, "danceability": 0.9, "valence": 0.8}
+            },
+            "chill": {
+                "keywords": ["chill", "relaxed", "calm", "peaceful", "mellow"],
+                "features": {
+                    "energy": [0.0, 0.4],
+                    "acousticness": [0.5, 1.0],
+                    "valence": [0.4, 0.8],
+                    "tempo": [60, 100],
+                    "loudness": [-25, -10]
+                },
+                "weights": {"energy": 0.9, "acousticness": 0.8, "tempo": 0.7}
+            },
+            "focus": {
+                "keywords": ["focus", "concentration", "study", "instrumental", "ambient"],
+                "features": {
+                    "instrumentalness": [0.7, 1.0],
+                    "energy": [0.1, 0.4],
+                    "acousticness": [0.4, 1.0],
+                    "speechiness": [0.0, 0.2],
+                    "tempo": [50, 90]
+                },
+                "weights": {"instrumentalness": 0.9, "speechiness": 0.8, "energy": 0.7}
+            },
+            "emotional": {
+                "keywords": ["emotional", "sad", "melancholy", "deep", "sentimental"],
+                "features": {
+                    "valence": [0.0, 0.4],
+                    "energy": [0.1, 0.5],
+                    "mode": [0, 0.3],  # Minor key preference
+                    "acousticness": [0.4, 1.0],
+                    "tempo": [60, 110]
+                },
+                "weights": {"valence": 0.9, "mode": 0.8, "acousticness": 0.7}
+            }
+        }
 
-        if any(keyword in prompt_lower for keyword in high_energy_keywords):
-            analysis["energy_level"] = "high"
-            analysis["target_features"]["energy"] = [0.7, 1.0]
-            analysis["target_features"]["valence"] = [0.6, 1.0]
-        elif any(keyword in prompt_lower for keyword in low_energy_keywords):
-            analysis["energy_level"] = "low"
-            analysis["target_features"]["energy"] = [0.0, 0.4]
-            analysis["target_features"]["acousticness"] = [0.5, 1.0]
+        # Check for mood profile matches
+        matched_profiles = []
+        for mood_name, profile in mood_profiles.items():
+            if any(keyword in prompt_lower for keyword in profile["keywords"]):
+                matched_profiles.append((mood_name, profile))
 
-        # Valence analysis
-        positive_keywords = ["happy", "joyful", "cheerful", "positive", "uplifting", "fun"]
-        negative_keywords = ["sad", "melancholy", "depressed", "dark", "moody", "emotional"]
+        # Apply matched profiles
+        if matched_profiles:
+            for mood_name, profile in matched_profiles:
+                analysis["mood_interpretation"] = f"{mood_name.capitalize()} mood based on: {mood_prompt}"
+                analysis["target_features"].update(profile["features"])
+                analysis["feature_weights"].update(profile["weights"])
 
-        if any(keyword in prompt_lower for keyword in positive_keywords):
-            analysis["primary_emotion"] = "positive"
-            analysis["target_features"]["valence"] = [0.7, 1.0]
-        elif any(keyword in prompt_lower for keyword in negative_keywords):
-            analysis["primary_emotion"] = "negative"
-            analysis["target_features"]["valence"] = [0.0, 0.4]
+                # Update primary emotion based on mood
+                emotion_mapping = {
+                    "party": "positive",
+                    "chill": "neutral",
+                    "focus": "neutral",
+                    "emotional": "negative",
+                    "indie": "neutral"
+                }
+                if mood_name in emotion_mapping:
+                    analysis["primary_emotion"] = emotion_mapping[mood_name]
 
-        # Danceability analysis
-        dance_keywords = ["dance", "dancing", "club", "party", "groove", "rhythm"]
-        if any(keyword in prompt_lower for keyword in dance_keywords):
-            analysis["target_features"]["danceability"] = [0.7, 1.0]
-
-        # Acousticness analysis
-        acoustic_keywords = ["acoustic", "unplugged", "natural", "organic", "folk"]
-        if any(keyword in prompt_lower for keyword in acoustic_keywords):
-            analysis["target_features"]["acousticness"] = [0.7, 1.0]
+        # Additional keyword-based feature analysis
+        self._enhance_features_with_keywords(analysis, prompt_lower)
 
         # Generate search keywords
         analysis["search_keywords"] = self._extract_search_keywords(mood_prompt)
 
         return analysis
+
+    def _enhance_features_with_keywords(self, analysis: Dict[str, Any], prompt_lower: str):
+        """Enhance feature analysis with specific keywords."""
+        # Energy analysis
+        high_energy_keywords = ["energetic", "upbeat", "exciting", "workout", "intense", "powerful", "hype"]
+        low_energy_keywords = ["calm", "peaceful", "sleepy", "soft", "gentle", "laid-back"]
+
+        if any(keyword in prompt_lower for keyword in high_energy_keywords):
+            analysis["energy_level"] = "high"
+            if "energy" not in analysis["target_features"]:
+                analysis["target_features"]["energy"] = [0.7, 1.0]
+                analysis["target_features"]["valence"] = [0.5, 1.0]
+        elif any(keyword in prompt_lower for keyword in low_energy_keywords):
+            analysis["energy_level"] = "low"
+            if "energy" not in analysis["target_features"]:
+                analysis["target_features"]["energy"] = [0.0, 0.4]
+
+        # Valence analysis
+        positive_keywords = ["happy", "joyful", "cheerful", "uplifting", "fun", "bright"]
+        negative_keywords = ["sad", "depressed", "dark", "moody", "bittersweet"]
+
+        if any(keyword in prompt_lower for keyword in positive_keywords):
+            analysis["primary_emotion"] = "positive"
+            if "valence" not in analysis["target_features"]:
+                analysis["target_features"]["valence"] = [0.7, 1.0]
+        elif any(keyword in prompt_lower for keyword in negative_keywords):
+            analysis["primary_emotion"] = "negative"
+            if "valence" not in analysis["target_features"]:
+                analysis["target_features"]["valence"] = [0.0, 0.4]
+
+        # Danceability analysis
+        dance_keywords = ["dance", "dancing", "groove", "rhythm", "club"]
+        if any(keyword in prompt_lower for keyword in dance_keywords):
+            if "danceability" not in analysis["target_features"]:
+                analysis["target_features"]["danceability"] = [0.6, 1.0]
+
+        # Acousticness analysis
+        acoustic_keywords = ["acoustic", "unplugged", "organic", "folk", "singer-songwriter"]
+        if any(keyword in prompt_lower for keyword in acoustic_keywords):
+            if "acousticness" not in analysis["target_features"]:
+                analysis["target_features"]["acousticness"] = [0.7, 1.0]
+
+        # Instrumentalness analysis
+        instrumental_keywords = ["instrumental", "no vocals", "background", "ambient"]
+        if any(keyword in prompt_lower for keyword in instrumental_keywords):
+            if "instrumentalness" not in analysis["target_features"]:
+                analysis["target_features"]["instrumentalness"] = [0.7, 1.0]
+
+        # Live performance analysis
+        live_keywords = ["live", "concert", "performance", "audience"]
+        if any(keyword in prompt_lower for keyword in live_keywords):
+            if "liveness" not in analysis["target_features"]:
+                analysis["target_features"]["liveness"] = [0.6, 1.0]
+
+        # Speech/Talk analysis
+        speech_keywords = ["podcast", "talk", "spoken", "narrative", "story"]
+        if any(keyword in prompt_lower for keyword in speech_keywords):
+            if "speechiness" not in analysis["target_features"]:
+                analysis["target_features"]["speechiness"] = [0.5, 1.0]
 
     def _parse_llm_response_fallback(self, response_content: str) -> Dict[str, Any]:
         """Parse LLM response when JSON parsing fails.
@@ -238,13 +394,13 @@ Provide your analysis in valid JSON format."""
         return analysis
 
     def _extract_target_features(self, mood_analysis: Dict[str, Any]) -> Dict[str, float]:
-        """Extract target audio features from mood analysis.
+        """Extract target audio features from mood analysis with full feature set support.
 
         Args:
             mood_analysis: Comprehensive mood analysis
 
         Returns:
-            Dictionary of target audio features
+            Dictionary of target audio features (midpoint of ranges)
         """
         target_features = {}
 
@@ -253,11 +409,55 @@ Provide your analysis in valid JSON format."""
         # Convert ranges to target values (use midpoint)
         for feature, value_range in features.items():
             if isinstance(value_range, list) and len(value_range) == 2:
+                # Use midpoint of range as target value
                 target_features[feature] = sum(value_range) / 2
             elif isinstance(value_range, (int, float)):
                 target_features[feature] = float(value_range)
 
+        # Ensure we have reasonable defaults for key features if missing
+        if not target_features:
+            logger.warning("No target features extracted from mood analysis")
+            # Set neutral defaults
+            target_features = {
+                "energy": 0.5,
+                "valence": 0.5,
+                "danceability": 0.5,
+                "acousticness": 0.5
+            }
+
+        logger.info(f"Extracted target features: {list(target_features.keys())}")
         return target_features
+
+    def _extract_feature_weights(self, mood_analysis: Dict[str, Any]) -> Dict[str, float]:
+        """Extract feature importance weights from mood analysis.
+
+        Args:
+            mood_analysis: Comprehensive mood analysis
+
+        Returns:
+            Dictionary of feature weights (0-1 importance)
+        """
+        feature_weights = mood_analysis.get("feature_weights", {})
+
+        # Set default weights if none provided
+        if not feature_weights:
+            # Default weights favoring core mood features
+            feature_weights = {
+                "energy": 0.8,
+                "valence": 0.8,
+                "danceability": 0.6,
+                "acousticness": 0.6,
+                "instrumentalness": 0.5,
+                "tempo": 0.4,
+                "mode": 0.4,
+                "loudness": 0.3,
+                "speechiness": 0.3,
+                "liveness": 0.2,
+                "key": 0.2,
+                "popularity": 0.1
+            }
+
+        return feature_weights
 
     def _extract_search_keywords(self, mood_prompt: str) -> List[str]:
         """Extract search keywords from mood prompt.
