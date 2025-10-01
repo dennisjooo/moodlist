@@ -586,21 +586,21 @@ class RecommendationGeneratorAgent(BaseAgent):
         
         # Define tolerance thresholds for different feature types
         tolerance_thresholds = {
-            # Critical features - very strict
-            "speechiness": 0.15,
-            "instrumentalness": 0.15,
+            # Critical features - strict but not too harsh
+            "speechiness": 0.25,  # Increased from 0.15
+            "instrumentalness": 0.25,  # Increased from 0.15
             # Important features - moderate
-            "energy": 0.25,
-            "valence": 0.25,
-            "danceability": 0.25,
+            "energy": 0.3,  # Slightly increased from 0.25
+            "valence": 0.3,  # Slightly increased from 0.25
+            "danceability": 0.3,  # Slightly increased from 0.25
             # Flexible features - relaxed
-            "tempo": 35.0,  # BPM
-            "loudness": 5.0,  # dB
-            "acousticness": 0.35,
-            "liveness": 0.35,
+            "tempo": 40.0,  # BPM - slightly increased from 35
+            "loudness": 6.0,  # dB - slightly increased from 5
+            "acousticness": 0.4,  # Increased from 0.35
+            "liveness": 0.4,  # Increased from 0.35
             "mode": None,  # Binary, no tolerance
             "key": None,  # Discrete, no tolerance
-            "popularity": 25  # 0-100 scale
+            "popularity": 30  # 0-100 scale - slightly increased from 25
         }
 
         for rec in recommendations:
@@ -638,10 +638,10 @@ class RecommendationGeneratorAgent(BaseAgent):
                     if difference > tolerance:
                         violations.append(f"{feature_name}: target={target_single:.2f}, actual={actual_value:.2f}, diff={difference:.2f}")
                         
-                        # Critical features cause immediate filtering
+                        # Critical features cause immediate filtering only if severely out of range
                         if feature_name in ["speechiness", "instrumentalness"]:
-                            # Extra strict for critical features
-                            if difference > tolerance * 1.5:
+                            # Only filter if difference is more than 2x tolerance (very extreme)
+                            if difference > tolerance * 2.0:
                                 should_filter = True
             
             if should_filter:
