@@ -1,7 +1,7 @@
 """Recommendation generator agent for creating mood-based track recommendations."""
 
+import asyncio
 import logging
-import random
 from typing import Any, Dict, List, Optional
 
 from ..core.base_agent import BaseAgent
@@ -70,9 +70,14 @@ class RecommendationGeneratorAgent(BaseAgent):
             # Ensure diversity in recommendations
             diverse_recommendations = self._ensure_diversity(filtered_recommendations)
 
-            # Update state with recommendations
+            # Update state with recommendations (with deduplication)
+            seen_track_ids = set()
             for rec in diverse_recommendations[:self.max_recommendations]:
-                state.add_recommendation(rec)
+                if rec.track_id not in seen_track_ids:
+                    state.add_recommendation(rec)
+                    seen_track_ids.add(rec.track_id)
+                else:
+                    logger.debug(f"Skipping duplicate track: {rec.track_name} by {', '.join(rec.artists)}")
 
             state.current_step = "recommendations_generated"
             state.status = RecommendationStatus.GENERATING_RECOMMENDATIONS
@@ -104,9 +109,8 @@ class RecommendationGeneratorAgent(BaseAgent):
         # Split seeds into smaller chunks for multiple API calls
         seed_chunks = self._chunk_seeds(state.seed_tracks, chunk_size=3)
 
-        # Get mood-based features
-        mood_features = self._extract_mood_features(state.mood_analysis)
-        print("features", mood_features)
+        # Get comprehensive mood-based features from enhanced analysis
+        mood_features = self._extract_mood_features(state)
         for chunk in seed_chunks:
             try:
                 # Get recommendations for this seed chunk
@@ -119,18 +123,28 @@ class RecommendationGeneratorAgent(BaseAgent):
                 # Convert to TrackRecommendation objects
                 for rec_data in chunk_recommendations:
                     try:
+                        track_id = rec_data.get("track_id", "")
+                        if not track_id:
+                            logger.warning("Skipping recommendation without track ID")
+                            continue
+
+                        # Get complete audio features for this track
+                        complete_audio_features = await self._get_complete_audio_features(
+                            track_id, rec_data.get("audio_features")
+                        )
+
                         # Use confidence score from RecoBeat if available, otherwise calculate
                         confidence = rec_data.get("confidence_score")
                         if confidence is None:
                             confidence = self._calculate_confidence_score(rec_data, state)
-                        
+
                         recommendation = TrackRecommendation(
-                            track_id=rec_data.get("id", ""),
+                            track_id=track_id,
                             track_name=rec_data.get("track_name", "Unknown Track"),
                             artists=rec_data.get("artists", ["Unknown Artist"]),
                             spotify_uri=rec_data.get("spotify_uri"),
                             confidence_score=confidence,
-                            audio_features=rec_data.get("audio_features"),
+                            audio_features=complete_audio_features,
                             reasoning=rec_data.get("reasoning", f"Mood-based recommendation using seeds: {', '.join(chunk)}"),
                             source=rec_data.get("source", "reccobeat")
                         )
@@ -141,7 +155,6 @@ class RecommendationGeneratorAgent(BaseAgent):
                         continue
 
                 # Add some delay between API calls to respect rate limits
-                import asyncio
                 await asyncio.sleep(0.1)
 
             except Exception as e:
@@ -151,6 +164,72 @@ class RecommendationGeneratorAgent(BaseAgent):
         logger.info(f"Generated {len(all_recommendations)} raw recommendations from {len(seed_chunks)} seed chunks")
 
         return [rec.dict() for rec in all_recommendations]
+
+    async def _get_complete_audio_features(
+        self,
+        track_id: str,
+        existing_features: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Get complete audio features for a track using RecoBeat API.
+
+        Args:
+            track_id: The track ID to get features for
+            existing_features: Any existing features from the recommendation
+
+        Returns:
+            Complete audio features dictionary with all 12 features
+        """
+        complete_features = {}
+
+        # Start with existing features if available
+        if existing_features:
+            complete_features.update(existing_features)
+
+        # If we already have all features, return them
+        required_features = {
+            "acousticness", "danceability", "energy", "instrumentalness",
+            "key", "liveness", "loudness", "mode", "speechiness",
+            "tempo", "valence", "popularity"
+        }
+
+        if required_features.issubset(complete_features.keys()):
+            return complete_features
+
+        try:
+            # Fetch complete audio features from RecoBeat API
+            audio_features_result = await self.reccobeat_service.get_tracks_audio_features([track_id])
+
+            if track_id in audio_features_result:
+                api_features = audio_features_result[track_id]
+
+                # Map API response to expected feature names and merge with existing
+                feature_mapping = {
+                    "acousticness": api_features.get("acousticness"),
+                    "danceability": api_features.get("danceability"),
+                    "energy": api_features.get("energy"),
+                    "instrumentalness": api_features.get("instrumentalness"),
+                    "key": api_features.get("key"),
+                    "liveness": api_features.get("liveness"),
+                    "loudness": api_features.get("loudness"),
+                    "mode": api_features.get("mode"),
+                    "speechiness": api_features.get("speechiness"),
+                    "tempo": api_features.get("tempo"),
+                    "valence": api_features.get("valence"),
+                    "popularity": api_features.get("popularity")
+                }
+
+                # Update with API features (only add non-None values)
+                for feature_name, feature_value in feature_mapping.items():
+                    if feature_value is not None:
+                        complete_features[feature_name] = feature_value
+
+                logger.info(f"Enhanced audio features for track {track_id}: got {len(complete_features)} features")
+
+        except Exception as e:
+            logger.warning(f"Failed to get complete audio features for track {track_id}: {e}")
+            # Continue with existing features if API call fails
+
+        return complete_features
 
     async def _generate_fallback_recommendations(self, state: AgentState) -> List[Dict[str, Any]]:
         """Generate fallback recommendations when no seeds are available.
@@ -212,76 +291,84 @@ class RecommendationGeneratorAgent(BaseAgent):
                 chunks.append(chunk)
         return chunks
 
-    def _extract_mood_features(self, mood_analysis: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Extract audio features from mood analysis.
+    def _extract_mood_features(self, state: AgentState) -> Dict[str, Any]:
+        """Extract comprehensive audio features from enhanced mood analysis for RecoBeat API.
 
         Args:
-            mood_analysis: Mood analysis results
+            state: Current agent state with mood analysis and target features
 
         Returns:
-            Dictionary of audio features for RecoBeat API
+            Dictionary of all audio features for RecoBeat API with proper parameter mapping
         """
         features = {}
 
-        if not mood_analysis:
-            return features
+        # Get target features from state metadata (where mood analyzer stores them)
+        target_features = state.metadata.get("target_features", {})
 
-        # Support both old format (target_features) and new format (audio_features)
-        target_features = mood_analysis.get("target_features") or mood_analysis.get("audio_features")
-        
         if not target_features:
+            logger.warning("No target features available for recommendation generation")
             return features
 
-        # Map mood analysis features to RecoBeat API parameters
+        # Get feature weights for sophisticated mood influence
+        feature_weights = state.metadata.get("feature_weights", {})
+
+        # Map all 12 RecoBeat API features with proper parameter handling
         feature_mapping = {
-            "energy": "energy",
-            "valence": "valence",
-            "danceability": "danceability",
             "acousticness": "acousticness",
+            "danceability": "danceability",
+            "energy": "energy",
             "instrumentalness": "instrumentalness",
-            "tempo": "tempo",
             "key": "key",
+            "liveness": "liveness",
+            "loudness": "loudness",
             "mode": "mode",
             "speechiness": "speechiness",
-            "liveness": "liveness",
-            "loudness": "loudness"
+            "tempo": "tempo",
+            "valence": "valence",
+            "popularity": "popularity"
         }
 
         for mood_feature, api_param in feature_mapping.items():
             if mood_feature in target_features:
                 value = target_features[mood_feature]
 
-                # Handle range values as string (e.g., "0.8-1.0")
-                if isinstance(value, str):
-                    try:
-                        if '-' in value:
-                            # Parse range string
-                            parts = value.split('-')
-                            if len(parts) == 2:
-                                min_val = float(parts[0])
-                                max_val = float(parts[1])
-                                features[api_param] = (min_val + max_val) / 2
-                            else:
-                                # Single value as string
-                                features[api_param] = float(value)
-                        else:
-                            # Single value as string
-                            features[api_param] = float(value)
-                    except (ValueError, IndexError) as e:
-                        logger.warning(f"Could not parse feature value '{value}' for {mood_feature}: {e}")
-                        continue
                 # Handle range values as list (e.g., [0.8, 1.0])
-                elif isinstance(value, list) and len(value) == 2:
+                if isinstance(value, list) and len(value) == 2:
+                    # Use midpoint of range for API call
                     features[api_param] = sum(value) / 2
                 # Handle numeric values
                 elif isinstance(value, (int, float)):
-                    features[api_param] = value
+                    features[api_param] = float(value)
+                # Handle range values as string (e.g., "0.8-1.0") - legacy support
+                elif isinstance(value, str) and '-' in value:
+                    try:
+                        parts = value.split('-')
+                        if len(parts) == 2:
+                            min_val = float(parts[0])
+                            max_val = float(parts[1])
+                            features[api_param] = (min_val + max_val) / 2
+                    except (ValueError, IndexError) as e:
+                        logger.warning(f"Could not parse range value '{value}' for {mood_feature}: {e}")
+                        continue
 
-        # Set feature weight for stronger mood influence
-        features["feature_weight"] = 3.0
-        
-        # Make sure mode is in integer
-        features["mode"] = int(features["mode"])
+        # Set enhanced feature weight based on mood analysis confidence
+        # Use feature weights if available, otherwise use default high weight for mood influence
+        if feature_weights:
+            # Calculate average weight for overall feature influence
+            avg_weight = sum(feature_weights.values()) / len(feature_weights) if feature_weights else 4.5
+            features["feature_weight"] = max(4.5, min(avg_weight * 4.0, 5.0))  # Scale to API range (1-5), minimum 4.5
+        else:
+            features["feature_weight"] = 4.5  # High influence for mood-based recommendations
+
+        # Ensure proper data types for API parameters
+        if "mode" in features:
+            features["mode"] = int(features["mode"])
+        if "key" in features:
+            features["key"] = int(features["key"])
+        if "popularity" in features:
+            features["popularity"] = int(features["popularity"])
+
+        logger.info(f"Extracted {len(features)} audio features for RecoBeat API: {list(features.keys())}")
 
         return features
 
@@ -320,20 +407,42 @@ class RecommendationGeneratorAgent(BaseAgent):
         if popularity > 0:
             # Scale popularity contribution
             popularity_factor = min(popularity / 100.0, 1.0)
-            base_score += (0.2 * popularity_factor)
+            base_score += (0.15 * popularity_factor)
         
-        # Factor in audio features match with mood
-        if state.mood_analysis and recommendation_data.get("audio_features"):
+        # Factor in audio features match with mood using complete features
+        target_features = state.metadata.get("target_features", {})
+        if target_features and recommendation_data.get("audio_features"):
             mood_match_score = self._calculate_mood_match(
                 recommendation_data["audio_features"],
-                state.mood_analysis.get("target_features", {})
+                target_features
             )
-            base_score += (0.2 * mood_match_score)
-        elif state.mood_analysis and state.mood_analysis.get("target_features"):
-            # Boost for having mood analysis even without audio features
+            base_score += (0.4 * mood_match_score)  # Increased weight for mood matching
+            
+            # Apply penalties for critical feature violations
+            audio_features = recommendation_data["audio_features"]
+            penalty = 0.0
+            
+            # Penalize high speechiness if target is low
+            if "speechiness" in target_features and "speechiness" in audio_features:
+                target_speech = target_features["speechiness"]
+                actual_speech = audio_features["speechiness"]
+                if target_speech < 0.2 and actual_speech > 0.3:
+                    penalty += 0.15 * (actual_speech - 0.3)
+            
+            # Penalize high liveness if target is low
+            if "liveness" in target_features and "liveness" in audio_features:
+                target_live = target_features["liveness"]
+                actual_live = audio_features["liveness"]
+                if target_live < 0.3 and actual_live > 0.5:
+                    penalty += 0.1 * (actual_live - 0.5)
+            
+            base_score -= penalty
+            
+        elif target_features:
+            # Boost for having target features even without audio features
             base_score += 0.1
 
-        return min(base_score, 1.0)
+        return min(max(base_score, 0.0), 1.0)
     
     def _calculate_mood_match(
         self,
@@ -424,8 +533,14 @@ class RecommendationGeneratorAgent(BaseAgent):
         rec_objects = []
         for rec_data in recommendations:
             try:
+                # Handle both 'track_id' and 'id' fields for compatibility
+                track_id = rec_data.get("track_id") or rec_data.get("id", "")
+                if not track_id:
+                    logger.warning("Skipping recommendation without track ID")
+                    continue
+                
                 rec_obj = TrackRecommendation(
-                    track_id=rec_data.get("id", ""),
+                    track_id=track_id,
                     track_name=rec_data.get("track_name", "Unknown Track"),
                     artists=rec_data.get("artists", ["Unknown Artist"]),
                     spotify_uri=rec_data.get("spotify_uri"),
@@ -440,7 +555,7 @@ class RecommendationGeneratorAgent(BaseAgent):
                 logger.warning(f"Failed to create recommendation object: {e}")
                 continue
 
-        # Sort by confidence score
+        # Sort by confidence score before filtering
         rec_objects.sort(key=lambda x: x.confidence_score, reverse=True)
 
         # Apply mood-based filtering if available
@@ -454,30 +569,89 @@ class RecommendationGeneratorAgent(BaseAgent):
         recommendations: List[TrackRecommendation],
         mood_analysis: Dict[str, Any]
     ) -> List[TrackRecommendation]:
-        """Apply mood-based filtering to recommendations.
+        """Apply mood-based filtering to recommendations with strict tolerance thresholds.
 
         Args:
             recommendations: List of recommendations to filter
             mood_analysis: Mood analysis results
 
         Returns:
-            Filtered recommendations
+            Filtered recommendations that meet mood constraints
         """
         if not mood_analysis.get("target_features"):
             return recommendations
 
         target_features = mood_analysis["target_features"]
         filtered_recommendations = []
+        
+        # Define tolerance thresholds for different feature types
+        tolerance_thresholds = {
+            # Critical features - very strict
+            "speechiness": 0.15,
+            "instrumentalness": 0.15,
+            # Important features - moderate
+            "energy": 0.25,
+            "valence": 0.25,
+            "danceability": 0.25,
+            # Flexible features - relaxed
+            "tempo": 35.0,  # BPM
+            "loudness": 5.0,  # dB
+            "acousticness": 0.35,
+            "liveness": 0.35,
+            "mode": None,  # Binary, no tolerance
+            "key": None,  # Discrete, no tolerance
+            "popularity": 25  # 0-100 scale
+        }
 
         for rec in recommendations:
-            # Simple filtering based on available features
-            # In a real implementation, you might use audio features for more sophisticated filtering
+            if not rec.audio_features:
+                # Keep tracks without audio features (will have lower confidence anyway)
+                filtered_recommendations.append(rec)
+                continue
+            
+            should_filter = False
+            violations = []
+            
+            # Check each target feature against the track's audio features
+            for feature_name, target_value in target_features.items():
+                if feature_name not in rec.audio_features:
+                    continue
+                
+                actual_value = rec.audio_features[feature_name]
+                tolerance = tolerance_thresholds.get(feature_name)
+                
+                # Convert target_value to single value if it's a range
+                if isinstance(target_value, list) and len(target_value) == 2:
+                    target_single = sum(target_value) / 2  # Use midpoint
+                elif isinstance(target_value, (int, float)):
+                    target_single = float(target_value)
+                else:
+                    continue  # Skip if we can't parse the target value
+                
+                if tolerance is None:
+                    # Binary or discrete features - exact or close match required
+                    if feature_name in ["mode", "key"]:
+                        continue  # Skip strict filtering for mode/key
+                else:
+                    # Check if actual value is within tolerance
+                    difference = abs(actual_value - target_single)
+                    if difference > tolerance:
+                        violations.append(f"{feature_name}: target={target_single:.2f}, actual={actual_value:.2f}, diff={difference:.2f}")
+                        
+                        # Critical features cause immediate filtering
+                        if feature_name in ["speechiness", "instrumentalness"]:
+                            # Extra strict for critical features
+                            if difference > tolerance * 1.5:
+                                should_filter = True
+            
+            if should_filter:
+                logger.debug(f"Filtered out '{rec.track_name}' by {', '.join(rec.artists)} due to violations: {'; '.join(violations)}")
+            else:
+                if violations:
+                    logger.debug(f"Keeping '{rec.track_name}' despite minor violations: {'; '.join(violations)}")
+                filtered_recommendations.append(rec)
 
-            # For now, we'll keep all recommendations but could add filtering logic here
-            # based on the target_features from mood analysis
-
-            filtered_recommendations.append(rec)
-
+        logger.info(f"Mood filtering: {len(recommendations)} -> {len(filtered_recommendations)} tracks")
         return filtered_recommendations
 
     def _ensure_diversity(
@@ -522,7 +696,7 @@ class RecommendationGeneratorAgent(BaseAgent):
                 spotify_uri=rec.spotify_uri,
                 confidence_score=adjusted_confidence,
                 audio_features=rec.audio_features,
-                reasoning=f"{rec.reasoning} (diversity-adjusted)",
+                reasoning=rec.reasoning,  # Keep original reasoning, adjustment is in confidence score
                 source=rec.source
             )
 
