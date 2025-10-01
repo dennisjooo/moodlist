@@ -21,9 +21,10 @@ from ..agents import (
     SeedGathererAgent,
     RecommendationGeneratorAgent,
     PlaylistEditorAgent,
-    PlaylistCreatorAgent
+    PlaylistCreatorAgent,
+    OrchestratorAgent
 )
-from ..states.agent_state import AgentState, PlaylistEdit
+from ..states.agent_state import  PlaylistEdit
 
 
 logger = logging.getLogger(__name__)
@@ -34,18 +35,36 @@ spotify_service = SpotifyService()
 
 llm = ChatOpenAI(
     model="x-ai/grok-4-fast:free",
-    temperature=0.2,
+    temperature=1,
     base_url="https://openrouter.ai/api/v1",
-    # api_key="***REMOVED***"
+    api_key="***REMOVED***"
+)
+
+groq_llm = ChatOpenAI(
+    model="openai/gpt-oss-120b",
+    temperature=1,
+    base_url="https://api.groq.com/openai/v1",
     api_key="***REMOVED***"
 )
 
 # Create agents
-mood_analyzer = MoodAnalyzerAgent(llm, verbose=True)
+mood_analyzer = MoodAnalyzerAgent(groq_llm, verbose=True)
 seed_gatherer = SeedGathererAgent(spotify_service, verbose=True)
 recommendation_generator = RecommendationGeneratorAgent(reccobeat_service, verbose=True)
 playlist_editor = PlaylistEditorAgent(verbose=True)
 playlist_creator = PlaylistCreatorAgent(spotify_service, llm, verbose=True)
+
+# Create orchestrator agent (must be created after other agents)
+orchestrator = OrchestratorAgent(
+    mood_analyzer=mood_analyzer,
+    recommendation_generator=recommendation_generator,
+    seed_gatherer=seed_gatherer,
+    llm=llm,
+    max_iterations=3,
+    min_recommendations=15,
+    cohesion_threshold=0.75,
+    verbose=True
+)
 
 # Create workflow manager
 workflow_config = WorkflowConfig(
@@ -61,7 +80,8 @@ agents = {
     "seed_gatherer": seed_gatherer,
     "recommendation_generator": recommendation_generator,
     "playlist_editor": playlist_editor,
-    "playlist_creator": playlist_creator
+    "playlist_creator": playlist_creator,
+    "orchestrator": orchestrator
 }
 
 workflow_manager = WorkflowManager(workflow_config, agents, reccobeat_service.tools)

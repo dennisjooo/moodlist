@@ -12,6 +12,8 @@ class RecommendationStatus(str, Enum):
     ANALYZING_MOOD = "analyzing_mood"
     GATHERING_SEEDS = "gathering_seeds"
     GENERATING_RECOMMENDATIONS = "generating_recommendations"
+    EVALUATING_QUALITY = "evaluating_quality"
+    OPTIMIZING_RECOMMENDATIONS = "optimizing_recommendations"
     AWAITING_USER_INPUT = "awaiting_user_input"
     PROCESSING_EDITS = "processing_edits"
     CREATING_PLAYLIST = "creating_playlist"
