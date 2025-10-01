@@ -22,6 +22,8 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
       case 'analyzing_mood':
       case 'gathering_seeds':
       case 'generating_recommendations':
+      case 'evaluating_quality':
+      case 'optimizing_recommendations':
       case 'processing_edits':
       case 'creating_playlist':
         return <Loader2 className="w-4 h-4 animate-spin" />;
@@ -36,7 +38,20 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
     }
   };
 
-  const getStatusMessage = (status: string | null) => {
+  const getStatusMessage = (status: string | null, currentStep?: string) => {
+    // Check for iteration-based steps
+    if (currentStep?.includes('iteration')) {
+      const match = currentStep.match(/iteration[_\s](\d+)/i);
+      const iteration = match ? match[1] : '1';
+
+      if (currentStep.includes('evaluating_quality')) {
+        return `🔍 Evaluating playlist quality (${iteration}/3)...`;
+      }
+      if (currentStep.includes('optimizing_recommendations')) {
+        return `✨ Optimizing recommendations (${iteration}/3)...`;
+      }
+    }
+
     switch (status) {
       case 'analyzing_mood':
         return '🤔 Analyzing your mood...';
@@ -44,6 +59,10 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
         return '🎵 Finding your music preferences...';
       case 'generating_recommendations':
         return '🎼 Generating perfect recommendations...';
+      case 'evaluating_quality':
+        return '🔍 Evaluating playlist quality...';
+      case 'optimizing_recommendations':
+        return '✨ Optimizing your playlist...';
       case 'awaiting_user_input':
         return '✏️ Ready for editing!';
       case 'processing_edits':
@@ -59,7 +78,20 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
     }
   };
 
-  const getProgressValue = (status: string | null) => {
+  const getProgressValue = (status: string | null, currentStep?: string) => {
+    // Calculate progress for optimization iterations
+    if (currentStep?.includes('iteration')) {
+      const match = currentStep.match(/iteration[_\s](\d+)/i);
+      const iteration = parseInt(match ? match[1] : '1');
+
+      if (currentStep.includes('evaluating_quality')) {
+        return 65 + (iteration * 3); // 68%, 71%, 74%
+      }
+      if (currentStep.includes('optimizing_recommendations')) {
+        return 73 + (iteration * 4); // 77%, 81%, 85%
+      }
+    }
+
     switch (status) {
       case 'analyzing_mood':
         return 20;
@@ -67,10 +99,14 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
         return 40;
       case 'generating_recommendations':
         return 60;
-      case 'awaiting_user_input':
+      case 'evaluating_quality':
+        return 70;
+      case 'optimizing_recommendations':
         return 80;
+      case 'awaiting_user_input':
+        return 90;
       case 'processing_edits':
-        return 85;
+        return 92;
       case 'creating_playlist':
         return 95;
       case 'completed':
@@ -129,14 +165,14 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
-              {getStatusMessage(workflowState.status)}
+              {getStatusMessage(workflowState.status, workflowState.currentStep)}
             </span>
             <Badge variant="outline" className="text-xs">
-              {getProgressValue(workflowState.status)}%
+              {getProgressValue(workflowState.status, workflowState.currentStep)}%
             </Badge>
           </div>
           <Progress
-            value={getProgressValue(workflowState.status)}
+            value={getProgressValue(workflowState.status, workflowState.currentStep)}
             className={cn(
               "h-2",
               workflowState.status === 'failed' && "bg-red-100"

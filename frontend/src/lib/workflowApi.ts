@@ -17,9 +17,10 @@ export interface StartRecommendationResponse {
 export interface WorkflowStatus {
   session_id: string;
   status: "pending" | "analyzing_mood" | "gathering_seeds" |
-         "generating_recommendations" | "awaiting_user_input" |
-         "processing_edits" | "creating_playlist" |
-         "completed" | "failed";
+  "generating_recommendations" | "evaluating_quality" |
+  "optimizing_recommendations" | "awaiting_user_input" |
+  "processing_edits" | "creating_playlist" |
+  "completed" | "failed";
   current_step: string;
   mood_prompt: string;
   recommendation_count: number;
