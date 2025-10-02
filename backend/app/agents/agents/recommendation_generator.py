@@ -74,9 +74,13 @@ class RecommendationGeneratorAgent(BaseAgent):
             # Ensure diversity in recommendations
             diverse_recommendations = self._ensure_diversity(filtered_recommendations)
 
+            # Get playlist target to determine max recommendations
+            playlist_target = state.metadata.get("playlist_target", {})
+            max_recommendations = playlist_target.get("max_count", self.max_recommendations)
+
             # Update state with recommendations (with deduplication)
             seen_track_ids = set()
-            for rec in diverse_recommendations[:self.max_recommendations]:
+            for rec in diverse_recommendations[:max_recommendations]:
                 if rec.track_id not in seen_track_ids:
                     state.add_recommendation(rec)
                     seen_track_ids.add(rec.track_id)
@@ -101,6 +105,8 @@ class RecommendationGeneratorAgent(BaseAgent):
 
     async def _generate_mood_based_recommendations(self, state: AgentState) -> List[Dict[str, Any]]:
         """Generate recommendations based on mood analysis, seeds, and discovered artists.
+        
+        Target ratio: ~2/3 from seed-based recommendations, ~1/3 from artist discovery.
 
         Args:
             state: Current agent state
@@ -110,17 +116,39 @@ class RecommendationGeneratorAgent(BaseAgent):
         """
         all_recommendations = []
         
-        # Generate from seed tracks
+        # Get target to calculate desired split
+        playlist_target = state.metadata.get("playlist_target", {})
+        target_count = playlist_target.get("target_count", 20)
+        
+        # Calculate target split: 2/3 seeds, 1/3 artists
+        target_seed_recs = int(target_count * 0.67)  # ~67% from seeds
+        target_artist_recs = target_count - target_seed_recs  # ~33% from artists
+        
+        # Store targets in state for use by generation methods
+        state.metadata["_temp_seed_target"] = target_seed_recs
+        state.metadata["_temp_artist_target"] = target_artist_recs
+        
+        logger.info(
+            f"Target generation split: {target_seed_recs} from seeds, "
+            f"{target_artist_recs} from artists (total: {target_count})"
+        )
+        
+        # Generate from seed tracks (aiming for 2/3 of target)
         seed_recommendations = await self._generate_from_seeds(state)
         all_recommendations.extend(seed_recommendations)
         
-        # Generate from discovered artists (if available)
+        # Generate from discovered artists (aiming for 1/3 of target)
         artist_recommendations = await self._generate_from_discovered_artists(state)
         all_recommendations.extend(artist_recommendations)
         
+        # Clean up temp metadata
+        state.metadata.pop("_temp_seed_target", None)
+        state.metadata.pop("_temp_artist_target", None)
+        
         logger.info(
             f"Generated {len(all_recommendations)} total recommendations "
-            f"({len(seed_recommendations)} from seeds, {len(artist_recommendations)} from artists)"
+            f"({len(seed_recommendations)} from seeds [{target_seed_recs} target], "
+            f"{len(artist_recommendations)} from artists [{target_artist_recs} target])"
         )
         
         return all_recommendations
@@ -141,12 +169,20 @@ class RecommendationGeneratorAgent(BaseAgent):
 
         # Get comprehensive mood-based features from enhanced analysis
         mood_features = self._extract_mood_features(state)
+        
+        # Get seed target (2/3 of total playlist target)
+        target_seed_recs = state.metadata.get("_temp_seed_target", 14)  # Default ~2/3 of 20
+        
+        # Request more per chunk to account for filtering (aim for 1.5x target)
+        # This gives us room for filtering while targeting the right amount
+        per_chunk_size = min(20, int((target_seed_recs * 1.5) // len(seed_chunks)) + 3)
+        
         for chunk in seed_chunks:
             try:
                 # Get recommendations for this seed chunk
                 chunk_recommendations = await self.reccobeat_service.get_track_recommendations(
                     seeds=chunk,
-                    size=15,  # Get more per chunk for filtering
+                    size=per_chunk_size,  # Dynamic instead of fixed 15
                     **mood_features
                 )
 
@@ -621,21 +657,21 @@ class RecommendationGeneratorAgent(BaseAgent):
         
         # Define tolerance thresholds for different feature types
         tolerance_thresholds = {
-            # Critical features - strict but not too harsh
-            "speechiness": 0.25,  # Increased from 0.15
-            "instrumentalness": 0.25,  # Increased from 0.15
-            # Important features - moderate
-            "energy": 0.3,  # Slightly increased from 0.25
-            "valence": 0.3,  # Slightly increased from 0.25
-            "danceability": 0.3,  # Slightly increased from 0.25
-            # Flexible features - relaxed
-            "tempo": 40.0,  # BPM - slightly increased from 35
-            "loudness": 6.0,  # dB - slightly increased from 5
-            "acousticness": 0.4,  # Increased from 0.35
-            "liveness": 0.4,  # Increased from 0.35
+            # Critical features - tighter control
+            "speechiness": 0.20,  # Reduced from 0.25
+            "instrumentalness": 0.20,  # Reduced from 0.25
+            # Important features - tighten slightly
+            "energy": 0.25,  # Reduced from 0.3
+            "valence": 0.25,  # Reduced from 0.3
+            "danceability": 0.25,  # Reduced from 0.3
+            # Flexible features - keep reasonable
+            "tempo": 40.0,
+            "loudness": 6.0,
+            "acousticness": 0.35,  # Reduced from 0.4
+            "liveness": 0.35,  # Reduced from 0.4
             "mode": None,  # Binary, no tolerance
             "key": None,  # Discrete, no tolerance
-            "popularity": 30  # 0-100 scale - slightly increased from 25
+            "popularity": 25  # Reduced from 30
         }
 
         for rec in recommendations:
@@ -673,10 +709,14 @@ class RecommendationGeneratorAgent(BaseAgent):
                     if difference > tolerance:
                         violations.append(f"{feature_name}: target={target_single:.2f}, actual={actual_value:.2f}, diff={difference:.2f}")
                         
-                        # Critical features cause immediate filtering only if severely out of range
+                        # Critical features cause immediate filtering if moderately out of range
                         if feature_name in ["speechiness", "instrumentalness"]:
-                            # Only filter if difference is more than 2x tolerance (very extreme)
-                            if difference > tolerance * 2.0:
+                            # Filter if difference is more than 1.5x tolerance (was 2x)
+                            if difference > tolerance * 1.5:
+                                should_filter = True
+                        elif feature_name in ["energy", "valence"]:
+                            # Filter if difference is more than 1.8x tolerance
+                            if difference > tolerance * 1.8:
                                 should_filter = True
             
             if should_filter:
@@ -765,6 +805,9 @@ class RecommendationGeneratorAgent(BaseAgent):
         # Get target features for filtering
         target_features = state.metadata.get("target_features", {})
         
+        # Get artist target (1/3 of total playlist target)
+        target_artist_recs = state.metadata.get("_temp_artist_target", 7)  # Default ~1/3 of 20
+        
         # Track successful artists
         successful_artists = 0
         
@@ -773,6 +816,16 @@ class RecommendationGeneratorAgent(BaseAgent):
         if not access_token:
             logger.warning("No Spotify access token available for artist top tracks")
             return all_recommendations
+        
+        # Calculate tracks per artist to reach 1/3 target
+        # Use fewer artists but more tracks per artist for better quality
+        artist_count = min(len(mood_matched_artists), 8)  # Limit to 8 artists max
+        tracks_per_artist = max(2, min(int((target_artist_recs * 1.5) // artist_count), 4))
+        
+        logger.info(
+            f"Fetching {tracks_per_artist} tracks per artist (up to {artist_count} artists) "
+            f"to reach artist target of {target_artist_recs} tracks"
+        )
         
         # Fetch tracks from each artist (limit to 6-8 artists for focused playlist)
         for artist_id in mood_matched_artists[:8]:  # Limit to 8 artists
@@ -790,8 +843,8 @@ class RecommendationGeneratorAgent(BaseAgent):
                 
                 successful_artists += 1
                 
-                # Score and filter tracks by audio features (limit to 3 tracks per artist)
-                for track in artist_tracks[:3]:
+                # Score and filter tracks by audio features (dynamic count)
+                for track in artist_tracks[:tracks_per_artist]:
                     try:
                         # Spotify returns tracks with 'id' key
                         track_id = track.get("id")

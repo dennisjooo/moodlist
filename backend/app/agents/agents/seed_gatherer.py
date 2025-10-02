@@ -88,16 +88,29 @@ class SeedGathererAgent(BaseAgent):
             # Select seed tracks using audio feature scoring
             scored_tracks = self._select_seed_tracks(top_tracks, target_features)
             
+            # Get playlist target to determine seed count
+            playlist_target = state.metadata.get("playlist_target", {})
+            target_count = playlist_target.get("target_count", 20)
+            
+            # Calculate seed count: aim for 1 seed per 3-4 target tracks
+            ideal_seed_count = max(5, min(target_count // 3, 10))
+            
             # Use LLM to select final seeds if available
-            if self.llm and len(scored_tracks) > 5:
+            if self.llm and len(scored_tracks) > ideal_seed_count:
                 final_seeds = await self._llm_select_seeds(
-                    scored_tracks[:15],  # Top 15 candidates
+                    scored_tracks[:ideal_seed_count * 2],  # Give LLM 2x candidates
                     state.mood_prompt,
-                    target_features
+                    target_features,
+                    ideal_count=ideal_seed_count
                 )
             else:
                 # Just use top scored tracks
-                final_seeds = scored_tracks[:10]
+                final_seeds = scored_tracks[:ideal_seed_count]
+            
+            logger.info(
+                f"Selected {len(final_seeds)} seeds for target of {target_count} tracks "
+                f"(ratio: 1:{target_count // len(final_seeds) if len(final_seeds) > 0 else 1})"
+            )
             
             state.seed_tracks = final_seeds
             state.metadata["seed_candidates_count"] = len(scored_tracks)
@@ -398,7 +411,8 @@ class SeedGathererAgent(BaseAgent):
         self,
         candidate_track_ids: List[str],
         mood_prompt: str,
-        target_features: Dict[str, Any]
+        target_features: Dict[str, Any],
+        ideal_count: int = 8
     ) -> List[str]:
         """Use LLM to select the best seed tracks from candidates.
 
@@ -406,9 +420,10 @@ class SeedGathererAgent(BaseAgent):
             candidate_track_ids: List of candidate track IDs (already scored)
             mood_prompt: User's mood description
             target_features: Target audio features
+            ideal_count: Ideal number of seeds to select
 
         Returns:
-            List of 5-8 selected seed track IDs
+            List of selected seed track IDs
         """
         try:
             # We need track details for the LLM prompt
@@ -432,7 +447,7 @@ class SeedGathererAgent(BaseAgent):
 
 **Target Audio Features**: {", ".join(features_summary)}
 
-**Task**: From the provided {len(candidate_track_ids)} candidate tracks (already ranked by how well they match the mood), select 5-8 tracks that would make the best seeds for generating a cohesive playlist.
+**Task**: From the provided {len(candidate_track_ids)} candidate tracks (already ranked by how well they match the mood), select {ideal_count} tracks that would make the best seeds for generating a cohesive playlist.
 
 Consider:
 1. The tracks are already scored and ordered by match quality
@@ -445,11 +460,11 @@ Consider:
 
 Respond in JSON format:
 {{
-  "selected_indices": [1, 2, 3, 4, 5, 6, 7, 8],
+  "selected_indices": [1, 2, 3, ...],
   "reasoning": "Brief explanation of selection strategy"
 }}
 
-Select 5-8 indices from the list above."""
+Select approximately {ideal_count} indices from the list above."""
 
             response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
             content = response.content if hasattr(response, 'content') else str(response)
@@ -476,14 +491,14 @@ Select 5-8 indices from the list above."""
                 # Store reasoning in metadata
                 logger.info(f"LLM selected {len(selected_tracks)} seeds: {reasoning}")
                 
-                # Return 5-8 seeds
-                return selected_tracks[:8]
+                # Return up to ideal_count seeds
+                return selected_tracks[:ideal_count]
 
             else:
                 logger.warning("Could not parse LLM seed selection response")
-                return candidate_track_ids[:8]
+                return candidate_track_ids[:ideal_count]
 
         except Exception as e:
             logger.error(f"LLM seed selection failed: {str(e)}")
             # Fallback to top scored tracks
-            return candidate_track_ids[:8]
+            return candidate_track_ids[:ideal_count]
