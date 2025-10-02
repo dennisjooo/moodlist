@@ -191,6 +191,7 @@ async def get_workflow_status(session_id: str, db: AsyncSession = Depends(get_db
                 "status": state.status.value,
                 "current_step": state.current_step,
                 "mood_prompt": state.mood_prompt,
+                "mood_analysis": state.mood_analysis,
                 "recommendation_count": len(state.recommendations),
                 "has_playlist": state.playlist_id is not None,
                 "awaiting_input": state.awaiting_user_input,
@@ -221,6 +222,7 @@ async def get_workflow_status(session_id: str, db: AsyncSession = Depends(get_db
             "status": playlist.status,
             "current_step": "completed" if playlist.status == "completed" else playlist.status,
             "mood_prompt": playlist.mood_prompt,
+            "mood_analysis": playlist.mood_analysis_data,
             "recommendation_count": recommendation_count,
             "has_playlist": playlist.spotify_playlist_id is not None,
             "awaiting_input": False,  # Persisted workflows are not awaiting input

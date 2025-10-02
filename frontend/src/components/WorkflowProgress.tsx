@@ -113,7 +113,13 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
 
     // Clean up local state and stop polling
     stopWorkflow();
-    router.push('/create');
+
+    // Clear any errors that might be showing
+    clearError();
+
+    // Navigate to /create and force a clean state by using replace
+    // This ensures we go back to the initial state with the mood input form
+    router.replace('/create');
   };
 
   if (!workflowState.sessionId && !workflowState.isLoading) {
@@ -161,7 +167,6 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
             <div className="flex items-center justify-between px-2 py-3 rounded-lg bg-gradient-to-r from-muted/30 to-muted/10 backdrop-blur-sm border border-border/50">
               {getVisibleStages().map((stage, index) => {
                 const isCurrentStage = workflowState.status?.includes(stage.key);
-                const isPreviousStage = index < getVisibleStages().length - 1;
 
                 return (
                   <div key={stage.key} className="flex items-center flex-1">

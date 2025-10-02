@@ -198,7 +198,7 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
           onClick={() => {
             console.log('Create New Playlist button clicked');
             resetWorkflow();
-            router.push('/create');
+            router.replace('/create');
           }}
           className="flex-1"
         >

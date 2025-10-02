@@ -409,7 +409,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
       return await workflowAPI.getWorkflowStatus(workflowState.sessionId!);
     };
 
-    const handleStatus = (status: WorkflowStatus) => {
+    const handleStatus = async (status: WorkflowStatus) => {
       // If workflow reached terminal state, stop polling immediately and update state
       const isTerminal = status.status === 'completed' || status.status === 'failed';
 
@@ -418,16 +418,28 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
         console.log('Terminal state detected, stopping polling for session:', workflowState.sessionId);
         pollingManager.stopPolling(workflowState.sessionId!);
 
-        // Update state immediately with terminal status (no additional API calls)
+        // Fetch results when workflow completes
+        let results = null;
+        try {
+          console.log('Fetching results for completed workflow:', workflowState.sessionId);
+          results = await workflowAPI.getWorkflowResults(workflowState.sessionId!);
+        } catch (e) {
+          console.error('Failed to fetch results for completed workflow:', e);
+        }
+
+        // Update state with terminal status and results
         setWorkflowState(prev => ({
           ...prev,
           status: status.status,
           currentStep: status.current_step,
           awaitingInput: status.awaiting_input,
           error: status.error || null,
+          moodAnalysis: results?.mood_analysis || prev.moodAnalysis,
+          recommendations: results?.recommendations || prev.recommendations,
+          playlist: results?.playlist || prev.playlist,
         }));
 
-        console.log('Terminal state set, polling stopped for session:', workflowState.sessionId);
+        console.log('Terminal state set with results, polling stopped for session:', workflowState.sessionId);
       } else {
         // For non-terminal states, just update the status
         setWorkflowState(prev => ({

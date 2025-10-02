@@ -32,12 +32,31 @@ function CreatePageContent() {
   }, [searchParams]);
 
   // Clear any existing workflow state on mount to start fresh
+  // This ensures that when user navigates to /create (e.g., via cancel button),
+  // the page shows the initial mood input form
   useEffect(() => {
-    if (workflowState.sessionId && !workflowState.isLoading) {
-      // User navigated to /create with an old session, clear it
+    // If there's a session ID when mounting /create (not /create/[id]),
+    // it means we're coming from a cancelled workflow or navigating back
+    // Clear it to show a fresh state
+    if (workflowState.sessionId) {
+      console.log('Clearing workflow state on /create mount');
       resetWorkflow();
     }
   }, []); // Only run on mount
+
+  // Also clear workflow state when it changes while on /create page
+  // This handles cases where user stops workflow while already on /create
+  useEffect(() => {
+    // Only reset if we're on the base /create page (not /create/[id])
+    // and we have a session ID (indicating a workflow was stopped)
+    const isBaseCreatePage = !window.location.pathname.includes('/create/') ||
+                           window.location.pathname === '/create';
+
+    if (isBaseCreatePage && workflowState.sessionId) {
+      console.log('Clearing workflow state due to session presence on /create');
+      resetWorkflow();
+    }
+  }, [workflowState.sessionId, resetWorkflow]);
 
   // Redirect to dynamic route when session_id is available after starting new workflow
   useEffect(() => {
@@ -153,7 +172,8 @@ function CreatePageContent() {
         </div>
 
         {/* Loading Spinner - show while waiting for session redirect */}
-        {workflowState.isLoading && !workflowState.sessionId && (
+        {/* Only show when we're starting a new workflow, not during cleanup */}
+        {workflowState.isLoading && !workflowState.sessionId && workflowState.moodPrompt && (
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="flex flex-col items-center gap-6">
               {/* Animated musical notes */}
