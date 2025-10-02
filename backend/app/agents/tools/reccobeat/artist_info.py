@@ -215,3 +215,126 @@ class GetMultipleArtistsTool(RateLimitedTool):
                 f"Failed to get multiple artists: {str(e)}",
                 error_type=type(e).__name__
             )
+
+
+class GetArtistTracksInput(BaseModel):
+    """Input schema for getting artist's tracks."""
+
+    artist_id: str = Field(..., description="RecoBeat artist ID")
+    page: int = Field(default=0, ge=0, le=1000, description="Page number")
+    size: int = Field(default=25, ge=1, le=50, description="Tracks per page")
+
+
+class GetArtistTracksTool(RateLimitedTool):
+    """Tool for getting tracks from a specific artist on RecoBeat API."""
+
+    name: str = "get_artist_tracks"
+    description: str = """
+    Get tracks from a specific artist on RecoBeat API.
+    Use this to fetch an artist's catalog for mood-based recommendations.
+    """
+
+    def __init__(self):
+        """Initialize the artist tracks tool."""
+        super().__init__(
+            name="get_artist_tracks",
+            description="Get artist's tracks from RecoBeat API",
+            base_url="https://api.reccobeats.com",
+            rate_limit_per_minute=60
+        )
+
+    def _get_input_schema(self) -> Type[BaseModel]:
+        """Get the input schema for this tool."""
+        return GetArtistTracksInput
+
+    async def _run(
+        self,
+        artist_id: str,
+        page: int = 0,
+        size: int = 25
+    ) -> ToolResult:
+        """Get tracks from an artist on RecoBeat.
+
+        Args:
+            artist_id: RecoBeat artist ID
+            page: Page number for pagination
+            size: Number of tracks per page
+
+        Returns:
+            ToolResult with artist tracks or error
+        """
+        try:
+            logger.info(f"Getting tracks for artist {artist_id} (page {page}, size {size})")
+
+            # Make API request
+            response_data = await self._make_request(
+                method="GET",
+                endpoint=f"/v1/artist/{artist_id}/track",
+                params={
+                    "page": page,
+                    "size": size
+                }
+            )
+
+            # Validate response structure
+            if not self._validate_response(response_data, ["content"]):
+                return ToolResult.error_result(
+                    "Invalid response structure from RecoBeat API",
+                    api_response=response_data
+                )
+
+            # Parse tracks
+            tracks = []
+            for track_data in response_data["content"]:
+                try:
+                    # Normalize track ID (could be 'id' or 'trackId')
+                    track_id = track_data.get("id") or track_data.get("track_id")
+                    
+                    track_info = {
+                        "id": track_id,
+                        "track_id": track_id,  # Include both for compatibility
+                        "title": track_data.get("trackTitle"),
+                        "artists": [artist.get("name") for artist in track_data.get("artists", [])],
+                        "duration_ms": track_data.get("durationMs"),
+                        "spotify_uri": track_data.get("href"),
+                        "popularity": track_data.get("popularity", 50),
+                        "isrc": track_data.get("isrc"),
+                        "available_countries": track_data.get("availableCountries")
+                    }
+                    tracks.append(track_info)
+
+                except Exception as e:
+                    logger.warning(f"Failed to parse track data: {track_data}, error: {e}")
+                    continue
+
+            # Get pagination info
+            pagination = {
+                "page": response_data.get("page", page),
+                "size": response_data.get("size", size),
+                "total_elements": response_data.get("totalElements", 0),
+                "total_pages": response_data.get("totalPages", 0)
+            }
+
+            logger.info(f"Successfully retrieved {len(tracks)} tracks for artist {artist_id}")
+
+            return ToolResult.success_result(
+                data={
+                    "tracks": tracks,
+                    "pagination": pagination,
+                    "artist_id": artist_id,
+                    "total_count": len(tracks)
+                },
+                metadata={
+                    "source": "reccobeat",
+                    "artist_id": artist_id,
+                    "result_count": len(tracks),
+                    "api_endpoint": f"/v1/artist/{artist_id}/track"
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Error getting artist tracks: {str(e)}", exc_info=True)
+            return ToolResult.error_result(
+                f"Failed to get artist tracks: {str(e)}",
+                error_type=type(e).__name__
+            )

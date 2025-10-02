@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from ..core.base_agent import BaseAgent
 from ..states.agent_state import AgentState, RecommendationStatus, TrackRecommendation
 from ..tools.reccobeat_service import RecoBeatService
+from ..tools.spotify_service import SpotifyService
 
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ class RecommendationGeneratorAgent(BaseAgent):
     def __init__(
         self,
         reccobeat_service: RecoBeatService,
+        spotify_service: SpotifyService,
         max_recommendations: int = 30,
         diversity_factor: float = 0.7,
         verbose: bool = False
@@ -26,6 +28,7 @@ class RecommendationGeneratorAgent(BaseAgent):
 
         Args:
             reccobeat_service: Service for RecoBeat API operations
+            spotify_service: Service for Spotify API operations
             max_recommendations: Maximum number of recommendations to generate
             diversity_factor: Factor for ensuring diversity in recommendations (0-1)
             verbose: Whether to enable verbose logging
@@ -37,6 +40,7 @@ class RecommendationGeneratorAgent(BaseAgent):
         )
 
         self.reccobeat_service = reccobeat_service
+        self.spotify_service = spotify_service
         self.max_recommendations = max_recommendations
         self.diversity_factor = diversity_factor
 
@@ -96,13 +100,39 @@ class RecommendationGeneratorAgent(BaseAgent):
         return state
 
     async def _generate_mood_based_recommendations(self, state: AgentState) -> List[Dict[str, Any]]:
-        """Generate recommendations based on mood analysis and seeds.
+        """Generate recommendations based on mood analysis, seeds, and discovered artists.
 
         Args:
             state: Current agent state
 
         Returns:
             List of raw recommendations from RecoBeat
+        """
+        all_recommendations = []
+        
+        # Generate from seed tracks
+        seed_recommendations = await self._generate_from_seeds(state)
+        all_recommendations.extend(seed_recommendations)
+        
+        # Generate from discovered artists (if available)
+        artist_recommendations = await self._generate_from_discovered_artists(state)
+        all_recommendations.extend(artist_recommendations)
+        
+        logger.info(
+            f"Generated {len(all_recommendations)} total recommendations "
+            f"({len(seed_recommendations)} from seeds, {len(artist_recommendations)} from artists)"
+        )
+        
+        return all_recommendations
+
+    async def _generate_from_seeds(self, state: AgentState) -> List[Dict[str, Any]]:
+        """Generate recommendations from seed tracks.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            List of recommendations from seed tracks
         """
         all_recommendations = []
         
@@ -359,6 +389,11 @@ class RecommendationGeneratorAgent(BaseAgent):
             features["feature_weight"] = max(4.5, min(avg_weight * 4.0, 5.0))  # Scale to API range (1-5), minimum 4.5
         else:
             features["feature_weight"] = 4.5  # High influence for mood-based recommendations
+
+        # Add negative seeds if available (limit to 5 as per RecoBeat API)
+        if state.negative_seeds:
+            features["negative_seeds"] = state.negative_seeds[:5]
+            logger.info(f"Using {len(features['negative_seeds'])} negative seeds to avoid similar tracks")
 
         # Ensure proper data types for API parameters
         if "mode" in features:
@@ -706,3 +741,172 @@ class RecommendationGeneratorAgent(BaseAgent):
         diversified_recommendations.sort(key=lambda x: x.confidence_score, reverse=True)
 
         return diversified_recommendations
+
+    async def _generate_from_discovered_artists(self, state: AgentState) -> List[Dict[str, Any]]:
+        """Generate recommendations from mood-matched artists.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            List of recommendations from discovered artists
+        """
+        all_recommendations = []
+        
+        # Get mood-matched artists from state metadata
+        mood_matched_artists = state.metadata.get("mood_matched_artists", [])
+        
+        if not mood_matched_artists:
+            logger.info("No mood-matched artists available for recommendations")
+            return all_recommendations
+        
+        logger.info(f"Generating recommendations from {len(mood_matched_artists)} discovered artists")
+        
+        # Get target features for filtering
+        target_features = state.metadata.get("target_features", {})
+        
+        # Track successful artists
+        successful_artists = 0
+        
+        # Get access token for Spotify API
+        access_token = state.metadata.get("spotify_access_token")
+        if not access_token:
+            logger.warning("No Spotify access token available for artist top tracks")
+            return all_recommendations
+        
+        # Fetch tracks from each artist (limit to 6-8 artists for focused playlist)
+        for artist_id in mood_matched_artists[:8]:  # Limit to 8 artists
+            try:
+                # Get top tracks from Spotify (more reliable than RecoBeat)
+                artist_tracks = await self.spotify_service.get_artist_top_tracks(
+                    access_token=access_token,
+                    artist_id=artist_id,
+                    market="US"
+                )
+                
+                if not artist_tracks:
+                    logger.debug(f"No tracks found for artist {artist_id}")
+                    continue
+                
+                successful_artists += 1
+                
+                # Score and filter tracks by audio features (limit to 3 tracks per artist)
+                for track in artist_tracks[:3]:
+                    try:
+                        # Spotify returns tracks with 'id' key
+                        track_id = track.get("id")
+                        if not track_id:
+                            logger.debug(f"Skipping track without ID: {track}")
+                            continue
+                        
+                        # Get audio features
+                        audio_features = await self._get_complete_audio_features(track_id)
+                        
+                        # Score track against mood
+                        if target_features and audio_features:
+                            cohesion_score = self._calculate_track_cohesion(
+                                audio_features, target_features
+                            )
+                            
+                            # Only include tracks that meet threshold
+                            if cohesion_score < 0.6:
+                                logger.debug(f"Skipping artist track {track_id} (cohesion: {cohesion_score:.2f})")
+                                continue
+                        else:
+                            cohesion_score = 0.7  # Default if no features
+                        
+                        # Create recommendation (extract artist names from Spotify format)
+                        artist_names = [artist.get("name", "Unknown") for artist in track.get("artists", [])]
+                        
+                        recommendation = TrackRecommendation(
+                            track_id=track_id,
+                            track_name=track.get("name", "Unknown Track"),
+                            artists=artist_names if artist_names else ["Unknown Artist"],
+                            spotify_uri=track.get("spotify_uri"),
+                            confidence_score=cohesion_score,
+                            audio_features=audio_features,
+                            reasoning=f"From mood-matched artist (cohesion: {cohesion_score:.2f})",
+                            source="artist_discovery"
+                        )
+                        
+                        all_recommendations.append(recommendation)
+                        
+                    except Exception as e:
+                        logger.warning(f"Failed to process artist track: {e}")
+                        continue
+                
+                # Small delay between artists
+                await asyncio.sleep(0.1)
+                
+            except Exception as e:
+                logger.error(f"Error getting tracks for artist {artist_id}: {e}")
+                continue
+        
+        logger.info(
+            f"Generated {len(all_recommendations)} recommendations from {successful_artists}/{len(mood_matched_artists[:8])} artists "
+            f"(some artists may not be in RecoBeat database)"
+        )
+        
+        return [rec.dict() for rec in all_recommendations]
+
+    def _calculate_track_cohesion(
+        self,
+        audio_features: Dict[str, Any],
+        target_features: Dict[str, Any]
+    ) -> float:
+        """Calculate how well a track's audio features match target mood features.
+
+        Args:
+            audio_features: Track's audio features
+            target_features: Target mood features
+
+        Returns:
+            Cohesion score (0-1)
+        """
+        if not audio_features or not target_features:
+            return 0.5
+        
+        scores = []
+        
+        # Define tolerance thresholds
+        tolerance_thresholds = {
+            "energy": 0.3,
+            "valence": 0.3,
+            "danceability": 0.3,
+            "acousticness": 0.4,
+            "instrumentalness": 0.25,
+            "speechiness": 0.25,
+            "tempo": 40.0,
+            "loudness": 6.0,
+            "liveness": 0.4,
+            "popularity": 30
+        }
+        
+        for feature_name, target_value in target_features.items():
+            if feature_name not in audio_features:
+                continue
+            
+            actual_value = audio_features[feature_name]
+            tolerance = tolerance_thresholds.get(feature_name)
+            
+            if tolerance is None:
+                continue
+            
+            # Convert target value to single number if it's a range
+            if isinstance(target_value, list) and len(target_value) == 2:
+                target_single = sum(target_value) / 2
+            elif isinstance(target_value, (int, float)):
+                target_single = float(target_value)
+            else:
+                continue
+            
+            # Calculate difference and score
+            difference = abs(actual_value - target_single)
+            match_score = max(0.0, 1.0 - (difference / tolerance))
+            scores.append(match_score)
+        
+        # Return average match score
+        if scores:
+            return sum(scores) / len(scores)
+        else:
+            return 0.5

@@ -3,10 +3,9 @@
 import logging
 from datetime import datetime
 
-from typing import Dict, List, Optional, Any
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from langchain_openai import ChatOpenAI
 
 from ...core.config import settings
@@ -47,10 +46,20 @@ groq_llm = ChatOpenAI(
     api_key="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"
 )
 
-# Create agents
-mood_analyzer = MoodAnalyzerAgent(groq_llm, verbose=True)
-seed_gatherer = SeedGathererAgent(spotify_service, verbose=True)
-recommendation_generator = RecommendationGeneratorAgent(reccobeat_service, verbose=True)
+# Create agents with updated dependencies
+mood_analyzer = MoodAnalyzerAgent(llm=llm, spotify_service=spotify_service, verbose=True)
+seed_gatherer = SeedGathererAgent(
+    spotify_service=spotify_service,
+    reccobeat_service=reccobeat_service,
+    llm=groq_llm,
+    verbose=True
+)
+recommendation_generator = RecommendationGeneratorAgent(
+    reccobeat_service,
+    spotify_service,
+    max_recommendations=25,  # Limit to 25 tracks for focused playlists
+    verbose=True
+)
 playlist_editor = PlaylistEditorAgent(verbose=True)
 playlist_creator = PlaylistCreatorAgent(spotify_service, llm, verbose=True)
 
@@ -60,8 +69,8 @@ orchestrator = OrchestratorAgent(
     recommendation_generator=recommendation_generator,
     seed_gatherer=seed_gatherer,
     llm=llm,
-    max_iterations=3,
-    min_recommendations=15,
+    max_iterations=1,
+    min_recommendations=20,  # Ensure at least 20 tracks
     cohesion_threshold=0.75,
     verbose=True
 )
@@ -70,7 +79,7 @@ orchestrator = OrchestratorAgent(
 workflow_config = WorkflowConfig(
     max_retries=3,
     timeout_per_agent=60,
-    max_recommendations=30,
+    max_recommendations=25,  # Cap at 25 tracks for manageable playlists
     enable_human_loop=True,
     require_approval=True
 )

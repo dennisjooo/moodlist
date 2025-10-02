@@ -67,7 +67,7 @@ class PlaylistCreatorAgent(BaseAgent):
             playlist_data = await self.spotify_service.create_playlist(
                 access_token=access_token,
                 name=playlist_name,
-                description=f"Mood-based playlist: {state.mood_prompt}",
+                description=f"Mood-based playlist: {state.mood_prompt}. Created by MoodList.",
                 public=True
             )
 
