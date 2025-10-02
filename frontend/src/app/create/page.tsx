@@ -7,9 +7,8 @@ import PlaylistEditor from '@/components/PlaylistEditor';
 import PlaylistResults from '@/components/PlaylistResults';
 import { Badge } from '@/components/ui/badge';
 import { DotPattern } from '@/components/ui/dot-pattern';
-import WorkflowProgress from '@/components/WorkflowProgress';
-import { cn } from '@/lib/utils';
 import { getMoodGenre } from '@/lib/moodColors';
+import { cn } from '@/lib/utils';
 import { useWorkflow } from '@/lib/workflowContext';
 import { Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -169,13 +168,39 @@ function CreatePageContent() {
         {/* Loading Spinner - show while waiting for session redirect */}
         {workflowState.isLoading && !workflowState.sessionId && (
           <div className="flex items-center justify-center min-h-[400px]">
-            <div className="flex flex-col items-center gap-4">
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-primary rounded-full animate-bounce"></div>
-                <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            <div className="flex flex-col items-center gap-6">
+              {/* Animated musical notes */}
+              <div className="relative w-24 h-24">
+                {/* Spinning ring */}
+                <div className="absolute inset-0 rounded-full border-4 border-primary/20 animate-pulse"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-primary animate-spin"></div>
+
+                {/* Center icon */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Sparkles className="w-8 h-8 text-primary animate-pulse" />
+                </div>
+
+                {/* Floating musical notes */}
+                <div className="absolute -top-2 -right-2 w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center animate-bounce" style={{ animationDelay: '0s', animationDuration: '2s' }}>
+                  <span className="text-xs">♪</span>
+                </div>
+                <div className="absolute -bottom-2 -left-2 w-5 h-5 bg-primary/20 rounded-full flex items-center justify-center animate-bounce" style={{ animationDelay: '0.5s', animationDuration: '2.5s' }}>
+                  <span className="text-xs">♫</span>
+                </div>
+                <div className="absolute top-1/2 -right-4 w-4 h-4 bg-primary/20 rounded-full flex items-center justify-center animate-bounce" style={{ animationDelay: '1s', animationDuration: '2s' }}>
+                  <span className="text-xs">♪</span>
+                </div>
               </div>
-              <p className="text-sm text-muted-foreground">Starting your playlist...</p>
+
+              {/* Loading text with gradient */}
+              <div className="text-center space-y-2">
+                <p className="text-lg font-semibold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent animate-pulse">
+                  Firing up the AI...
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Preparing to analyze your vibe
+                </p>
+              </div>
             </div>
           </div>
         )}
