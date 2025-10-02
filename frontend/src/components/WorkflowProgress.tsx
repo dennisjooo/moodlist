@@ -66,19 +66,6 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
   };
 
   const getStatusMessage = (status: string | null, currentStep?: string) => {
-    // Check for iteration-based steps
-    if (currentStep?.includes('iteration')) {
-      const match = currentStep.match(/iteration[_\s](\d+)/i);
-      const iteration = match ? match[1] : '1';
-
-      if (currentStep.includes('evaluating_quality')) {
-        return `🔍 Evaluating playlist quality (${iteration}/3)...`;
-      }
-      if (currentStep.includes('optimizing_recommendations')) {
-        return `✨ Optimizing recommendations (${iteration}/3)...`;
-      }
-    }
-
     switch (status) {
       case 'analyzing_mood':
         return '🤔 Analyzing your mood...';
@@ -111,7 +98,20 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
     // The workflow will automatically restart polling
   };
 
-  const handleStop = () => {
+  const handleStop = async () => {
+    // Cancel the workflow on the backend if we have a session ID
+    if (workflowState.sessionId) {
+      try {
+        const { workflowAPI } = await import('@/lib/workflowApi');
+        await workflowAPI.cancelWorkflow(workflowState.sessionId);
+        console.log('Workflow cancelled on backend');
+      } catch (error) {
+        console.error('Failed to cancel workflow on backend:', error);
+        // Continue with local cleanup even if backend call fails
+      }
+    }
+
+    // Clean up local state and stop polling
     stopWorkflow();
     router.push('/create');
   };
@@ -158,13 +158,13 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
 
           {/* Enhanced Dot Timeline */}
           <div className="relative">
-            <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-gradient-to-r from-muted/30 to-muted/10 backdrop-blur-sm border border-border/50">
+            <div className="flex items-center justify-between px-2 py-3 rounded-lg bg-gradient-to-r from-muted/30 to-muted/10 backdrop-blur-sm border border-border/50">
               {getVisibleStages().map((stage, index) => {
                 const isCurrentStage = workflowState.status?.includes(stage.key);
                 const isPreviousStage = index < getVisibleStages().length - 1;
 
                 return (
-                  <div key={stage.key} className="flex items-center gap-3">
+                  <div key={stage.key} className="flex items-center flex-1">
                     <div className="relative flex items-center justify-center">
                       {/* Glow effect for current stage */}
                       {isCurrentStage && (
@@ -182,7 +182,7 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
                     </div>
                     {index < getVisibleStages().length - 1 && (
                       <div className={cn(
-                        "h-0.5 w-8 rounded-full transition-all duration-300",
+                        "h-0.5 flex-1 rounded-full transition-all duration-300 ml-2",
                         isCurrentStage
                           ? "bg-gradient-to-r from-primary/60 to-muted-foreground/20"
                           : "bg-muted-foreground/20"
@@ -195,15 +195,34 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
           </div>
         </div>
 
-        {/* Current Step */}
-        {workflowState.currentStep && (
-          <div className="text-sm text-muted-foreground">
-            <span className="font-medium">Current step:</span> {workflowState.currentStep}
+        {/* Mood Analysis - Show when available */}
+        {workflowState.moodAnalysis && (
+          <div className="space-y-3 rounded-lg bg-muted/30 p-4 border border-border/50">
+            <div className="flex items-start gap-2">
+              <div className="text-2xl">🎵</div>
+              <div className="flex-1 space-y-2">
+                <div className="text-sm font-medium text-foreground">
+                  {workflowState.moodAnalysis.mood_interpretation}
+                </div>
+                {workflowState.moodAnalysis.primary_emotion && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant="secondary" className="text-xs">
+                      {workflowState.moodAnalysis.primary_emotion}
+                    </Badge>
+                    {workflowState.moodAnalysis.energy_level && (
+                      <Badge variant="secondary" className="text-xs">
+                        {workflowState.moodAnalysis.energy_level}
+                      </Badge>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Mood Prompt */}
-        {workflowState.moodPrompt && (
+        {/* Mood Prompt - Show when no analysis yet */}
+        {workflowState.moodPrompt && !workflowState.moodAnalysis && (
           <div className="text-sm">
             <span className="font-medium">Mood:</span> {workflowState.moodPrompt}
           </div>

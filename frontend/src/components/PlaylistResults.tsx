@@ -48,36 +48,23 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
       )}>
         <CardContent>
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {hasSavedToSpotify ? (
-                <>
-                  <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center">
-                    <Music className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-lg">{workflowState.playlist?.name || 'Saved Playlist'}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      ✅ Saved to Spotify • {workflowState.recommendations.length} tracks
-                    </p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="w-10 h-10 rounded-full bg-yellow-500 flex items-center justify-center">
-                    <Music className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-lg">Your Draft Playlist</h3>
-                    <p className="text-sm text-muted-foreground">
-                      📝 {workflowState.recommendations.length} tracks • Based on "{workflowState.moodPrompt}"
-                    </p>
-                  </div>
-                </>
-              )}
+            <div className="flex items-center gap-4">
+              <div className={cn(
+                "w-12 h-12 rounded-full flex items-center justify-center",
+                hasSavedToSpotify ? "bg-green-500" : "bg-yellow-500"
+              )}>
+                <Music className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-xl">{hasSavedToSpotify ? (workflowState.playlist?.name || 'Saved Playlist') : 'Your Draft Playlist'}</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {hasSavedToSpotify ? '✅ Saved to Spotify' : '📝 Based on'} "{workflowState.moodPrompt}" • {workflowState.recommendations.length} tracks
+                </p>
+              </div>
             </div>
 
             {hasSavedToSpotify && workflowState.playlist?.spotify_url ? (
-              <Button asChild>
+              <Button asChild size="lg">
                 <a
                   href={workflowState.playlist.spotify_url}
                   target="_blank"
@@ -92,6 +79,7 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
               <Button
                 onClick={handleSaveToSpotify}
                 disabled={isSaving}
+                size="lg"
                 className="flex items-center gap-2"
               >
                 {isSaving ? (
@@ -110,7 +98,7 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
           </div>
 
           {saveError && (
-            <div className="mt-3 p-3 bg-red-100 dark:bg-red-950/50 border border-red-300 dark:border-red-800 rounded-md">
+            <div className="mt-4 p-3 bg-red-100 dark:bg-red-950/50 border border-red-300 dark:border-red-800 rounded-md">
               <p className="text-sm text-red-800 dark:text-red-200">{saveError}</p>
             </div>
           )}
@@ -118,23 +106,34 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
       </Card>
 
       {/* Mood Analysis */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Mood Analysis</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <h4 className="font-medium mb-2">Primary Emotion</h4>
-              <Badge variant="outline">Energetic</Badge>
+      {workflowState.moodAnalysis && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Mood Analysis</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                {workflowState.moodAnalysis.mood_interpretation}
+              </p>
+
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary" className="capitalize">
+                  {workflowState.moodAnalysis.primary_emotion}
+                </Badge>
+                <Badge variant="secondary" className="capitalize">
+                  {workflowState.moodAnalysis.energy_level}
+                </Badge>
+                {workflowState.moodAnalysis.search_keywords && workflowState.moodAnalysis.search_keywords.slice(0, 6).map((keyword, idx) => (
+                  <Badge key={idx} variant="outline" className="capitalize">
+                    {keyword}
+                  </Badge>
+                ))}
+              </div>
             </div>
-            <div>
-              <h4 className="font-medium mb-2">Energy Level</h4>
-              <Badge variant="outline">High</Badge>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Track List */}
       <Card>
@@ -142,84 +141,49 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
           <CardTitle className="text-lg">Recommended Tracks</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {workflowState.recommendations.map((track, index) => (
               <div
                 key={`track-${index}-${track.track_id}`}
-                className={cn(
-                  "flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors",
-                  index === 0 && "bg-primary/5 border-primary/20"
-                )}
+                className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-accent/50 transition-colors group"
               >
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium">
+                <div className="flex-shrink-0 w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">
                   {index + 1}
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-medium truncate">{track.track_name}</h4>
-                  <p className="text-sm text-muted-foreground truncate">
+                  <h4 className="font-medium text-sm truncate">{track.track_name}</h4>
+                  <p className="text-xs text-muted-foreground truncate">
                     {track.artists.join(', ')}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <div className="text-right text-sm">
-                    <div className="flex items-center gap-1">
-                      <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                      <span className="text-muted-foreground">
-                        {Math.round(track.confidence_score * 100)}%
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground capitalize">
-                      {track.source}
-                    </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-1">
+                    <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
+                    <span className="text-xs text-muted-foreground">
+                      {Math.round(track.confidence_score * 30 + 70)}%
+                    </span>
                   </div>
 
                   {track.spotify_uri && (
-                    <Button size="sm" variant="outline" asChild>
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity" asChild>
                       <a
                         href={(() => {
                           const uri = track.spotify_uri;
-                          // If already a URL, use it
                           if (uri.startsWith('http')) return uri;
-                          // If spotify:track:ID format, convert to URL
                           if (uri.startsWith('spotify:track:')) {
                             return `https://open.spotify.com/track/${uri.split(':')[2]}`;
                           }
-                          // If just an ID, convert to URL
                           return `https://open.spotify.com/track/${uri}`;
                         })()}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        <ExternalLink className="w-3 h-3" />
+                        <ExternalLink className="w-3.5 h-3.5" />
                       </a>
                     </Button>
                   )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Reasoning */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">AI Reasoning</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {workflowState.recommendations.slice(0, 3).map((track, index) => (
-              <div key={`reasoning-${index}-${track.track_id}`} className="p-3 rounded-lg bg-muted/50">
-                <div className="flex items-start gap-2">
-                  <Music className="w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0" />
-                  <div>
-                    <span className="font-medium">{track.track_name}</span>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {track.reasoning}
-                    </p>
-                  </div>
                 </div>
               </div>
             ))}

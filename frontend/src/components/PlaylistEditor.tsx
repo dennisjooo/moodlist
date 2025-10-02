@@ -110,7 +110,7 @@ function SortableTrackItem({ track, index, onRemove, isRemoving }: SortableTrack
           <div className="flex items-center gap-1">
             <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
             <span className="text-xs text-muted-foreground">
-              {Math.round(track.confidence_score * 100)}%
+              {Math.round(track.confidence_score * 30 + 70)}%
             </span>
           </div>
           <Badge variant="outline" className="text-xs capitalize">

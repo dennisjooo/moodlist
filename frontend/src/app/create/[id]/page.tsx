@@ -256,13 +256,6 @@ function CreateSessionPageContent() {
                 </div>
 
                 {/* Workflow Progress */}
-                {workflowState.isLoading && (
-                    <div className="mb-8">
-                        <WorkflowProgress />
-                    </div>
-                )}
-
-                {/* Active Workflow Progress */}
                 {workflowState.sessionId && workflowState.status !== 'completed' && (
                     <div className="mb-8">
                         <WorkflowProgress />
