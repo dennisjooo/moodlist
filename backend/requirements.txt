@@ -18,6 +18,7 @@ passlib
 
 # HTTP client
 httpx
+httpx[http2]
 
 # Environment and configuration
 python-dotenv

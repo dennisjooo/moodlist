@@ -290,15 +290,15 @@ class CacheManager:
         """Initialize cache manager.
 
         Args:
-            redis_url: Optional Redis URL for distributed caching
+            redis_url: Optional Redis/Valkey URL for distributed caching
         """
         # Choose cache implementation
         if redis_url and REDIS_AVAILABLE:
             self.cache = RedisCache(redis_url)
-            logger.info(f"Using Redis cache at {redis_url}")
+            logger.info(f"Using Valkey/Redis cache at {redis_url}")
         else:
             self.cache = MemoryCache(max_size=1000)
-            logger.info("Using in-memory cache")
+            logger.info("Using in-memory cache (no Valkey/Redis URL provided)")
 
         # Cache TTL defaults (in seconds)
         self.default_ttl = {
@@ -460,7 +460,7 @@ class CacheManager:
         }
 
 
-# Global cache manager
+# Global cache manager - will be initialized with Valkey when available
 cache_manager = CacheManager()
 
 
