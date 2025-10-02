@@ -24,7 +24,6 @@ class OrchestratorAgent(BaseAgent):
         seed_gatherer: BaseAgent,
         llm: Optional[BaseLanguageModel] = None,
         max_iterations: int = 3,
-        min_recommendations: int = 15,
         cohesion_threshold: float = 0.75,
         verbose: bool = False
     ):
@@ -36,7 +35,6 @@ class OrchestratorAgent(BaseAgent):
             seed_gatherer: SeedGathererAgent for re-seeding if needed
             llm: Language model for decision making
             max_iterations: Maximum improvement iterations before accepting results
-            min_recommendations: Minimum number of recommendations required
             cohesion_threshold: Minimum cohesion score (0-1) to accept playlist
             verbose: Whether to enable verbose logging
         """
@@ -51,7 +49,6 @@ class OrchestratorAgent(BaseAgent):
         self.recommendation_generator = recommendation_generator
         self.seed_gatherer = seed_gatherer
         self.max_iterations = max_iterations
-        self.min_recommendations = min_recommendations
         self.cohesion_threshold = cohesion_threshold
 
     async def execute(self, state: AgentState) -> AgentState:
@@ -131,6 +128,19 @@ class OrchestratorAgent(BaseAgent):
             # Remove duplicates
             state.recommendations = self._remove_duplicates(state.recommendations)
 
+            # Cap recommendations at max_count to respect target plan
+            playlist_target = state.metadata.get("playlist_target", {})
+            max_count = playlist_target.get("max_count", 30)
+            
+            if len(state.recommendations) > max_count:
+                # Keep the highest confidence recommendations
+                state.recommendations.sort(key=lambda r: r.confidence_score, reverse=True)
+                original_count = len(state.recommendations)
+                state.recommendations = state.recommendations[:max_count]
+                logger.info(
+                    f"Capped recommendations at max_count: {original_count} -> {max_count} tracks"
+                )
+
             logger.info(
                 f"Orchestration completed with {len(state.recommendations)} unique recommendations "
                 f"after {state.metadata['orchestration_iterations']} iteration(s)"
@@ -178,6 +188,12 @@ class OrchestratorAgent(BaseAgent):
         recommendations = state.recommendations
         target_features = state.metadata.get("target_features", {})
         feature_weights = state.metadata.get("feature_weights", {})
+        
+        # Get target plan
+        playlist_target = state.metadata.get("playlist_target", {})
+        min_count = playlist_target.get("min_count", 15)
+        target_count = playlist_target.get("target_count", 20)
+        quality_threshold = playlist_target.get("quality_threshold", 0.75)
 
         evaluation = {
             "overall_score": 0.0,
@@ -188,16 +204,23 @@ class OrchestratorAgent(BaseAgent):
             "meets_threshold": False,
             "issues": [],
             "recommendations_count": len(recommendations),
+            "target_count": target_count,  # Track target
             "outlier_tracks": [],
             "llm_assessment": None
         }
 
-        # Check minimum recommendations
-        if len(recommendations) < self.min_recommendations:
+        # Check against minimum (not target, minimum is the floor)
+        if len(recommendations) < min_count:
             evaluation["issues"].append(
-                f"Insufficient recommendations: {len(recommendations)} < {self.min_recommendations}"
+                f"Below minimum: {len(recommendations)} < {min_count}"
             )
-            evaluation["coverage_score"] = len(recommendations) / self.min_recommendations
+            evaluation["coverage_score"] = len(recommendations) / target_count
+        # Check if we're close to target
+        elif len(recommendations) < target_count:
+            evaluation["coverage_score"] = len(recommendations) / target_count
+            evaluation["issues"].append(
+                f"Below target: {len(recommendations)} < {target_count}"
+            )
         else:
             evaluation["coverage_score"] = 1.0
 
@@ -257,12 +280,12 @@ class OrchestratorAgent(BaseAgent):
                 if llm_assessment.get("issues"):
                     evaluation["issues"].extend(llm_assessment["issues"])
 
-        # Check if meets threshold
+        # Check if meets threshold using target's quality threshold
         evaluation["meets_threshold"] = (
             evaluation["cohesion_score"] >= self.cohesion_threshold and
-            evaluation["coverage_score"] >= 1.0 and
+            len(recommendations) >= target_count and  # Must reach target, not just min
             len(evaluation["outlier_tracks"]) == 0 and
-            evaluation["overall_score"] >= 0.75
+            evaluation["overall_score"] >= quality_threshold  # Use target's threshold
         )
 
         return evaluation
@@ -630,7 +653,7 @@ class OrchestratorAgent(BaseAgent):
         return state
 
     async def _generate_more_recommendations(self, state: AgentState) -> AgentState:
-        """Generate additional recommendations to reach minimum count.
+        """Generate additional recommendations to reach target count.
 
         Args:
             state: Current agent state
@@ -639,9 +662,18 @@ class OrchestratorAgent(BaseAgent):
             Updated agent state with more recommendations
         """
         current_count = len(state.recommendations)
-        needed = max(self.min_recommendations - current_count, 5)
+        
+        # Get target from plan
+        playlist_target = state.metadata.get("playlist_target", {})
+        target_count = playlist_target.get("target_count", 20)
+        
+        # Calculate how many more we need
+        needed = max(target_count - current_count, 5)
 
-        logger.info(f"Generating {needed} more recommendations (current: {current_count})")
+        logger.info(
+            f"Generating {needed} more recommendations "
+            f"(current: {current_count}, target: {target_count})"
+        )
 
         # Store current recommendations temporarily
         existing_recommendations = state.recommendations.copy()
@@ -678,6 +710,8 @@ class OrchestratorAgent(BaseAgent):
             
             mood_interpretation = state.mood_analysis.get("mood_interpretation", "N/A")
             target_features = state.metadata.get("target_features", {})
+            playlist_target = state.metadata.get("playlist_target", {})
+            target_count = playlist_target.get("target_count", 20)
             
             prompt = f"""You are a music curator expert evaluating a playlist for quality and cohesion.
 
@@ -687,7 +721,7 @@ class OrchestratorAgent(BaseAgent):
 
 **Target Audio Features**: {', '.join(f'{k}={v:.2f}' for k, v in list(target_features.items())[:5])}
 
-**Playlist** ({len(state.recommendations)} tracks total):
+**Playlist** ({len(state.recommendations)} tracks, target: {target_count}):
 {chr(10).join(tracks_summary)}
 
 **Algorithmic Metrics**:
@@ -751,12 +785,15 @@ Respond in JSON format:
         try:
             issues_summary = "\n".join(f"- {issue}" for issue in quality_evaluation.get("issues", []))
             llm_assessment = quality_evaluation.get("llm_assessment", {})
+            playlist_target = state.metadata.get("playlist_target", {})
+            target_count = playlist_target.get("target_count", 20)
             
             prompt = f"""You are a music recommendation system optimizer deciding how to improve a playlist.
 
 **Current Situation**:
 - Mood: "{state.mood_prompt}"
-- Recommendations: {quality_evaluation['recommendations_count']} tracks
+- Current: {quality_evaluation['recommendations_count']} tracks
+- Target: {target_count} tracks
 - Cohesion Score: {quality_evaluation['cohesion_score']:.2f}/1.0
 - Overall Score: {quality_evaluation['overall_score']:.2f}/1.0
 - Outliers: {len(quality_evaluation['outlier_tracks'])} tracks

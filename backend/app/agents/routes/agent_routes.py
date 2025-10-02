@@ -69,8 +69,7 @@ orchestrator = OrchestratorAgent(
     recommendation_generator=recommendation_generator,
     seed_gatherer=seed_gatherer,
     llm=llm,
-    max_iterations=1,
-    min_recommendations=20,  # Ensure at least 20 tracks
+    max_iterations=2,
     cohesion_threshold=0.75,
     verbose=True
 )
