@@ -1,31 +1,31 @@
 'use client';
 
-import MoodCard from '@/components/MoodCard';
 import MoodInput from '@/components/MoodInput';
 import Navigation from '@/components/Navigation';
 import PlaylistEditor from '@/components/PlaylistEditor';
 import PlaylistResults from '@/components/PlaylistResults';
 import { Badge } from '@/components/ui/badge';
 import { DotPattern } from '@/components/ui/dot-pattern';
-import { getMoodGenre } from '@/lib/moodColors';
 import { cn } from '@/lib/utils';
 import { useWorkflow } from '@/lib/workflowContext';
 import { Sparkles } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 // Main content component that uses workflow context
 function CreatePageContent() {
   const router = useRouter();
-  const [isMobile, setIsMobile] = useState(false);
+  const searchParams = useSearchParams();
+  const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const { workflowState, startWorkflow, resetWorkflow } = useWorkflow();
 
+  // Get mood from URL params if present
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+    const moodParam = searchParams.get('mood');
+    if (moodParam) {
+      setSelectedMood(moodParam);
+    }
+  }, [searchParams]);
 
   // Clear any existing workflow state on mount to start fresh
   useEffect(() => {
@@ -61,32 +61,6 @@ function CreatePageContent() {
     // Go back to results view
     window.location.reload();
   };
-
-  const mobileMoods = [
-    'Chill Evening',
-    'Energetic Workout',
-    'Study Focus',
-    'Road Trip',
-    'Romantic Night',
-    'Morning Coffee',
-  ];
-
-  const desktopMoods = [
-    'Chill Evening',
-    'Energetic Workout',
-    'Study Focus',
-    'Road Trip',
-    'Romantic Night',
-    'Morning Coffee',
-    'Rainy Day',
-    'Party Vibes',
-    'Happy Sunshine',
-    'Melancholy Blues',
-    'Adventure Time',
-    'Cozy Winter',
-  ];
-
-  const moods = isMobile ? mobileMoods : desktopMoods;
 
   // Show editor if workflow is awaiting user input
   if (workflowState.awaitingInput && workflowState.recommendations.length > 0 && workflowState.sessionId) {
@@ -207,27 +181,11 @@ function CreatePageContent() {
 
         {/* Mood Input - only show if no active workflow */}
         {!workflowState.sessionId && !workflowState.isLoading && (
-          <>
-            <div className="flex justify-center">
-              <div className="w-full max-w-md">
-                <MoodInput onSubmit={handleMoodSubmit} />
-              </div>
+          <div className="flex justify-center">
+            <div className="w-full max-w-md">
+              <MoodInput onSubmit={handleMoodSubmit} initialMood={selectedMood || undefined} />
             </div>
-
-            {/* Quick Mood Suggestions */}
-            <div className="mt-16">
-              <h2 className="text-2xl font-semibold text-center mb-8">Quick Suggestions</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
-                {moods.map((mood, index) => (
-                  <MoodCard
-                    key={`${mood}-${index}`}
-                    mood={mood}
-                    onClick={() => handleMoodSubmit(mood, getMoodGenre(mood))}
-                  />
-                ))}
-              </div>
-            </div>
-          </>
+          </div>
         )}
 
       </main>
