@@ -153,14 +153,17 @@ class RecommendationGeneratorAgent(BaseAgent):
     async def _generate_mood_based_recommendations(self, state: AgentState) -> List[Dict[str, Any]]:
         """Generate recommendations based on mood analysis, seeds, and discovered artists.
         
-        Target ratio: 9:1 (90% from artist discovery, 10% from seed-based recommendations).
+        Target ratio: 95:5 (95% from artist discovery, 5% from seed-based recommendations).
         Artist discovery is overwhelmingly prioritized as RecoBeat recommendations tend to be lower quality.
+        
+        RecoBeat API calls use ONLY seeds, negative_seeds, and size parameters.
+        Audio feature parameters are NOT used as they cause RecoBeat to return irrelevant tracks.
 
         Args:
             state: Current agent state
 
         Returns:
-            List of raw recommendations from RecoBeat
+            List of raw recommendations (mostly from artist discovery)
         """
         all_recommendations = []
         
@@ -212,11 +215,13 @@ class RecommendationGeneratorAgent(BaseAgent):
         """
         all_recommendations = []
         
+        # Deduplicate seeds before processing
+        unique_seeds = list(dict.fromkeys(state.seed_tracks))  # Preserves order
+        if len(unique_seeds) < len(state.seed_tracks):
+            logger.info(f"Deduplicated seeds: {len(state.seed_tracks)} -> {len(unique_seeds)}")
+        
         # Split seeds into smaller chunks for multiple API calls
-        seed_chunks = self._chunk_seeds(state.seed_tracks, chunk_size=3)
-
-        # Get comprehensive mood-based features from enhanced analysis
-        mood_features = self._extract_mood_features(state)
+        seed_chunks = self._chunk_seeds(unique_seeds, chunk_size=3)
         
         # Get seed target (5% of total playlist target - very minimal supplementary)
         target_seed_recs = state.metadata.get("_temp_seed_target", 1)  # Default ~5% of 20
@@ -225,13 +230,22 @@ class RecommendationGeneratorAgent(BaseAgent):
         # This gives us room for filtering while targeting the right amount
         per_chunk_size = min(10, max(int((target_seed_recs * 2) // len(seed_chunks)) + 2, 3))
         
+        # Prepare minimal RecoBeat params (NO audio features - they cause issues)
+        reccobeat_params = {}
+        
+        # Add negative seeds if available (limit to 5 as per RecoBeat API)
+        if state.negative_seeds:
+            reccobeat_params["negative_seeds"] = state.negative_seeds[:5]
+            logger.info(f"Using {len(reccobeat_params['negative_seeds'])} negative seeds to avoid similar tracks")
+        
         for chunk in seed_chunks:
             try:
                 # Get recommendations for this seed chunk
+                # ONLY use seeds, negative_seeds, and size - NO audio feature params
                 chunk_recommendations = await self.reccobeat_service.get_track_recommendations(
                     seeds=chunk,
-                    size=per_chunk_size,  # Dynamic instead of fixed 15
-                    **mood_features
+                    size=per_chunk_size,
+                    **reccobeat_params
                 )
 
                 # Convert to TrackRecommendation objects
@@ -525,9 +539,12 @@ class RecommendationGeneratorAgent(BaseAgent):
                     artist_ids = [artist["id"] for artist in matching_artists if artist.get("id")]
 
                     if artist_ids:
+                        # Deduplicate artist IDs
+                        unique_artist_ids = list(dict.fromkeys(artist_ids[:3]))
                         fallback_recommendations = await self.reccobeat_service.get_track_recommendations(
-                            seeds=artist_ids[:3],  # Use up to 3 artists as seeds
+                            seeds=unique_artist_ids,
                             size=20
+                            # NO audio feature params - keep it simple
                         )
 
                         logger.info(f"Generated {len(fallback_recommendations)} fallback recommendations using {len(artist_ids)} artists")
@@ -555,90 +572,19 @@ class RecommendationGeneratorAgent(BaseAgent):
         return chunks
 
     def _extract_mood_features(self, state: AgentState) -> Dict[str, Any]:
-        """Extract comprehensive audio features from enhanced mood analysis for RecoBeat API.
+        """Extract features for RecoBeat API.
+        
+        DEPRECATED: We now only use seeds and negative_seeds, no audio features.
+        Audio feature parameters cause RecoBeat to return irrelevant tracks.
 
         Args:
             state: Current agent state with mood analysis and target features
 
         Returns:
-            Dictionary of all audio features for RecoBeat API with proper parameter mapping
+            Empty dict (audio features no longer used)
         """
-        features = {}
-
-        # Get target features from state metadata (where mood analyzer stores them)
-        target_features = state.metadata.get("target_features", {})
-
-        if not target_features:
-            logger.warning("No target features available for recommendation generation")
-            return features
-
-        # Get feature weights for sophisticated mood influence
-        feature_weights = state.metadata.get("feature_weights", {})
-
-        # Map RecoBeat API features (EXCLUDING popularity - causes mainstream bias)
-        # Popularity should not influence the recommendation algorithm, only be used for post-filtering/ranking
-        feature_mapping = {
-            "acousticness": "acousticness",
-            "danceability": "danceability",
-            "energy": "energy",
-            "instrumentalness": "instrumentalness",
-            "key": "key",
-            "liveness": "liveness",
-            "loudness": "loudness",
-            "mode": "mode",
-            "speechiness": "speechiness",
-            "tempo": "tempo",
-            "valence": "valence"
-            # Explicitly NOT including popularity here to avoid biasing recommendations toward mainstream tracks
-        }
-
-        for mood_feature, api_param in feature_mapping.items():
-            if mood_feature in target_features:
-                value = target_features[mood_feature]
-
-                # Handle range values as list (e.g., [0.8, 1.0])
-                if isinstance(value, list) and len(value) == 2:
-                    # Use midpoint of range for API call
-                    features[api_param] = sum(value) / 2
-                # Handle numeric values
-                elif isinstance(value, (int, float)):
-                    features[api_param] = float(value)
-                # Handle range values as string (e.g., "0.8-1.0") - legacy support
-                elif isinstance(value, str) and '-' in value:
-                    try:
-                        parts = value.split('-')
-                        if len(parts) == 2:
-                            min_val = float(parts[0])
-                            max_val = float(parts[1])
-                            features[api_param] = (min_val + max_val) / 2
-                    except (ValueError, IndexError) as e:
-                        logger.warning(f"Could not parse range value '{value}' for {mood_feature}: {e}")
-                        continue
-
-        # Set enhanced feature weight based on mood analysis confidence
-        # Use feature weights if available, otherwise use default high weight for mood influence
-        if feature_weights:
-            # Calculate average weight for overall feature influence
-            avg_weight = sum(feature_weights.values()) / len(feature_weights) if feature_weights else 4.5
-            features["feature_weight"] = max(4.5, min(avg_weight * 4.0, 5.0))  # Scale to API range (1-5), minimum 4.5
-        else:
-            features["feature_weight"] = 4.5  # High influence for mood-based recommendations
-
-        # Add negative seeds if available (limit to 5 as per RecoBeat API)
-        if state.negative_seeds:
-            features["negative_seeds"] = state.negative_seeds[:5]
-            logger.info(f"Using {len(features['negative_seeds'])} negative seeds to avoid similar tracks")
-
-        # Ensure proper data types for API parameters
-        if "mode" in features:
-            features["mode"] = int(features["mode"])
-        if "key" in features:
-            features["key"] = int(features["key"])
-        # Note: popularity removed - not sent to RecoBeat to avoid mainstream bias
-
-        logger.info(f"Extracted {len(features)} audio features for RecoBeat API: {list(features.keys())}")
-
-        return features
+        logger.info("Audio features extraction skipped - using seed-based recommendations only")
+        return {}
 
     def _calculate_confidence_score(
         self,
@@ -1019,18 +965,19 @@ class RecommendationGeneratorAgent(BaseAgent):
             logger.warning("No Spotify access token available for artist top tracks")
             return all_recommendations
         
-        # Calculate tracks per artist to reach 90% target
-        # Use more artists for maximum diversity (up to 12-15 artists)
-        artist_count = min(len(mood_matched_artists), 15)  # Increased to 15 artists max
-        tracks_per_artist = max(2, min(int((target_artist_recs * 1.3) // artist_count) + 1, 4))
+        # MAXIMIZE DIVERSITY: Use MORE artists with FEWER tracks each
+        # This gives broader representation of the mood/genre
+        # For a target of ~19 tracks: 10 artists × 2-3 tracks = 20-30 tracks before filtering
+        artist_count = min(len(mood_matched_artists), 20)  # Use up to 20 artists for maximum variety
+        tracks_per_artist = max(2, min(int((target_artist_recs * 1.5) // artist_count) + 1, 3))
         
         logger.info(
-            f"Fetching {tracks_per_artist} tracks per artist (up to {artist_count} artists) "
-            f"to reach artist target of {target_artist_recs} tracks (DOMINANT source - 95:5 ratio)"
+            f"MAXIMIZING DIVERSITY: Fetching {tracks_per_artist} tracks from up to {artist_count} artists "
+            f"to reach artist target of {target_artist_recs} tracks (95:5 ratio)"
         )
         
-        # Fetch tracks from each artist (use up to 15 artists for maximum coverage)
-        for artist_id in mood_matched_artists[:15]:  # Increased to 15 artists
+        # Fetch tracks from each artist (use up to 20 artists for maximum coverage and variety)
+        for artist_id in mood_matched_artists[:20]:  # Increased to 20 artists for max diversity
             try:
                 # Get top tracks from Spotify (more reliable than RecoBeat)
                 artist_tracks = await self.spotify_service.get_artist_top_tracks(
@@ -1099,8 +1046,8 @@ class RecommendationGeneratorAgent(BaseAgent):
                 continue
         
         logger.info(
-            f"Generated {len(all_recommendations)} recommendations from {successful_artists}/{len(mood_matched_artists[:8])} artists "
-            f"(some artists may not be in RecoBeat database)"
+            f"Generated {len(all_recommendations)} recommendations from {successful_artists}/{min(len(mood_matched_artists), 20)} artists "
+            f"(maximized diversity by spreading across more artists)"
         )
         
         return [rec.dict() for rec in all_recommendations]
