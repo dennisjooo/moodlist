@@ -11,6 +11,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { generateMoodGradient } from '@/lib/moodColors';
+import { MoodAnalysis } from '@/lib/playlistApi';
 import { Calendar, ExternalLink, Music, Play, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -24,14 +25,18 @@ interface PlaylistCardProps {
   sessionId?: string;
   status?: string;
   playlistId?: number;
+  moodAnalysis?: MoodAnalysis;
   onDelete?: (playlistId: number) => void;
 }
 
-export default function PlaylistCard({ mood, title, createdAt, trackCount, spotifyUrl, sessionId, status, playlistId, onDelete }: PlaylistCardProps) {
+export default function PlaylistCard({ mood, title, createdAt, trackCount, spotifyUrl, sessionId, status, playlistId, moodAnalysis, onDelete }: PlaylistCardProps) {
   const autoGradient = generateMoodGradient(mood);
   const isCompleted = status === 'completed';
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  // Get display text from mood analysis or fallback to mood prompt
+  const displayMood = moodAnalysis?.mood_interpretation || mood;
 
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -77,7 +82,7 @@ export default function PlaylistCard({ mood, title, createdAt, trackCount, spoti
 
       <div className="group cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl rounded-lg overflow-hidden">
         {/* Full Gradient Background */}
-        <div className={`${autoGradient} h-64 flex flex-col justify-between p-6 relative`}>
+        <div className={`${autoGradient} h-[320px] flex flex-col justify-between p-6 relative`}>
           <div className="absolute inset-0 bg-black/10 group-hover:bg-black/5 transition-colors" />
 
           {/* Header */}
@@ -104,18 +109,43 @@ export default function PlaylistCard({ mood, title, createdAt, trackCount, spoti
           </div>
 
           {/* Content */}
-          <div className="relative z-10 space-y-3">
-            <div>
-              <h3 className="font-bold text-white text-lg mb-1 drop-shadow-sm">{title}</h3>
-              <p className="text-sm text-white/90 drop-shadow-sm">"{mood}"</p>
+          <div className="relative z-10 flex flex-col h-full">
+            {/* Title section - fixed height */}
+            <div className="my-3">
+              <h3 className="font-bold text-white text-lg leading-tight mb-2 drop-shadow-sm line-clamp-2">{title}</h3>
             </div>
 
-            <div className="flex items-center text-sm text-white/80 mb-4">
-              <Calendar className="w-4 h-4 mr-2" />
-              Created {new Date(createdAt).toLocaleDateString()}
+            {/* Description section - fixed height */}
+            <div className="mb-3 min-h-[60px]">
+              <p className="text-sm text-white/90 drop-shadow-sm line-clamp-2 mb-2">
+                {displayMood}
+              </p>
+              <div className="flex flex-wrap gap-1.5 min-h-[24px]">
+                {moodAnalysis?.primary_emotion && (
+                  <>
+                    <Badge variant="secondary" className="text-xs bg-white/25 backdrop-blur-sm text-white border-white/30 hover:bg-white/35 inline-block truncate max-w-[120px]">
+                      <span className="truncate block">{moodAnalysis.primary_emotion}</span>
+                    </Badge>
+                    {moodAnalysis.energy_level && (
+                      <Badge variant="secondary" className="text-xs bg-white/25 backdrop-blur-sm text-white border-white/30 hover:bg-white/35 inline-block truncate max-w-[120px]">
+                        <span className="truncate block">{moodAnalysis.energy_level}</span>
+                      </Badge>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
 
-            <div className="flex gap-2">
+            {/* Date section - consistent position */}
+            <div className="mb-4">
+              <div className="flex items-center text-sm text-white/80">
+                <Calendar className="w-4 h-4 mr-2" />
+                Created {new Date(createdAt).toLocaleDateString()}
+              </div>
+            </div>
+
+            {/* Buttons - pushed to bottom */}
+            <div className="mt-auto flex gap-2">
               {sessionId && (
                 <Link href={`/create/${sessionId}`} className="flex-1">
                   <Button

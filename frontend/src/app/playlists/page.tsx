@@ -132,6 +132,7 @@ export default function PlaylistsPage() {
                   sessionId={playlist.session_id}
                   status={playlist.status}
                   playlistId={playlist.id}
+                  moodAnalysis={playlist.mood_analysis_data}
                   onDelete={handleDelete}
                 />
               </div>
