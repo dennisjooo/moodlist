@@ -6,6 +6,9 @@ import uuid
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
 from ..core.base_agent import BaseAgent
 from ..states.agent_state import AgentState, RecommendationStatus
 from ..tools.agent_tools import AgentTools
@@ -72,6 +75,69 @@ class WorkflowManager:
 
         logger.info("Initialized WorkflowManager with {} agents".format(len(agents)))
 
+    async def _update_playlist_db(self, session_id: str, state: AgentState) -> None:
+        """Update the playlist database with workflow state.
+
+        Args:
+            session_id: Workflow session ID
+            state: Current workflow state
+        """
+        try:
+            from ...core.database import async_session_factory
+            from ...models.playlist import Playlist
+            
+            async with async_session_factory() as db:
+                # Find the playlist by session_id
+                result = await db.execute(
+                    select(Playlist).where(Playlist.session_id == session_id)
+                )
+                playlist = result.scalar_one_or_none()
+                
+                if playlist:
+                    # Update status
+                    playlist.status = state.status.value
+                    
+                    # Update mood analysis if available
+                    if state.mood_analysis:
+                        playlist.mood_analysis_data = state.mood_analysis
+                    
+                    # Update recommendations if available
+                    if state.recommendations:
+                        playlist.recommendations_data = [
+                            {
+                                "track_id": rec.track_id,
+                                "track_name": rec.track_name,
+                                "artists": rec.artists,
+                                "spotify_uri": rec.spotify_uri,
+                                "confidence_score": rec.confidence_score,
+                                "reasoning": rec.reasoning,
+                                "source": rec.source
+                            }
+                            for rec in state.recommendations
+                        ]
+                        playlist.track_count = len(state.recommendations)
+                    
+                    # Update playlist metadata if created
+                    if state.playlist_id:
+                        playlist.spotify_playlist_id = state.playlist_id
+                        playlist.playlist_data = {
+                            "name": state.playlist_name,
+                            "spotify_url": state.metadata.get("playlist_url"),
+                            "spotify_uri": state.metadata.get("playlist_uri")
+                        }
+                    
+                    # Update error if present
+                    if state.error_message:
+                        playlist.error_message = state.error_message
+                    
+                    await db.commit()
+                    logger.debug(f"Updated playlist DB for session {session_id}")
+                else:
+                    logger.warning(f"Playlist not found for session {session_id}")
+                    
+        except Exception as e:
+            logger.error(f"Failed to update playlist DB for session {session_id}: {str(e)}", exc_info=True)
+
     async def start_workflow(
         self,
         mood_prompt: str,
@@ -129,14 +195,17 @@ class WorkflowManager:
 
             # Execute workflow steps
             state = await self._execute_mood_analysis(state)
+            await self._update_playlist_db(session_id, state)
             
             # Execute orchestration (handles seed gathering, recommendations, and quality improvement)
             state = await self._execute_orchestration(state)
+            await self._update_playlist_db(session_id, state)
             
             # Mark as completed after recommendations are ready
             state.status = RecommendationStatus.COMPLETED
             state.current_step = "recommendations_ready"
             state.metadata["playlist_saved_to_spotify"] = False
+            await self._update_playlist_db(session_id, state)
             self.success_count += 1
             
             # Dump the state to a file

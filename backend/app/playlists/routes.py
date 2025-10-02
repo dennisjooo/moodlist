@@ -1,0 +1,313 @@
+"""Playlist CRUD routes for managing user playlists."""
+
+import logging
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select, desc, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..core.database import get_db
+from ..auth.dependencies import require_auth
+from ..models.user import User
+from ..models.playlist import Playlist
+
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+@router.get("/playlists")
+async def get_user_playlists(
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=50, le=100),
+    offset: int = Query(default=0),
+    status: Optional[str] = Query(default=None, description="Filter by status (pending, completed, failed)")
+):
+    """Get all playlists created by the current user.
+
+    Args:
+        current_user: Authenticated user
+        db: Database session
+        limit: Maximum number of playlists to return
+        offset: Number of playlists to skip
+        status: Optional status filter
+
+    Returns:
+        List of user's playlists with pagination info
+    """
+    try:
+        # Build query
+        query = (
+            select(Playlist)
+            .where(Playlist.user_id == current_user.id)
+        )
+        
+        # Add status filter if provided
+        if status:
+            query = query.where(Playlist.status == status)
+        
+        # Add ordering and pagination
+        query = query.order_by(desc(Playlist.created_at)).limit(limit).offset(offset)
+        
+        result = await db.execute(query)
+        playlists = result.scalars().all()
+        
+        # Format playlists for response
+        playlists_data = []
+        for playlist in playlists:
+            playlist_info = {
+                "id": playlist.id,
+                "session_id": playlist.session_id,
+                "mood_prompt": playlist.mood_prompt,
+                "status": playlist.status,
+                "track_count": playlist.track_count,
+                "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
+                "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
+            }
+            
+            # Add playlist data if available
+            if playlist.playlist_data:
+                playlist_info["name"] = playlist.playlist_data.get("name")
+                playlist_info["spotify_url"] = playlist.playlist_data.get("spotify_url")
+                playlist_info["spotify_uri"] = playlist.playlist_data.get("spotify_uri")
+            
+            # Add spotify playlist id if available
+            if playlist.spotify_playlist_id:
+                playlist_info["spotify_playlist_id"] = playlist.spotify_playlist_id
+            
+            playlists_data.append(playlist_info)
+        
+        # Get total count for pagination
+        count_query = select(func.count()).select_from(Playlist).where(Playlist.user_id == current_user.id)
+        if status:
+            count_query = count_query.where(Playlist.status == status)
+        count_result = await db.execute(count_query)
+        total_count = count_result.scalar()
+        
+        return {
+            "playlists": playlists_data,
+            "total": total_count,
+            "limit": limit,
+            "offset": offset
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting user playlists: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get user playlists: {str(e)}"
+        )
+
+
+@router.get("/playlists/{playlist_id}")
+async def get_playlist(
+    playlist_id: int,
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get a specific playlist by ID.
+
+    Args:
+        playlist_id: Playlist database ID
+        current_user: Authenticated user
+        db: Database session
+
+    Returns:
+        Playlist details
+    """
+    try:
+        query = select(Playlist).where(
+            Playlist.id == playlist_id,
+            Playlist.user_id == current_user.id
+        )
+        result = await db.execute(query)
+        playlist = result.scalar_one_or_none()
+        
+        if not playlist:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Playlist not found"
+            )
+        
+        return {
+            "id": playlist.id,
+            "session_id": playlist.session_id,
+            "mood_prompt": playlist.mood_prompt,
+            "status": playlist.status,
+            "track_count": playlist.track_count,
+            "duration_ms": playlist.duration_ms,
+            "playlist_data": playlist.playlist_data,
+            "recommendations_data": playlist.recommendations_data,
+            "mood_analysis_data": playlist.mood_analysis_data,
+            "spotify_playlist_id": playlist.spotify_playlist_id,
+            "error_message": playlist.error_message,
+            "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
+            "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting playlist {playlist_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get playlist: {str(e)}"
+        )
+
+
+@router.get("/playlists/session/{session_id}")
+async def get_playlist_by_session(
+    session_id: str,
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get a playlist by its session ID.
+
+    Args:
+        session_id: Workflow session UUID
+        current_user: Authenticated user
+        db: Database session
+
+    Returns:
+        Playlist details
+    """
+    try:
+        query = select(Playlist).where(
+            Playlist.session_id == session_id,
+            Playlist.user_id == current_user.id
+        )
+        result = await db.execute(query)
+        playlist = result.scalar_one_or_none()
+        
+        if not playlist:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Playlist not found"
+            )
+        
+        return {
+            "id": playlist.id,
+            "session_id": playlist.session_id,
+            "mood_prompt": playlist.mood_prompt,
+            "status": playlist.status,
+            "track_count": playlist.track_count,
+            "duration_ms": playlist.duration_ms,
+            "playlist_data": playlist.playlist_data,
+            "recommendations_data": playlist.recommendations_data,
+            "mood_analysis_data": playlist.mood_analysis_data,
+            "spotify_playlist_id": playlist.spotify_playlist_id,
+            "error_message": playlist.error_message,
+            "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
+            "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting playlist by session {session_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get playlist: {str(e)}"
+        )
+
+
+@router.delete("/playlists/{playlist_id}")
+async def delete_playlist(
+    playlist_id: int,
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a playlist.
+
+    Args:
+        playlist_id: Playlist database ID
+        current_user: Authenticated user
+        db: Database session
+
+    Returns:
+        Success message
+    """
+    try:
+        query = select(Playlist).where(
+            Playlist.id == playlist_id,
+            Playlist.user_id == current_user.id
+        )
+        result = await db.execute(query)
+        playlist = result.scalar_one_or_none()
+        
+        if not playlist:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Playlist not found"
+            )
+        
+        await db.delete(playlist)
+        await db.commit()
+        
+        logger.info(f"Deleted playlist {playlist_id} for user {current_user.id}")
+        
+        return {
+            "message": "Playlist deleted successfully",
+            "playlist_id": playlist_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting playlist {playlist_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete playlist: {str(e)}"
+        )
+
+
+@router.get("/playlists/stats/summary")
+async def get_playlist_stats(
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get user's playlist statistics.
+
+    Args:
+        current_user: Authenticated user
+        db: Database session
+
+    Returns:
+        Playlist statistics
+    """
+    try:
+        # Total playlists
+        total_query = select(func.count()).select_from(Playlist).where(Playlist.user_id == current_user.id)
+        total_result = await db.execute(total_query)
+        total = total_result.scalar()
+        
+        # Completed playlists
+        completed_query = select(func.count()).select_from(Playlist).where(
+            Playlist.user_id == current_user.id,
+            Playlist.status == "completed"
+        )
+        completed_result = await db.execute(completed_query)
+        completed = completed_result.scalar()
+        
+        # Total tracks
+        tracks_query = select(func.sum(Playlist.track_count)).where(Playlist.user_id == current_user.id)
+        tracks_result = await db.execute(tracks_query)
+        total_tracks = tracks_result.scalar() or 0
+        
+        return {
+            "total_playlists": total,
+            "completed_playlists": completed,
+            "total_tracks": total_tracks,
+            "user_id": current_user.id
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting playlist stats: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get playlist stats: {str(e)}"
+        )
+
