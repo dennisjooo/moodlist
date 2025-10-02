@@ -6,7 +6,7 @@ import structlog
 
 from app.core.database import get_db
 from app.models.user import User
-from app.auth.dependencies import require_auth
+from app.auth.dependencies import require_auth, refresh_spotify_token_if_expired
 from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
@@ -98,6 +98,9 @@ async def get_spotify_profile(
 ):
     """Get user's Spotify profile information."""
     logger.info("Getting Spotify profile", user_id=current_user.id)
+
+    # Refresh token if expired
+    current_user = await refresh_spotify_token_if_expired(current_user, db)
 
     # Use the stored access token to get profile from Spotify
     async with httpx.AsyncClient() as client:
@@ -246,6 +249,9 @@ async def get_user_playlists(
     db: AsyncSession = Depends(get_db)
 ):
     """Get user's Spotify playlists."""
+    # Refresh token if expired
+    current_user = await refresh_spotify_token_if_expired(current_user, db)
+    
     logger.info("Getting user playlists", user_id=current_user.id, limit=limit, offset=offset)
     
     async with httpx.AsyncClient() as client:
