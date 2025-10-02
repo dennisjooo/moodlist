@@ -40,12 +40,13 @@ async def get_user_playlists(
         List of user's playlists with pagination info
     """
     try:
-        # Build query - exclude soft-deleted playlists
+        # Build query - exclude soft-deleted and cancelled playlists
         query = (
             select(Playlist)
             .where(
                 Playlist.user_id == current_user.id,
-                Playlist.deleted_at.is_(None)
+                Playlist.deleted_at.is_(None),
+                Playlist.status != "cancelled"
             )
         )
         
@@ -88,10 +89,11 @@ async def get_user_playlists(
             
             playlists_data.append(playlist_info)
         
-        # Get total count for pagination - exclude soft-deleted playlists
+        # Get total count for pagination - exclude soft-deleted and cancelled playlists
         count_query = select(func.count()).select_from(Playlist).where(
             Playlist.user_id == current_user.id,
-            Playlist.deleted_at.is_(None)
+            Playlist.deleted_at.is_(None),
+            Playlist.status != "cancelled"
         )
         if status:
             count_query = count_query.where(Playlist.status == status)
