@@ -19,7 +19,7 @@ export interface WorkflowState {
 
 interface WorkflowContextType {
   workflowState: WorkflowState;
-  startWorkflow: (moodPrompt: string) => Promise<void>;
+  startWorkflow: (moodPrompt: string, genreHint?: string) => Promise<void>;
   stopWorkflow: () => void;
   resetWorkflow: () => void;
   applyEdit: (edit: PlaylistEditRequest) => Promise<void>;
@@ -48,7 +48,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     awaitingInput: false,
   });
 
-  const startWorkflow = async (moodPrompt: string) => {
+  const startWorkflow = async (moodPrompt: string, genreHint?: string) => {
     if (!isAuthenticated || !user) {
       throw new Error('User must be authenticated to start workflow');
     }
@@ -63,7 +63,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     try {
       // Backend will use the authenticated user's tokens automatically
       const response = await workflowAPI.startWorkflow({
-        mood_prompt: moodPrompt,
+        mood_prompt: `${moodPrompt} ${genreHint ? `in the genre of ${genreHint}` : ''}`,
       });
 
       setWorkflowState(prev => ({
@@ -167,7 +167,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
 
     try {
       const result = await workflowAPI.saveToSpotify(workflowState.sessionId);
-      
+
       // Update state with playlist information
       setWorkflowState(prev => ({
         ...prev,
@@ -179,7 +179,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
         },
         isLoading: false,
       }));
-      
+
       return result;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to save playlist to Spotify';
