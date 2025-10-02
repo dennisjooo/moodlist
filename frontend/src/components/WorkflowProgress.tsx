@@ -121,8 +121,8 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
   }
 
   return (
-    <Card className="w-full">
-      <CardHeader className="pb-3">
+    <Card className="w-full overflow-hidden">
+      <CardHeader className="pb-3 overflow-hidden">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
             {getStatusIcon(workflowState.status)}
@@ -136,7 +136,7 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 overflow-hidden">
         {/* Error Alert */}
         {workflowState.error && (
           <Alert variant="destructive">
@@ -197,15 +197,15 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
 
         {/* Mood Analysis - Show when available */}
         {workflowState.moodAnalysis && (
-          <div className="space-y-3 rounded-lg bg-muted/30 p-4 border border-border/50">
-            <div className="flex items-start gap-2">
-              <div className="text-2xl">🎵</div>
-              <div className="flex-1 space-y-2">
-                <div className="text-sm font-medium text-foreground">
+          <div className="space-y-3 rounded-lg bg-muted/30 p-3 sm:p-4 border border-border/50 overflow-hidden">
+            <div className="flex items-start gap-2 overflow-hidden">
+              <div className="text-xl sm:text-2xl flex-shrink-0 mt-0.5">🎵</div>
+              <div className="flex-1 space-y-3 min-w-0 overflow-hidden">
+                <p className="text-sm font-medium text-foreground break-words leading-relaxed pr-2 [word-break:break-word] max-w-full">
                   {workflowState.moodAnalysis.mood_interpretation}
-                </div>
+                </p>
                 {workflowState.moodAnalysis.primary_emotion && (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center flex-wrap gap-2 text-xs text-muted-foreground pt-1">
                     <Badge variant="secondary" className="text-xs">
                       {workflowState.moodAnalysis.primary_emotion}
                     </Badge>
