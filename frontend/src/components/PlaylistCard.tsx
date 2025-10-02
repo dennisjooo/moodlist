@@ -80,7 +80,7 @@ export default function PlaylistCard({ mood, title, createdAt, trackCount, spoti
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="group cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl rounded-lg overflow-hidden">
+      <div className="group transition-all duration-300 hover:scale-105 hover:shadow-xl rounded-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
         {/* Full Gradient Background */}
         <div className={`${autoGradient} h-[320px] flex flex-col justify-between p-6 relative`}>
           <div className="absolute inset-0 bg-black/10 group-hover:bg-black/5 transition-colors" />
@@ -147,7 +147,7 @@ export default function PlaylistCard({ mood, title, createdAt, trackCount, spoti
             {/* Buttons - pushed to bottom */}
             <div className="mt-auto flex gap-2">
               {sessionId && (
-                <Link href={`/create/${sessionId}`} className="flex-1">
+                <Link href={`/create/${sessionId}`} className="flex-1" onClick={(e) => e.stopPropagation()}>
                   <Button
                     size="sm"
                     className="w-full bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white border-white/30"
@@ -159,7 +159,7 @@ export default function PlaylistCard({ mood, title, createdAt, trackCount, spoti
                 </Link>
               )}
               {spotifyUrl && spotifyUrl !== '#' && (
-                <a href={spotifyUrl} target="_blank" rel="noopener noreferrer">
+                <a href={spotifyUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
                   <Button
                     size="sm"
                     className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white border-white/30"
