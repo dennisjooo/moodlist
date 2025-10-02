@@ -184,6 +184,16 @@ class WorkflowAPI {
       method: 'POST',
     });
   }
+
+  async cancelWorkflow(sessionId: string): Promise<{
+    session_id: string;
+    status: string;
+    message: string;
+  }> {
+    return this.request(`/api/agents/recommendations/${sessionId}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 export const workflowAPI = new WorkflowAPI();

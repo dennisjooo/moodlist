@@ -31,6 +31,12 @@ export class PollingManager {
     callbacks: PollingCallbacks,
     config: Partial<PollingConfig> = {}
   ) {
+    // Stop any existing polling for this session first
+    if (this.intervals.has(sessionId)) {
+      console.log('Polling already active for session:', sessionId, '- stopping old one');
+      this.stopPolling(sessionId);
+    }
+
     const mergedConfig = { ...this.defaultConfig, ...config };
     const poll = async () => {
       try {

@@ -236,6 +236,41 @@ async def get_workflow_status(session_id: str, db: AsyncSession = Depends(get_db
         )
 
 
+@router.delete("/recommendations/{session_id}")
+async def cancel_workflow(session_id: str):
+    """Cancel an active workflow.
+
+    Args:
+        session_id: Workflow session ID to cancel
+
+    Returns:
+        Cancellation confirmation
+    """
+    try:
+        cancelled = workflow_manager.cancel_workflow(session_id)
+        
+        if cancelled:
+            return {
+                "session_id": session_id,
+                "status": "cancelled",
+                "message": "Workflow cancelled successfully"
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Workflow {session_id} not found or already completed"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error cancelling workflow: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cancel workflow: {str(e)}"
+        )
+
+
 @router.get("/recommendations/{session_id}/results")
 async def get_workflow_results(session_id: str, db: AsyncSession = Depends(get_db)):
     """Get the final results of a completed recommendation workflow.
@@ -252,13 +287,8 @@ async def get_workflow_results(session_id: str, db: AsyncSession = Depends(get_d
         state = workflow_manager.get_workflow_state(session_id)
 
         if state:
-            if not state.is_complete():
-                raise HTTPException(
-                    status_code=status.HTTP_202_ACCEPTED,
-                    detail=f"Workflow {session_id} is still in progress"
-                )
-
-            # Return complete results from memory
+            # Return partial results even if workflow is not complete
+            # This allows frontend to show mood analysis early
             return {
                 "session_id": session_id,
                 "status": state.status.value,
@@ -275,7 +305,7 @@ async def get_workflow_results(session_id: str, db: AsyncSession = Depends(get_d
                         "source": rec.source
                     }
                     for rec in state.recommendations
-                ],
+                ] if state.is_complete() or len(state.recommendations) > 0 else [],
                 "playlist": {
                     "id": state.playlist_id,
                     "name": state.playlist_name,
@@ -284,7 +314,7 @@ async def get_workflow_results(session_id: str, db: AsyncSession = Depends(get_d
                 } if state.playlist_id else None,
                 "metadata": state.metadata,
                 "created_at": state.created_at.isoformat(),
-                "completed_at": state.updated_at.isoformat()
+                "completed_at": state.updated_at.isoformat() if state.is_complete() else None
             }
         
         # If not in memory, get from database
@@ -473,45 +503,95 @@ async def get_playlist_details(session_id: str):
 @router.post("/recommendations/{session_id}/save-to-spotify")
 async def save_playlist_to_spotify(
     session_id: str,
-    current_user: User = Depends(require_auth)
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
 ):
     """Save the draft playlist to Spotify.
 
     Args:
         session_id: Workflow session ID
         current_user: Authenticated user
+        db: Database session
 
     Returns:
         Playlist creation result
     """
     try:
+        # First try to get from in-memory state
         state = workflow_manager.get_workflow_state(session_id)
 
+        # If not in memory, load from database
         if not state:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Workflow {session_id} not found"
+            from sqlalchemy import select
+            from ..states.agent_state import AgentState, RecommendationStatus, TrackRecommendation
+            
+            query = select(Playlist).where(Playlist.session_id == session_id)
+            result = await db.execute(query)
+            playlist = result.scalar_one_or_none()
+            
+            if not playlist:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Workflow {session_id} not found"
+                )
+            
+            # Check if already saved to Spotify
+            if playlist.spotify_playlist_id:
+                return {
+                    "session_id": session_id,
+                    "already_saved": True,
+                    "playlist_id": playlist.spotify_playlist_id,
+                    "playlist_name": playlist.playlist_data.get("name") if playlist.playlist_data else None,
+                    "spotify_url": playlist.playlist_data.get("spotify_url") if playlist.playlist_data else None,
+                    "message": "Playlist already saved to Spotify"
+                }
+            
+            # Reconstruct state from database
+            recommendations = [
+                TrackRecommendation(
+                    track_id=rec["track_id"],
+                    track_name=rec["track_name"],
+                    artists=rec["artists"],
+                    spotify_uri=rec.get("spotify_uri"),
+                    confidence_score=rec.get("confidence_score", 0.5),
+                    reasoning=rec.get("reasoning", ""),
+                    source=rec.get("source", "unknown")
+                )
+                for rec in (playlist.recommendations_data or [])
+            ]
+            
+            state = AgentState(
+                session_id=session_id,
+                user_id=str(current_user.id),
+                mood_prompt=playlist.mood_prompt,
+                spotify_user_id=current_user.spotify_id,
+                status=RecommendationStatus.COMPLETED,
+                current_step="completed",
+                recommendations=recommendations,
+                mood_analysis=playlist.mood_analysis_data,
+                metadata={"spotify_access_token": current_user.access_token}
             )
+        else:
+            # In-memory state exists
+            if not state.is_complete():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Workflow is not complete yet"
+                )
 
-        if not state.is_complete():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Workflow is not complete yet"
-            )
+            if state.playlist_id:
+                # Already saved
+                return {
+                    "session_id": session_id,
+                    "already_saved": True,
+                    "playlist_id": state.playlist_id,
+                    "playlist_name": state.playlist_name,
+                    "spotify_url": state.metadata.get("playlist_url"),
+                    "message": "Playlist already saved to Spotify"
+                }
 
-        if state.playlist_id:
-            # Already saved
-            return {
-                "session_id": session_id,
-                "already_saved": True,
-                "playlist_id": state.playlist_id,
-                "playlist_name": state.playlist_name,
-                "spotify_url": state.metadata.get("playlist_url"),
-                "message": "Playlist already saved to Spotify"
-            }
-
-        # Add access token to metadata for playlist creation
-        state.metadata["spotify_access_token"] = current_user.access_token
+            # Add access token to metadata for playlist creation
+            state.metadata["spotify_access_token"] = current_user.access_token
 
         # Create playlist on Spotify using the playlist creator agent
         if not playlist_creator:
@@ -533,7 +613,21 @@ async def save_playlist_to_spotify(
         state.metadata["spotify_save_timestamp"] = datetime.utcnow().isoformat()
         
         # Update database with final playlist info
-        await workflow_manager._update_playlist_db(session_id, state)
+        from sqlalchemy import select
+        query = select(Playlist).where(Playlist.session_id == session_id)
+        result = await db.execute(query)
+        playlist_db = result.scalar_one_or_none()
+        
+        if playlist_db:
+            playlist_db.spotify_playlist_id = state.playlist_id
+            playlist_db.status = "completed"
+            playlist_db.playlist_data = {
+                "name": state.playlist_name,
+                "spotify_url": state.metadata.get("playlist_url"),
+                "spotify_uri": state.metadata.get("playlist_uri")
+            }
+            await db.commit()
+            logger.info(f"Updated playlist {playlist_db.id} with Spotify info")
 
         return {
             "session_id": session_id,
@@ -552,41 +646,6 @@ async def save_playlist_to_spotify(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to save playlist: {str(e)}"
-        )
-
-
-@router.delete("/recommendations/{session_id}")
-async def cancel_workflow(session_id: str):
-    """Cancel an active recommendation workflow.
-
-    Args:
-        session_id: Workflow session ID
-
-    Returns:
-        Cancellation confirmation
-    """
-    try:
-        cancelled = workflow_manager.cancel_workflow(session_id)
-
-        if not cancelled:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Workflow {session_id} not found or already complete"
-            )
-
-        return {
-            "session_id": session_id,
-            "status": "cancelled",
-            "message": "Workflow cancelled successfully"
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error cancelling workflow: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to cancel workflow: {str(e)}"
         )
 
 
