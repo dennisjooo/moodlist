@@ -20,6 +20,7 @@ export interface WorkflowState {
 interface WorkflowContextType {
   workflowState: WorkflowState;
   startWorkflow: (moodPrompt: string, genreHint?: string) => Promise<void>;
+  loadWorkflow: (sessionId: string) => Promise<void>;
   stopWorkflow: () => void;
   resetWorkflow: () => void;
   applyEdit: (edit: PlaylistEditRequest) => Promise<void>;
@@ -75,6 +76,56 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to start workflow';
+      setWorkflowState(prev => ({
+        ...prev,
+        error: errorMessage,
+        isLoading: false,
+      }));
+      throw error;
+    }
+  };
+
+  const loadWorkflow = async (sessionId: string) => {
+    if (!isAuthenticated || !user) {
+      throw new Error('User must be authenticated to load workflow');
+    }
+
+    setWorkflowState(prev => ({
+      ...prev,
+      isLoading: true,
+      error: null,
+    }));
+
+    try {
+      // Load workflow status
+      const status = await workflowAPI.getWorkflowStatus(sessionId);
+
+      // Load results if workflow is completed or has recommendations
+      let results = null;
+      if (status.status === 'completed' || status.recommendation_count > 0) {
+        try {
+          results = await workflowAPI.getWorkflowResults(sessionId);
+        } catch (e) {
+          // Results might not be ready yet, that's ok
+          console.log('Results not ready yet:', e);
+        }
+      }
+
+      setWorkflowState(prev => ({
+        ...prev,
+        sessionId: status.session_id,
+        status: status.status,
+        currentStep: status.current_step,
+        moodPrompt: status.mood_prompt,
+        recommendations: results?.recommendations || [],
+        playlist: results?.playlist,
+        awaitingInput: status.awaiting_input,
+        error: status.error || null,
+        isLoading: false,
+      }));
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load workflow';
       setWorkflowState(prev => ({
         ...prev,
         error: errorMessage,
@@ -220,7 +271,17 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
 
   // Auto-refresh workflow status when there's an active session
   useEffect(() => {
-    if (!workflowState.sessionId || workflowState.status === 'completed' || workflowState.status === 'failed') {
+    // Don't poll if no session or if workflow is in a terminal state
+    if (!workflowState.sessionId) {
+      return;
+    }
+
+    // Stop polling for completed, failed, or any workflow with recommendations already loaded
+    if (workflowState.status === 'completed' ||
+      workflowState.status === 'failed' ||
+      (workflowState.recommendations.length > 0 && workflowState.status !== 'processing_edits')) {
+      console.log('Workflow in terminal state, stopping polling');
+      pollingManager.stopPolling(workflowState.sessionId);
       return;
     }
 
@@ -237,9 +298,11 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
         error: status.error || null,
       }));
 
-      // If workflow is completed or failed, get final results
+      // If workflow is completed or failed, get final results and stop polling
       if (status.status === 'completed' || status.status === 'failed') {
-        refreshResults();
+        refreshResults().then(() => {
+          pollingManager.stopPolling(workflowState.sessionId!);
+        });
       }
     };
 
@@ -270,11 +333,12 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     return () => {
       pollingManager.stopPolling(workflowState.sessionId!);
     };
-  }, [workflowState.sessionId, workflowState.status]);
+  }, [workflowState.sessionId, workflowState.status, workflowState.recommendations.length]);
 
   const value: WorkflowContextType = {
     workflowState,
     startWorkflow,
+    loadWorkflow,
     stopWorkflow,
     resetWorkflow,
     applyEdit,

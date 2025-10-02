@@ -425,6 +425,9 @@ class RecommendationGeneratorAgent(BaseAgent):
         all_keywords = genre_keywords + search_keywords
         mood_language = None
         
+        # Create combined track and artist string for matching
+        track_and_artists = track_lower + " " + " ".join(artists_lower)
+        
         # Detect mood language from keywords
         for keyword in all_keywords:
             keyword_lower = keyword.lower()
@@ -446,7 +449,6 @@ class RecommendationGeneratorAgent(BaseAgent):
         
         # If we detected a specific mood language, check if track matches
         if mood_language:
-            track_and_artists = track_lower + " " + " ".join(artists_lower)
             
             for lang, indicators in language_indicators.items():
                 if lang == mood_language:

@@ -7,11 +7,13 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Query
 from langchain_openai import ChatOpenAI
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.config import settings
 from ...core.database import get_db
 from ...auth.dependencies import require_auth
 from ...models.user import User
+from ...models.playlist import Playlist
 from ..workflows.workflow_manager import WorkflowManager, WorkflowConfig
 from ..tools.reccobeat_service import RecoBeatService
 from ..tools.spotify_service import SpotifyService
@@ -46,8 +48,15 @@ groq_llm = ChatOpenAI(
     api_key="***REMOVED***"
 )
 
+cerebras_llm = ChatOpenAI(
+    model="gpt-oss-120b",
+    temperature=1,
+    base_url="https://api.cerebras.ai/v1",
+    api_key="***REMOVED***"
+)
+
 # Create agents with updated dependencies
-mood_analyzer = MoodAnalyzerAgent(llm=llm, spotify_service=spotify_service, verbose=True)
+mood_analyzer = MoodAnalyzerAgent(llm=cerebras_llm, spotify_service=spotify_service, verbose=True)
 seed_gatherer = SeedGathererAgent(
     spotify_service=spotify_service,
     reccobeat_service=reccobeat_service,
@@ -68,7 +77,7 @@ orchestrator = OrchestratorAgent(
     mood_analyzer=mood_analyzer,
     recommendation_generator=recommendation_generator,
     seed_gatherer=seed_gatherer,
-    llm=llm,
+    llm=cerebras_llm,
     max_iterations=2,
     cohesion_threshold=0.75,
     verbose=True
@@ -101,7 +110,8 @@ router = APIRouter()
 async def start_recommendation(
     mood_prompt: str = Query(..., description="Mood description for playlist generation"),
     current_user: User = Depends(require_auth),
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    db: AsyncSession = Depends(get_db)
 ):
     """Start a new mood-based recommendation workflow.
 
@@ -109,6 +119,7 @@ async def start_recommendation(
         mood_prompt: User's mood description
         current_user: Authenticated user (from session)
         background_tasks: FastAPI background tasks
+        db: Database session
 
     Returns:
         Workflow session information
@@ -128,6 +139,19 @@ async def start_recommendation(
         if state:
             state.metadata["spotify_access_token"] = current_user.access_token
 
+        # Create initial Playlist DB record
+        playlist = Playlist(
+            user_id=current_user.id,
+            session_id=session_id,
+            mood_prompt=mood_prompt,
+            status="pending"
+        )
+        db.add(playlist)
+        await db.commit()
+        await db.refresh(playlist)
+        
+        logger.info(f"Created playlist record {playlist.id} for session {session_id}")
+
         return {
             "session_id": session_id,
             "status": "started",
@@ -144,35 +168,62 @@ async def start_recommendation(
 
 
 @router.get("/recommendations/{session_id}/status")
-async def get_workflow_status(session_id: str):
+async def get_workflow_status(session_id: str, db: AsyncSession = Depends(get_db)):
     """Get the current status of a recommendation workflow.
 
     Args:
         session_id: Workflow session ID
+        db: Database session
 
     Returns:
         Current workflow status
     """
     try:
+        # First try to get from in-memory workflow manager
         state = workflow_manager.get_workflow_state(session_id)
 
-        if not state:
+        if state:
+            return {
+                "session_id": session_id,
+                "status": state.status.value,
+                "current_step": state.current_step,
+                "mood_prompt": state.mood_prompt,
+                "recommendation_count": len(state.recommendations),
+                "has_playlist": state.playlist_id is not None,
+                "awaiting_input": state.awaiting_user_input,
+                "error": state.error_message,
+                "created_at": state.created_at.isoformat(),
+                "updated_at": state.updated_at.isoformat()
+            }
+        
+        # If not in memory, try to get from database
+        from sqlalchemy import select
+        query = select(Playlist).where(Playlist.session_id == session_id)
+        result = await db.execute(query)
+        playlist = result.scalar_one_or_none()
+        
+        if not playlist:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Workflow {session_id} not found"
             )
-
+        
+        # Return status from database
+        recommendation_count = 0
+        if playlist.recommendations_data:
+            recommendation_count = len(playlist.recommendations_data)
+        
         return {
             "session_id": session_id,
-            "status": state.status.value,
-            "current_step": state.current_step,
-            "mood_prompt": state.mood_prompt,
-            "recommendation_count": len(state.recommendations),
-            "has_playlist": state.playlist_id is not None,
-            "awaiting_input": state.awaiting_user_input,
-            "error": state.error_message,
-            "created_at": state.created_at.isoformat(),
-            "updated_at": state.updated_at.isoformat()
+            "status": playlist.status,
+            "current_step": "completed" if playlist.status == "completed" else playlist.status,
+            "mood_prompt": playlist.mood_prompt,
+            "recommendation_count": recommendation_count,
+            "has_playlist": playlist.spotify_playlist_id is not None,
+            "awaiting_input": False,  # Persisted workflows are not awaiting input
+            "error": playlist.error_message,
+            "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
+            "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None
         }
 
     except HTTPException:
@@ -186,57 +237,90 @@ async def get_workflow_status(session_id: str):
 
 
 @router.get("/recommendations/{session_id}/results")
-async def get_workflow_results(session_id: str):
+async def get_workflow_results(session_id: str, db: AsyncSession = Depends(get_db)):
     """Get the final results of a completed recommendation workflow.
 
     Args:
         session_id: Workflow session ID
+        db: Database session
 
     Returns:
         Complete workflow results
     """
     try:
+        # First try to get from in-memory workflow manager
         state = workflow_manager.get_workflow_state(session_id)
 
-        if not state:
+        if state:
+            if not state.is_complete():
+                raise HTTPException(
+                    status_code=status.HTTP_202_ACCEPTED,
+                    detail=f"Workflow {session_id} is still in progress"
+                )
+
+            # Return complete results from memory
+            return {
+                "session_id": session_id,
+                "status": state.status.value,
+                "mood_prompt": state.mood_prompt,
+                "mood_analysis": state.mood_analysis,
+                "recommendations": [
+                    {
+                        "track_id": rec.track_id,
+                        "track_name": rec.track_name,
+                        "artists": rec.artists,
+                        "spotify_uri": rec.spotify_uri,
+                        "confidence_score": rec.confidence_score,
+                        "reasoning": rec.reasoning,
+                        "source": rec.source
+                    }
+                    for rec in state.recommendations
+                ],
+                "playlist": {
+                    "id": state.playlist_id,
+                    "name": state.playlist_name,
+                    "spotify_url": state.metadata.get("playlist_url"),
+                    "spotify_uri": state.metadata.get("playlist_uri")
+                } if state.playlist_id else None,
+                "metadata": state.metadata,
+                "created_at": state.created_at.isoformat(),
+                "completed_at": state.updated_at.isoformat()
+            }
+        
+        # If not in memory, get from database
+        from sqlalchemy import select
+        query = select(Playlist).where(Playlist.session_id == session_id)
+        result = await db.execute(query)
+        playlist = result.scalar_one_or_none()
+        
+        if not playlist:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Workflow {session_id} not found"
             )
-
-        if not state.is_complete():
+        
+        if playlist.status != "completed":
             raise HTTPException(
                 status_code=status.HTTP_202_ACCEPTED,
                 detail=f"Workflow {session_id} is still in progress"
             )
-
-        # Return complete results
+        
+        # Return results from database
         return {
             "session_id": session_id,
-            "status": state.status.value,
-            "mood_prompt": state.mood_prompt,
-            "mood_analysis": state.mood_analysis,
-            "recommendations": [
-                {
-                    "track_id": rec.track_id,
-                    "track_name": rec.track_name,
-                    "artists": rec.artists,
-                    "spotify_uri": rec.spotify_uri,
-                    "confidence_score": rec.confidence_score,
-                    "reasoning": rec.reasoning,
-                    "source": rec.source
-                }
-                for rec in state.recommendations
-            ],
+            "status": playlist.status,
+            "mood_prompt": playlist.mood_prompt,
+            "mood_analysis": playlist.mood_analysis_data,
+            "recommendations": playlist.recommendations_data or [],
             "playlist": {
-                "id": state.playlist_id,
-                "name": state.playlist_name,
-                "spotify_url": state.metadata.get("playlist_url"),
-                "spotify_uri": state.metadata.get("playlist_uri")
-            } if state.playlist_id else None,
-            "metadata": state.metadata,
-            "created_at": state.created_at.isoformat(),
-            "completed_at": state.updated_at.isoformat()
+                "id": playlist.spotify_playlist_id,
+                "name": playlist.playlist_data.get("name") if playlist.playlist_data else None,
+                "spotify_url": playlist.playlist_data.get("spotify_url") if playlist.playlist_data else None,
+                "spotify_uri": playlist.playlist_data.get("spotify_uri") if playlist.playlist_data else None
+            } if playlist.spotify_playlist_id else None,
+            "metadata": {},
+            "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
+            "completed_at": playlist.updated_at.isoformat() if playlist.updated_at else None
         }
 
     except HTTPException:
@@ -447,6 +531,9 @@ async def save_playlist_to_spotify(
         # Mark as saved
         state.metadata["playlist_saved_to_spotify"] = True
         state.metadata["spotify_save_timestamp"] = datetime.utcnow().isoformat()
+        
+        # Update database with final playlist info
+        await workflow_manager._update_playlist_db(session_id, state)
 
         return {
             "session_id": session_id,
@@ -584,3 +671,4 @@ async def list_recent_workflows(limit: int = Query(default=10, le=50)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list recent workflows: {str(e)}"
         )
+

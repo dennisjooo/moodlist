@@ -4,10 +4,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { useWorkflow } from '@/lib/workflowContext';
 import { AlertCircle, CheckCircle, Loader2, Music, XCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 interface WorkflowProgressProps {
   onComplete?: () => void;
@@ -15,7 +15,34 @@ interface WorkflowProgressProps {
 }
 
 export default function WorkflowProgress({ onComplete, onError }: WorkflowProgressProps) {
+  const router = useRouter();
   const { workflowState, startWorkflow, stopWorkflow, clearError } = useWorkflow();
+
+  // Define workflow stages
+  const workflowStages = [
+    { key: 'analyzing_mood', label: 'Analyzing mood' },
+    { key: 'gathering_seeds', label: 'Finding seeds' },
+    { key: 'generating_recommendations', label: 'Generating playlist' },
+    { key: 'evaluating_quality', label: 'Evaluating' },
+    { key: 'optimizing_recommendations', label: 'Optimizing' },
+    { key: 'creating_playlist', label: 'Creating playlist' },
+    { key: 'completed', label: 'Complete' },
+  ];
+
+  // Get current stage index
+  const getCurrentStageIndex = (status: string | null): number => {
+    if (!status) return 0;
+    const index = workflowStages.findIndex(stage => status.includes(stage.key));
+    return index >= 0 ? index : 0;
+  };
+
+  // Get visible stages (current + 2 previous)
+  const getVisibleStages = () => {
+    const currentIndex = getCurrentStageIndex(workflowState.status);
+    const startIndex = Math.max(0, currentIndex - 2);
+    const endIndex = currentIndex + 1;
+    return workflowStages.slice(startIndex, endIndex);
+  };
 
   const getStatusIcon = (status: string | null) => {
     switch (status) {
@@ -78,45 +105,6 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
     }
   };
 
-  const getProgressValue = (status: string | null, currentStep?: string) => {
-    // Calculate progress for optimization iterations
-    if (currentStep?.includes('iteration')) {
-      const match = currentStep.match(/iteration[_\s](\d+)/i);
-      const iteration = parseInt(match ? match[1] : '1');
-
-      if (currentStep.includes('evaluating_quality')) {
-        return 65 + (iteration * 3); // 68%, 71%, 74%
-      }
-      if (currentStep.includes('optimizing_recommendations')) {
-        return 73 + (iteration * 4); // 77%, 81%, 85%
-      }
-    }
-
-    switch (status) {
-      case 'analyzing_mood':
-        return 20;
-      case 'gathering_seeds':
-        return 40;
-      case 'generating_recommendations':
-        return 60;
-      case 'evaluating_quality':
-        return 70;
-      case 'optimizing_recommendations':
-        return 80;
-      case 'awaiting_user_input':
-        return 90;
-      case 'processing_edits':
-        return 92;
-      case 'creating_playlist':
-        return 95;
-      case 'completed':
-        return 100;
-      case 'failed':
-        return 0;
-      default:
-        return 0;
-    }
-  };
 
   const handleRetry = () => {
     clearError();
@@ -125,6 +113,7 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
 
   const handleStop = () => {
     stopWorkflow();
+    router.push('/create');
   };
 
   if (!workflowState.sessionId && !workflowState.isLoading) {
@@ -161,23 +150,49 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
           </Alert>
         )}
 
-        {/* Progress Bar */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">
-              {getStatusMessage(workflowState.status, workflowState.currentStep)}
-            </span>
-            <Badge variant="outline" className="text-xs">
-              {getProgressValue(workflowState.status, workflowState.currentStep)}%
-            </Badge>
+        {/* Timeline with Dots */}
+        <div className="space-y-4">
+          <div className="text-sm font-medium">
+            {getStatusMessage(workflowState.status, workflowState.currentStep)}
           </div>
-          <Progress
-            value={getProgressValue(workflowState.status, workflowState.currentStep)}
-            className={cn(
-              "h-2",
-              workflowState.status === 'failed' && "bg-red-100"
-            )}
-          />
+
+          {/* Enhanced Dot Timeline */}
+          <div className="relative">
+            <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-gradient-to-r from-muted/30 to-muted/10 backdrop-blur-sm border border-border/50">
+              {getVisibleStages().map((stage, index) => {
+                const isCurrentStage = workflowState.status?.includes(stage.key);
+                const isPreviousStage = index < getVisibleStages().length - 1;
+
+                return (
+                  <div key={stage.key} className="flex items-center gap-3">
+                    <div className="relative flex items-center justify-center">
+                      {/* Glow effect for current stage */}
+                      {isCurrentStage && (
+                        <div className="absolute w-6 h-6 bg-primary/20 rounded-full animate-ping" />
+                      )}
+                      {/* Main dot */}
+                      <div
+                        className={cn(
+                          "rounded-full transition-all duration-500 relative z-10",
+                          isCurrentStage
+                            ? "w-4 h-4 bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/50 ring-2 ring-primary/30 ring-offset-2 ring-offset-background"
+                            : "w-2.5 h-2.5 bg-gradient-to-br from-muted-foreground/60 to-muted-foreground/40"
+                        )}
+                      />
+                    </div>
+                    {index < getVisibleStages().length - 1 && (
+                      <div className={cn(
+                        "h-0.5 w-8 rounded-full transition-all duration-300",
+                        isCurrentStage
+                          ? "bg-gradient-to-r from-primary/60 to-muted-foreground/20"
+                          : "bg-muted-foreground/20"
+                      )} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Current Step */}
