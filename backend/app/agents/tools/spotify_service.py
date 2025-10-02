@@ -7,6 +7,7 @@ from .agent_tools import AgentTools
 from .spotify.user_data import GetUserTopTracksTool, GetUserTopArtistsTool
 from .spotify.playlist_management import CreatePlaylistTool, AddTracksToPlaylistTool
 from .spotify.user_profile import GetUserProfileTool
+from .spotify.artist_search import SearchSpotifyArtistsTool, GetSeveralSpotifyArtistsTool, GetArtistTopTracksTool
 
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,10 @@ class SpotifyService:
             GetUserTopArtistsTool(),
             CreatePlaylistTool(),
             AddTracksToPlaylistTool(),
-            GetUserProfileTool()
+            GetUserProfileTool(),
+            SearchSpotifyArtistsTool(),
+            GetSeveralSpotifyArtistsTool(),
+            GetArtistTopTracksTool()
         ]
 
         for tool in tools_to_register:
@@ -192,6 +196,99 @@ class SpotifyService:
 
         return True
 
+    async def search_spotify_artists(
+        self,
+        access_token: str,
+        query: str,
+        limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """Search for artists on Spotify.
+
+        Args:
+            access_token: Spotify access token
+            query: Search query (artist name, genre, keywords)
+            limit: Number of results to return
+
+        Returns:
+            List of artists matching the query
+        """
+        tool = self.tools.get_tool("search_spotify_artists")
+        if not tool:
+            raise ValueError("Search Spotify artists tool not available")
+
+        result = await tool._run(
+            access_token=access_token,
+            query=query,
+            limit=limit
+        )
+
+        if not result.success:
+            logger.error(f"Failed to search Spotify artists: {result.error}")
+            return []
+
+        return result.data.get("artists", [])
+
+    async def get_several_spotify_artists(
+        self,
+        access_token: str,
+        artist_ids: List[str]
+    ) -> List[Dict[str, Any]]:
+        """Get multiple artists from Spotify.
+
+        Args:
+            access_token: Spotify access token
+            artist_ids: List of Spotify artist IDs (up to 50)
+
+        Returns:
+            List of artist data
+        """
+        tool = self.tools.get_tool("get_several_spotify_artists")
+        if not tool:
+            raise ValueError("Get several Spotify artists tool not available")
+
+        result = await tool._run(
+            access_token=access_token,
+            artist_ids=artist_ids
+        )
+
+        if not result.success:
+            logger.error(f"Failed to get several Spotify artists: {result.error}")
+            return []
+
+        return result.data.get("artists", [])
+
+    async def get_artist_top_tracks(
+        self,
+        access_token: str,
+        artist_id: str,
+        market: str = "US"
+    ) -> List[Dict[str, Any]]:
+        """Get an artist's top tracks from Spotify.
+
+        Args:
+            access_token: Spotify access token
+            artist_id: Spotify artist ID
+            market: ISO 3166-1 alpha-2 country code
+
+        Returns:
+            List of top tracks for the artist
+        """
+        tool = self.tools.get_tool("get_artist_top_tracks")
+        if not tool:
+            raise ValueError("Get artist top tracks tool not available")
+
+        result = await tool._run(
+            access_token=access_token,
+            artist_id=artist_id,
+            market=market
+        )
+
+        if not result.success:
+            logger.error(f"Failed to get artist top tracks: {result.error}")
+            return []
+
+        return result.data.get("tracks", [])
+
     def get_available_tools(self) -> List[str]:
         """Get list of available Spotify tools.
 
@@ -203,7 +300,10 @@ class SpotifyService:
             "get_user_top_artists",
             "get_user_profile",
             "create_playlist",
-            "add_tracks_to_playlist"
+            "add_tracks_to_playlist",
+            "search_spotify_artists",
+            "get_several_spotify_artists",
+            "get_artist_top_tracks"
         ]
 
     def get_tool_descriptions(self) -> Dict[str, str]:
