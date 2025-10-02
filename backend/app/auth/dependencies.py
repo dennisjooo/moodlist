@@ -1,5 +1,6 @@
 import structlog
-from datetime import datetime, timezone
+import httpx
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status, Request
@@ -11,6 +12,7 @@ from app.auth.security import verify_token
 from app.core.database import get_db
 from app.models.session import Session
 from app.models.user import User
+from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
 security = HTTPBearer(auto_error=False)
@@ -150,3 +152,86 @@ async def require_auth(
         )
 
     return user
+
+
+async def refresh_spotify_token_if_expired(user: User, db: AsyncSession) -> User:
+    """Check if Spotify token is expired and refresh if needed.
+    
+    Args:
+        user: User object with token information
+        db: Database session
+        
+    Returns:
+        User object with refreshed token if needed
+        
+    Raises:
+        HTTPException: If token refresh fails
+    """
+    # Check if token is expired or will expire in the next 5 minutes
+    now = datetime.now(timezone.utc)
+    
+    # Handle both timezone-aware and naive datetimes
+    token_expires_at = user.token_expires_at
+    if token_expires_at.tzinfo is None:
+        token_expires_at = token_expires_at.replace(tzinfo=timezone.utc)
+    
+    # Add 5 minute buffer to refresh before actual expiration
+    if token_expires_at > now:
+        # Token is still valid
+        logger.debug("Spotify token still valid", user_id=user.id, expires_at=token_expires_at)
+        return user
+    
+    logger.info("Spotify token expired, refreshing", user_id=user.id, expired_at=token_expires_at)
+    
+    # Refresh the token
+    async with httpx.AsyncClient() as client:
+        try:
+            data = {
+                "grant_type": "refresh_token",
+                "refresh_token": user.refresh_token,
+                "client_id": settings.SPOTIFY_CLIENT_ID,
+                "client_secret": settings.SPOTIFY_CLIENT_SECRET
+            }
+            
+            response = await client.post(
+                "https://accounts.spotify.com/api/token",
+                data=data
+            )
+            response.raise_for_status()
+            token_data = response.json()
+            
+            # Update user's tokens in database
+            user.access_token = token_data["access_token"]
+            if "refresh_token" in token_data:
+                user.refresh_token = token_data["refresh_token"]
+            
+            # Update expiration time
+            expires_in = token_data.get("expires_in", 3600)
+            user.token_expires_at = datetime.now(timezone.utc).replace(microsecond=0) + \
+                                   timedelta(seconds=expires_in)
+            
+            await db.commit()
+            await db.refresh(user)
+            
+            logger.info("Spotify token refreshed successfully", user_id=user.id, 
+                       new_expires_at=user.token_expires_at)
+            
+            return user
+            
+        except httpx.HTTPStatusError as e:
+            logger.error("Failed to refresh Spotify token", 
+                        user_id=user.id, 
+                        error=str(e), 
+                        status_code=e.response.status_code)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Failed to refresh Spotify token. Please log in again."
+            )
+        except Exception as e:
+            logger.error("Unexpected error refreshing Spotify token", 
+                        user_id=user.id, 
+                        error=str(e))
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to refresh token: {str(e)}"
+            )
