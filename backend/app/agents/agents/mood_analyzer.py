@@ -74,11 +74,12 @@ For "super indie" you might target:
 - Lower loudness [-20, -8] (more dynamic range)
 
 CRITICAL: Always suggest specific artist names that match the mood:
-- artist_recommendations: ALWAYS provide 3-8 specific artist names that match the mood, even if not mentioned by user
-  * For "city pop": suggest artists like "Miki Matsubara", "Tatsuro Yamashita", "Mariya Takeuchi"
-  * For "french funk": suggest artists like "Daft Punk", "Justice", "Vulfpeck", "Parcels"
-  * For niche genres: research and suggest authentic artists from that scene
-  * This is CRUCIAL for artist discovery - empty list severely degrades recommendations
+- artist_recommendations: ALWAYS provide 8-15 specific artist names that match the mood, even if not mentioned by user
+  * Include a MIX of popular and lesser-known artists for diversity
+  * For "city pop": suggest artists like "Miki Matsubara", "Tatsuro Yamashita", "Mariya Takeuchi", "Junko Ohashi", "Anri", "Taeko Onuki"
+  * For "french funk": suggest artists like "Daft Punk", "Justice", "Vulfpeck", "Parcels", "St Germain", "Air", "Phoenix", "Polo & Pan", "Cassius", "L'Impératrice"
+  * For niche genres: research and suggest 10+ authentic artists from that scene for maximum variety
+  * This is CRUCIAL for artist discovery - more artists = more diverse playlist
 - genre_keywords: Genre terms and mood descriptors (e.g., "indie", "city pop", "jazz", "electronic", "chill")
 
 Provide your analysis in valid JSON format with this structure:
@@ -686,21 +687,21 @@ Provide your analysis in valid JSON format with this structure:
 
             all_artists = []
 
-            # 1. Search for artists by name (direct artist search)
-            for artist_name in artist_recommendations[:3]:  # Limit to top 3 artist names
+            # 1. Search for artists by name (direct artist search) - EXPANDED
+            for artist_name in artist_recommendations[:10]:  # Increased from 3 to 10 for more variety
                 try:
                     logger.info(f"Searching for artist: {artist_name}")
                     artists = await self.spotify_service.search_spotify_artists(
                         access_token=access_token,
                         query=artist_name,
-                        limit=3  # Few results per artist name
+                        limit=3  # Keep at 3 per artist to avoid exact duplicates
                     )
                     all_artists.extend(artists)
                 except Exception as e:
                     logger.error(f"Failed to search for artist '{artist_name}': {e}")
 
-            # 2. Search tracks for genre keywords and extract artists
-            for genre in genre_keywords[:3]:  # Limit to top 3 genres
+            # 2. Search tracks for genre keywords and extract artists - EXPANDED
+            for genre in genre_keywords[:5]:  # Increased from 3 to 5 genres
                 try:
                     logger.info(f"Searching tracks for genre: {genre}")
                     # Use genre filter format for better results
@@ -708,20 +709,20 @@ Provide your analysis in valid JSON format with this structure:
                     artists = await self.spotify_service.search_tracks_for_artists(
                         access_token=access_token,
                         query=query,
-                        limit=15  # More tracks to get diverse artists
+                        limit=20  # Increased from 15 to 20 for more diverse artists
                     )
                     all_artists.extend(artists)
                 except Exception as e:
                     logger.error(f"Failed to search tracks for genre '{genre}': {e}")
 
-            # 3. Fallback: use general search keywords with artist search
+            # 3. Fallback: use general search keywords with artist search - EXPANDED
             if not all_artists and search_keywords:
-                for keyword in search_keywords[:3]:
+                for keyword in search_keywords[:5]:  # Increased from 3 to 5
                     try:
                         artists = await self.spotify_service.search_spotify_artists(
                             access_token=access_token,
                             query=keyword,
-                            limit=8
+                            limit=12  # Increased from 8 to 12
                         )
                         all_artists.extend(artists)
                     except Exception as e:
@@ -742,18 +743,19 @@ Provide your analysis in valid JSON format with this structure:
 
             logger.info(f"Found {len(unique_artists)} unique artists from search")
 
-            # Use LLM to filter artists if available
-            if self.llm and len(unique_artists) > 6:
+            # Use LLM to filter artists if available - EXPANDED for diversity
+            if self.llm and len(unique_artists) > 10:
                 filtered_artists = await self._llm_filter_artists(
                     unique_artists, state.mood_prompt, mood_analysis
                 )
             else:
-                # Just take top artists by popularity if no LLM
+                # Take more artists sorted by popularity for diversity
+                # Mix of popular and less popular for variety
                 filtered_artists = sorted(
                     unique_artists,
                     key=lambda x: x.get("popularity", 0),
                     reverse=True
-                )[:8]  # Reduced from 12 to 8 for focused playlists
+                )[:20]  # Increased from 8 to 20 for maximum diversity
 
             # Store in state metadata
             state.metadata["discovered_artists"] = [
@@ -809,11 +811,12 @@ Provide your analysis in valid JSON format with this structure:
 **Available Artists**:
 {chr(10).join(artists_summary)}
 
-**Task**: Select 6-8 artists from the list that best match this mood. Consider:
+**Task**: Select 12-20 artists from the list that best match this mood for MAXIMUM DIVERSITY. Consider:
 1. Genre compatibility with the mood
 2. Artist style and vibe
-3. Mix of popular and lesser-known artists for variety
+3. IMPORTANT: Mix of popular and lesser-known artists for variety
 4. Overall cohesion with the requested mood
+5. Prefer MORE artists over fewer for playlist diversity
 
 Respond in JSON format:
 {{
@@ -821,7 +824,7 @@ Respond in JSON format:
   "reasoning": "Brief explanation of why these artists fit the mood"
 }}
 
-Select artist indices (numbers from the list above)."""
+Select artist indices (numbers from the list above). Aim for 12-20 artists for best diversity."""
 
             response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
             content = response.content if hasattr(response, 'content') else str(response)
@@ -848,13 +851,13 @@ Select artist indices (numbers from the list above)."""
                     self._current_state.metadata["artist_discovery_reasoning"] = reasoning
 
                 logger.info(f"LLM selected {len(filtered_artists)} artists: {reasoning}")
-                return filtered_artists[:12]  # Cap at 12
+                return filtered_artists[:20]  # Increased from 12 to 20 for max diversity
 
             else:
                 logger.warning("Could not parse LLM artist filtering response")
-                return artists[:12]
+                return artists[:20]  # Increased from 12 to 20
 
         except Exception as e:
             logger.error(f"LLM artist filtering failed: {str(e)}")
             # Fallback to popularity-based selection
-            return sorted(artists, key=lambda x: x.get("popularity", 0), reverse=True)[:12]
+            return sorted(artists, key=lambda x: x.get("popularity", 0), reverse=True)[:20]  # Increased from 12 to 20
