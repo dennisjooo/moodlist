@@ -1,11 +1,13 @@
 'use client';
 
+import LoginRequiredDialog from '@/components/LoginRequiredDialog';
 import MoodInput from '@/components/MoodInput';
 import Navigation from '@/components/Navigation';
 import PlaylistEditor from '@/components/PlaylistEditor';
 import PlaylistResults from '@/components/PlaylistResults';
 import { Badge } from '@/components/ui/badge';
 import { DotPattern } from '@/components/ui/dot-pattern';
+import { useAuth } from '@/lib/authContext';
 import { cn } from '@/lib/utils';
 import { useWorkflow } from '@/lib/workflowContext';
 import { Sparkles } from 'lucide-react';
@@ -16,7 +18,9 @@ import { useEffect, useState } from 'react';
 function CreatePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isAuthenticated } = useAuth();
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
+  const [showLoginDialog, setShowLoginDialog] = useState(false);
   const { workflowState, startWorkflow, resetWorkflow } = useWorkflow();
 
   // Get mood from URL params if present
@@ -43,6 +47,12 @@ function CreatePageContent() {
   }, [workflowState.sessionId, workflowState.isLoading, router]);
 
   const handleMoodSubmit = async (mood: string, genreHint?: string) => {
+    // Check if user is authenticated before starting workflow
+    if (!isAuthenticated) {
+      setShowLoginDialog(true);
+      return;
+    }
+
     try {
       await startWorkflow(mood, genreHint);
       // Note: Redirect happens in useEffect above when sessionId is set
@@ -111,6 +121,9 @@ function CreatePageContent() {
 
   return (
     <div className="min-h-screen bg-background relative">
+      {/* Login Dialog */}
+      <LoginRequiredDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
+
       {/* Fixed Dot Pattern Background */}
       <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
         <DotPattern
