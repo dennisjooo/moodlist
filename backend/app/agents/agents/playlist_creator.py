@@ -59,6 +59,9 @@ class PlaylistCreatorAgent(BaseAgent):
             # Generate playlist name
             playlist_name = await self._generate_playlist_name(state)
 
+            # Generate playlist description
+            playlist_description = self._generate_playlist_description(state)
+
             # Create playlist on Spotify
             access_token = state.metadata.get("spotify_access_token")
             if not access_token:
@@ -67,7 +70,7 @@ class PlaylistCreatorAgent(BaseAgent):
             playlist_data = await self.spotify_service.create_playlist(
                 access_token=access_token,
                 name=playlist_name,
-                description=f"Mood-based playlist: {state.mood_prompt}. Created by MoodList.",
+                description=playlist_description,
                 public=True
             )
 
@@ -204,6 +207,63 @@ class PlaylistCreatorAgent(BaseAgent):
         ]
 
         return random.choice(default_names)
+
+    def _generate_playlist_description(self, state: AgentState) -> str:
+        """Generate a descriptive playlist description using mood analysis.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Generated playlist description
+        """
+        try:
+            # Start with the original mood prompt
+            description_parts = []
+            
+            # Use mood analysis if available
+            if state.mood_analysis:
+                mood_interpretation = state.mood_analysis.get("mood_interpretation")
+                primary_emotion = state.mood_analysis.get("primary_emotion")
+                energy_level = state.mood_analysis.get("energy_level")
+                
+                # Build a rich description
+                if mood_interpretation:
+                    description_parts.append(mood_interpretation)
+                
+                # Add emotion and energy if available
+                emotion_energy_parts = []
+                if primary_emotion:
+                    emotion_energy_parts.append(primary_emotion)
+                if energy_level:
+                    emotion_energy_parts.append(energy_level)
+                
+                if emotion_energy_parts:
+                    description_parts.append(f"({', '.join(emotion_energy_parts)})")
+            else:
+                # Fallback to mood prompt if no analysis
+                description_parts.append(f"Mood: {state.mood_prompt}")
+            
+            # Add track count
+            track_count = len(state.recommendations)
+            description_parts.append(f"{track_count} carefully selected tracks.")
+            
+            # Add branding
+            description_parts.append("Created by MoodList.")
+            
+            # Join with proper spacing
+            description = " ".join(description_parts)
+            
+            # Spotify description limit is 300 characters
+            if len(description) > 300:
+                description = description[:297] + "..."
+            
+            return description
+            
+        except Exception as e:
+            logger.error(f"Error generating playlist description: {str(e)}")
+            # Fallback to simple description
+            return f"Mood-based playlist: {state.mood_prompt}. Created by MoodList."
 
     def _normalize_spotify_uri(self, uri_or_id: str) -> str:
         """Normalize track identifier to proper Spotify URI format.

@@ -2,6 +2,18 @@
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
 
+export interface MoodAnalysis {
+    mood_interpretation?: string;
+    primary_emotion?: string;
+    energy_level?: string;
+    target_features?: Record<string, [number, number]>;
+    feature_weights?: Record<string, number>;
+    search_keywords?: string[];
+    artist_recommendations?: string[];
+    genre_keywords?: string[];
+    reasoning?: string;
+}
+
 export interface UserPlaylist {
     id: number;
     session_id: string;
@@ -12,6 +24,7 @@ export interface UserPlaylist {
     spotify_url?: string;
     spotify_uri?: string;
     spotify_playlist_id?: string;
+    mood_analysis_data?: MoodAnalysis;
     created_at: string;
     updated_at: string;
 }

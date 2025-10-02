@@ -78,6 +78,10 @@ async def get_user_playlists(
             if playlist.spotify_playlist_id:
                 playlist_info["spotify_playlist_id"] = playlist.spotify_playlist_id
             
+            # Add mood analysis data if available
+            if playlist.mood_analysis_data:
+                playlist_info["mood_analysis_data"] = playlist.mood_analysis_data
+            
             playlists_data.append(playlist_info)
         
         # Get total count for pagination
