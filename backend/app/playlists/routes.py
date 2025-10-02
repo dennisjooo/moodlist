@@ -315,3 +315,45 @@ async def get_playlist_stats(
             detail=f"Failed to get playlist stats: {str(e)}"
         )
 
+
+@router.get("/stats/public")
+async def get_public_stats(db: AsyncSession = Depends(get_db)):
+    """Get public platform statistics (no authentication required).
+
+    Args:
+        db: Database session
+
+    Returns:
+        Public platform statistics including total users and playlists count
+    """
+    try:
+        # Total users
+        total_users_query = select(func.count()).select_from(User).where(User.is_active == True)
+        total_users_result = await db.execute(total_users_query)
+        total_users = total_users_result.scalar()
+        
+        # Total playlists
+        total_playlists_query = select(func.count()).select_from(Playlist)
+        total_playlists_result = await db.execute(total_playlists_query)
+        total_playlists = total_playlists_result.scalar()
+        
+        # Completed playlists
+        completed_playlists_query = select(func.count()).select_from(Playlist).where(
+            Playlist.status == "completed"
+        )
+        completed_playlists_result = await db.execute(completed_playlists_query)
+        completed_playlists = completed_playlists_result.scalar()
+        
+        return {
+            "total_users": total_users,
+            "total_playlists": total_playlists,
+            "completed_playlists": completed_playlists
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting public stats: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get public stats: {str(e)}"
+        )
+
