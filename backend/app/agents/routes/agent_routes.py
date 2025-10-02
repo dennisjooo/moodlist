@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.config import settings
 from ...core.database import get_db
-from ...auth.dependencies import require_auth
+from ...auth.dependencies import require_auth, refresh_spotify_token_if_expired
 from ...models.user import User
 from ...models.playlist import Playlist
 from ..workflows.workflow_manager import WorkflowManager, WorkflowConfig
@@ -78,7 +78,7 @@ orchestrator = OrchestratorAgent(
     recommendation_generator=recommendation_generator,
     seed_gatherer=seed_gatherer,
     llm=cerebras_llm,
-    max_iterations=2,
+    max_iterations=3,
     cohesion_threshold=0.75,
     verbose=True
 )
@@ -86,7 +86,7 @@ orchestrator = OrchestratorAgent(
 # Create workflow manager
 workflow_config = WorkflowConfig(
     max_retries=3,
-    timeout_per_agent=60,
+    timeout_per_agent=120,
     max_recommendations=25,  # Cap at 25 tracks for manageable playlists
     enable_human_loop=True,
     require_approval=True
@@ -126,6 +126,9 @@ async def start_recommendation(
     """
     try:
         logger.info(f"Starting recommendation workflow for user {current_user.id}, mood: {mood_prompt}")
+
+        # Refresh Spotify token if expired before starting workflow
+        current_user = await refresh_spotify_token_if_expired(current_user, db)
 
         # Start the workflow with authenticated user's information
         session_id = await workflow_manager.start_workflow(
@@ -517,6 +520,9 @@ async def save_playlist_to_spotify(
         Playlist creation result
     """
     try:
+        # Refresh Spotify token if expired before saving to Spotify
+        current_user = await refresh_spotify_token_if_expired(current_user, db)
+        
         # First try to get from in-memory state
         state = workflow_manager.get_workflow_state(session_id)
 
