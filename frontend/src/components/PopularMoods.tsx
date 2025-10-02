@@ -3,6 +3,7 @@
 import LoginRequiredDialog from '@/components/LoginRequiredDialog';
 import MoodCard from '@/components/MoodCard';
 import { useAuth } from '@/lib/authContext';
+import { getMoodGenre } from '@/lib/moodColors';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
@@ -37,7 +38,7 @@ export default function PopularMoods() {
     }
 
     // User is logged in - navigate to create page with the mood
-    router.push(`/create?mood=${encodeURIComponent(mood)}`);
+    router.push(`/create?mood=${encodeURIComponent(`${mood} in the genre of ${getMoodGenre(mood)}`)}`);
   };
 
   return (
