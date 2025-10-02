@@ -10,6 +10,7 @@ export interface WorkflowState {
   status: WorkflowStatus['status'] | 'started' | null;
   currentStep: string;
   moodPrompt: string;
+  moodAnalysis?: WorkflowResults['mood_analysis'];
   recommendations: WorkflowResults['recommendations'];
   playlist?: WorkflowResults['playlist'];
   error: string | null;
@@ -43,6 +44,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     status: null,
     currentStep: '',
     moodPrompt: '',
+    moodAnalysis: undefined,
     recommendations: [],
     error: null,
     isLoading: false,
@@ -71,7 +73,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
         ...prev,
         sessionId: response.session_id,
         status: response.status,
-        isLoading: false,
+        isLoading: true, // Keep loading true so redirect happens
       }));
 
     } catch (error) {
@@ -117,6 +119,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
         status: status.status,
         currentStep: status.current_step,
         moodPrompt: status.mood_prompt,
+        moodAnalysis: results?.mood_analysis,
         recommendations: results?.recommendations || [],
         playlist: results?.playlist,
         awaitingInput: status.awaiting_input,
@@ -142,6 +145,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
       status: null,
       currentStep: '',
       moodPrompt: '',
+      moodAnalysis: undefined,
       recommendations: [],
       error: null,
       isLoading: false,
@@ -157,6 +161,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
       status: null,
       currentStep: '',
       moodPrompt: '',
+      moodAnalysis: undefined,
       recommendations: [],
       error: null,
       isLoading: false,
@@ -271,7 +276,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
 
   // Auto-refresh workflow status when there's an active session
   useEffect(() => {
-    // Don't poll if no session or if workflow is in a terminal state
+    // Don't poll if no session
     if (!workflowState.sessionId) {
       return;
     }
@@ -282,7 +287,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
       (workflowState.recommendations.length > 0 && workflowState.status !== 'processing_edits')) {
       console.log('Workflow in terminal state, stopping polling');
       pollingManager.stopPolling(workflowState.sessionId);
-      return;
+      return; // Don't start polling again
     }
 
     const pollWorkflow = async () => {
@@ -297,6 +302,22 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
         awaitingInput: status.awaiting_input,
         error: status.error || null,
       }));
+
+      // Try to fetch mood analysis early if we don't have it yet
+      if (!workflowState.moodAnalysis && status.recommendation_count === 0) {
+        workflowAPI.getWorkflowResults(workflowState.sessionId!)
+          .then(results => {
+            if (results.mood_analysis) {
+              setWorkflowState(prev => ({
+                ...prev,
+                moodAnalysis: results.mood_analysis,
+              }));
+            }
+          })
+          .catch(() => {
+            // Results not ready yet, that's ok
+          });
+      }
 
       // If workflow is completed or failed, get final results and stop polling
       if (status.status === 'completed' || status.status === 'failed') {
@@ -320,6 +341,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
       console.log('Workflow awaiting user input');
     };
 
+    console.log('Starting polling for session:', workflowState.sessionId, 'status:', workflowState.status);
     pollingManager.startPolling(
       workflowState.sessionId,
       pollWorkflow,
@@ -331,6 +353,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     );
 
     return () => {
+      console.log('Cleanup: stopping polling for session:', workflowState.sessionId);
       pollingManager.stopPolling(workflowState.sessionId!);
     };
   }, [workflowState.sessionId, workflowState.status, workflowState.recommendations.length]);

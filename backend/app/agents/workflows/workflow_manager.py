@@ -67,6 +67,7 @@ class WorkflowManager:
         # Workflow state
         self.active_workflows: Dict[str, AgentState] = {}
         self.completed_workflows: Dict[str, AgentState] = {}
+        self.active_tasks: Dict[str, asyncio.Task] = {}  # Track running tasks
 
         # Performance tracking
         self.workflow_count = 0
@@ -172,10 +173,44 @@ class WorkflowManager:
 
         logger.info(f"Started workflow {session_id} for mood: {mood_prompt[:50]}...")
 
-        # Start workflow execution
-        asyncio.create_task(self._execute_workflow(session_id))
+        # Start workflow execution and track the task
+        task = asyncio.create_task(self._execute_workflow(session_id))
+        self.active_tasks[session_id] = task
 
         return session_id
+
+    def cancel_workflow(self, session_id: str) -> bool:
+        """Cancel an active workflow.
+
+        Args:
+            session_id: Workflow session ID to cancel
+
+        Returns:
+            True if workflow was cancelled, False if not found or already completed
+        """
+        if session_id in self.active_workflows:
+            state = self.active_workflows[session_id]
+            state.status = RecommendationStatus.FAILED
+            state.error_message = "Workflow cancelled by user"
+            state.current_step = "cancelled"
+            
+            # Cancel the asyncio task if it exists
+            if session_id in self.active_tasks:
+                task = self.active_tasks[session_id]
+                if not task.done():
+                    task.cancel()
+                    logger.info(f"Cancelled asyncio task for workflow {session_id}")
+                del self.active_tasks[session_id]
+            
+            # Move to completed workflows
+            self.completed_workflows[session_id] = self.active_workflows.pop(session_id)
+            self.failure_count += 1
+            
+            logger.info(f"Workflow {session_id} cancelled by user")
+            return True
+        
+        logger.warning(f"Attempted to cancel non-existent or completed workflow {session_id}")
+        return False
 
     async def _execute_workflow(self, session_id: str):
         """Execute the complete workflow for a session.
@@ -231,20 +266,32 @@ class WorkflowManager:
                 serialized_state = serialize_datetime(state_dict)
                 f.write(json.dumps(serialized_state, indent=4, default=str))
 
+        except asyncio.CancelledError:
+            logger.info(f"Workflow {session_id} was cancelled")
+            state.status = RecommendationStatus.FAILED
+            state.error_message = "Workflow cancelled by user"
+            self.failure_count += 1
+            raise  # Re-raise to properly handle cancellation
+
         except Exception as e:
             logger.error(f"Workflow {session_id} failed: {str(e)}", exc_info=True)
             state.set_error(str(e))
             self.failure_count += 1
 
         finally:
-            # Move to completed workflows
-            completion_time = datetime.utcnow()
-            state.metadata["completion_time"] = completion_time.isoformat()
-            state.metadata["total_duration"] = (completion_time - start_time).total_seconds()
+            # Clean up task reference
+            if session_id in self.active_tasks:
+                del self.active_tasks[session_id]
+            
+            # Move to completed workflows if still in active
+            if session_id in self.active_workflows:
+                completion_time = datetime.utcnow()
+                state.metadata["completion_time"] = completion_time.isoformat()
+                state.metadata["total_duration"] = (completion_time - start_time).total_seconds()
 
-            self.completed_workflows[session_id] = self.active_workflows.pop(session_id)
+                self.completed_workflows[session_id] = self.active_workflows.pop(session_id)
 
-            logger.info(f"Workflow {session_id} completed in {state.metadata['total_duration']:.2f}s")
+                logger.info(f"Workflow {session_id} completed in {state.metadata['total_duration']:.2f}s")
 
     async def _execute_mood_analysis(self, state: AgentState) -> AgentState:
         """Execute mood analysis step.
