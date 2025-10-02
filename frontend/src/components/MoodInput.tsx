@@ -63,7 +63,6 @@ export default function MoodInput({ onSubmit, initialMood }: MoodInputProps) {
           <Button
             type="submit"
             className="w-full h-11"
-            disabled={!mood.trim()}
           >
             Generate Playlist
           </Button>
