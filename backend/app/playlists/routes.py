@@ -2,6 +2,7 @@
 
 import logging
 from typing import Optional
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, desc, func
@@ -39,10 +40,13 @@ async def get_user_playlists(
         List of user's playlists with pagination info
     """
     try:
-        # Build query
+        # Build query - exclude soft-deleted playlists
         query = (
             select(Playlist)
-            .where(Playlist.user_id == current_user.id)
+            .where(
+                Playlist.user_id == current_user.id,
+                Playlist.deleted_at.is_(None)
+            )
         )
         
         # Add status filter if provided
@@ -84,8 +88,11 @@ async def get_user_playlists(
             
             playlists_data.append(playlist_info)
         
-        # Get total count for pagination
-        count_query = select(func.count()).select_from(Playlist).where(Playlist.user_id == current_user.id)
+        # Get total count for pagination - exclude soft-deleted playlists
+        count_query = select(func.count()).select_from(Playlist).where(
+            Playlist.user_id == current_user.id,
+            Playlist.deleted_at.is_(None)
+        )
         if status:
             count_query = count_query.where(Playlist.status == status)
         count_result = await db.execute(count_query)
@@ -125,7 +132,8 @@ async def get_playlist(
     try:
         query = select(Playlist).where(
             Playlist.id == playlist_id,
-            Playlist.user_id == current_user.id
+            Playlist.user_id == current_user.id,
+            Playlist.deleted_at.is_(None)
         )
         result = await db.execute(query)
         playlist = result.scalar_one_or_none()
@@ -181,7 +189,8 @@ async def get_playlist_by_session(
     try:
         query = select(Playlist).where(
             Playlist.session_id == session_id,
-            Playlist.user_id == current_user.id
+            Playlist.user_id == current_user.id,
+            Playlist.deleted_at.is_(None)
         )
         result = await db.execute(query)
         playlist = result.scalar_one_or_none()
@@ -224,7 +233,7 @@ async def delete_playlist(
     current_user: User = Depends(require_auth),
     db: AsyncSession = Depends(get_db)
 ):
-    """Delete a playlist.
+    """Soft delete a playlist.
 
     Args:
         playlist_id: Playlist database ID
@@ -237,7 +246,8 @@ async def delete_playlist(
     try:
         query = select(Playlist).where(
             Playlist.id == playlist_id,
-            Playlist.user_id == current_user.id
+            Playlist.user_id == current_user.id,
+            Playlist.deleted_at.is_(None)
         )
         result = await db.execute(query)
         playlist = result.scalar_one_or_none()
@@ -248,10 +258,11 @@ async def delete_playlist(
                 detail="Playlist not found"
             )
         
-        await db.delete(playlist)
+        # Soft delete by setting deleted_at timestamp
+        playlist.deleted_at = datetime.utcnow()
         await db.commit()
         
-        logger.info(f"Deleted playlist {playlist_id} for user {current_user.id}")
+        logger.info(f"Soft deleted playlist {playlist_id} for user {current_user.id}")
         
         return {
             "message": "Playlist deleted successfully",
@@ -283,21 +294,28 @@ async def get_playlist_stats(
         Playlist statistics
     """
     try:
-        # Total playlists
-        total_query = select(func.count()).select_from(Playlist).where(Playlist.user_id == current_user.id)
+        # Total playlists - exclude soft-deleted
+        total_query = select(func.count()).select_from(Playlist).where(
+            Playlist.user_id == current_user.id,
+            Playlist.deleted_at.is_(None)
+        )
         total_result = await db.execute(total_query)
         total = total_result.scalar()
         
-        # Completed playlists
+        # Completed playlists - exclude soft-deleted
         completed_query = select(func.count()).select_from(Playlist).where(
             Playlist.user_id == current_user.id,
-            Playlist.status == "completed"
+            Playlist.status == "completed",
+            Playlist.deleted_at.is_(None)
         )
         completed_result = await db.execute(completed_query)
         completed = completed_result.scalar()
         
-        # Total tracks
-        tracks_query = select(func.sum(Playlist.track_count)).where(Playlist.user_id == current_user.id)
+        # Total tracks - exclude soft-deleted
+        tracks_query = select(func.sum(Playlist.track_count)).where(
+            Playlist.user_id == current_user.id,
+            Playlist.deleted_at.is_(None)
+        )
         tracks_result = await db.execute(tracks_query)
         total_tracks = tracks_result.scalar() or 0
         
