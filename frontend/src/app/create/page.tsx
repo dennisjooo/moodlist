@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import WorkflowProgress from '@/components/WorkflowProgress';
 import { cn } from '@/lib/utils';
+import { getMoodGenre } from '@/lib/moodColors';
 import { useWorkflow } from '@/lib/workflowContext';
 import { Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -25,9 +26,9 @@ function CreatePageContent() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  const handleMoodSubmit = async (mood: string) => {
+  const handleMoodSubmit = async (mood: string, genreHint?: string) => {
     try {
-      await startWorkflow(mood);
+      await startWorkflow(mood, genreHint);
     } catch (error) {
       console.error('Failed to start workflow:', error);
     }
@@ -171,7 +172,7 @@ function CreatePageContent() {
                   <MoodCard
                     key={`${mood}-${index}`}
                     mood={mood}
-                    onClick={() => handleMoodSubmit(mood)}
+                    onClick={() => handleMoodSubmit(mood, getMoodGenre(mood))}
                   />
                 ))}
               </div>
