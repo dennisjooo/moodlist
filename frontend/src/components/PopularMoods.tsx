@@ -1,8 +1,7 @@
 'use client';
 
+import LoginRequiredDialog from '@/components/LoginRequiredDialog';
 import MoodCard from '@/components/MoodCard';
-import SpotifyLoginButton from '@/components/SpotifyLoginButton';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useAuth } from '@/lib/authContext';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
@@ -44,24 +43,7 @@ export default function PopularMoods() {
   return (
     <>
       {/* Login Dialog */}
-      <AlertDialog open={showLoginDialog} onOpenChange={setShowLoginDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Login Required</AlertDialogTitle>
-            <AlertDialogDescription>
-              Hold on there, buddy! We need you to log in to create playlists.
-              <br />
-              Mind logging in to your Spotify account to continue.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="flex justify-center py-4">
-            <SpotifyLoginButton />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Maybe later</AlertDialogCancel>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <LoginRequiredDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
 
       {/* Popular Moods Section */}
       <div ref={containerRef} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-16">
