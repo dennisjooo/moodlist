@@ -180,11 +180,13 @@ class OrchestratorAgent(BaseAgent):
             List with duplicates removed, preserving order and keeping first occurrence
         """
         seen_track_ids = set()
+        seen_spotify_uris = set()
         unique_recommendations = []
         
         for rec in recommendations:
-            if rec.track_id not in seen_track_ids:
+            if rec.track_id not in seen_track_ids and rec.spotify_uri not in seen_spotify_uris:
                 seen_track_ids.add(rec.track_id)
+                seen_spotify_uris.add(rec.spotify_uri)
                 unique_recommendations.append(rec)
             else:
                 logger.debug(f"Removing duplicate: {rec.track_name} by {', '.join(rec.artists)}")
