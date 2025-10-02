@@ -6,6 +6,7 @@ import PlaylistResults from '@/components/PlaylistResults';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
+import { LoadingDots } from '@/components/ui/loading-dots';
 import WorkflowProgress from '@/components/WorkflowProgress';
 import { cn } from '@/lib/utils';
 import { useWorkflow } from '@/lib/workflowContext';
@@ -128,11 +129,7 @@ function CreateSessionPageContent() {
                     </Button>
 
                     <div className="flex items-center justify-center min-h-[60vh]">
-                        <div className="flex items-center justify-center space-x-2">
-                            <div className="w-4 h-4 bg-primary rounded-full animate-bounce"></div>
-                            <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                            <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                        </div>
+                        <LoadingDots size="sm" />
                     </div>
                 </main>
             </div>
@@ -242,11 +239,7 @@ function CreateSessionPageContent() {
                                     <p className="text-muted-foreground">{workflowState.error}</p>
                                 </div>
                             ) : (
-                                <div className="flex items-center justify-center space-x-2">
-                                    <div className="w-4 h-4 bg-primary rounded-full animate-bounce"></div>
-                                    <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                                    <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                                </div>
+                                <LoadingDots size="sm" />
                             )}
                         </div>
                     </div>
