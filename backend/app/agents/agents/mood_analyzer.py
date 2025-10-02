@@ -19,12 +19,14 @@ class MoodAnalyzerAgent(BaseAgent):
     def __init__(
         self,
         llm: Optional[BaseLanguageModel] = None,
+        spotify_service=None,
         verbose: bool = False
     ):
         """Initialize the mood analyzer agent.
 
         Args:
             llm: Language model for mood analysis
+            spotify_service: SpotifyService for artist discovery
             verbose: Whether to enable verbose logging
         """
         super().__init__(
@@ -33,6 +35,8 @@ class MoodAnalyzerAgent(BaseAgent):
             llm=llm,
             verbose=verbose
         )
+        
+        self.spotify_service = spotify_service
 
         # Enhanced mood analysis prompts with full RecoBeat API feature set
         self.system_prompt = """You are an expert music curator and audio analyst. Your task is to analyze user mood prompts and translate them into comprehensive audio feature profiles for music recommendations.
@@ -131,6 +135,10 @@ Provide your analysis in valid JSON format with this structure:
             logger.info(f"Mood analysis completed for prompt: {state.mood_prompt}")
             logger.info(f"Target features: {list(target_features.keys())}")
             logger.info(f"Feature weights: {feature_weights}")
+
+            # Discover artists matching the mood (if Spotify service available)
+            if self.spotify_service:
+                await self._discover_mood_artists(state, mood_analysis)
 
         except Exception as e:
             logger.error(f"Error in mood analysis: {str(e)}", exc_info=True)
@@ -500,3 +508,171 @@ Provide your analysis in valid JSON format with this structure:
                 keywords.extend(mood_synonyms[word])
 
         return list(set(keywords))  # Remove duplicates
+
+    async def _discover_mood_artists(self, state: AgentState, mood_analysis: Dict[str, Any]):
+        """Discover artists matching the mood using Spotify search and LLM filtering.
+
+        Args:
+            state: Current agent state
+            mood_analysis: Mood analysis results
+        """
+        try:
+            logger.info("Starting artist discovery for mood")
+
+            # Get access token
+            access_token = state.metadata.get("spotify_access_token")
+            if not access_token:
+                logger.warning("No Spotify access token available for artist discovery")
+                return
+
+            # Get search keywords from mood analysis
+            search_keywords = mood_analysis.get("search_keywords", [])
+            if not search_keywords:
+                search_keywords = self._extract_search_keywords(state.mood_prompt)
+
+            # Search for artists using first few keywords
+            all_artists = []
+            search_queries = search_keywords[:3]  # Limit to top 3 keywords
+
+            for keyword in search_queries:
+                try:
+                    artists = await self.spotify_service.search_spotify_artists(
+                        access_token=access_token,
+                        query=keyword,
+                        limit=8  # Reduced from 10 to keep playlist focused
+                    )
+                    all_artists.extend(artists)
+                except Exception as e:
+                    logger.error(f"Failed to search artists for keyword '{keyword}': {e}")
+
+            if not all_artists:
+                logger.warning("No artists found during discovery")
+                return
+
+            # Remove duplicates
+            seen_ids = set()
+            unique_artists = []
+            for artist in all_artists:
+                artist_id = artist.get("id")
+                if artist_id and artist_id not in seen_ids:
+                    seen_ids.add(artist_id)
+                    unique_artists.append(artist)
+
+            logger.info(f"Found {len(unique_artists)} unique artists from search")
+
+            # Use LLM to filter artists if available
+            if self.llm and len(unique_artists) > 6:
+                filtered_artists = await self._llm_filter_artists(
+                    unique_artists, state.mood_prompt, mood_analysis
+                )
+            else:
+                # Just take top artists by popularity if no LLM
+                filtered_artists = sorted(
+                    unique_artists,
+                    key=lambda x: x.get("popularity", 0),
+                    reverse=True
+                )[:8]  # Reduced from 12 to 8 for focused playlists
+
+            # Store in state metadata
+            state.metadata["discovered_artists"] = [
+                {
+                    "id": artist.get("id"),
+                    "name": artist.get("name"),
+                    "genres": artist.get("genres", []),
+                    "popularity": artist.get("popularity", 50)
+                }
+                for artist in filtered_artists
+            ]
+            state.metadata["mood_matched_artists"] = [artist.get("id") for artist in filtered_artists]
+
+            logger.info(f"Discovered {len(filtered_artists)} mood-matched artists: {[a.get('name') for a in filtered_artists[:5]]}")
+
+        except Exception as e:
+            logger.error(f"Error in artist discovery: {str(e)}", exc_info=True)
+            # Don't fail the whole pipeline, just continue without artist discovery
+
+    async def _llm_filter_artists(
+        self,
+        artists: List[Dict[str, Any]],
+        mood_prompt: str,
+        mood_analysis: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Use LLM to filter and select artists that best match the mood.
+
+        Args:
+            artists: List of artist candidates
+            mood_prompt: User's mood description
+            mood_analysis: Mood analysis results
+
+        Returns:
+            Filtered list of artists (8-12 artists)
+        """
+        try:
+            # Prepare artist summary for LLM
+            artists_summary = []
+            for i, artist in enumerate(artists[:20], 1):  # Limit to 20 for LLM context
+                genres_str = ", ".join(artist.get("genres", [])[:3]) or "no genres listed"
+                artists_summary.append(
+                    f"{i}. {artist.get('name')} - Genres: {genres_str}, Popularity: {artist.get('popularity', 50)}"
+                )
+
+            mood_interpretation = mood_analysis.get("mood_interpretation", mood_prompt)
+
+            prompt = f"""You are a music curator selecting artists that match a specific mood.
+
+**User's Mood**: "{mood_prompt}"
+
+**Mood Analysis**: {mood_interpretation}
+
+**Available Artists**:
+{chr(10).join(artists_summary)}
+
+**Task**: Select 6-8 artists from the list that best match this mood. Consider:
+1. Genre compatibility with the mood
+2. Artist style and vibe
+3. Mix of popular and lesser-known artists for variety
+4. Overall cohesion with the requested mood
+
+Respond in JSON format:
+{{
+  "selected_artist_indices": [1, 3, 5, ...],
+  "reasoning": "Brief explanation of why these artists fit the mood"
+}}
+
+Select artist indices (numbers from the list above)."""
+
+            response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
+            content = response.content if hasattr(response, 'content') else str(response)
+
+            # Parse JSON response
+            json_start = content.find('{')
+            json_end = content.rfind('}') + 1
+
+            if json_start >= 0 and json_end > json_start:
+                json_str = content[json_start:json_end]
+                result = json.loads(json_str)
+
+                selected_indices = result.get("selected_artist_indices", [])
+                reasoning = result.get("reasoning", "")
+
+                # Map indices to artists (1-indexed in prompt, 0-indexed in list)
+                filtered_artists = [
+                    artists[idx - 1] for idx in selected_indices
+                    if 1 <= idx <= len(artists)
+                ]
+
+                # Store reasoning in state metadata
+                if hasattr(self, '_current_state'):
+                    self._current_state.metadata["artist_discovery_reasoning"] = reasoning
+
+                logger.info(f"LLM selected {len(filtered_artists)} artists: {reasoning}")
+                return filtered_artists[:12]  # Cap at 12
+
+            else:
+                logger.warning("Could not parse LLM artist filtering response")
+                return artists[:12]
+
+        except Exception as e:
+            logger.error(f"LLM artist filtering failed: {str(e)}")
+            # Fallback to popularity-based selection
+            return sorted(artists, key=lambda x: x.get("popularity", 0), reverse=True)[:12]

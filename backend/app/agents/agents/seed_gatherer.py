@@ -17,21 +17,27 @@ class SeedGathererAgent(BaseAgent):
     def __init__(
         self,
         spotify_service: SpotifyService,
+        reccobeat_service=None,
+        llm=None,
         verbose: bool = False
     ):
         """Initialize the seed gatherer agent.
 
         Args:
             spotify_service: Service for Spotify API operations
+            reccobeat_service: Service for RecoBeat API operations (for audio features)
+            llm: Language model for intelligent seed selection
             verbose: Whether to enable verbose logging
         """
         super().__init__(
             name="seed_gatherer",
             description="Gathers seed tracks and artists from user's Spotify listening history",
+            llm=llm,
             verbose=verbose
         )
 
         self.spotify_service = spotify_service
+        self.reccobeat_service = reccobeat_service
 
     async def execute(self, state: AgentState) -> AgentState:
         """Execute seed gathering from user's Spotify data.
@@ -75,8 +81,26 @@ class SeedGathererAgent(BaseAgent):
             if feature_weights:
                 target_features["_weights"] = feature_weights
 
-            seed_tracks = self._select_seed_tracks(top_tracks, target_features)
-            state.seed_tracks = seed_tracks
+            # Fetch audio features for top tracks if RecoBeat service available
+            if self.reccobeat_service:
+                top_tracks = await self._enrich_tracks_with_features(top_tracks)
+
+            # Select seed tracks using audio feature scoring
+            scored_tracks = self._select_seed_tracks(top_tracks, target_features)
+            
+            # Use LLM to select final seeds if available
+            if self.llm and len(scored_tracks) > 5:
+                final_seeds = await self._llm_select_seeds(
+                    scored_tracks[:15],  # Top 15 candidates
+                    state.mood_prompt,
+                    target_features
+                )
+            else:
+                # Just use top scored tracks
+                final_seeds = scored_tracks[:10]
+            
+            state.seed_tracks = final_seeds
+            state.metadata["seed_candidates_count"] = len(scored_tracks)
 
             # Extract artist IDs for context
             artist_ids = [artist["id"] for artist in top_artists if artist.get("id")]
@@ -87,11 +111,11 @@ class SeedGathererAgent(BaseAgent):
             state.status = RecommendationStatus.GATHERING_SEEDS
 
             # Store additional metadata
-            state.metadata["seed_track_count"] = len(seed_tracks)
+            state.metadata["seed_track_count"] = len(final_seeds)
             state.metadata["top_artist_count"] = len(artist_ids)
-            state.metadata["seed_source"] = "spotify_top_tracks"
+            state.metadata["seed_source"] = "spotify_top_tracks_ai_selected"
 
-            logger.info(f"Gathered {len(seed_tracks)} seed tracks and {len(artist_ids)} artists")
+            logger.info(f"Gathered {len(final_seeds)} seed tracks and {len(artist_ids)} artists")
 
         except Exception as e:
             logger.error(f"Error in seed gathering: {str(e)}", exc_info=True)
@@ -104,15 +128,14 @@ class SeedGathererAgent(BaseAgent):
         top_tracks: List[Dict[str, Any]],
         target_features: Optional[Dict[str, Any]] = None
     ) -> List[str]:
-        """Select the best tracks to use as seeds.
+        """Select the best tracks to use as seeds with scoring.
 
         Args:
             top_tracks: User's top tracks from Spotify
-            mood_analysis: Optional mood analysis for filtering
             target_features: Target audio features from mood analysis
 
         Returns:
-            List of selected track IDs
+            List of selected track IDs (ordered by score)
         """
         if not top_tracks:
             logger.warning("No top tracks available for seed selection")
@@ -125,33 +148,31 @@ class SeedGathererAgent(BaseAgent):
             logger.warning("No valid track IDs found in top tracks")
             return []
 
-        # Select top tracks based on popularity and relevance
-        selected_tracks = []
-
         # Prioritize tracks that match mood if target features available
         if target_features:
             # Score tracks based on how well they match the target features
             scored_tracks = []
             for track in valid_tracks[:30]:  # Consider top 30 tracks
                 score = self._calculate_mood_match_score(track, target_features)
-                scored_tracks.append((track, score))
+                scored_tracks.append((track["id"], score, track))
 
-            # Sort by score and take top tracks
+            # Sort by score and return track IDs
             scored_tracks.sort(key=lambda x: x[1], reverse=True)
-            selected_tracks = [track["id"] for track, _ in scored_tracks[:10]]
+            selected_tracks = [track_id for track_id, _, _ in scored_tracks]
+
+            logger.info(f"Scored {len(scored_tracks)} tracks, top score: {scored_tracks[0][1]:.2f}")
+            return selected_tracks
 
         else:
             # Default selection: take top tracks by popularity
-            # Sort by popularity (descending)
             sorted_tracks = sorted(
                 valid_tracks,
                 key=lambda x: x.get("popularity", 0),
                 reverse=True
             )
-            selected_tracks = [track["id"] for track in sorted_tracks[:10]]
+            selected_tracks = [track["id"] for track in sorted_tracks]
 
-        logger.info(f"Selected {len(selected_tracks)} seed tracks from {len(valid_tracks)} available tracks")
-
+        logger.info(f"Selected {len(selected_tracks)} seed track candidates")
         return selected_tracks
 
     def _calculate_mood_match_score(
@@ -330,3 +351,139 @@ class SeedGathererAgent(BaseAgent):
         logger.info(f"Selected {len(negative_seeds)} negative seed tracks")
 
         return negative_seeds
+
+    async def _enrich_tracks_with_features(
+        self,
+        tracks: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Enrich tracks with audio features from RecoBeat.
+
+        Args:
+            tracks: List of track dictionaries
+
+        Returns:
+            Tracks enriched with audio features
+        """
+        if not self.reccobeat_service:
+            return tracks
+
+        logger.info(f"Fetching audio features for {len(tracks)} tracks")
+        enriched_tracks = []
+        for track in tracks:
+            track_id = track.get("track_id") or track.get("id")
+            if not track_id:
+                enriched_tracks.append(track)
+                continue
+
+            try:
+                # Fetch audio features from RecoBeat
+                features_map = await self.reccobeat_service.get_tracks_audio_features([track_id])
+                
+                if track_id in features_map:
+                    # Merge audio features into track data
+                    track_with_features = track.copy()
+                    track_with_features.update(features_map[track_id])
+                    enriched_tracks.append(track_with_features)
+                else:
+                    enriched_tracks.append(track)
+
+            except Exception as e:
+                logger.warning(f"Failed to fetch features for track {track_id}: {e}")
+                enriched_tracks.append(track)
+
+        logger.info(f"Successfully enriched {len([t for t in enriched_tracks if 'energy' in t])} tracks with audio features")
+        return enriched_tracks
+
+    async def _llm_select_seeds(
+        self,
+        candidate_track_ids: List[str],
+        mood_prompt: str,
+        target_features: Dict[str, Any]
+    ) -> List[str]:
+        """Use LLM to select the best seed tracks from candidates.
+
+        Args:
+            candidate_track_ids: List of candidate track IDs (already scored)
+            mood_prompt: User's mood description
+            target_features: Target audio features
+
+        Returns:
+            List of 5-8 selected seed track IDs
+        """
+        try:
+            # We need track details for the LLM prompt
+            # For now, use the track IDs directly and trust the scoring
+            # In a more complete implementation, we'd fetch track metadata
+            
+            logger.info(f"LLM selecting seeds from {len(candidate_track_ids)} candidates for mood: '{mood_prompt}'")
+
+            # Create a summary of target features for LLM
+            features_summary = []
+            for feature, value in list(target_features.items())[:5]:
+                if feature != "_weights":
+                    if isinstance(value, list):
+                        features_summary.append(f"{feature}: {value[0]:.2f}-{value[1]:.2f}")
+                    else:
+                        features_summary.append(f"{feature}: {value:.2f}")
+
+            prompt = f"""You are a music curator selecting seed tracks for a mood-based playlist.
+
+**User's Mood**: "{mood_prompt}"
+
+**Target Audio Features**: {", ".join(features_summary)}
+
+**Task**: From the provided {len(candidate_track_ids)} candidate tracks (already ranked by how well they match the mood), select 5-8 tracks that would make the best seeds for generating a cohesive playlist.
+
+Consider:
+1. The tracks are already scored and ordered by match quality
+2. Select tracks that exemplify the mood
+3. Prefer variety in the seeds (don't pick all similar tracks)
+4. Balance between strong mood matches and diversity
+
+**Candidates** (ranked by score):
+{chr(10).join([f"{i+1}. Track {track_id[:8]}..." for i, track_id in enumerate(candidate_track_ids)])}
+
+Respond in JSON format:
+{{
+  "selected_indices": [1, 2, 3, 4, 5, 6, 7, 8],
+  "reasoning": "Brief explanation of selection strategy"
+}}
+
+Select 5-8 indices from the list above."""
+
+            response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
+            content = response.content if hasattr(response, 'content') else str(response)
+
+            # Parse JSON response
+            json_start = content.find('{')
+            json_end = content.rfind('}') + 1
+
+            if json_start >= 0 and json_end > json_start:
+                import json
+                json_str = content[json_start:json_end]
+                result = json.loads(json_str)
+
+                selected_indices = result.get("selected_indices", [])
+                reasoning = result.get("reasoning", "")
+
+                # Map indices to track IDs (1-indexed in prompt, 0-indexed in list)
+                selected_tracks = [
+                    candidate_track_ids[idx - 1]
+                    for idx in selected_indices
+                    if 1 <= idx <= len(candidate_track_ids)
+                ]
+
+                # Store reasoning in metadata
+                logger.info(f"LLM selected {len(selected_tracks)} seeds: {reasoning}")
+                
+                # Return 5-8 seeds
+                return selected_tracks[:8]
+
+            else:
+                logger.warning("Could not parse LLM seed selection response")
+                return candidate_track_ids[:8]
+
+        except Exception as e:
+            logger.error(f"LLM seed selection failed: {str(e)}")
+            # Fallback to top scored tracks
+            return candidate_track_ids[:8]

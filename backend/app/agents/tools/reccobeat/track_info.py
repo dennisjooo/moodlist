@@ -101,11 +101,19 @@ class GetMultipleTracksTool(RateLimitedTool):
             )
 
         except Exception as e:
-            logger.error(f"Error getting multiple tracks: {str(e)}", exc_info=True)
-            return ToolResult.error_result(
-                f"Failed to get multiple tracks: {str(e)}",
-                error_type=type(e).__name__
-            )
+            # 404 errors are expected when Spotify IDs don't exist in RecoBeat
+            if "404" in str(e):
+                logger.debug(f"Some tracks not found in RecoBeat (404) - returning empty result")
+                return ToolResult.success_result(
+                    data={"tracks": [], "total_count": 0, "requested_count": len(ids)},
+                    metadata={"source": "reccobeat", "api_endpoint": "/v1/track"}
+                )
+            else:
+                logger.error(f"Error getting multiple tracks: {str(e)}", exc_info=True)
+                return ToolResult.error_result(
+                    f"Failed to get multiple tracks: {str(e)}",
+                    error_type=type(e).__name__
+                )
 
 
 class GetTrackAudioFeaturesInput(BaseModel):
@@ -195,8 +203,16 @@ class GetTrackAudioFeaturesTool(RateLimitedTool):
             )
 
         except Exception as e:
-            logger.error(f"Error getting track audio features: {str(e)}", exc_info=True)
-            return ToolResult.error_result(
-                f"Failed to get track audio features: {str(e)}",
-                error_type=type(e).__name__
-            )
+            # 404 errors are expected for Spotify tracks not in RecoBeat database
+            if "404" in str(e):
+                logger.debug(f"Track {track_id} not found in RecoBeat (404) - this is normal for many Spotify tracks")
+                return ToolResult.error_result(
+                    f"Track not found in RecoBeat: {str(e)}",
+                    error_type=type(e).__name__
+                )
+            else:
+                logger.error(f"Error getting track audio features: {str(e)}", exc_info=True)
+                return ToolResult.error_result(
+                    f"Failed to get track audio features: {str(e)}",
+                    error_type=type(e).__name__
+                )

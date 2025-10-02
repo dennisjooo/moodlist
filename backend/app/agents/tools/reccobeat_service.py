@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Any
 from .agent_tools import AgentTools
 from .reccobeat.track_recommendations import TrackRecommendationsTool
 from .reccobeat.track_info import GetMultipleTracksTool, GetTrackAudioFeaturesTool
-from .reccobeat.artist_info import SearchArtistTool, GetMultipleArtistsTool
+from .reccobeat.artist_info import SearchArtistTool, GetMultipleArtistsTool, GetArtistTracksTool
 
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,8 @@ class RecoBeatService:
             GetMultipleTracksTool(),
             GetTrackAudioFeaturesTool(),
             SearchArtistTool(),
-            GetMultipleArtistsTool()
+            GetMultipleArtistsTool(),
+            GetArtistTracksTool()
         ]
 
         for tool in tools_to_register:
@@ -73,14 +74,72 @@ class RecoBeatService:
 
         return result.data.get("recommendations", [])
 
+    async def convert_spotify_tracks_to_reccobeat(
+        self,
+        spotify_track_ids: List[str]
+    ) -> Dict[str, str]:
+        """Convert Spotify track IDs to RecoBeat IDs using batch lookup.
+
+        Args:
+            spotify_track_ids: List of Spotify track IDs
+
+        Returns:
+            Dictionary mapping Spotify ID to RecoBeat ID
+        """
+        if not spotify_track_ids:
+            return {}
+        
+        id_mapping = {}
+        
+        # Get multiple tracks tool
+        tracks_tool = self.tools.get_tool("get_multiple_tracks")
+        if not tracks_tool:
+            logger.warning("Multiple tracks tool not available for ID conversion")
+            return {}
+        
+        # Process in chunks of 40 (API limit)
+        for i in range(0, len(spotify_track_ids), 40):
+            chunk = spotify_track_ids[i:i + 40]
+            
+            try:
+                result = await tracks_tool._run(ids=chunk)
+                
+                if result.success:
+                    tracks = result.data.get("tracks", [])
+                    for track in tracks:
+                        reccobeat_id = track.get("id")
+                        spotify_uri = track.get("spotify_uri", "")
+                        
+                        # Extract Spotify ID from URI
+                        if spotify_uri and "spotify:track:" in spotify_uri:
+                            spotify_id = spotify_uri.replace("spotify:track:", "")
+                        elif "/" in spotify_uri:
+                            spotify_id = spotify_uri.split("/")[-1]
+                        else:
+                            # Assume the input ID matches
+                            for orig_id in chunk:
+                                if orig_id not in id_mapping:
+                                    spotify_id = orig_id
+                                    break
+                        
+                        if reccobeat_id:
+                            id_mapping[spotify_id] = reccobeat_id
+                            
+            except Exception as e:
+                logger.debug(f"Error converting track IDs chunk: {e}")
+                continue
+        
+        logger.info(f"Converted {len(id_mapping)}/{len(spotify_track_ids)} Spotify track IDs to RecoBeat IDs")
+        return id_mapping
+
     async def get_tracks_audio_features(self, track_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         """Get audio features for multiple tracks.
 
         Args:
-            track_ids: List of track IDs
+            track_ids: List of Spotify or RecoBeat track IDs
 
         Returns:
-            Dictionary mapping track IDs to their audio features
+            Dictionary mapping original track IDs to their audio features
         """
         features_map = {}
 
@@ -90,16 +149,36 @@ class RecoBeatService:
             logger.warning("Audio features tool not available")
             return features_map
 
-        # Get features for each track
+        # Try to convert Spotify IDs to RecoBeat IDs first
+        id_mapping = await self.convert_spotify_tracks_to_reccobeat(track_ids)
+        logger.info(f"Successfully converted {len(id_mapping)}/{len(track_ids)} Spotify tracks to RecoBeat IDs")
+        
+        # Get features for each track (only if we have a valid RecoBeat ID)
         for track_id in track_ids:
+            # Skip if we couldn't convert the Spotify ID to RecoBeat ID
+            if track_id not in id_mapping:
+                logger.debug(f"Skipping track {track_id} - not found in RecoBeat database")
+                continue
+            
+            reccobeat_id = id_mapping[track_id]
+            
             try:
-                result = await features_tool._run(track_id=track_id)
+                result = await features_tool._run(track_id=reccobeat_id)
                 if result.success:
+                    # Map back to original Spotify ID
                     features_map[track_id] = result.data
                 else:
-                    logger.warning(f"Failed to get features for track {track_id}: {result.error}")
+                    # 404 errors are common - track might not exist in RecoBeat
+                    if "404" in str(result.error):
+                        logger.debug(f"Track {reccobeat_id} not found in RecoBeat (404)")
+                    else:
+                        logger.warning(f"Failed to get features for track {reccobeat_id}: {result.error}")
             except Exception as e:
-                logger.error(f"Error getting features for track {track_id}: {e}")
+                # 404 errors are expected for many Spotify tracks
+                if "404" in str(e):
+                    logger.debug(f"Track {reccobeat_id} not found in RecoBeat: {e}")
+                else:
+                    logger.error(f"Error getting features for track {reccobeat_id}: {e}")
 
         return features_map
 
@@ -186,6 +265,119 @@ class RecoBeatService:
 
         return all_tracks
 
+    async def convert_spotify_artist_to_reccobeat(
+        self,
+        spotify_artist_ids: List[str]
+    ) -> Dict[str, str]:
+        """Convert Spotify artist IDs to RecoBeat IDs using batch lookup.
+
+        Args:
+            spotify_artist_ids: List of Spotify artist IDs
+
+        Returns:
+            Dictionary mapping Spotify ID to RecoBeat ID
+        """
+        if not spotify_artist_ids:
+            return {}
+        
+        id_mapping = {}
+        
+        # Get multiple artists tool
+        artists_tool = self.tools.get_tool("get_multiple_artists")
+        if not artists_tool:
+            logger.warning("Multiple artists tool not available for ID conversion")
+            return {}
+        
+        # Process in chunks of 40 (API limit)
+        for i in range(0, len(spotify_artist_ids), 40):
+            chunk = spotify_artist_ids[i:i + 40]
+            
+            try:
+                result = await artists_tool._run(ids=chunk)
+                
+                if result.success:
+                    artists = result.data.get("artists", [])
+                    for artist in artists:
+                        reccobeat_id = artist.get("id")
+                        spotify_uri = artist.get("href", "")
+                        
+                        # Extract Spotify ID from URI or href
+                        if spotify_uri and "spotify:artist:" in spotify_uri:
+                            spotify_id = spotify_uri.replace("spotify:artist:", "")
+                        elif "/" in spotify_uri:
+                            spotify_id = spotify_uri.split("/")[-1]
+                        else:
+                            # Assume the input ID matches
+                            for orig_id in chunk:
+                                if orig_id not in id_mapping:
+                                    spotify_id = orig_id
+                                    break
+                        
+                        if reccobeat_id:
+                            id_mapping[spotify_id] = reccobeat_id
+                            
+            except Exception as e:
+                logger.debug(f"Error converting artist IDs chunk: {e}")
+                continue
+        
+        logger.info(f"Converted {len(id_mapping)}/{len(spotify_artist_ids)} Spotify artist IDs to RecoBeat IDs")
+        return id_mapping
+
+    async def get_artist_tracks(
+        self,
+        artist_id: str,
+        limit: int = 25
+    ) -> List[Dict[str, Any]]:
+        """Get tracks from a specific artist.
+
+        Args:
+            artist_id: Spotify or RecoBeat artist ID (will attempt conversion)
+            limit: Maximum number of tracks to return
+
+        Returns:
+            List of tracks from the artist
+        """
+        artist_tracks_tool = self.tools.get_tool("get_artist_tracks")
+        if not artist_tracks_tool:
+            logger.warning("Artist tracks tool not available")
+            return []
+
+        # Try to convert Spotify ID to RecoBeat ID first
+        id_mapping = await self.convert_spotify_artist_to_reccobeat([artist_id])
+        
+        # Skip if artist not in RecoBeat database
+        if artist_id not in id_mapping:
+            logger.debug(f"Artist {artist_id} not found in RecoBeat database - skipping")
+            return []
+        
+        reccobeat_artist_id = id_mapping[artist_id]
+        logger.debug(f"Converted Spotify artist {artist_id} to RecoBeat ID {reccobeat_artist_id}")
+
+        try:
+            result = await artist_tracks_tool._run(
+                artist_id=reccobeat_artist_id,
+                page=0,
+                size=min(limit, 50)
+            )
+
+            if result.success:
+                return result.data.get("tracks", [])
+            else:
+                # 404 errors are common - artist might not exist in RecoBeat
+                if "404" in str(result.error):
+                    logger.debug(f"Artist {reccobeat_artist_id} not found in RecoBeat (404)")
+                else:
+                    logger.warning(f"Failed to get tracks for artist {reccobeat_artist_id}: {result.error}")
+                return []
+
+        except Exception as e:
+            # 404 errors are expected for many artists
+            if "404" in str(e):
+                logger.debug(f"Artist {reccobeat_artist_id} not found in RecoBeat: {e}")
+            else:
+                logger.error(f"Error getting tracks for artist {reccobeat_artist_id}: {e}")
+            return []
+
     def get_available_tools(self) -> List[str]:
         """Get list of available RecoBeat tools.
 
@@ -197,7 +389,8 @@ class RecoBeatService:
             "get_multiple_tracks",
             "get_track_audio_features",
             "search_artists",
-            "get_multiple_artists"
+            "get_multiple_artists",
+            "get_artist_tracks"
         ]
 
     def get_tool_descriptions(self) -> Dict[str, str]:

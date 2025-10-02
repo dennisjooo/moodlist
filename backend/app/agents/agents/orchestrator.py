@@ -526,6 +526,26 @@ class OrchestratorAgent(BaseAgent):
             f"Filtering {len(outlier_ids)} outliers, keeping {len(good_recommendations)} good tracks"
         )
 
+        # Add outliers to negative seeds (limit to 5 for RecoBeat API)
+        if outlier_ids:
+            # Add new outliers to existing negative seeds
+            existing_negative_seeds = set(state.negative_seeds)
+            existing_negative_seeds.update(outlier_ids)
+            
+            # Keep only most recent 5 negative seeds
+            state.negative_seeds = list(existing_negative_seeds)[-5:]
+            
+            logger.info(f"Added {len(outlier_ids)} outliers as negative seeds (total: {len(state.negative_seeds)})")
+            
+            # Track in metadata
+            if "orchestration_negative_seeds_used" not in state.metadata:
+                state.metadata["orchestration_negative_seeds_used"] = []
+            state.metadata["orchestration_negative_seeds_used"].append({
+                "iteration": state.metadata.get("orchestration_iterations", 0),
+                "outliers_added": list(outlier_ids),
+                "total_negative_seeds": len(state.negative_seeds)
+            })
+
         # Use good tracks as new seeds
         new_seeds = [rec.track_id for rec in good_recommendations[:5]]
         
@@ -564,6 +584,20 @@ class OrchestratorAgent(BaseAgent):
         # Take top tracks as new seeds
         top_tracks = scored_recs[:5]
         new_seeds = [rec.track_id for rec, _ in top_tracks]
+        
+        # Add bottom tracks as negative seeds
+        bottom_tracks = scored_recs[-3:]  # Take bottom 3
+        outlier_ids = [rec.track_id for rec, _ in bottom_tracks]
+        
+        if outlier_ids:
+            # Add to negative seeds
+            existing_negative_seeds = set(state.negative_seeds)
+            existing_negative_seeds.update(outlier_ids)
+            
+            # Keep only most recent 5
+            state.negative_seeds = list(existing_negative_seeds)[-5:]
+            
+            logger.info(f"Added {len(outlier_ids)} low-scoring tracks as negative seeds")
 
         logger.info(f"Re-seeding with {len(new_seeds)} top-scoring tracks")
 
