@@ -115,6 +115,10 @@ class SeedGathererAgent(BaseAgent):
             state.seed_tracks = final_seeds
             state.metadata["seed_candidates_count"] = len(scored_tracks)
 
+            # Store user's top track IDs in state for reference (full list, not just seeds)
+            user_track_ids = [track["id"] for track in top_tracks if track.get("id")]
+            state.user_top_tracks = user_track_ids
+            
             # Extract artist IDs for context
             artist_ids = [artist["id"] for artist in top_artists if artist.get("id")]
             state.user_top_artists = artist_ids
@@ -125,10 +129,14 @@ class SeedGathererAgent(BaseAgent):
 
             # Store additional metadata
             state.metadata["seed_track_count"] = len(final_seeds)
+            state.metadata["user_track_count"] = len(user_track_ids)
             state.metadata["top_artist_count"] = len(artist_ids)
             state.metadata["seed_source"] = "spotify_top_tracks_ai_selected"
 
-            logger.info(f"Gathered {len(final_seeds)} seed tracks and {len(artist_ids)} artists")
+            logger.info(
+                f"Gathered {len(final_seeds)} seed tracks from {len(user_track_ids)} user top tracks "
+                f"and {len(artist_ids)} artists"
+            )
 
         except Exception as e:
             logger.error(f"Error in seed gathering: {str(e)}", exc_info=True)

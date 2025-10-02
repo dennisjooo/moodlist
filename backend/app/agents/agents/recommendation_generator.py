@@ -77,15 +77,62 @@ class RecommendationGeneratorAgent(BaseAgent):
             # Get playlist target to determine max recommendations
             playlist_target = state.metadata.get("playlist_target", {})
             max_recommendations = playlist_target.get("max_count", self.max_recommendations)
+            
+            # ENFORCE 95:5 ratio: separate artist vs RecoBeat tracks and cap each
+            artist_recs = [r for r in diverse_recommendations if r.source == "artist_discovery"]
+            reccobeat_recs = [r for r in diverse_recommendations if r.source == "reccobeat"]
+            
+            # Calculate strict caps based on 95:5 ratio
+            max_artist = int(max_recommendations * 0.95)  # 95%
+            max_reccobeat = max_recommendations - max_artist  # 5%
+            
+            # Take top tracks from each source up to their caps
+            capped_artist = artist_recs[:max_artist]
+            capped_reccobeat = reccobeat_recs[:max_reccobeat]
+            
+            logger.info(
+                f"Enforcing 95:5 ratio: {len(capped_artist)} artist tracks (cap: {max_artist}), "
+                f"{len(capped_reccobeat)} RecoBeat tracks (cap: {max_reccobeat})"
+            )
+            
+            # Combine and sort by confidence
+            final_recommendations = capped_artist + capped_reccobeat
+            final_recommendations.sort(key=lambda x: x.confidence_score, reverse=True)
 
-            # Update state with recommendations (with deduplication)
+            # Update state with recommendations (with enhanced deduplication)
             seen_track_ids = set()
-            for rec in diverse_recommendations[:max_recommendations]:
-                if rec.track_id not in seen_track_ids:
-                    state.add_recommendation(rec)
-                    seen_track_ids.add(rec.track_id)
-                else:
-                    logger.debug(f"Skipping duplicate track: {rec.track_name} by {', '.join(rec.artists)}")
+            seen_normalized_names = set()
+            seen_spotify_uris = set()
+            
+            for rec in final_recommendations:
+                # Check track ID
+                if rec.track_id in seen_track_ids:
+                    logger.debug(f"Skipping duplicate track ID: {rec.track_name} by {', '.join(rec.artists)}")
+                    continue
+                
+                # Check normalized track name (case-insensitive, remove feat/featuring variations)
+                normalized_name = rec.track_name.lower()
+                # Remove common variations that create duplicates
+                for variant in [" (radio edit)", " - radio edit", " (feat.", " (featuring ", " - feat.", " - featuring "]:
+                    if variant in normalized_name:
+                        normalized_name = normalized_name.split(variant)[0]
+                normalized_name = normalized_name.strip()
+                
+                if normalized_name in seen_normalized_names:
+                    logger.debug(f"Skipping duplicate track name: {rec.track_name} by {', '.join(rec.artists)}")
+                    continue
+                
+                # Check Spotify URI
+                if rec.spotify_uri and rec.spotify_uri in seen_spotify_uris:
+                    logger.debug(f"Skipping duplicate Spotify URI: {rec.track_name} by {', '.join(rec.artists)}")
+                    continue
+                
+                # No duplicates found, add the track
+                state.add_recommendation(rec)
+                seen_track_ids.add(rec.track_id)
+                seen_normalized_names.add(normalized_name)
+                if rec.spotify_uri:
+                    seen_spotify_uris.add(rec.spotify_uri)
 
             state.current_step = "recommendations_generated"
             state.status = RecommendationStatus.GENERATING_RECOMMENDATIONS
@@ -106,7 +153,8 @@ class RecommendationGeneratorAgent(BaseAgent):
     async def _generate_mood_based_recommendations(self, state: AgentState) -> List[Dict[str, Any]]:
         """Generate recommendations based on mood analysis, seeds, and discovered artists.
         
-        Target ratio: ~2/3 from seed-based recommendations, ~1/3 from artist discovery.
+        Target ratio: 9:1 (90% from artist discovery, 10% from seed-based recommendations).
+        Artist discovery is overwhelmingly prioritized as RecoBeat recommendations tend to be lower quality.
 
         Args:
             state: Current agent state
@@ -120,26 +168,26 @@ class RecommendationGeneratorAgent(BaseAgent):
         playlist_target = state.metadata.get("playlist_target", {})
         target_count = playlist_target.get("target_count", 20)
         
-        # Calculate target split: 2/3 seeds, 1/3 artists
-        target_seed_recs = int(target_count * 0.67)  # ~67% from seeds
-        target_artist_recs = target_count - target_seed_recs  # ~33% from artists
+        # Calculate target split: 95:5 ratio (95% artists, 5% seeds)
+        target_artist_recs = int(target_count * 0.95)  # 95% from artists
+        target_seed_recs = target_count - target_artist_recs  # 5% from seeds
         
         # Store targets in state for use by generation methods
         state.metadata["_temp_seed_target"] = target_seed_recs
         state.metadata["_temp_artist_target"] = target_artist_recs
         
         logger.info(
-            f"Target generation split: {target_seed_recs} from seeds, "
-            f"{target_artist_recs} from artists (total: {target_count})"
+            f"Target generation split (95:5 ratio): {target_artist_recs} from artists, "
+            f"{target_seed_recs} from seeds (total: {target_count})"
         )
         
-        # Generate from seed tracks (aiming for 2/3 of target)
-        seed_recommendations = await self._generate_from_seeds(state)
-        all_recommendations.extend(seed_recommendations)
-        
-        # Generate from discovered artists (aiming for 1/3 of target)
+        # Generate from discovered artists FIRST (aiming for 2/3 of target - higher priority)
         artist_recommendations = await self._generate_from_discovered_artists(state)
         all_recommendations.extend(artist_recommendations)
+        
+        # Generate from seed tracks (aiming for 1/3 of target - supplement only)
+        seed_recommendations = await self._generate_from_seeds(state)
+        all_recommendations.extend(seed_recommendations)
         
         # Clean up temp metadata
         state.metadata.pop("_temp_seed_target", None)
@@ -147,8 +195,8 @@ class RecommendationGeneratorAgent(BaseAgent):
         
         logger.info(
             f"Generated {len(all_recommendations)} total recommendations "
-            f"({len(seed_recommendations)} from seeds [{target_seed_recs} target], "
-            f"{len(artist_recommendations)} from artists [{target_artist_recs} target])"
+            f"({len(artist_recommendations)} from artists [{target_artist_recs} target], "
+            f"{len(seed_recommendations)} from seeds [{target_seed_recs} target])"
         )
         
         return all_recommendations
@@ -170,12 +218,12 @@ class RecommendationGeneratorAgent(BaseAgent):
         # Get comprehensive mood-based features from enhanced analysis
         mood_features = self._extract_mood_features(state)
         
-        # Get seed target (2/3 of total playlist target)
-        target_seed_recs = state.metadata.get("_temp_seed_target", 14)  # Default ~2/3 of 20
+        # Get seed target (5% of total playlist target - very minimal supplementary)
+        target_seed_recs = state.metadata.get("_temp_seed_target", 1)  # Default ~5% of 20
         
-        # Request more per chunk to account for filtering (aim for 1.5x target)
+        # Request more per chunk to account for filtering (aim for 2x target due to low count)
         # This gives us room for filtering while targeting the right amount
-        per_chunk_size = min(20, int((target_seed_recs * 1.5) // len(seed_chunks)) + 3)
+        per_chunk_size = min(10, max(int((target_seed_recs * 2) // len(seed_chunks)) + 2, 3))
         
         for chunk in seed_chunks:
             try:
@@ -229,7 +277,20 @@ class RecommendationGeneratorAgent(BaseAgent):
 
         logger.info(f"Generated {len(all_recommendations)} raw recommendations from {len(seed_chunks)} seed chunks")
 
-        return [rec.dict() for rec in all_recommendations]
+        # Apply validation pass to filter out irrelevant tracks
+        validated_recommendations = []
+        for rec in all_recommendations:
+            is_valid, reason = self._validate_track_relevance(
+                rec.track_name, rec.artists, state.mood_analysis
+            )
+            if is_valid:
+                validated_recommendations.append(rec)
+            else:
+                logger.info(f"Filtered out invalid track from seeds: {rec.track_name} by {', '.join(rec.artists)} - {reason}")
+        
+        logger.info(f"Validation pass: {len(all_recommendations)} -> {len(validated_recommendations)} tracks (filtered {len(all_recommendations) - len(validated_recommendations)})")
+
+        return [rec.dict() for rec in validated_recommendations]
 
     async def _get_complete_audio_features(
         self,
@@ -296,6 +357,142 @@ class RecommendationGeneratorAgent(BaseAgent):
             # Continue with existing features if API call fails
 
         return complete_features
+
+    def _validate_track_relevance(
+        self,
+        track_name: str,
+        artists: List[str],
+        mood_analysis: Optional[Dict[str, Any]]
+    ) -> tuple[bool, str]:
+        """Validate if a track is relevant to the mood before accepting.
+        
+        Filters out obvious mismatches (wrong language, genre, etc.)
+        
+        Args:
+            track_name: Track name to validate
+            artists: List of artist names
+            mood_analysis: Mood analysis with artist recommendations and keywords
+            
+        Returns:
+            (is_valid, reason) - True if track is relevant, False with reason if not
+        """
+        if not mood_analysis:
+            return (True, "No mood analysis available")
+        
+        # Get mood context
+        artist_recommendations = mood_analysis.get("artist_recommendations", [])
+        genre_keywords = mood_analysis.get("genre_keywords", [])
+        search_keywords = mood_analysis.get("search_keywords", [])
+        mood_prompt = mood_analysis.get("mood_interpretation", "")
+        
+        # Normalize for comparison
+        track_lower = track_name.lower()
+        artists_lower = [a.lower() for a in artists]
+        artist_recs_lower = [a.lower() for a in artist_recommendations]
+        
+        # Check 1: If artist is in recommended artists, always accept
+        for artist in artists_lower:
+            if any(rec_artist in artist or artist in rec_artist for rec_artist in artist_recs_lower):
+                return (True, "Artist matches mood recommendations")
+        
+        # Check 2: Language/region mismatch detection
+        # Detect obvious language mismatches by checking for non-Latin characters or language-specific names
+        language_indicators = {
+            "spanish": ["el ", "la ", "los ", "las ", "mi ", "tu ", "de ", "con ", "por ", "para "],
+            "korean": ["\u3131", "\u314f", "\uac00", "\ud7a3"],  # Hangul character ranges
+            "japanese": ["\u3040", "\u309f", "\u30a0", "\u30ff"],  # Hiragana/Katakana
+            "chinese": ["\u4e00", "\u9fff"],  # Common CJK
+            "portuguese": ["meu ", "minha ", "você ", "está ", "muito ", "bem "],
+            "german": ["der ", "die ", "das ", "ich ", "du ", "und ", "mit "],
+            "french": ["le ", "la ", "les ", "de ", "je ", "tu ", "avec ", "pour "]
+        }
+        
+        # Combine all keywords for mood language detection
+        all_keywords = genre_keywords + search_keywords
+        mood_language = None
+        
+        # Detect mood language from keywords
+        for keyword in all_keywords:
+            keyword_lower = keyword.lower()
+            if any(lang_word in keyword_lower for lang_word in ["french", "français"]):
+                mood_language = "french"
+                break
+            elif any(lang_word in keyword_lower for lang_word in ["spanish", "latin", "latino"]):
+                mood_language = "spanish"
+                break
+            elif any(lang_word in keyword_lower for lang_word in ["korean", "k-pop", "kpop"]):
+                mood_language = "korean"
+                break
+            elif any(lang_word in keyword_lower for lang_word in ["japanese", "j-pop", "jpop", "city pop"]):
+                mood_language = "japanese"
+                break
+            elif any(lang_word in keyword_lower for lang_word in ["portuguese", "brazilian", "bossa"]):
+                mood_language = "portuguese"
+                break
+        
+        # If we detected a specific mood language, check if track matches
+        if mood_language:
+            track_and_artists = track_lower + " " + " ".join(artists_lower)
+            
+            for lang, indicators in language_indicators.items():
+                if lang == mood_language:
+                    continue  # Skip checking against the mood's own language
+                
+                # Check if track has indicators of a different language
+                for indicator in indicators:
+                    if isinstance(indicator, str):
+                        if indicator in track_and_artists:
+                            return (False, f"Language mismatch: track appears to be {lang}, mood is {mood_language}")
+                    else:
+                        # Unicode range check for CJK languages
+                        for char in track_name:
+                            if indicator <= char <= indicators[indicators.index(indicator) + 1]:
+                                return (False, f"Language mismatch: track appears to be {lang}, mood is {mood_language}")
+        
+        # Check 3: Genre/style keyword overlap
+        # Extract potential genre words from track/artist names
+        genre_terms = ["funk", "disco", "house", "techno", "jazz", "rock", "pop", "indie", 
+                       "electronic", "hip hop", "rap", "soul", "blues", "metal", "punk",
+                       "reggae", "country", "folk", "classical", "ambient", "trap"]
+        
+        track_genres = []
+        mood_genres = []
+        
+        # Find genres in track/artist
+        for term in genre_terms:
+            if term in track_and_artists:
+                track_genres.append(term)
+        
+        # Find genres in mood keywords
+        for keyword in all_keywords:
+            keyword_lower = keyword.lower()
+            for term in genre_terms:
+                if term in keyword_lower:
+                    mood_genres.append(term)
+        
+        # If both have genre indicators and they don't overlap at all, flag it
+        if track_genres and mood_genres:
+            # Check for conflicting genres (e.g., "hip hop" for "indie rock")
+            conflicting_pairs = [
+                (["classical", "jazz", "blues"], ["metal", "punk", "trap"]),
+                (["folk", "country", "indie"], ["electronic", "techno", "house"]),
+                (["hip hop", "rap", "trap"], ["rock", "indie", "folk"])
+            ]
+            
+            for group1, group2 in conflicting_pairs:
+                has_group1 = any(g in track_genres for g in group1)
+                has_group2 = any(g in mood_genres for g in group2)
+                if has_group1 and has_group2:
+                    return (False, f"Genre conflict: track appears to be {track_genres}, mood is {mood_genres}")
+                
+                # Check reverse
+                has_group1_mood = any(g in mood_genres for g in group1)
+                has_group2_track = any(g in track_genres for g in group2)
+                if has_group1_mood and has_group2_track:
+                    return (False, f"Genre conflict: track appears to be {track_genres}, mood is {mood_genres}")
+        
+        # If we got here, no obvious red flags
+        return (True, "No obvious mismatches detected")
 
     async def _generate_fallback_recommendations(self, state: AgentState) -> List[Dict[str, Any]]:
         """Generate fallback recommendations when no seeds are available.
@@ -378,7 +575,8 @@ class RecommendationGeneratorAgent(BaseAgent):
         # Get feature weights for sophisticated mood influence
         feature_weights = state.metadata.get("feature_weights", {})
 
-        # Map all 12 RecoBeat API features with proper parameter handling
+        # Map RecoBeat API features (EXCLUDING popularity - causes mainstream bias)
+        # Popularity should not influence the recommendation algorithm, only be used for post-filtering/ranking
         feature_mapping = {
             "acousticness": "acousticness",
             "danceability": "danceability",
@@ -390,8 +588,8 @@ class RecommendationGeneratorAgent(BaseAgent):
             "mode": "mode",
             "speechiness": "speechiness",
             "tempo": "tempo",
-            "valence": "valence",
-            "popularity": "popularity"
+            "valence": "valence"
+            # Explicitly NOT including popularity here to avoid biasing recommendations toward mainstream tracks
         }
 
         for mood_feature, api_param in feature_mapping.items():
@@ -436,8 +634,7 @@ class RecommendationGeneratorAgent(BaseAgent):
             features["mode"] = int(features["mode"])
         if "key" in features:
             features["key"] = int(features["key"])
-        if "popularity" in features:
-            features["popularity"] = int(features["popularity"])
+        # Note: popularity removed - not sent to RecoBeat to avoid mainstream bias
 
         logger.info(f"Extracted {len(features)} audio features for RecoBeat API: {list(features.keys())}")
 
@@ -512,6 +709,11 @@ class RecommendationGeneratorAgent(BaseAgent):
         elif target_features:
             # Boost for having target features even without audio features
             base_score += 0.1
+        
+        # Apply source penalty - RecoBeat has circular dependency bias
+        # (recommendations are generated using target features, so they score high but may be irrelevant)
+        if recommendation_data.get("source") == "reccobeat":
+            base_score *= 0.85  # 15% penalty for RecoBeat bias
 
         return min(max(base_score, 0.0), 1.0)
     
@@ -805,8 +1007,8 @@ class RecommendationGeneratorAgent(BaseAgent):
         # Get target features for filtering
         target_features = state.metadata.get("target_features", {})
         
-        # Get artist target (1/3 of total playlist target)
-        target_artist_recs = state.metadata.get("_temp_artist_target", 7)  # Default ~1/3 of 20
+        # Get artist target (95% of total playlist target - DOMINANT source, 95:5 ratio)
+        target_artist_recs = state.metadata.get("_temp_artist_target", 19)  # Default 95% of 20
         
         # Track successful artists
         successful_artists = 0
@@ -817,18 +1019,18 @@ class RecommendationGeneratorAgent(BaseAgent):
             logger.warning("No Spotify access token available for artist top tracks")
             return all_recommendations
         
-        # Calculate tracks per artist to reach 1/3 target
-        # Use fewer artists but more tracks per artist for better quality
-        artist_count = min(len(mood_matched_artists), 8)  # Limit to 8 artists max
-        tracks_per_artist = max(2, min(int((target_artist_recs * 1.5) // artist_count), 4))
+        # Calculate tracks per artist to reach 90% target
+        # Use more artists for maximum diversity (up to 12-15 artists)
+        artist_count = min(len(mood_matched_artists), 15)  # Increased to 15 artists max
+        tracks_per_artist = max(2, min(int((target_artist_recs * 1.3) // artist_count) + 1, 4))
         
         logger.info(
             f"Fetching {tracks_per_artist} tracks per artist (up to {artist_count} artists) "
-            f"to reach artist target of {target_artist_recs} tracks"
+            f"to reach artist target of {target_artist_recs} tracks (DOMINANT source - 95:5 ratio)"
         )
         
-        # Fetch tracks from each artist (limit to 6-8 artists for focused playlist)
-        for artist_id in mood_matched_artists[:8]:  # Limit to 8 artists
+        # Fetch tracks from each artist (use up to 15 artists for maximum coverage)
+        for artist_id in mood_matched_artists[:15]:  # Increased to 15 artists
             try:
                 # Get top tracks from Spotify (more reliable than RecoBeat)
                 artist_tracks = await self.spotify_service.get_artist_top_tracks(
@@ -855,18 +1057,19 @@ class RecommendationGeneratorAgent(BaseAgent):
                         # Get audio features
                         audio_features = await self._get_complete_audio_features(track_id)
                         
-                        # Score track against mood
+                        # Score track against mood (RELAXED for artist tracks)
                         if target_features and audio_features:
                             cohesion_score = self._calculate_track_cohesion(
                                 audio_features, target_features
                             )
                             
-                            # Only include tracks that meet threshold
-                            if cohesion_score < 0.6:
-                                logger.debug(f"Skipping artist track {track_id} (cohesion: {cohesion_score:.2f})")
+                            # Relaxed threshold for artist tracks (0.4 vs 0.6 for RecoBeat)
+                            # Artist tracks are from curated top tracks, less strict filtering needed
+                            if cohesion_score < 0.4:
+                                logger.debug(f"Skipping artist track {track_id} (cohesion: {cohesion_score:.2f} - relaxed threshold)")
                                 continue
                         else:
-                            cohesion_score = 0.7  # Default if no features
+                            cohesion_score = 0.75  # Higher default for artist tracks without features
                         
                         # Create recommendation (extract artist names from Spotify format)
                         artist_names = [artist.get("name", "Unknown") for artist in track.get("artists", [])]

@@ -138,6 +138,29 @@ class WorkflowManager:
             state.current_step = "recommendations_ready"
             state.metadata["playlist_saved_to_spotify"] = False
             self.success_count += 1
+            
+            # Dump the state to a file
+            with open(f"workflow_{session_id}.json", "w") as f:
+                import json
+                
+                def serialize_datetime(obj):
+                    """Recursively serialize datetime objects to ISO format strings."""
+                    if isinstance(obj, datetime):
+                        return obj.isoformat()
+                    elif isinstance(obj, dict):
+                        return {k: serialize_datetime(v) for k, v in obj.items()}
+                    elif isinstance(obj, list):
+                        return [serialize_datetime(item) for item in obj]
+                    elif isinstance(obj, tuple):
+                        return tuple(serialize_datetime(item) for item in obj)
+                    elif hasattr(obj, '__dict__'):
+                        return serialize_datetime(obj.__dict__)
+                    else:
+                        return obj
+                
+                state_dict = state.model_dump()
+                serialized_state = serialize_datetime(state_dict)
+                f.write(json.dumps(serialized_state, indent=4, default=str))
 
         except Exception as e:
             logger.error(f"Workflow {session_id} failed: {str(e)}", exc_info=True)
