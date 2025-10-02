@@ -12,12 +12,14 @@ import { cn } from '@/lib/utils';
 import { getMoodGenre } from '@/lib/moodColors';
 import { useWorkflow } from '@/lib/workflowContext';
 import { Sparkles } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 // Main content component that uses workflow context
 function CreatePageContent() {
+  const router = useRouter();
   const [isMobile, setIsMobile] = useState(false);
-  const { workflowState, startWorkflow } = useWorkflow();
+  const { workflowState, startWorkflow, resetWorkflow } = useWorkflow();
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -26,9 +28,25 @@ function CreatePageContent() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Clear any existing workflow state on mount to start fresh
+  useEffect(() => {
+    if (workflowState.sessionId && !workflowState.isLoading) {
+      // User navigated to /create with an old session, clear it
+      resetWorkflow();
+    }
+  }, []); // Only run on mount
+
+  // Redirect to dynamic route when session_id is available after starting new workflow
+  useEffect(() => {
+    if (workflowState.sessionId && workflowState.isLoading) {
+      router.push(`/create/${workflowState.sessionId}`);
+    }
+  }, [workflowState.sessionId, workflowState.isLoading, router]);
+
   const handleMoodSubmit = async (mood: string, genreHint?: string) => {
     try {
       await startWorkflow(mood, genreHint);
+      // Note: Redirect happens in useEffect above when sessionId is set
     } catch (error) {
       console.error('Failed to start workflow:', error);
     }
@@ -148,10 +166,17 @@ function CreatePageContent() {
           </p>
         </div>
 
-        {/* Workflow Progress */}
-        {workflowState.isLoading && (
-          <div className="mb-8">
-            <WorkflowProgress />
+        {/* Loading Spinner - show while waiting for session redirect */}
+        {workflowState.isLoading && !workflowState.sessionId && (
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="flex flex-col items-center gap-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-3 h-3 bg-primary rounded-full animate-bounce"></div>
+                <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              </div>
+              <p className="text-sm text-muted-foreground">Starting your playlist...</p>
+            </div>
           </div>
         )}
 
@@ -180,12 +205,6 @@ function CreatePageContent() {
           </>
         )}
 
-        {/* Active Workflow Progress */}
-        {workflowState.sessionId && workflowState.status !== 'completed' && (
-          <div className="mb-8">
-            <WorkflowProgress />
-          </div>
-        )}
       </main>
     </div>
   );

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useWorkflow } from '@/lib/workflowContext';
 import { Download, ExternalLink, Loader2, Music, Star } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 interface PlaylistResultsProps {
@@ -14,6 +15,7 @@ interface PlaylistResultsProps {
 }
 
 export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResultsProps = {}) {
+  const router = useRouter();
   const { workflowState, saveToSpotify, resetWorkflow } = useWorkflow();
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -231,13 +233,8 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
           variant="outline"
           onClick={() => {
             console.log('Create New Playlist button clicked');
-            if (onNewPlaylist) {
-              console.log('Using onNewPlaylist prop');
-              onNewPlaylist();
-            } else {
-              console.log('Using resetWorkflow from context');
-              resetWorkflow();
-            }
+            resetWorkflow();
+            router.push('/create');
           }}
           className="flex-1"
         >
