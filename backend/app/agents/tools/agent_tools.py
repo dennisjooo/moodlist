@@ -155,7 +155,7 @@ class BaseAPITool(BaseTool, ABC):
                 last_exception = APIError(f"Request timeout on attempt {attempt + 1}", response_data={"error": "timeout"})
                 if attempt < self.max_retries - 1:
                     wait_time = (2 ** attempt) * 0.5  # Exponential backoff
-                    logger.warning(f"Timeout, retrying in {wait_time}s...")
+                    logger.warning(f"Timeout when calling {self.name}, retrying in {wait_time}s...")
                     await asyncio.sleep(wait_time)
                     continue
 
@@ -169,7 +169,7 @@ class BaseAPITool(BaseTool, ABC):
                 if e.response.status_code >= 500 and attempt < self.max_retries - 1:
                     # Retry on server errors
                     wait_time = (2 ** attempt) * 0.5
-                    logger.warning(f"Server error ({e.response.status_code}), retrying in {wait_time}s...")
+                    logger.warning(f"Server error ({e.response.status_code}) when calling {self.name}, retrying in {wait_time}s...")
                     await asyncio.sleep(wait_time)
                     continue
 
@@ -185,7 +185,7 @@ class BaseAPITool(BaseTool, ABC):
                 break
 
         # All retries failed
-        logger.error(f"All {self.max_retries} attempts failed for {self.name}")
+        logger.error(f"All {self.max_retries} attempts failed for {self.name} when calling {self.name}")
         raise last_exception or APIError("Unknown error occurred")
 
     async def _make_request(
@@ -246,7 +246,7 @@ class BaseAPITool(BaseTool, ABC):
         """
         for field in required_fields:
             if field not in response_data:
-                logger.error(f"Required field '{field}' missing from response")
+                logger.error(f"Required field '{field}' missing from response for {self.name}")
                 return False
         return True
 
@@ -293,7 +293,7 @@ class RateLimitedTool(BaseAPITool):
             oldest_request = min(self.request_times)
             wait_seconds = 60 - (now - oldest_request).total_seconds()
             if wait_seconds > 0:
-                logger.warning(f"Rate limit reached, waiting {wait_seconds:.1f}s")
+                logger.warning(f"Rate limit reached for {self.name}, waiting {wait_seconds:.1f}s")
                 await asyncio.sleep(wait_seconds)
 
     async def _record_request(self):
