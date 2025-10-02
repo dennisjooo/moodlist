@@ -116,10 +116,16 @@ class BaseAPITool(BaseTool, ABC):
         self.timeout = timeout
         self.max_retries = max_retries
 
-        # HTTP client with connection pooling
+        # HTTP client with optimized connection pooling for better performance
         self.client = httpx.AsyncClient(
-            timeout=httpx.Timeout(timeout),
-            limits=httpx.Limits(max_keepalive_connections=20, max_connections=100)
+            timeout=httpx.Timeout(timeout, connect=10.0),  # Shorter connect timeout
+            limits=httpx.Limits(
+                max_keepalive_connections=50,  # Increased for better connection reuse
+                max_connections=200,  # Increased for higher concurrency
+                keepalive_expiry=30.0  # Keep connections alive longer
+            ),
+            # Enable HTTP/2 for better performance
+            http2=True
         )
 
     async def __aenter__(self):

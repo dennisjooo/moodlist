@@ -1,5 +1,7 @@
 """RecoBeat API service that coordinates all RecoBeat tools."""
 
+import asyncio
+import hashlib
 import logging
 from typing import Dict, List, Optional, Any
 
@@ -7,6 +9,7 @@ from .agent_tools import AgentTools
 from .reccobeat.track_recommendations import TrackRecommendationsTool
 from .reccobeat.track_info import GetMultipleTracksTool, GetTrackAudioFeaturesTool
 from .reccobeat.artist_info import SearchArtistTool, GetMultipleArtistsTool, GetArtistTracksTool
+from ..core.cache import cache_manager
 
 
 logger = logging.getLogger(__name__)
@@ -23,6 +26,100 @@ class RecoBeatService:
         self._register_tools()
 
         logger.info("Initialized RecoBeat service with all tools")
+
+    def _make_cache_key(self, operation: str, *args) -> str:
+        """Create a cache key for RecoBeat operations.
+
+        Args:
+            operation: Type of operation (e.g., 'track_recommendations', 'track_info')
+            *args: Operation parameters
+
+        Returns:
+            Cache key string
+        """
+        # Create deterministic key from operation and parameters
+        key_components = [operation] + [str(arg) for arg in args]
+        key_string = ":".join(key_components)
+
+        # Hash for consistent length and security
+        return hashlib.md5(key_string.encode()).hexdigest()
+
+    async def _get_cached_recommendations(
+        self,
+        seeds: List[str],
+        size: int,
+        mood_features: Optional[Dict[str, float]] = None,
+        **kwargs
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Get cached track recommendations if available.
+
+        Args:
+            seeds: List of track IDs used as seeds
+            size: Number of recommendations requested
+            mood_features: Optional mood-based audio features
+            **kwargs: Additional parameters
+
+        Returns:
+            Cached recommendations or None if not available/expired
+        """
+        # Create cache key from parameters
+        cache_params = [str(seeds), str(size)]
+        if mood_features:
+            # Sort mood features for consistent key generation
+            sorted_features = sorted(mood_features.items())
+            cache_params.append(str(sorted_features))
+        cache_params.extend([f"{k}:{v}" for k, v in sorted(kwargs.items())])
+
+        cache_key = self._make_cache_key("track_recommendations", *cache_params)
+
+        # Try to get from cache (15 minute TTL for recommendations)
+        cached_result = await cache_manager.cache.get(cache_key)
+        if cached_result:
+            logger.info(f"Cache hit for track recommendations (key: {cache_key[:8]}...)")
+            return cached_result.get("recommendations", [])
+
+        return None
+
+    async def _cache_recommendations(
+        self,
+        seeds: List[str],
+        size: int,
+        recommendations: List[Dict[str, Any]],
+        mood_features: Optional[Dict[str, float]] = None,
+        **kwargs
+    ) -> None:
+        """Cache track recommendations for future use.
+
+        Args:
+            seeds: List of track IDs used as seeds
+            size: Number of recommendations requested
+            recommendations: Recommendations to cache
+            mood_features: Optional mood-based audio features
+            **kwargs: Additional parameters
+        """
+        # Create cache key from parameters
+        cache_params = [str(seeds), str(size)]
+        if mood_features:
+            sorted_features = sorted(mood_features.items())
+            cache_params.append(str(sorted_features))
+        cache_params.extend([f"{k}:{v}" for k, v in sorted(kwargs.items())])
+
+        cache_key = self._make_cache_key("track_recommendations", *cache_params)
+
+        # Cache with 15 minute TTL
+        cache_data = {
+            "recommendations": recommendations,
+            "cached_at": asyncio.get_event_loop().time(),
+            "parameters": {
+                "seeds": seeds,
+                "size": size,
+                "mood_features": mood_features,
+                "kwargs": kwargs
+            }
+        }
+
+        await cache_manager.cache.set(cache_key, cache_data, ttl=900)  # 15 minutes
+        logger.debug(f"Cached track recommendations (key: {cache_key[:8]}...)")
 
     def _register_tools(self):
         """Register all RecoBeat tools."""
@@ -56,6 +153,18 @@ class RecoBeatService:
         Returns:
             List of track recommendations
         """
+        # Try to get from cache first
+        cached_recommendations = await self._get_cached_recommendations(
+            seeds, size, mood_features, **kwargs
+        )
+
+        if cached_recommendations:
+            logger.info(f"Returning {len(cached_recommendations)} cached recommendations")
+            return cached_recommendations
+
+        # Cache miss - fetch from API
+        logger.info(f"Cache miss for recommendations, fetching from API")
+
         tool = self.tools.get_tool("get_track_recommendations")
         if not tool:
             raise ValueError("Track recommendations tool not available")
@@ -72,13 +181,21 @@ class RecoBeatService:
             logger.error(f"Failed to get recommendations: {result.error}")
             return []
 
-        return result.data.get("recommendations", [])
+        recommendations = result.data.get("recommendations", [])
+
+        # Cache the successful result
+        await self._cache_recommendations(
+            seeds, size, recommendations, mood_features, **kwargs
+        )
+
+        logger.info(f"Fetched and cached {len(recommendations)} fresh recommendations")
+        return recommendations
 
     async def convert_spotify_tracks_to_reccobeat(
         self,
         spotify_track_ids: List[str]
     ) -> Dict[str, str]:
-        """Convert Spotify track IDs to RecoBeat IDs using batch lookup.
+        """Convert Spotify track IDs to RecoBeat IDs using batch lookup with parallel processing.
 
         Args:
             spotify_track_ids: List of Spotify track IDs
@@ -88,47 +205,69 @@ class RecoBeatService:
         """
         if not spotify_track_ids:
             return {}
-        
+
         id_mapping = {}
-        
+
         # Get multiple tracks tool
         tracks_tool = self.tools.get_tool("get_multiple_tracks")
         if not tracks_tool:
             logger.warning("Multiple tracks tool not available for ID conversion")
             return {}
-        
-        # Process in chunks of 40 (API limit)
-        for i in range(0, len(spotify_track_ids), 40):
-            chunk = spotify_track_ids[i:i + 40]
-            
-            try:
-                result = await tracks_tool._run(ids=chunk)
-                
-                if result.success:
-                    tracks = result.data.get("tracks", [])
-                    for track in tracks:
-                        reccobeat_id = track.get("id")
-                        spotify_uri = track.get("spotify_uri", "")
-                        
-                        # Extract Spotify ID from URI
-                        if spotify_uri and "spotify:track:" in spotify_uri:
-                            spotify_id = spotify_uri.replace("spotify:track:", "")
-                        elif "/" in spotify_uri:
-                            spotify_id = spotify_uri.split("/")[-1]
-                        else:
-                            # Assume the input ID matches
-                            for orig_id in chunk:
-                                if orig_id not in id_mapping:
-                                    spotify_id = orig_id
-                                    break
-                        
-                        if reccobeat_id:
-                            id_mapping[spotify_id] = reccobeat_id
-                            
-            except Exception as e:
-                logger.debug(f"Error converting track IDs chunk: {e}")
-                continue
-        
+
+        # Process in chunks of 40 (API limit) with parallel processing
+        chunk_size = 40
+        chunks = [spotify_track_ids[i:i + chunk_size] for i in range(0, len(spotify_track_ids), chunk_size)]
+
+        # Process chunks in parallel (limit concurrency to avoid overwhelming the API)
+        semaphore = asyncio.Semaphore(5)  # Max 5 concurrent chunk requests
+
+        async def process_chunk(chunk: List[str]) -> Dict[str, str]:
+            """Process a single chunk of track IDs."""
+            async with semaphore:
+                try:
+                    result = await tracks_tool._run(ids=chunk)
+
+                    if result.success:
+                        tracks = result.data.get("tracks", [])
+                        chunk_mapping = {}
+
+                        for track in tracks:
+                            reccobeat_id = track.get("id")
+                            spotify_uri = track.get("spotify_uri", "")
+
+                            # Extract Spotify ID from URI
+                            if spotify_uri and "spotify:track:" in spotify_uri:
+                                spotify_id = spotify_uri.replace("spotify:track:", "")
+                            elif "/" in spotify_uri:
+                                spotify_id = spotify_uri.split("/")[-1]
+                            else:
+                                # Assume the input ID matches
+                                for orig_id in chunk:
+                                    if orig_id not in chunk_mapping:
+                                        spotify_id = orig_id
+                                        break
+
+                            if reccobeat_id:
+                                chunk_mapping[spotify_id] = reccobeat_id
+
+                        return chunk_mapping
+
+                except Exception as e:
+                    logger.debug(f"Error converting track IDs chunk: {e}")
+
+                return {}
+
+        # Execute all chunks in parallel
+        try:
+            chunk_results = await asyncio.gather(*[process_chunk(chunk) for chunk in chunks])
+
+            # Combine results from all chunks
+            for chunk_result in chunk_results:
+                id_mapping.update(chunk_result)
+
+        except Exception as e:
+            logger.error(f"Error in parallel track ID conversion: {e}")
+
         logger.info(f"Converted {len(id_mapping)}/{len(spotify_track_ids)} Spotify track IDs to RecoBeat IDs")
         return id_mapping
 
@@ -152,21 +291,34 @@ class RecoBeatService:
         # Try to convert Spotify IDs to RecoBeat IDs first
         id_mapping = await self.convert_spotify_tracks_to_reccobeat(track_ids)
         logger.info(f"Successfully converted {len(id_mapping)}/{len(track_ids)} Spotify tracks to RecoBeat IDs")
-        
+
         # Get features for each track (only if we have a valid RecoBeat ID)
         for track_id in track_ids:
             # Skip if we couldn't convert the Spotify ID to RecoBeat ID
             if track_id not in id_mapping:
                 logger.debug(f"Skipping track {track_id} - not found in RecoBeat database")
                 continue
-            
+
             reccobeat_id = id_mapping[track_id]
-            
+
+            # Try cache first for individual track features
+            cache_key = self._make_cache_key("track_audio_features", reccobeat_id)
+            cached_features = await cache_manager.cache.get(cache_key)
+
+            if cached_features:
+                logger.debug(f"Cache hit for audio features of track {reccobeat_id}")
+                features_map[track_id] = cached_features
+                continue
+
             try:
                 result = await features_tool._run(track_id=reccobeat_id)
                 if result.success:
                     # Map back to original Spotify ID
                     features_map[track_id] = result.data
+
+                    # Cache individual track features for 1 hour
+                    await cache_manager.cache.set(cache_key, result.data, ttl=3600)
+                    logger.debug(f"Cached audio features for track {reccobeat_id}")
                 else:
                     # 404 errors are common - track might not exist in RecoBeat
                     if "404" in str(result.error):
@@ -232,7 +384,7 @@ class RecoBeatService:
         return unique_artists
 
     async def get_tracks_by_ids(self, track_ids: List[str]) -> List[Dict[str, Any]]:
-        """Get track information for multiple track IDs.
+        """Get track information for multiple track IDs with parallel processing.
 
         Args:
             track_ids: List of track IDs
@@ -242,26 +394,44 @@ class RecoBeatService:
         """
         # Split into chunks to respect API limits (40 per request)
         chunk_size = 40
-        all_tracks = []
+        chunks = [track_ids[i:i + chunk_size] for i in range(0, len(track_ids), chunk_size)]
 
-        for i in range(0, len(track_ids), chunk_size):
-            chunk = track_ids[i:i + chunk_size]
+        tracks_tool = self.tools.get_tool("get_multiple_tracks")
+        if not tracks_tool:
+            logger.warning("Multiple tracks tool not available")
+            return []
 
-            tracks_tool = self.tools.get_tool("get_multiple_tracks")
-            if not tracks_tool:
-                logger.warning("Multiple tracks tool not available")
-                continue
+        # Process chunks in parallel with concurrency limit
+        semaphore = asyncio.Semaphore(8)  # Max 8 concurrent chunk requests
 
-            try:
-                result = await tracks_tool._run(ids=chunk)
-                if result.success:
-                    tracks = result.data.get("tracks", [])
-                    all_tracks.extend(tracks)
-                else:
-                    logger.warning(f"Failed to get tracks for chunk {i//chunk_size}: {result.error}")
+        async def process_track_chunk(chunk: List[str]) -> List[Dict[str, Any]]:
+            """Process a single chunk of track IDs."""
+            async with semaphore:
+                try:
+                    result = await tracks_tool._run(ids=chunk)
+                    if result.success:
+                        tracks = result.data.get("tracks", [])
+                        return tracks
+                    else:
+                        logger.warning(f"Failed to get tracks for chunk: {result.error}")
+                        return []
 
-            except Exception as e:
-                logger.error(f"Error getting tracks for chunk {i//chunk_size}: {e}")
+                except Exception as e:
+                    logger.error(f"Error getting tracks for chunk: {e}")
+                    return []
+
+        # Execute all chunks in parallel
+        try:
+            chunk_results = await asyncio.gather(*[process_track_chunk(chunk) for chunk in chunks])
+
+            # Combine results from all chunks
+            all_tracks = []
+            for chunk_result in chunk_results:
+                all_tracks.extend(chunk_result)
+
+        except Exception as e:
+            logger.error(f"Error in parallel track fetching: {e}")
+            all_tracks = []
 
         return all_tracks
 
