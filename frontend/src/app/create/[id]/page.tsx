@@ -24,9 +24,9 @@ function CreateSessionPageContent() {
     const { workflowState, startWorkflow, loadWorkflow } = useWorkflow();
 
     const handleBack = () => {
-        // Check if there's history to go back to
+        // Check if there's history to go back to create page
         if (window.history.length > 2) {
-            router.back();
+            router.replace('/create');
         } else {
             // Default to playlists page if no history
             router.push('/playlists');
