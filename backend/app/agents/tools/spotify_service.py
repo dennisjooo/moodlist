@@ -8,6 +8,7 @@ from .spotify.user_data import GetUserTopTracksTool, GetUserTopArtistsTool
 from .spotify.playlist_management import CreatePlaylistTool, AddTracksToPlaylistTool
 from .spotify.user_profile import GetUserProfileTool
 from .spotify.artist_search import SearchSpotifyArtistsTool, GetSeveralSpotifyArtistsTool, GetArtistTopTracksTool
+from .spotify.track_search import SearchSpotifyTracksTool
 
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,8 @@ class SpotifyService:
             GetUserProfileTool(),
             SearchSpotifyArtistsTool(),
             GetSeveralSpotifyArtistsTool(),
-            GetArtistTopTracksTool()
+            GetArtistTopTracksTool(),
+            SearchSpotifyTracksTool()
         ]
 
         for tool in tools_to_register:
@@ -289,6 +291,94 @@ class SpotifyService:
 
         return result.data.get("tracks", [])
 
+    async def search_spotify_tracks(
+        self,
+        access_token: str,
+        query: str,
+        limit: int = 20,
+        market: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Search for tracks on Spotify.
+
+        Args:
+            access_token: Spotify access token
+            query: Search query (track name, genre, keywords)
+            limit: Number of results to return
+            market: Optional ISO 3166-1 alpha-2 country code
+
+        Returns:
+            List of tracks matching the query
+        """
+        tool = self.tools.get_tool("search_spotify_tracks")
+        if not tool:
+            raise ValueError("Search Spotify tracks tool not available")
+
+        result = await tool._run(
+            access_token=access_token,
+            query=query,
+            limit=limit,
+            market=market
+        )
+
+        if not result.success:
+            logger.error(f"Failed to search Spotify tracks: {result.error}")
+            return []
+
+        return result.data.get("tracks", [])
+
+    async def search_tracks_for_artists(
+        self,
+        access_token: str,
+        query: str,
+        limit: int = 20,
+        market: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Search for tracks and extract unique artists from results.
+
+        Args:
+            access_token: Spotify access token
+            query: Search query (genre, keywords, etc.)
+            limit: Number of track results to fetch
+            market: Optional ISO 3166-1 alpha-2 country code
+
+        Returns:
+            List of unique artists extracted from track results
+        """
+        # Search for tracks
+        tracks = await self.search_spotify_tracks(
+            access_token=access_token,
+            query=query,
+            limit=limit,
+            market=market
+        )
+
+        if not tracks:
+            logger.warning(f"No tracks found for query '{query}'")
+            return []
+
+        # Extract unique artists from tracks
+        artists = []
+        seen_ids = set()
+
+        for track in tracks:
+            for artist in track.get("artists", []):
+                artist_id = artist.get("id")
+                if artist_id and artist_id not in seen_ids:
+                    seen_ids.add(artist_id)
+                    # Create artist info structure matching SearchSpotifyArtistsTool output
+                    artists.append({
+                        "id": artist_id,
+                        "name": artist.get("name"),
+                        "spotify_uri": artist.get("uri"),
+                        "genres": [],  # Track search doesn't return genres, would need separate call
+                        "popularity": None,  # Not available in track artist data
+                        "followers": None,  # Not available in track artist data
+                        "images": []  # Not available in track artist data
+                    })
+
+        logger.info(f"Extracted {len(artists)} unique artists from {len(tracks)} tracks for query '{query}'")
+        return artists
+
     def get_available_tools(self) -> List[str]:
         """Get list of available Spotify tools.
 
@@ -303,7 +393,8 @@ class SpotifyService:
             "add_tracks_to_playlist",
             "search_spotify_artists",
             "get_several_spotify_artists",
-            "get_artist_top_tracks"
+            "get_artist_top_tracks",
+            "search_spotify_tracks"
         ]
 
     def get_tool_descriptions(self) -> Dict[str, str]:

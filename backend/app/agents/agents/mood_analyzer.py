@@ -46,7 +46,9 @@ Analyze the user's mood description and provide:
 2. Comprehensive audio feature targets using all available features
 3. Feature importance weights for different aspects of the mood
 4. Keywords for searching relevant artists and genres
-5. Reasoning for your audio feature choices
+5. Specific artist recommendations (if mentioned by name)
+6. Genre keywords for track-based discovery
+7. Reasoning for your audio feature choices
 
 Available Audio Features (use ranges [min, max] for each):
 - acousticness (0-1): Acoustic vs electronic elements (0=electronic/synthetic, 1=acoustic/natural)
@@ -71,6 +73,14 @@ For "super indie" you might target:
 - Natural tempo range [60, 120] (not extreme BPM)
 - Lower loudness [-20, -8] (more dynamic range)
 
+CRITICAL: Always suggest specific artist names that match the mood:
+- artist_recommendations: ALWAYS provide 3-8 specific artist names that match the mood, even if not mentioned by user
+  * For "city pop": suggest artists like "Miki Matsubara", "Tatsuro Yamashita", "Mariya Takeuchi"
+  * For "french funk": suggest artists like "Daft Punk", "Justice", "Vulfpeck", "Parcels"
+  * For niche genres: research and suggest authentic artists from that scene
+  * This is CRUCIAL for artist discovery - empty list severely degrades recommendations
+- genre_keywords: Genre terms and mood descriptors (e.g., "indie", "city pop", "jazz", "electronic", "chill")
+
 Provide your analysis in valid JSON format with this structure:
 {
   "mood_interpretation": "Clear description of the intended mood",
@@ -87,6 +97,8 @@ Provide your analysis in valid JSON format with this structure:
     ...
   },
   "search_keywords": ["indie", "alternative", "underground"],
+  "artist_recommendations": ["Artist Name 1", "Artist Name 2"],
+  "genre_keywords": ["indie", "alternative", "rock"],
   "reasoning": "Explanation of feature choices and mood interpretation"
 }"""
 
@@ -131,6 +143,8 @@ Provide your analysis in valid JSON format with this structure:
             state.metadata["mood_interpretation"] = mood_analysis.get("mood_interpretation", "")
             state.metadata["primary_emotion"] = mood_analysis.get("primary_emotion", "neutral")
             state.metadata["search_keywords"] = mood_analysis.get("search_keywords", [])
+            state.metadata["artist_recommendations"] = mood_analysis.get("artist_recommendations", [])
+            state.metadata["genre_keywords"] = mood_analysis.get("genre_keywords", [])
 
             logger.info(f"Mood analysis completed for prompt: {state.mood_prompt}")
             logger.info(f"Target features: {list(target_features.keys())}")
@@ -223,6 +237,8 @@ Provide your analysis in valid JSON format with this structure:
             "target_features": {},
             "feature_weights": {},
             "search_keywords": [],
+            "artist_recommendations": [],
+            "genre_keywords": [],
             "reasoning": f"Rule-based analysis using keyword matching for: {mood_prompt}"
         }
 
@@ -314,6 +330,11 @@ Provide your analysis in valid JSON format with this structure:
 
         # Generate search keywords
         analysis["search_keywords"] = self._extract_search_keywords(mood_prompt)
+        
+        # Extract genre keywords and artist recommendations
+        genre_keywords, artist_recommendations = self._extract_genres_and_artists(mood_prompt)
+        analysis["genre_keywords"] = genre_keywords
+        analysis["artist_recommendations"] = artist_recommendations
 
         return analysis
 
@@ -523,6 +544,61 @@ Provide your analysis in valid JSON format with this structure:
 
         return list(set(keywords))  # Remove duplicates
 
+    def _extract_genres_and_artists(self, mood_prompt: str) -> tuple[List[str], List[str]]:
+        """Extract genre keywords and artist names from mood prompt.
+
+        Args:
+            mood_prompt: User's mood description
+
+        Returns:
+            Tuple of (genre_keywords, artist_recommendations)
+        """
+        # Common genre keywords that should be searched as genres
+        known_genres = {
+            "indie", "rock", "pop", "jazz", "electronic", "edm", "hip-hop", "hip hop",
+            "rap", "r&b", "rnb", "soul", "funk", "disco", "house", "techno", "trance",
+            "dubstep", "drum and bass", "dnb", "ambient", "classical", "country", "folk",
+            "metal", "punk", "alternative", "grunge", "ska", "reggae", "blues", "gospel",
+            "latin", "salsa", "bossa nova", "samba", "k-pop", "kpop", "j-pop", "jpop",
+            "city pop", "citypop", "synthwave", "vaporwave", "lo-fi", "lofi", "chillwave",
+            "shoegaze", "post-rock", "post-punk", "new wave", "psychedelic", "progressive"
+        }
+
+        prompt_lower = mood_prompt.lower()
+        genre_keywords = []
+        artist_recommendations = []
+
+        # Check for known genres
+        for genre in known_genres:
+            if genre in prompt_lower:
+                # Normalize genre (remove spaces for search)
+                normalized_genre = genre.replace(" ", "").replace("-", "")
+                genre_keywords.append(normalized_genre)
+
+        # Simple heuristic: Look for capitalized words that might be artist names
+        # This is a basic approach - could be enhanced with NLP/entity recognition
+        words = mood_prompt.split()
+        for i, word in enumerate(words):
+            # Check if word is capitalized (and not at start of sentence)
+            if word and word[0].isupper() and i > 0:
+                # Check if it's part of a multi-word name
+                potential_artist = word
+                # Look ahead for more capitalized words
+                j = i + 1
+                while j < len(words) and words[j] and words[j][0].isupper():
+                    potential_artist += " " + words[j]
+                    j += 1
+                
+                # Only add if not a genre keyword
+                if potential_artist.lower() not in known_genres:
+                    artist_recommendations.append(potential_artist)
+
+        # Remove duplicates
+        genre_keywords = list(set(genre_keywords))
+        artist_recommendations = list(set(artist_recommendations))
+
+        return genre_keywords, artist_recommendations
+
     def _determine_playlist_target(
         self,
         mood_prompt: str,
@@ -599,25 +675,57 @@ Provide your analysis in valid JSON format with this structure:
                 logger.warning("No Spotify access token available for artist discovery")
                 return
 
-            # Get search keywords from mood analysis
+            # Get genre keywords and artist recommendations from mood analysis
+            genre_keywords = mood_analysis.get("genre_keywords", [])
+            artist_recommendations = mood_analysis.get("artist_recommendations", [])
+            
+            # Fallback to search keywords if no specific genres/artists identified
             search_keywords = mood_analysis.get("search_keywords", [])
-            if not search_keywords:
+            if not genre_keywords and not artist_recommendations and not search_keywords:
                 search_keywords = self._extract_search_keywords(state.mood_prompt)
 
-            # Search for artists using first few keywords
             all_artists = []
-            search_queries = search_keywords[:3]  # Limit to top 3 keywords
 
-            for keyword in search_queries:
+            # 1. Search for artists by name (direct artist search)
+            for artist_name in artist_recommendations[:3]:  # Limit to top 3 artist names
                 try:
+                    logger.info(f"Searching for artist: {artist_name}")
                     artists = await self.spotify_service.search_spotify_artists(
                         access_token=access_token,
-                        query=keyword,
-                        limit=8  # Reduced from 10 to keep playlist focused
+                        query=artist_name,
+                        limit=3  # Few results per artist name
                     )
                     all_artists.extend(artists)
                 except Exception as e:
-                    logger.error(f"Failed to search artists for keyword '{keyword}': {e}")
+                    logger.error(f"Failed to search for artist '{artist_name}': {e}")
+
+            # 2. Search tracks for genre keywords and extract artists
+            for genre in genre_keywords[:3]:  # Limit to top 3 genres
+                try:
+                    logger.info(f"Searching tracks for genre: {genre}")
+                    # Use genre filter format for better results
+                    query = f"genre:{genre}"
+                    artists = await self.spotify_service.search_tracks_for_artists(
+                        access_token=access_token,
+                        query=query,
+                        limit=15  # More tracks to get diverse artists
+                    )
+                    all_artists.extend(artists)
+                except Exception as e:
+                    logger.error(f"Failed to search tracks for genre '{genre}': {e}")
+
+            # 3. Fallback: use general search keywords with artist search
+            if not all_artists and search_keywords:
+                for keyword in search_keywords[:3]:
+                    try:
+                        artists = await self.spotify_service.search_spotify_artists(
+                            access_token=access_token,
+                            query=keyword,
+                            limit=8
+                        )
+                        all_artists.extend(artists)
+                    except Exception as e:
+                        logger.error(f"Failed to search artists for keyword '{keyword}': {e}")
 
             if not all_artists:
                 logger.warning("No artists found during discovery")

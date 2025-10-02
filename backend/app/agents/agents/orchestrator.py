@@ -24,7 +24,7 @@ class OrchestratorAgent(BaseAgent):
         seed_gatherer: BaseAgent,
         llm: Optional[BaseLanguageModel] = None,
         max_iterations: int = 3,
-        cohesion_threshold: float = 0.75,
+        cohesion_threshold: float = 0.65,
         verbose: bool = False
     ):
         """Initialize the orchestrator agent.
@@ -35,7 +35,7 @@ class OrchestratorAgent(BaseAgent):
             seed_gatherer: SeedGathererAgent for re-seeding if needed
             llm: Language model for decision making
             max_iterations: Maximum improvement iterations before accepting results
-            cohesion_threshold: Minimum cohesion score (0-1) to accept playlist
+            cohesion_threshold: Minimum cohesion score (0-1) to accept playlist (default 0.65)
             verbose: Whether to enable verbose logging
         """
         super().__init__(
@@ -132,14 +132,32 @@ class OrchestratorAgent(BaseAgent):
             playlist_target = state.metadata.get("playlist_target", {})
             max_count = playlist_target.get("max_count", 30)
             
-            if len(state.recommendations) > max_count:
-                # Keep the highest confidence recommendations
-                state.recommendations.sort(key=lambda r: r.confidence_score, reverse=True)
-                original_count = len(state.recommendations)
-                state.recommendations = state.recommendations[:max_count]
-                logger.info(
-                    f"Capped recommendations at max_count: {original_count} -> {max_count} tracks"
-                )
+            # CRITICAL: Enforce 95:5 ratio (95% artist, 5% RecoBeat) even after iterations
+            artist_recs = [r for r in state.recommendations if r.source == "artist_discovery"]
+            reccobeat_recs = [r for r in state.recommendations if r.source == "reccobeat"]
+            
+            max_artist = int(max_count * 0.95)  # 95%
+            max_reccobeat = max_count - max_artist  # 5%
+            
+            # Sort each source by confidence
+            artist_recs.sort(key=lambda r: r.confidence_score, reverse=True)
+            reccobeat_recs.sort(key=lambda r: r.confidence_score, reverse=True)
+            
+            # Cap each source to enforce ratio
+            capped_artist = artist_recs[:max_artist]
+            capped_reccobeat = reccobeat_recs[:max_reccobeat]
+            
+            # Combine and sort final list
+            final_recs = capped_artist + capped_reccobeat
+            final_recs.sort(key=lambda r: r.confidence_score, reverse=True)
+            
+            original_count = len(state.recommendations)
+            state.recommendations = final_recs
+            
+            logger.info(
+                f"Final enforcement of 95:5 ratio: {len(capped_artist)} artist + {len(capped_reccobeat)} RecoBeat "
+                f"= {len(final_recs)} total (was {original_count})"
+            )
 
             logger.info(
                 f"Orchestration completed with {len(state.recommendations)} unique recommendations "
@@ -279,14 +297,38 @@ class OrchestratorAgent(BaseAgent):
                 # Update issues with LLM insights
                 if llm_assessment.get("issues"):
                     evaluation["issues"].extend(llm_assessment["issues"])
+                
+                # CRITICAL: Extract LLM-identified outliers from specific_concerns
+                llm_outliers = self._extract_llm_outliers(
+                    llm_assessment.get("specific_concerns", []),
+                    recommendations
+                )
+                if llm_outliers:
+                    # Merge with algorithmic outliers (union, not duplicates)
+                    existing_outliers = set(evaluation["outlier_tracks"])
+                    existing_outliers.update(llm_outliers)
+                    evaluation["outlier_tracks"] = list(existing_outliers)
+                    
+                    logger.info(
+                        f"LLM identified {len(llm_outliers)} additional outliers: "
+                        f"{[r.track_name for r in recommendations if r.track_id in llm_outliers]}"
+                    )
 
         # Check if meets threshold using target's quality threshold
-        evaluation["meets_threshold"] = (
+        # Relaxed: cohesion >= 0.65 AND overall >= 0.60 OR (cohesion >= 0.70 with some outliers)
+        meets_strict = (
             evaluation["cohesion_score"] >= self.cohesion_threshold and
-            len(recommendations) >= target_count and  # Must reach target, not just min
+            len(recommendations) >= target_count and
             len(evaluation["outlier_tracks"]) == 0 and
-            evaluation["overall_score"] >= quality_threshold  # Use target's threshold
+            evaluation["overall_score"] >= quality_threshold
         )
+        meets_relaxed = (
+            evaluation["cohesion_score"] >= 0.65 and
+            evaluation["overall_score"] >= 0.60 and
+            len(recommendations) >= min_count and
+            len(evaluation["outlier_tracks"]) <= 2  # Allow up to 2 minor outliers
+        )
+        evaluation["meets_threshold"] = meets_strict or meets_relaxed
 
         return evaluation
 
@@ -351,10 +393,17 @@ class OrchestratorAgent(BaseAgent):
         cohesion_scores = []
 
         for rec in recommendations:
+            # IMPORTANT: RecoBeat tracks are biased - they were GENERATED using these target features
+            # So they'll naturally score higher on cohesion even if they're garbage (circular dependency)
+            # Artist tracks are from Spotify's curated top tracks, more trustworthy
+            is_reccobeat = rec.source == "reccobeat"
+            
             if not rec.audio_features:
-                # Tracks without features get neutral score
-                track_scores[rec.track_id] = 0.7
-                cohesion_scores.append(0.7)
+                # Artist tracks without features get higher default (curated by Spotify)
+                # RecoBeat tracks without features get lower default (less trustworthy)
+                default_score = 0.65 if is_reccobeat else 0.75
+                track_scores[rec.track_id] = default_score
+                cohesion_scores.append(default_score)
                 continue
 
             violations = []
@@ -407,18 +456,33 @@ class OrchestratorAgent(BaseAgent):
             track_scores[rec.track_id] = track_cohesion
 
             # Mark as outlier based on weighted violations and cohesion score
-            # Outlier if: high weighted violations (>1.5) OR critical feature + low cohesion
+            # STRICTER for RecoBeat (circular dependency bias), RELAXED for artist tracks
             is_critical_violation = any(f in critical_features for f in violations)
             
-            if weighted_violations > 1.5 or (is_critical_violation and track_cohesion < 0.5):
-                outliers.append(rec.track_id)
-                logger.debug(
-                    f"Outlier detected: {rec.track_name} by {', '.join(rec.artists)} "
-                    f"(score={track_cohesion:.2f}, weighted_violations={weighted_violations:.2f}, "
-                    f"violations={violations})"
-                )
+            if is_reccobeat:
+                # RecoBeat: stricter outlier detection (they're biased to match features)
+                # Outlier if: high weighted violations (>1.2) OR critical feature + moderate cohesion
+                if weighted_violations > 1.2 or (is_critical_violation and track_cohesion < 0.6):
+                    outliers.append(rec.track_id)
+                    logger.debug(
+                        f"Outlier detected (RecoBeat): {rec.track_name} by {', '.join(rec.artists)} "
+                        f"(score={track_cohesion:.2f}, weighted_violations={weighted_violations:.2f}, "
+                        f"violations={violations})"
+                    )
+                else:
+                    cohesion_scores.append(track_cohesion)
             else:
-                cohesion_scores.append(track_cohesion)
+                # Artist tracks: relaxed outlier detection (curated by Spotify, more trustworthy)
+                # Outlier only if: very high weighted violations (>2.0) OR critical feature + very low cohesion
+                if weighted_violations > 2.0 or (is_critical_violation and track_cohesion < 0.4):
+                    outliers.append(rec.track_id)
+                    logger.debug(
+                        f"Outlier detected (Artist): {rec.track_name} by {', '.join(rec.artists)} "
+                        f"(score={track_cohesion:.2f}, weighted_violations={weighted_violations:.2f}, "
+                        f"violations={violations})"
+                    )
+                else:
+                    cohesion_scores.append(track_cohesion)
 
         # Calculate overall cohesion score (excluding outliers)
         if cohesion_scores:
@@ -461,9 +525,14 @@ class OrchestratorAgent(BaseAgent):
         outlier_count = len(quality_evaluation.get("outlier_tracks", []))
         cohesion_score = quality_evaluation.get("cohesion_score", 0)
         recommendations_count = quality_evaluation.get("recommendations_count", 0)
+        
+        # Get target from plan
+        playlist_target = state.metadata.get("playlist_target", {})
+        min_count = playlist_target.get("min_count", 15)
+        target_count = playlist_target.get("target_count", 20)
 
         # Strategy 1: Filter outliers if present
-        if outlier_count > 0 and recommendations_count > self.min_recommendations:
+        if outlier_count > 0 and recommendations_count > min_count:
             strategies.append("filter_and_replace")
 
         # Strategy 2: Adjust feature weights if cohesion needs improvement
@@ -471,12 +540,12 @@ class OrchestratorAgent(BaseAgent):
             strategies.append("adjust_feature_weights")
 
         # Strategy 3: Re-seed if cohesion is very poor
-        if cohesion_score < 0.6 and recommendations_count >= self.min_recommendations:
+        if cohesion_score < 0.6 and recommendations_count >= min_count:
             if "filter_and_replace" not in strategies:
                 strategies.append("reseed_from_clean")
 
         # Strategy 4: Generate more if count is insufficient
-        if recommendations_count < self.min_recommendations:
+        if recommendations_count < target_count:
             strategies.append("generate_more")
 
         # Default: at least adjust and generate
@@ -685,6 +754,57 @@ class OrchestratorAgent(BaseAgent):
 
         return state
 
+    def _extract_llm_outliers(
+        self,
+        specific_concerns: List[str],
+        recommendations: List[TrackRecommendation]
+    ) -> List[str]:
+        """Extract track IDs from LLM's specific concerns.
+        
+        LLM provides concerns in format: "Track Name by Artist Name feels out of place because..."
+        We need to match these to actual track IDs in recommendations.
+        
+        Args:
+            specific_concerns: List of LLM concern strings
+            recommendations: List of current track recommendations
+            
+        Returns:
+            List of track IDs identified as outliers by LLM
+        """
+        if not specific_concerns:
+            return []
+        
+        outlier_track_ids = []
+        
+        for concern in specific_concerns:
+            # Extract track name from concern (format: "Track Name by Artist Name feels...")
+            # Split on " by " to get track name
+            if " by " not in concern:
+                continue
+            
+            track_name_part = concern.split(" by ")[0].strip()
+            
+            # Match against recommendations (case-insensitive, partial match for robustness)
+            for rec in recommendations:
+                # Exact match (case-insensitive)
+                if rec.track_name.lower() == track_name_part.lower():
+                    outlier_track_ids.append(rec.track_id)
+                    logger.info(
+                        f"LLM flagged outlier: {rec.track_name} by {', '.join(rec.artists)} "
+                        f"(matched from concern: {concern[:80]}...)"
+                    )
+                    break
+                # Partial match as fallback (track name is substring)
+                elif track_name_part.lower() in rec.track_name.lower():
+                    outlier_track_ids.append(rec.track_id)
+                    logger.info(
+                        f"LLM flagged outlier (partial match): {rec.track_name} by {', '.join(rec.artists)} "
+                        f"(matched '{track_name_part}' from concern)"
+                    )
+                    break
+        
+        return outlier_track_ids
+
     async def _llm_evaluate_quality(
         self,
         state: AgentState,
@@ -700,24 +820,29 @@ class OrchestratorAgent(BaseAgent):
             LLM assessment with quality score and insights
         """
         try:
-            # Prepare playlist summary for LLM (first 10 tracks for brevity)
+            # Prepare playlist summary for LLM (first 15 tracks for better assessment)
             tracks_summary = []
-            for i, rec in enumerate(state.recommendations[:10], 1):
+            for i, rec in enumerate(state.recommendations[:15], 1):
                 tracks_summary.append(
                     f"{i}. {rec.track_name} by {', '.join(rec.artists)} "
-                    f"(confidence: {rec.confidence_score:.2f})"
+                    f"(confidence: {rec.confidence_score:.2f}, source: {rec.source})"
                 )
             
             mood_interpretation = state.mood_analysis.get("mood_interpretation", "N/A")
+            artist_recommendations = state.mood_analysis.get("artist_recommendations", [])
+            genre_keywords = state.mood_analysis.get("genre_keywords", [])
             target_features = state.metadata.get("target_features", {})
             playlist_target = state.metadata.get("playlist_target", {})
             target_count = playlist_target.get("target_count", 20)
             
-            prompt = f"""You are a music curator expert evaluating a playlist for quality and cohesion.
+            prompt = f"""You are a STRICT music curator expert evaluating a playlist for quality and cohesion.
 
 **User's Mood Request**: "{state.mood_prompt}"
 
 **Mood Analysis**: {mood_interpretation}
+
+**Expected Artists**: {', '.join(artist_recommendations[:8])}
+**Expected Genres**: {', '.join(genre_keywords[:5])}
 
 **Target Audio Features**: {', '.join(f'{k}={v:.2f}' for k, v in list(target_features.items())[:5])}
 
@@ -731,11 +856,20 @@ class OrchestratorAgent(BaseAgent):
 - Outliers Found: {len(evaluation['outlier_tracks'])}
 - Overall Score: {evaluation['overall_score']:.2f}/1.0
 
-**Task**: Evaluate if this playlist truly matches the user's mood and maintains good cohesion. Consider:
-1. Do the tracks fit the requested mood and vibe?
-2. Is there good variety without jarring genre shifts?
-3. Would these tracks flow well together?
-4. Are there any tracks that feel out of place?
+**Task**: BE STRICT - Evaluate if this playlist truly matches the user's mood. Consider:
+1. **Language Match**: Do track/artist names match the expected language/region? (e.g., Spanish tracks for French funk = REJECT)
+2. **Genre Match**: Do tracks fit the genre/style requested? Flag any that feel wrong.
+3. **Artist Match**: Are artists similar to the expected ones listed above?
+4. **Flow**: Would these tracks flow well together without jarring shifts?
+
+**CRITICAL**: Flag ANY track that doesn't match the language, genre, or cultural style of the mood request.
+For example:
+- Latin/Spanish music in a French playlist = OUT OF PLACE
+- K-pop in a British indie playlist = OUT OF PLACE  
+- Regional Mexican music in an electronic playlist = OUT OF PLACE
+
+**IMPORTANT**: In "specific_concerns", explicitly identify tracks that should be REMOVED from the playlist.
+Use exact format: "Track Name by Artist Name feels out of place because..."
 
 Respond in JSON format:
 {{
@@ -743,7 +877,7 @@ Respond in JSON format:
   "meets_expectations": <boolean>,
   "strengths": ["<strength 1>", "<strength 2>"],
   "issues": ["<issue 1>", "<issue 2>"],
-  "specific_concerns": ["<track name> feels out of place because..."],
+  "specific_concerns": ["<exact track name> by <artist name> feels out of place because..."],
   "reasoning": "<brief explanation>"
 }}"""
 
