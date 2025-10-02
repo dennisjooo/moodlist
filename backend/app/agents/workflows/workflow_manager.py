@@ -230,16 +230,19 @@ class WorkflowManager:
 
             # Execute workflow steps
             state = await self._execute_mood_analysis(state)
+            self.active_workflows[session_id] = state  # Update in-memory state
             await self._update_playlist_db(session_id, state)
             
             # Execute orchestration (handles seed gathering, recommendations, and quality improvement)
             state = await self._execute_orchestration(state)
+            self.active_workflows[session_id] = state  # Update in-memory state
             await self._update_playlist_db(session_id, state)
             
             # Mark as completed after recommendations are ready
             state.status = RecommendationStatus.COMPLETED
             state.current_step = "recommendations_ready"
             state.metadata["playlist_saved_to_spotify"] = False
+            self.active_workflows[session_id] = state  # Update in-memory state
             await self._update_playlist_db(session_id, state)
             self.success_count += 1
             
@@ -421,23 +424,6 @@ class WorkflowManager:
             self.active_workflows.get(session_id) or
             self.completed_workflows.get(session_id)
         )
-
-    def cancel_workflow(self, session_id: str) -> bool:
-        """Cancel an active workflow.
-
-        Args:
-            session_id: Workflow session ID
-
-        Returns:
-            Whether cancellation was successful
-        """
-        if session_id in self.active_workflows:
-            state = self.active_workflows.pop(session_id)
-            state.set_error("Workflow cancelled by user")
-            self.completed_workflows[session_id] = state
-            logger.info(f"Cancelled workflow {session_id}")
-            return True
-        return False
 
     def get_workflow_summary(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get a summary of a workflow.

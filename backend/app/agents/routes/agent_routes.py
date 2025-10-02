@@ -182,7 +182,7 @@ async def get_workflow_status(session_id: str, db: AsyncSession = Depends(get_db
         Current workflow status
     """
     try:
-        # First try to get from in-memory workflow manager
+        # First try to get from workflow manager (Redis/cache)
         state = workflow_manager.get_workflow_state(session_id)
 
         if state:
@@ -199,7 +199,7 @@ async def get_workflow_status(session_id: str, db: AsyncSession = Depends(get_db
                 "updated_at": state.updated_at.isoformat()
             }
         
-        # If not in memory, try to get from database
+        # If not in cache, try to get from database
         from sqlalchemy import select
         query = select(Playlist).where(Playlist.session_id == session_id)
         result = await db.execute(query)
@@ -240,11 +240,12 @@ async def get_workflow_status(session_id: str, db: AsyncSession = Depends(get_db
 
 
 @router.delete("/recommendations/{session_id}")
-async def cancel_workflow(session_id: str):
+async def cancel_workflow(session_id: str, db: AsyncSession = Depends(get_db)):
     """Cancel an active workflow.
 
     Args:
         session_id: Workflow session ID to cancel
+        db: Database session
 
     Returns:
         Cancellation confirmation
@@ -252,7 +253,19 @@ async def cancel_workflow(session_id: str):
     try:
         cancelled = workflow_manager.cancel_workflow(session_id)
         
-        if cancelled:
+        # Update playlist status in database to "cancelled"
+        from sqlalchemy import select
+        query = select(Playlist).where(Playlist.session_id == session_id)
+        result = await db.execute(query)
+        playlist = result.scalar_one_or_none()
+        
+        if playlist:
+            playlist.status = "cancelled"
+            playlist.error_message = "Workflow cancelled by user"
+            await db.commit()
+            logger.info(f"Updated playlist {playlist.id} status to cancelled")
+        
+        if cancelled or playlist:
             return {
                 "session_id": session_id,
                 "status": "cancelled",
@@ -286,7 +299,7 @@ async def get_workflow_results(session_id: str, db: AsyncSession = Depends(get_d
         Complete workflow results
     """
     try:
-        # First try to get from in-memory workflow manager
+        # First try to get from workflow manager (Redis/cache)
         state = workflow_manager.get_workflow_state(session_id)
 
         if state:
@@ -523,10 +536,10 @@ async def save_playlist_to_spotify(
         # Refresh Spotify token if expired before saving to Spotify
         current_user = await refresh_spotify_token_if_expired(current_user, db)
         
-        # First try to get from in-memory state
+        # First try to get from workflow manager (Redis/cache)
         state = workflow_manager.get_workflow_state(session_id)
 
-        # If not in memory, load from database
+        # If not in cache, load from database
         if not state:
             from sqlalchemy import select
             from ..states.agent_state import AgentState, RecommendationStatus, TrackRecommendation
@@ -664,7 +677,7 @@ async def get_system_status():
     """
     try:
         # Get workflow manager stats
-        workflow_stats = workflow_manager.get_performance_stats()
+        workflow_stats = await workflow_manager.get_performance_stats()
 
         # Get agent performance stats
         agent_stats = {}
