@@ -249,7 +249,7 @@ function CreateSessionPageContent() {
     }
 
     return (
-        <div className="min-h-screen bg-background relative">
+        <div className="min-h-screen bg-background relative flex flex-col">
             {/* Fixed Dot Pattern Background */}
             <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
                 <DotPattern
@@ -262,41 +262,48 @@ function CreateSessionPageContent() {
             {/* Navigation */}
             <Navigation />
 
-            {/* Main Content */}
-            <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                {/* Back Button */}
-                <Button
-                    variant="ghost"
-                    onClick={handleBack}
-                    className="mb-6 gap-2"
-                >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back
-                </Button>
+            {/* Main Content - Centered */}
+            <main className="relative z-10 flex-1 flex flex-col">
+                <div className="max-w-4xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    {/* Back Button - Positioned at top */}
+                    <Button
+                        variant="ghost"
+                        onClick={handleBack}
+                        className="mb-8 gap-2"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        Back
+                    </Button>
+                </div>
 
-                {/* Only show "Creating your playlist" if we have a status AND it's not terminal */}
-                {workflowState.status && !isTerminalStatus && (
-                    <div className="text-center mb-12">
-                        <Badge variant="outline" className="px-4 py-1 flex items-center gap-2 w-fit mx-auto mb-6">
-                            <Sparkles className="w-4 h-4" />
-                            AI-Powered Playlist Creation
-                        </Badge>
+                {/* Centered content area */}
+                <div className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 -mt-16">
+                    <div className="max-w-4xl w-full">
+                        {/* Only show "Creating your playlist" if we have a status AND it's not terminal */}
+                        {workflowState.status && !isTerminalStatus && (
+                            <div className="text-center mb-12">
+                                <Badge variant="outline" className="px-4 py-1 flex items-center gap-2 w-fit mx-auto mb-6">
+                                    <Sparkles className="w-4 h-4" />
+                                    AI-Powered Playlist Creation
+                                </Badge>
 
-                        <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl mb-4">
-                            Creating your playlist
-                        </h1>
-                        <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                            Our AI is working on creating the perfect Spotify playlist for your mood.
-                        </p>
+                                <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl mb-4">
+                                    Creating your playlist
+                                </h1>
+                                <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                                    Our AI is working on creating the perfect Spotify playlist for your mood.
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Workflow Progress */}
+                        {workflowState.sessionId && workflowState.status !== 'completed' && (
+                            <div className="mb-8">
+                                <WorkflowProgress />
+                            </div>
+                        )}
                     </div>
-                )}
-
-                {/* Workflow Progress */}
-                {workflowState.sessionId && workflowState.status !== 'completed' && (
-                    <div className="mb-8">
-                        <WorkflowProgress />
-                    </div>
-                )}
+                </div>
             </main>
         </div>
     );

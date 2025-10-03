@@ -17,6 +17,10 @@ export interface WorkflowState {
   error: string | null;
   isLoading: boolean;
   awaitingInput: boolean;
+  metadata?: {
+    iteration?: number;
+    cohesion_score?: number;
+  };
 }
 
 interface WorkflowContextType {
@@ -448,6 +452,8 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
           currentStep: status.current_step,
           awaitingInput: status.awaiting_input,
           error: status.error || null,
+          moodAnalysis: status.mood_analysis || prev.moodAnalysis,
+          metadata: status.metadata || prev.metadata,
         }));
       }
     };
