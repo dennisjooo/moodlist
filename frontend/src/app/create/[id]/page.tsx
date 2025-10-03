@@ -24,17 +24,31 @@ function CreateSessionPageContent() {
     const { workflowState, startWorkflow, loadWorkflow } = useWorkflow();
 
     const handleBack = () => {
-        // Check if user came from playlists page
-        const referrer = document.referrer;
-        const cameFromPlaylists = referrer.includes('/playlists') ||
-                                 (window.history.length > 1 && window.history.go(-1) === undefined);
+        // Check if we're currently on an edit page - if so, go back to the parent create page
+        if (window.location.pathname.includes('/edit')) {
+            const parentPath = window.location.pathname.replace('/edit', '');
+            router.push(parentPath);
+            return;
+        }
 
-        if (cameFromPlaylists) {
+        // Determine navigation origin and destination
+        const referrer = document.referrer;
+        const currentPath = window.location.pathname;
+
+        // If user came from playlists page, go back there
+        if (referrer.includes('/playlists')) {
             router.push('/playlists');
-        } else if (window.history.length > 2) {
-            router.replace('/create');
-        } else {
-            // Default to playlists page if no history or unclear navigation
+        }
+        // If user came from /create page, go back there
+        else if (referrer.includes('/create') && !referrer.includes('/create/')) {
+            router.push('/create');
+        }
+        // If referrer is unclear but we have a session ID, user likely came from playlists
+        else if (currentPath.includes('/create/') && sessionId) {
+            router.push('/playlists');
+        }
+        // Default fallback to playlists
+        else {
             router.push('/playlists');
         }
     };
