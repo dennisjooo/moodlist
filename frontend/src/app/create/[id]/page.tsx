@@ -24,11 +24,17 @@ function CreateSessionPageContent() {
     const { workflowState, startWorkflow, loadWorkflow } = useWorkflow();
 
     const handleBack = () => {
-        // Check if there's history to go back to create page
-        if (window.history.length > 2) {
+        // Check if user came from playlists page
+        const referrer = document.referrer;
+        const cameFromPlaylists = referrer.includes('/playlists') ||
+                                 (window.history.length > 1 && window.history.go(-1) === undefined);
+
+        if (cameFromPlaylists) {
+            router.push('/playlists');
+        } else if (window.history.length > 2) {
             router.replace('/create');
         } else {
-            // Default to playlists page if no history
+            // Default to playlists page if no history or unclear navigation
             router.push('/playlists');
         }
     };
