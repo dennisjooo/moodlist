@@ -56,7 +56,7 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className={cn(
-                "w-12 h-12 rounded-full flex items-center justify-center",
+                "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0",
                 hasSavedToSpotify ? "bg-green-500" : "bg-yellow-500"
               )}>
                 <Music className="w-6 h-6 text-white" />
