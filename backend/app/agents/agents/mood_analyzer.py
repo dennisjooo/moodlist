@@ -59,12 +59,16 @@ Available Audio Features (use ranges [min, max] for each):
 - liveness (0-1): Probability of live performance (0=studio, 1=live recording)
 - loudness (-60-2): Overall loudness in decibels (lower=more dynamic range)
 - mode (0-1): Major (1) vs minor (0) tonality (1=happier/brighter, 0=sadder/darker)
-- speechiness (0-1): Presence of spoken words (0=no speech, 1=mostly speech)
+- speechiness (0-1): Presence of spoken words
+  * IMPORTANT: For RAP/HIP-HOP, use LOW values [0.05, 0.25] - rap is SINGING with rhythm, not pure speech!
+  * Only use high speechiness (>0.6) for poetry, audiobooks, or talk shows
+  * Most music genres (including rap) should be [0.03, 0.20]
 - tempo (0-250): Estimated tempo in BPM (beats per minute)
 - valence (0-1): Musical positiveness (0=sad/negative, 1=happy/positive)
 - popularity (0-100): Track popularity (0=underground, 100=mainstream)
 
-Example mood analysis:
+Example mood analyses:
+
 For "super indie" you might target:
 - High acousticness [0.7, 1.0] (natural, organic sound)
 - Low-moderate energy [0.2, 0.5] (mellow, not intense)
@@ -72,6 +76,17 @@ For "super indie" you might target:
 - Moderate instrumentalness [0.3, 0.8] (less mainstream pop vocals)
 - Natural tempo range [60, 120] (not extreme BPM)
 - Lower loudness [-20, -8] (more dynamic range)
+- Low speechiness [0.03, 0.15] (sung vocals, not spoken)
+
+For "hype rap like Travis Scott" you might target:
+- Low acousticness [0.0, 0.2] (synthetic, electronic production)
+- High energy [0.7, 1.0] (intense, powerful)
+- High danceability [0.6, 0.9] (groovy trap beats)
+- Low instrumentalness [0.0, 0.3] (has vocals/rap)
+- LOW speechiness [0.05, 0.25] (rap is rhythmic singing, not pure speech!)
+- High tempo [120, 160] (energetic trap BPM)
+- High loudness [-8, -3] (loud, compressed modern production)
+- Moderate-high popularity [60, 100] (mainstream appeal)
 
 CRITICAL: Always suggest specific artist names that match the mood:
 - artist_recommendations: ALWAYS provide 8-15 specific artist names that match the mood, even if not mentioned by user
