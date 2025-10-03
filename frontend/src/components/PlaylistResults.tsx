@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useWorkflow } from '@/lib/workflowContext';
-import { Download, ExternalLink, Loader2, Music, Star } from 'lucide-react';
+import { Download, Edit, ExternalLink, Loader2, Music, Star } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
@@ -39,6 +39,12 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
 
   const hasSavedToSpotify = workflowState.playlist?.id;
 
+  const handleEditClick = () => {
+    if (workflowState.sessionId) {
+      router.push(`/create/${workflowState.sessionId}/edit`);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Draft/Saved Status Banner */}
@@ -63,38 +69,64 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
               </div>
             </div>
 
-            {hasSavedToSpotify && workflowState.playlist?.spotify_url ? (
-              <Button asChild size="lg">
-                <a
-                  href={workflowState.playlist.spotify_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  Open in Spotify
-                </a>
-              </Button>
-            ) : (
-              <Button
-                onClick={handleSaveToSpotify}
-                disabled={isSaving}
-                size="lg"
-                className="flex items-center gap-2"
-              >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    Save to Spotify
-                  </>
-                )}
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {hasSavedToSpotify ? (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={handleEditClick}
+                    size="lg"
+                    className="flex items-center gap-2"
+                  >
+                    <Edit className="w-4 h-4" />
+                    Edit Playlist
+                  </Button>
+                  {workflowState.playlist?.spotify_url && (
+                    <Button asChild size="lg">
+                      <a
+                        href={workflowState.playlist.spotify_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        Open in Spotify
+                      </a>
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={handleEditClick}
+                    size="lg"
+                    className="flex items-center gap-2"
+                  >
+                    <Edit className="w-4 h-4" />
+                    Edit Draft
+                  </Button>
+                  <Button
+                    onClick={handleSaveToSpotify}
+                    disabled={isSaving}
+                    size="lg"
+                    className="flex items-center gap-2"
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        Save to Spotify
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
 
           {saveError && (
