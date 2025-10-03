@@ -193,11 +193,18 @@ async def get_workflow_status(session_id: str, db: AsyncSession = Depends(get_db
                 "mood_prompt": state.mood_prompt,
                 "mood_analysis": state.mood_analysis,
                 "recommendation_count": len(state.recommendations),
+                "seed_track_count": len(state.seed_tracks),
+                "user_top_tracks_count": len(state.user_top_tracks),
+                "user_top_artists_count": len(state.user_top_artists),
                 "has_playlist": state.playlist_id is not None,
                 "awaiting_input": state.awaiting_user_input,
                 "error": state.error_message,
                 "created_at": state.created_at.isoformat(),
-                "updated_at": state.updated_at.isoformat()
+                "updated_at": state.updated_at.isoformat(),
+                "metadata": {
+                    "iteration": state.metadata.get("iteration"),
+                    "cohesion_score": state.metadata.get("cohesion_score"),
+                }
             }
         
         # If not in cache, try to get from database
