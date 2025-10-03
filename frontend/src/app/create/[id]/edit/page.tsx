@@ -50,7 +50,7 @@ function EditPlaylistPageContent() {
 
                 <main className="relative z-10 flex items-center justify-center min-h-[calc(100vh-80px)]">
                     <div className="text-center">
-                        <LoadingDots />
+                        <LoadingDots className="sm" />
                         <p className="mt-4 text-muted-foreground">Loading playlist...</p>
                     </div>
                 </main>
