@@ -237,9 +237,6 @@ class PlaylistCreatorAgent(BaseAgent):
                     emotion_energy_parts.append(primary_emotion)
                 if energy_level:
                     emotion_energy_parts.append(energy_level)
-                
-                if emotion_energy_parts:
-                    description_parts.append(f"({', '.join(emotion_energy_parts)})")
             else:
                 # Fallback to mood prompt if no analysis
                 description_parts.append(f"Mood: {state.mood_prompt}")
