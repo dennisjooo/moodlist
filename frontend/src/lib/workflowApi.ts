@@ -23,12 +23,26 @@ export interface WorkflowStatus {
   "completed" | "failed";
   current_step: string;
   mood_prompt: string;
+  mood_analysis?: {
+    mood_interpretation: string;
+    primary_emotion: string;
+    energy_level: string;
+    target_features: Record<string, number>;
+    search_keywords: string[];
+  };
   recommendation_count: number;
+  seed_track_count?: number;
+  user_top_tracks_count?: number;
+  user_top_artists_count?: number;
   has_playlist: boolean;
   awaiting_input: boolean;
   error?: string;
   created_at: string;
   updated_at: string;
+  metadata?: {
+    iteration?: number;
+    cohesion_score?: number;
+  };
 }
 
 export interface WorkflowResults {
