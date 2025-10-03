@@ -35,8 +35,7 @@ class SearchArtistTool(RateLimitedTool):
             name="search_artists",
             description="Search artists on RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=120,  # Conservative: 2 requests/second
-            min_request_interval=0.5  # Minimum 0.5s between requests to avoid bursts
+            rate_limit_per_minute=200  # Increased for search operations
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:
@@ -148,8 +147,7 @@ class GetMultipleArtistsTool(RateLimitedTool):
             name="get_multiple_artists",
             description="Get multiple artists from RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=120,  # Conservative: 2 requests/second
-            min_request_interval=0.5  # Minimum 0.5s between requests to avoid bursts
+            rate_limit_per_minute=400  # Increased for batch operations (up to 40 artists per request)
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:
@@ -242,8 +240,7 @@ class GetArtistTracksTool(RateLimitedTool):
             name="get_artist_tracks",
             description="Get artist's tracks from RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=120,  # Conservative: 2 requests/second
-            min_request_interval=0.5  # Minimum 0.5s between requests to avoid bursts
+            rate_limit_per_minute=300  # Increased for track catalog requests
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:
