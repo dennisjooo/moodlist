@@ -33,7 +33,8 @@ class GetMultipleTracksTool(RateLimitedTool):
             name="get_multiple_tracks",
             description="Get multiple tracks from RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=400  # Increased for batch operations (up to 40 tracks per request)
+            rate_limit_per_minute=120,  # Conservative: 2 requests/second
+            min_request_interval=0.5  # Minimum 0.5s between requests to avoid bursts
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:
@@ -137,7 +138,8 @@ class GetTrackAudioFeaturesTool(RateLimitedTool):
             name="get_track_audio_features",
             description="Get track audio features from RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=500  # Increased for audio feature requests
+            rate_limit_per_minute=120,  # Conservative: 2 requests/second
+            min_request_interval=0.5  # Minimum 0.5s between requests to avoid bursts
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:

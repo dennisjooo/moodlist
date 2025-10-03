@@ -72,7 +72,7 @@ class RecoBeatService:
 
         cache_key = self._make_cache_key("track_recommendations", *cache_params)
 
-        # Try to get from cache (15 minute TTL for recommendations)
+        # Try to get from cache (30 minute TTL for recommendations)
         cached_result = await cache_manager.cache.get(cache_key)
         if cached_result:
             logger.info(f"Cache hit for track recommendations (key: {cache_key[:8]}...)")
@@ -106,7 +106,7 @@ class RecoBeatService:
 
         cache_key = self._make_cache_key("track_recommendations", *cache_params)
 
-        # Cache with 15 minute TTL
+        # Cache with 30 minute TTL (longer to reduce API calls)
         cache_data = {
             "recommendations": recommendations,
             "cached_at": asyncio.get_event_loop().time(),
@@ -118,7 +118,7 @@ class RecoBeatService:
             }
         }
 
-        await cache_manager.cache.set(cache_key, cache_data, ttl=900)  # 15 minutes
+        await cache_manager.cache.set(cache_key, cache_data, ttl=1800)  # 30 minutes
         logger.debug(f"Cached track recommendations (key: {cache_key[:8]}...)")
 
     def _register_tools(self):
