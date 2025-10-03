@@ -30,6 +30,15 @@ interface WorkflowContextType {
   stopWorkflow: () => void;
   resetWorkflow: () => void;
   applyEdit: (edit: PlaylistEditRequest) => Promise<void>;
+  applyCompletedEdit: (
+    editType: 'reorder' | 'remove' | 'add',
+    options: {
+      trackId?: string;
+      newPosition?: number;
+      trackUri?: string;
+    }
+  ) => Promise<void>;
+  searchTracks: (query: string, limit?: number) => Promise<any>;
   refreshResults: () => Promise<void>;
   saveToSpotify: () => Promise<any>;
   clearError: () => void;
@@ -325,6 +334,52 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     }
   };
 
+  const applyCompletedEdit = async (
+    editType: 'reorder' | 'remove' | 'add',
+    options: {
+      trackId?: string;
+      newPosition?: number;
+      trackUri?: string;
+    }
+  ) => {
+    if (!workflowState.sessionId) {
+      throw new Error('No active workflow session');
+    }
+
+    // Don't set loading state - let the component handle optimistic updates
+    try {
+      await workflowAPI.applyCompletedPlaylistEdit(workflowState.sessionId, editType, options);
+
+      // Reload in background to sync with server state
+      const results = await workflowAPI.getWorkflowResults(workflowState.sessionId);
+      setWorkflowState(prev => ({
+        ...prev,
+        recommendations: results.recommendations,
+        playlist: results.playlist,
+      }));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to apply edit';
+      setWorkflowState(prev => ({
+        ...prev,
+        error: errorMessage,
+      }));
+      throw error;
+    }
+  };
+
+  const searchTracks = async (query: string, limit: number = 20) => {
+    try {
+      return await workflowAPI.searchTracks(query, limit);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to search tracks';
+      setWorkflowState(prev => ({
+        ...prev,
+        error: errorMessage,
+      }));
+      throw error;
+    }
+  };
+
   const clearError = () => {
     setWorkflowState(prev => ({ ...prev, error: null }));
   };
@@ -499,6 +554,8 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     stopWorkflow,
     resetWorkflow,
     applyEdit,
+    applyCompletedEdit,
+    searchTracks,
     refreshResults,
     saveToSpotify,
     clearError,

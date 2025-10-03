@@ -17,12 +17,13 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useWorkflow } from '@/lib/workflowContext';
@@ -31,7 +32,10 @@ import {
   ExternalLink,
   GripVertical,
   Loader2,
+  Music,
+  Plus,
   RotateCcw,
+  Search,
   Star,
   Trash2
 } from 'lucide-react';
@@ -49,6 +53,7 @@ interface Track {
 interface PlaylistEditorProps {
   sessionId: string;
   recommendations: Track[];
+  isCompleted?: boolean;
   onSave?: () => void;
   onCancel?: () => void;
 }
@@ -162,15 +167,25 @@ function SortableTrackItem({ track, index, onRemove, isRemoving }: SortableTrack
 export default function PlaylistEditor({
   sessionId,
   recommendations,
+  isCompleted = false,
   onSave,
   onCancel
 }: PlaylistEditorProps) {
-  const { applyEdit, saveToSpotify } = useWorkflow();
+  const { applyCompletedEdit, saveToSpotify, searchTracks } = useWorkflow();
   const [tracks, setTracks] = useState<Track[]>(recommendations);
   const [removingTracks, setRemovingTracks] = useState<Set<string>>(new Set());
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [editReasoning, setEditReasoning] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isAddingTrack, setIsAddingTrack] = useState(false);
+
+  // Sync tracks when recommendations prop changes (from context updates)
+  useEffect(() => {
+    setTracks(recommendations);
+  }, [recommendations]);
 
   // Set up sensors for drag and drop
   const sensors = useSensors(
@@ -197,12 +212,10 @@ export default function PlaylistEditor({
         setTracks(newTracks);
 
         try {
-          // Apply the reorder edit
-          await applyEdit({
-            edit_type: 'reorder',
-            track_id: active.id as string,
-            new_position: newIndex,
-            reasoning: editReasoning || 'Reordered track position'
+          // Always use applyCompletedEdit - it handles both draft and saved playlists
+          await applyCompletedEdit('reorder', {
+            trackId: active.id as string,
+            newPosition: newIndex,
           });
         } catch (error) {
           // Revert on error
@@ -213,7 +226,7 @@ export default function PlaylistEditor({
         }
       }
     }
-  }, [tracks, applyEdit, editReasoning]);
+  }, [tracks, applyCompletedEdit]);
 
   const handleRemoveTrack = useCallback(async (trackId: string) => {
     setRemovingTracks(prev => new Set(prev).add(trackId));
@@ -222,12 +235,8 @@ export default function PlaylistEditor({
       // Optimistically update UI
       setTracks(prev => prev.filter(track => track.track_id !== trackId));
 
-      // Apply the remove edit
-      await applyEdit({
-        edit_type: 'remove',
-        track_id: trackId,
-        reasoning: editReasoning || 'Removed unwanted track'
-      });
+      // Always use applyCompletedEdit - it handles both draft and saved playlists
+      await applyCompletedEdit('remove', { trackId });
     } catch (error) {
       // Revert on error
       setTracks(recommendations);
@@ -241,26 +250,53 @@ export default function PlaylistEditor({
         return newSet;
       });
     }
-  }, [applyEdit, editReasoning, recommendations]);
+  }, [applyCompletedEdit, recommendations]);
 
-  const handleFinalize = useCallback(async () => {
-    setIsFinalizing(true);
-    try {
-      await saveToSpotify();
-      onSave?.();
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to finalize playlist';
-      setError(errorMessage);
-      console.error('Failed to finalize playlist:', error);
-    } finally {
-      setIsFinalizing(false);
-    }
-  }, [saveToSpotify, onSave]);
+  const handleFinalize = useCallback(() => {
+    // Just close the editor, don't auto-save to Spotify
+    onSave?.();
+  }, [onSave]);
 
   const handleReset = useCallback(() => {
     setTracks(recommendations);
     setEditReasoning('');
   }, [recommendations]);
+
+  const handleSearch = useCallback(async (query: string) => {
+    setSearchQuery(query);
+
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const results = await searchTracks(query);
+      setSearchResults(results.tracks || []);
+    } catch (error) {
+      console.error('Search failed:', error);
+      setError('Failed to search tracks');
+    } finally {
+      setIsSearching(false);
+    }
+  }, [searchTracks]);
+
+  const handleAddTrack = useCallback(async (trackUri: string) => {
+    setIsAddingTrack(true);
+    try {
+      // Always use applyCompletedEdit - it handles both draft and saved playlists
+      await applyCompletedEdit('add', { trackUri });
+      setSearchQuery('');
+      setSearchResults([]);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add track';
+      setError(errorMessage);
+      console.error('Failed to add track:', error);
+    } finally {
+      setIsAddingTrack(false);
+    }
+  }, [applyCompletedEdit, isCompleted]);
 
   return (
     <div className="space-y-6">
@@ -271,7 +307,7 @@ export default function PlaylistEditor({
             ✏️ Edit Your Playlist
           </CardTitle>
           <p className="text-muted-foreground">
-            Drag tracks to reorder them, or remove songs you don't like. Your changes will be saved automatically.
+            {isCompleted ? 'Search and add tracks, or drag to reorder and remove songs.' : 'Drag tracks to reorder them, or remove songs you don\'t like.'}
           </p>
         </CardHeader>
       </Card>
@@ -293,68 +329,133 @@ export default function PlaylistEditor({
         </Alert>
       )}
 
-      {/* Edit Reasoning */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Why are you making these changes?</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Textarea
-            placeholder="Optional: Explain your edits to help the AI learn your preferences..."
-            value={editReasoning}
-            onChange={(e) => setEditReasoning(e.target.value)}
-            className="min-h-[80px]"
-          />
-        </CardContent>
-      </Card>
-
-      {/* Track List */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center justify-between">
-            <span>Playlist Tracks ({tracks.length})</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleReset}
-              className="flex items-center gap-2"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Reset
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {tracks.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>No tracks remaining. Try resetting or creating a new playlist.</p>
+      {/* Two Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Column - Add Tracks or Info */}
+        <Card className="lg:sticky lg:top-6 h-fit">
+          <CardHeader>
+            <CardTitle className="text-lg">Add Tracks</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Search Spotify to find and add songs to your playlist
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search for tracks to add..."
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                className="pl-10"
+              />
             </div>
-          ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={tracks.map(track => track.track_id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="space-y-2">
-                  {tracks.map((track, index) => (
-                    <SortableTrackItem
-                      key={track.track_id}
-                      track={track}
-                      index={index}
-                      onRemove={handleRemoveTrack}
-                      isRemoving={removingTracks.has(track.track_id)}
-                    />
-                  ))}
+
+            {isSearching && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            )}
+
+            {searchResults.length > 0 && (
+              <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
+                {searchResults.map((track) => (
+                  <div
+                    key={track.track_id}
+                    className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent/50 transition-colors"
+                  >
+                    {track.album_image && (
+                      <img
+                        src={track.album_image}
+                        alt={track.album}
+                        className="w-12 h-12 rounded"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-sm truncate">{track.track_name}</h4>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {track.artists.join(', ')}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => handleAddTrack(track.spotify_uri)}
+                      disabled={isAddingTrack}
+                      className="flex items-center gap-1 flex-shrink-0"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!isSearching && searchResults.length === 0 && searchQuery && (
+              <div className="text-center py-8 text-muted-foreground">
+                <p className="text-sm">No results found for "{searchQuery}"</p>
+              </div>
+            )}
+
+            {!searchQuery && (
+              <div className="text-center py-8 text-muted-foreground">
+                <Search className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                <p className="text-sm">Start typing to search for tracks</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Right Column - Playlist */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center justify-between">
+                <span>Playlist Tracks ({tracks.length})</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleReset}
+                  className="flex items-center gap-2"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Reset
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {tracks.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Music className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                  <p>No tracks remaining. Try resetting or creating a new playlist.</p>
                 </div>
-              </SortableContext>
-            </DndContext>
-          )}
-        </CardContent>
-      </Card>
+              ) : (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={tracks.map(track => track.track_id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-2">
+                      {tracks.map((track, index) => (
+                        <SortableTrackItem
+                          key={track.track_id}
+                          track={track}
+                          index={index}
+                          onRemove={handleRemoveTrack}
+                          isRemoving={removingTracks.has(track.track_id)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       {/* Actions */}
       <div className="flex gap-3">
@@ -364,25 +465,27 @@ export default function PlaylistEditor({
           className="flex-1"
           disabled={isFinalizing}
         >
-          Cancel
+          {isCompleted ? 'Done Editing' : 'Cancel'}
         </Button>
-        <Button
-          onClick={handleFinalize}
-          disabled={isFinalizing || tracks.length === 0}
-          className="flex-1 flex items-center gap-2"
-        >
-          {isFinalizing ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Finalizing...
-            </>
-          ) : (
-            <>
-              <Check className="w-4 h-4" />
-              Finalize Playlist ({tracks.length} tracks)
-            </>
-          )}
-        </Button>
+        {!isCompleted && (
+          <Button
+            onClick={handleFinalize}
+            disabled={isFinalizing || tracks.length === 0}
+            className="flex-1 flex items-center gap-2"
+          >
+            {isFinalizing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Finalizing...
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4" />
+                Finalize Playlist ({tracks.length} tracks)
+              </>
+            )}
+          </Button>
+        )}
       </div>
 
       {/* Mobile Touch Instructions */}

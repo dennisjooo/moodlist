@@ -174,9 +174,16 @@ class WorkflowAPI {
   }
 
   async applyPlaylistEdit(sessionId: string, edit: PlaylistEditRequest): Promise<void> {
-    return this.request<void>(`/api/agents/recommendations/${sessionId}/edit`, {
+    const params = new URLSearchParams({
+      edit_type: edit.edit_type,
+    });
+
+    if (edit.track_id) params.append('track_id', edit.track_id);
+    if (edit.new_position !== undefined) params.append('new_position', edit.new_position.toString());
+    if (edit.reasoning) params.append('reasoning', edit.reasoning);
+
+    return this.request<void>(`/api/agents/recommendations/${sessionId}/edit?${params.toString()}`, {
       method: 'POST',
-      body: JSON.stringify(edit),
     });
   }
 
@@ -207,6 +214,56 @@ class WorkflowAPI {
     return this.request(`/api/agents/recommendations/${sessionId}`, {
       method: 'DELETE',
     });
+  }
+
+  async applyCompletedPlaylistEdit(
+    sessionId: string,
+    editType: 'reorder' | 'remove' | 'add',
+    options: {
+      trackId?: string;
+      newPosition?: number;
+      trackUri?: string;
+    }
+  ): Promise<{
+    session_id: string;
+    status: string;
+    edit_type: string;
+    recommendation_count: number;
+    message: string;
+  }> {
+    const params = new URLSearchParams({
+      edit_type: editType,
+    });
+
+    if (options.trackId) params.append('track_id', options.trackId);
+    if (options.newPosition !== undefined) params.append('new_position', options.newPosition.toString());
+    if (options.trackUri) params.append('track_uri', options.trackUri);
+
+    return this.request(`/api/agents/recommendations/${sessionId}/edit-completed?${params.toString()}`, {
+      method: 'POST',
+    });
+  }
+
+  async searchTracks(query: string, limit: number = 20): Promise<{
+    tracks: Array<{
+      track_id: string;
+      track_name: string;
+      artists: string[];
+      spotify_uri: string;
+      album: string;
+      album_image?: string;
+      duration_ms: number;
+      preview_url?: string;
+    }>;
+    total: number;
+    query: string;
+  }> {
+    const params = new URLSearchParams({
+      query,
+      limit: limit.toString(),
+    });
+
+    return this.request(`/api/spotify/search/tracks?${params.toString()}`);
   }
 }
 

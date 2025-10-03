@@ -308,9 +308,35 @@ async def get_workflow_results(session_id: str, db: AsyncSession = Depends(get_d
         Complete workflow results
     """
     try:
-        # First try to get from workflow manager (Redis/cache)
+        # Always check database first for persisted playlists
+        from sqlalchemy import select
+        query = select(Playlist).where(Playlist.session_id == session_id)
+        result = await db.execute(query)
+        playlist = result.scalar_one_or_none()
+        
+        # If playlist exists in DB with recommendations, use that (it's the source of truth for edits)
+        if playlist and playlist.recommendations_data:
+            result = {
+                "session_id": session_id,
+                "status": playlist.status,
+                "mood_prompt": playlist.mood_prompt,
+                "mood_analysis": playlist.mood_analysis_data,
+                "recommendations": playlist.recommendations_data,
+                "playlist": {
+                    "id": playlist.spotify_playlist_id,
+                    "name": playlist.playlist_data.get("name") if playlist.playlist_data else None,
+                    "spotify_url": playlist.playlist_data.get("spotify_url") if playlist.playlist_data else None,
+                    "spotify_uri": playlist.playlist_data.get("spotify_uri") if playlist.playlist_data else None
+                } if playlist.spotify_playlist_id else None,
+                "metadata": {},
+                "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
+                "completed_at": playlist.updated_at.isoformat() if playlist.updated_at else None
+            }
+            
+            return result
+        
+        # Fallback to in-memory state for workflows that haven't been persisted yet
         state = workflow_manager.get_workflow_state(session_id)
-
         if state:
             # Return partial results even if workflow is not complete
             # This allows frontend to show mood analysis early
@@ -342,41 +368,11 @@ async def get_workflow_results(session_id: str, db: AsyncSession = Depends(get_d
                 "completed_at": state.updated_at.isoformat() if state.is_complete() else None
             }
         
-        # If not in memory, get from database
-        from sqlalchemy import select
-        query = select(Playlist).where(Playlist.session_id == session_id)
-        result = await db.execute(query)
-        playlist = result.scalar_one_or_none()
-        
-        if not playlist:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Workflow {session_id} not found"
-            )
-        
-        if playlist.status != "completed":
-            raise HTTPException(
-                status_code=status.HTTP_202_ACCEPTED,
-                detail=f"Workflow {session_id} is still in progress"
-            )
-        
-        # Return results from database
-        return {
-            "session_id": session_id,
-            "status": playlist.status,
-            "mood_prompt": playlist.mood_prompt,
-            "mood_analysis": playlist.mood_analysis_data,
-            "recommendations": playlist.recommendations_data or [],
-            "playlist": {
-                "id": playlist.spotify_playlist_id,
-                "name": playlist.playlist_data.get("name") if playlist.playlist_data else None,
-                "spotify_url": playlist.playlist_data.get("spotify_url") if playlist.playlist_data else None,
-                "spotify_uri": playlist.playlist_data.get("spotify_uri") if playlist.playlist_data else None
-            } if playlist.spotify_playlist_id else None,
-            "metadata": {},
-            "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
-            "completed_at": playlist.updated_at.isoformat() if playlist.updated_at else None
-        }
+        # If we reach here, workflow doesn't exist anywhere
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Workflow {session_id} not found"
+        )
 
     except HTTPException:
         raise
@@ -757,5 +753,246 @@ async def list_recent_workflows(limit: int = Query(default=10, le=50)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list recent workflows: {str(e)}"
+        )
+
+
+@router.post("/recommendations/{session_id}/edit-completed")
+async def edit_completed_playlist(
+    session_id: str,
+    edit_type: str = Query(..., description="Type of edit (reorder/remove/add)"),
+    track_id: Optional[str] = Query(None, description="Track ID for edit"),
+    new_position: Optional[int] = Query(None, description="New position for reorder"),
+    track_uri: Optional[str] = Query(None, description="Track URI for add operations"),
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
+):
+    """Edit a completed/saved playlist by modifying both local state and Spotify playlist.
+    
+    This endpoint bypasses the is_complete() check and directly modifies the Spotify playlist.
+    
+    Args:
+        session_id: Workflow session ID
+        edit_type: Type of edit (reorder/remove/add)
+        track_id: Track ID for the edit
+        new_position: New position for reorder operations
+        track_uri: Track URI for add operations
+        current_user: Authenticated user
+        db: Database session
+    
+    Returns:
+        Updated playlist information
+    """
+    try:
+        # Refresh Spotify token if expired
+        current_user = await refresh_spotify_token_if_expired(current_user, db)
+        
+        # Load playlist from database
+        from sqlalchemy import select
+        query = select(Playlist).where(Playlist.session_id == session_id)
+        result = await db.execute(query)
+        playlist = result.scalar_one_or_none()
+        
+        if not playlist:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Playlist with session {session_id} not found"
+            )
+        
+        # Validate user owns this playlist
+        if playlist.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to edit this playlist"
+            )
+        
+        # Check if playlist has been saved to Spotify
+        is_saved_to_spotify = bool(playlist.spotify_playlist_id)
+        
+        # Get current recommendations
+        recommendations = playlist.recommendations_data or []
+        
+        # Apply edit to local recommendations
+        if edit_type == "remove":
+            if not track_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="track_id is required for remove operation"
+                )
+            
+            # Find and remove track
+            track_to_remove = None
+            for i, rec in enumerate(recommendations):
+                if rec.get("track_id") == track_id:
+                    track_to_remove = recommendations.pop(i)
+                    break
+            
+            if not track_to_remove:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Track {track_id} not found in playlist"
+                )
+            
+            # Remove from Spotify if playlist is saved
+            if is_saved_to_spotify:
+                import httpx
+                async with httpx.AsyncClient() as client:
+                    response = await client.delete(
+                        f"https://api.spotify.com/v1/playlists/{playlist.spotify_playlist_id}/tracks",
+                        headers={"Authorization": f"Bearer {current_user.access_token}"},
+                        json={"tracks": [{"uri": track_to_remove.get("spotify_uri")}]}
+                    )
+                    response.raise_for_status()
+                
+                logger.info(f"Removed track {track_id} from Spotify playlist {playlist.spotify_playlist_id}")
+            else:
+                logger.info(f"Removed track {track_id} from draft playlist (not yet in Spotify)")
+        
+        elif edit_type == "reorder":
+            if track_id is None or new_position is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="track_id and new_position are required for reorder operation"
+                )
+            
+            # Find track index
+            old_index = None
+            for i, rec in enumerate(recommendations):
+                if rec.get("track_id") == track_id:
+                    old_index = i
+                    break
+            
+            if old_index is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Track {track_id} not found in playlist"
+                )
+            
+            # Reorder in local list
+            track = recommendations.pop(old_index)
+            recommendations.insert(new_position, track)
+            
+            # Reorder in Spotify if playlist is saved
+            if is_saved_to_spotify:
+                import httpx
+                async with httpx.AsyncClient() as client:
+                    # Spotify uses insert_before, so if moving down, add 1
+                    insert_before = new_position if old_index > new_position else new_position + 1
+                    response = await client.put(
+                        f"https://api.spotify.com/v1/playlists/{playlist.spotify_playlist_id}/tracks",
+                        headers={"Authorization": f"Bearer {current_user.access_token}"},
+                        json={
+                            "range_start": old_index,
+                            "insert_before": insert_before,
+                            "range_length": 1
+                        }
+                    )
+                    response.raise_for_status()
+                
+                logger.info(f"Reordered track {track_id} from position {old_index} to {new_position} in Spotify")
+            else:
+                logger.info(f"Reordered track {track_id} from position {old_index} to {new_position} in draft")
+        
+        elif edit_type == "add":
+            if not track_uri:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="track_uri is required for add operation"
+                )
+            
+            # Get track details from Spotify
+            import httpx
+            async with httpx.AsyncClient() as client:
+                # Extract track ID from URI (format: spotify:track:ID)
+                track_id_from_uri = track_uri.split(":")[-1]
+                
+                # Get track details
+                response = await client.get(
+                    f"https://api.spotify.com/v1/tracks/{track_id_from_uri}",
+                    headers={"Authorization": f"Bearer {current_user.access_token}"}
+                )
+                response.raise_for_status()
+                track_data = response.json()
+                
+                # Add to local recommendations
+                new_track = {
+                    "track_id": track_data["id"],
+                    "track_name": track_data["name"],
+                    "artists": [artist["name"] for artist in track_data["artists"]],
+                    "spotify_uri": track_data["uri"],
+                    "confidence_score": 0.5,
+                    "reasoning": "Added by user",
+                    "source": "user_added"
+                }
+                
+                # Add to position or end of list
+                if new_position is not None:
+                    recommendations.insert(new_position, new_track)
+                else:
+                    recommendations.append(new_track)
+                
+                # Add to Spotify if playlist is saved
+                if is_saved_to_spotify:
+                    response = await client.post(
+                        f"https://api.spotify.com/v1/playlists/{playlist.spotify_playlist_id}/tracks",
+                        headers={"Authorization": f"Bearer {current_user.access_token}"},
+                        json={
+                            "uris": [track_uri],
+                            "position": new_position
+                        } if new_position is not None else {"uris": [track_uri]}
+                    )
+                    response.raise_for_status()
+                    logger.info(f"Added track {track_uri} to Spotify playlist {playlist.spotify_playlist_id}")
+                else:
+                    logger.info(f"Added track {track_uri} to draft playlist (not yet in Spotify)")
+        
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid edit_type: {edit_type}. Must be one of: reorder, remove, add"
+            )
+        
+        # Update database with modified recommendations
+        # Force SQLAlchemy to detect the change by using flag_modified
+        from sqlalchemy.orm.attributes import flag_modified
+        playlist.recommendations_data = recommendations
+        flag_modified(playlist, "recommendations_data")
+        playlist.updated_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(playlist)
+        
+        # Also update in-memory state if it exists
+        state = workflow_manager.get_workflow_state(session_id)
+        if state:
+            # Update the in-memory recommendations to match database
+            from ..states.agent_state import TrackRecommendation
+            state.recommendations = [
+                TrackRecommendation(
+                    track_id=rec["track_id"],
+                    track_name=rec["track_name"],
+                    artists=rec["artists"],
+                    spotify_uri=rec.get("spotify_uri"),
+                    confidence_score=rec.get("confidence_score", 0.5),
+                    reasoning=rec.get("reasoning", ""),
+                    source=rec.get("source", "unknown")
+                )
+                for rec in recommendations
+            ]
+            logger.info(f"Updated in-memory state for session {session_id}")
+        
+        return {
+            "session_id": session_id,
+            "status": "success",
+            "edit_type": edit_type,
+            "recommendation_count": len(recommendations),
+            "message": f"Successfully applied {edit_type} edit to playlist"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error editing completed playlist: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to edit playlist: {str(e)}"
         )
 
