@@ -49,8 +49,7 @@ class TrackRecommendationsTool(RateLimitedTool):
             name="get_track_recommendations",
             description="Get track recommendations from RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=120,  # Conservative: 2 requests/second
-            min_request_interval=0.5  # Minimum 0.5s between requests to avoid bursts
+            rate_limit_per_minute=300  # Increased for better performance (5 requests/second)
         )
 
     def _normalize_spotify_uri(self, href: str, track_id: str) -> str:
