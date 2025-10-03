@@ -118,7 +118,7 @@ class RecoBeatService:
             }
         }
 
-        await cache_manager.cache.set(cache_key, cache_data, ttl=900)  # 15 minutes
+        await cache_manager.cache.set(cache_key, cache_data, ttl=1800)  # 30 minutes
         logger.debug(f"Cached track recommendations (key: {cache_key[:8]}...)")
 
     def _register_tools(self):
@@ -384,7 +384,7 @@ class RecoBeatService:
         return unique_artists
 
     async def get_tracks_by_ids(self, track_ids: List[str]) -> List[Dict[str, Any]]:
-        """Get track information for multiple track IDs with parallel processing.
+        """Get track information for multiple track IDs with parallel processing and caching.
 
         Args:
             track_ids: List of track IDs
@@ -392,6 +392,17 @@ class RecoBeatService:
         Returns:
             List of track information
         """
+        if not track_ids:
+            return []
+
+        # Try to get from cache first (30 min TTL for track lookups)
+        cache_key = self._make_cache_key("tracks_by_ids", str(sorted(track_ids)))
+        cached_result = await cache_manager.cache.get(cache_key)
+
+        if cached_result:
+            logger.info(f"Cache hit for track lookup (key: {cache_key[:8]}...)")
+            return cached_result.get("tracks", [])
+
         # Split into chunks to respect API limits (40 per request)
         chunk_size = 40
         chunks = [track_ids[i:i + chunk_size] for i in range(0, len(track_ids), chunk_size)]
@@ -432,6 +443,16 @@ class RecoBeatService:
         except Exception as e:
             logger.error(f"Error in parallel track fetching: {e}")
             all_tracks = []
+
+        # Cache the successful result for 30 minutes
+        if all_tracks:
+            cache_data = {
+                "tracks": all_tracks,
+                "cached_at": asyncio.get_event_loop().time(),
+                "track_ids": track_ids
+            }
+            await cache_manager.cache.set(cache_key, cache_data, ttl=1800)  # 30 minutes
+            logger.debug(f"Cached track lookup result (key: {cache_key[:8]}...)")
 
         return all_tracks
 
