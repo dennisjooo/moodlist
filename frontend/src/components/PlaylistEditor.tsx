@@ -17,14 +17,13 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useWorkflow } from '@/lib/workflowContext';
 import {
@@ -183,7 +182,7 @@ export default function PlaylistEditor({
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isAddingTrack, setIsAddingTrack] = useState(false);
-  const [isAddTracksCollapsed, setIsAddTracksCollapsed] = useState(true);
+  const [isAddTracksCollapsed, setIsAddTracksCollapsed] = useState(false);
 
   // Sync tracks when recommendations prop changes (from context updates)
   useEffect(() => {
