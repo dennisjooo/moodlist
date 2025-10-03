@@ -112,10 +112,6 @@ class WorkflowAPIError extends Error {
 }
 
 class WorkflowAPI {
-  private authPromise: Promise<any> | null = null;
-  private lastAuthCheck: number = 0;
-  private readonly AUTH_BATCH_WINDOW = 1000; // 1 second batch window
-
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
@@ -154,62 +150,8 @@ class WorkflowAPI {
     }
   }
 
-  // Batch authentication checks to reduce redundant /auth/verify calls
-  private async batchAuthCheck(): Promise<void> {
-    const now = Date.now();
-
-    // If we recently checked auth (within batch window), skip
-    if (this.lastAuthCheck && (now - this.lastAuthCheck) < this.AUTH_BATCH_WINDOW) {
-      return;
-    }
-
-    // If there's already an auth check in progress, wait for it
-    if (this.authPromise) {
-      await this.authPromise;
-      return;
-    }
-
-    // Perform auth check
-    this.authPromise = this.performAuthCheck();
-    try {
-      await this.authPromise;
-      this.lastAuthCheck = now;
-    } finally {
-      this.authPromise = null;
-    }
-  }
-
-  private async performAuthCheck(): Promise<void> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/verify`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      });
-
-      if (!response.ok && response.status === 401) {
-        throw new WorkflowAPIError(401, 'Authentication required');
-      }
-    } catch (error) {
-      console.error('Batch auth check failed:', error);
-      if (error instanceof WorkflowAPIError && error.status === 401) {
-        // Clear any cached auth state and redirect to login
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new Event('auth-logout'));
-        }
-      }
-      throw error;
-    }
-  }
-
   async startWorkflow(request: StartRecommendationRequest): Promise<StartRecommendationResponse> {
     console.log('Starting workflow with mood:', request.mood_prompt);
-
-    // Batch auth check before making the request
-    await this.batchAuthCheck();
-
     // Use query parameters as the backend expects
     const params = new URLSearchParams({
       mood_prompt: request.mood_prompt,
@@ -224,14 +166,10 @@ class WorkflowAPI {
   }
 
   async getWorkflowStatus(sessionId: string): Promise<WorkflowStatus> {
-    // Batch auth check before making the request
-    await this.batchAuthCheck();
     return this.request<WorkflowStatus>(`/api/agents/recommendations/${sessionId}/status`);
   }
 
   async getWorkflowResults(sessionId: string): Promise<WorkflowResults> {
-    // Batch auth check before making the request
-    await this.batchAuthCheck();
     return this.request<WorkflowResults>(`/api/agents/recommendations/${sessionId}/results`);
   }
 
