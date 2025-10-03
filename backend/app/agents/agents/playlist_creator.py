@@ -208,8 +208,8 @@ class PlaylistCreatorAgent(BaseAgent):
 
         return random.choice(default_names)
 
-    def _generate_playlist_description(self, state: AgentState) -> str:
-        """Generate a descriptive playlist description using mood analysis.
+    async def _generate_playlist_description(self, state: AgentState) -> str:
+        """Generate a descriptive playlist description using LLM.
 
         Args:
             state: Current agent state
@@ -218,49 +218,124 @@ class PlaylistCreatorAgent(BaseAgent):
             Generated playlist description
         """
         try:
-            # Start with the original mood prompt
-            description_parts = []
-            
-            # Use mood analysis if available
-            if state.mood_analysis:
-                mood_interpretation = state.mood_analysis.get("mood_interpretation")
-                primary_emotion = state.mood_analysis.get("primary_emotion")
-                energy_level = state.mood_analysis.get("energy_level")
-                
-                # Build a rich description
-                if mood_interpretation:
-                    description_parts.append(mood_interpretation)
-                
-                # Add emotion and energy if available
-                emotion_energy_parts = []
-                if primary_emotion:
-                    emotion_energy_parts.append(primary_emotion)
-                if energy_level:
-                    emotion_energy_parts.append(energy_level)
+            # Use LLM for creative description if available
+            if self.llm:
+                description = await self._generate_description_with_llm(state)
             else:
-                # Fallback to mood prompt if no analysis
-                description_parts.append(f"Mood: {state.mood_prompt}")
-            
-            # Add track count
-            track_count = len(state.recommendations)
-            description_parts.append(f"{track_count} carefully selected tracks.")
-            
-            # Add branding
-            description_parts.append("Created by MoodList.")
-            
-            # Join with proper spacing
-            description = " ".join(description_parts)
-            
-            # Spotify description limit is 300 characters
-            if len(description) > 300:
-                description = description[:297] + "..."
-            
+                description = self._generate_description_fallback(state)
+
             return description
-            
+
         except Exception as e:
             logger.error(f"Error generating playlist description: {str(e)}")
             # Fallback to simple description
-            return f"Mood-based playlist: {state.mood_prompt}. Created by MoodList."
+            track_count = len(state.recommendations)
+            return f"Mood-based playlist with {track_count} tracks curated with love by MoodList"
+
+    async def _generate_description_with_llm(self, state: AgentState) -> str:
+        """Generate playlist description using LLM.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            LLM-generated playlist description
+        """
+        try:
+            track_count = len(state.recommendations)
+
+            prompt = f"""
+            Create a creative and engaging playlist description based on this mood: "{state.mood_prompt}"
+
+            The playlist contains {track_count} tracks that match this mood perfectly.
+
+            Guidelines:
+            - Keep it under 200 characters total
+            - Make it emotionally resonant and appealing
+            - End with exactly: "{track_count} tracks curated with love by MoodList"
+            - Focus on the feeling and atmosphere the music creates
+            - Be specific to the mood but keep it concise
+
+            Return only the description text, nothing else.
+            """
+
+            response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
+
+            description = response.content.strip() if hasattr(response, 'content') else str(response).strip()
+
+            # Clean up the description
+            description = re.sub(r'^["\']|["\']$', '', description)  # Remove quotes
+
+            # Ensure it ends with the required format
+            required_ending = f"{track_count} tracks curated with love by MoodList"
+            if not description.endswith(required_ending):
+                # Remove any existing ending and add the correct one
+                description = re.sub(r'\s*\d+\s*tracks.*$', '', description).strip()
+                description += f" {required_ending}"
+
+            # Cap at 200 characters
+            if len(description) > 200:
+                description = description[:197] + "..."
+
+            return description or self._generate_description_fallback(state)
+
+        except Exception as e:
+            logger.error(f"LLM description generation failed: {str(e)}")
+            return self._generate_description_fallback(state)
+
+    def _generate_description_fallback(self, state: AgentState) -> str:
+        """Generate a fallback playlist description.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Fallback playlist description
+        """
+        try:
+            track_count = len(state.recommendations)
+
+            # Use mood analysis if available for richer description
+            if state.mood_analysis:
+                mood_interpretation = state.mood_analysis.get("mood_interpretation", "")
+                primary_emotion = state.mood_analysis.get("primary_emotion", "")
+                energy_level = state.mood_analysis.get("energy_level", "")
+
+                # Build description from available mood data
+                parts = []
+                if mood_interpretation:
+                    parts.append(mood_interpretation)
+                if primary_emotion:
+                    parts.append(f"{primary_emotion} vibes")
+                if energy_level:
+                    parts.append(f"{energy_level} energy")
+
+                if parts:
+                    description = ", ".join(parts)
+                else:
+                    description = f"Perfect {state.mood_prompt} soundtrack"
+            else:
+                description = f"Perfect {state.mood_prompt} soundtrack"
+
+            # Add the required ending
+            full_description = f"{description}. {track_count} tracks curated with love by MoodList"
+
+            # Cap at 200 characters
+            if len(full_description) > 200:
+                # Truncate the description part to fit
+                available_space = 200 - len(f". {track_count} tracks curated with love by MoodList") - 3
+                if available_space > 0:
+                    description = description[:available_space] + "..."
+                    full_description = f"{description}. {track_count} tracks curated with love by MoodList"
+                else:
+                    full_description = f"{track_count} tracks curated with love by MoodList"
+
+            return full_description
+
+        except Exception as e:
+            logger.error(f"Fallback description generation failed: {str(e)}")
+            track_count = len(state.recommendations)
+            return f"{track_count} tracks curated with love by MoodList"
 
     def _normalize_spotify_uri(self, uri_or_id: str) -> str:
         """Normalize track identifier to proper Spotify URI format.
