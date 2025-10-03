@@ -3,6 +3,8 @@
 import asyncio
 import logging
 from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone, timedelta
+import httpx
 
 from ..core.base_agent import BaseAgent
 from ..states.agent_state import AgentState, RecommendationStatus, TrackRecommendation
@@ -43,6 +45,95 @@ class RecommendationGeneratorAgent(BaseAgent):
         self.spotify_service = spotify_service
         self.max_recommendations = max_recommendations
         self.diversity_factor = diversity_factor
+
+    async def _refresh_token_from_workflow(self, state: AgentState) -> AgentState:
+        """Refresh the Spotify access token if expired.
+        
+        This is critical to call right before making Spotify API calls to ensure the token is valid.
+        
+        Args:
+            state: Current agent state
+            
+        Returns:
+            Updated state with refreshed token if needed
+        """
+        try:
+            if not state.user_id:
+                logger.warning("No user_id in state, cannot refresh token")
+                return state
+            
+            # Get user from database to check token expiry and refresh
+            from ...core.database import async_session_factory
+            from ...models.user import User
+            from sqlalchemy import select
+            
+            async with async_session_factory() as db:
+                result = await db.execute(
+                    select(User).where(User.id == int(state.user_id))
+                )
+                user = result.scalar_one_or_none()
+                
+                if not user:
+                    logger.warning(f"User {state.user_id} not found for token refresh")
+                    return state
+                
+                # Check if token is expired or will expire soon (within 5 minutes)
+                now = datetime.now(timezone.utc)
+                token_expires_at = user.token_expires_at
+                
+                # Handle both timezone-aware and naive datetimes
+                if token_expires_at.tzinfo is None:
+                    token_expires_at = token_expires_at.replace(tzinfo=timezone.utc)
+                
+                # If token is still valid (more than 5 minutes remaining), no need to refresh
+                if token_expires_at > now + timedelta(minutes=5):
+                    logger.info(f"Token still valid until {token_expires_at}, no refresh needed")
+                    return state
+                
+                logger.warning(f"Spotify token expired or expiring soon (expires at {token_expires_at}), refreshing now...")
+                
+                # Refresh the token
+                from ...core.config import settings
+                
+                async with httpx.AsyncClient() as client:
+                    data = {
+                        "grant_type": "refresh_token",
+                        "refresh_token": user.refresh_token,
+                        "client_id": settings.SPOTIFY_CLIENT_ID,
+                        "client_secret": settings.SPOTIFY_CLIENT_SECRET
+                    }
+                    
+                    response = await client.post(
+                        "https://accounts.spotify.com/api/token",
+                        data=data,
+                        timeout=30.0
+                    )
+                    response.raise_for_status()
+                    token_data = response.json()
+                    
+                    # Update user's tokens in database
+                    user.access_token = token_data["access_token"]
+                    if "refresh_token" in token_data:
+                        user.refresh_token = token_data["refresh_token"]
+                    
+                    # Update expiration time
+                    expires_in = token_data.get("expires_in", 3600)
+                    user.token_expires_at = datetime.now(timezone.utc).replace(microsecond=0) + \
+                                           timedelta(seconds=expires_in)
+                    
+                    await db.commit()
+                    
+                    # Update the state with new token
+                    state.metadata["spotify_access_token"] = user.access_token
+                    
+                    logger.info(f"Successfully refreshed Spotify token for user {user.id}, new token expires at {user.token_expires_at}")
+                    
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error refreshing Spotify token: {e.response.status_code} - {e.response.text}")
+        except Exception as e:
+            logger.error(f"Failed to refresh Spotify token: {str(e)}", exc_info=True)
+        
+        return state
 
     async def execute(self, state: AgentState) -> AgentState:
         """Execute recommendation generation.
@@ -397,7 +488,6 @@ class RecommendationGeneratorAgent(BaseAgent):
         artist_recommendations = mood_analysis.get("artist_recommendations", [])
         genre_keywords = mood_analysis.get("genre_keywords", [])
         search_keywords = mood_analysis.get("search_keywords", [])
-        mood_prompt = mood_analysis.get("mood_interpretation", "")
         
         # Normalize for comparison
         track_lower = track_name.lower()
@@ -778,11 +868,11 @@ class RecommendationGeneratorAgent(BaseAgent):
 
         # Sort by confidence score before filtering
         rec_objects.sort(key=lambda x: x.confidence_score, reverse=True)
-
+        
         # Apply mood-based filtering if available
         if mood_analysis and mood_analysis.get("target_features"):
             rec_objects = self._apply_mood_filtering(rec_objects, mood_analysis)
-
+            
         return rec_objects
 
     def _apply_mood_filtering(
@@ -790,7 +880,7 @@ class RecommendationGeneratorAgent(BaseAgent):
         recommendations: List[TrackRecommendation],
         mood_analysis: Dict[str, Any]
     ) -> List[TrackRecommendation]:
-        """Apply mood-based filtering to recommendations with strict tolerance thresholds.
+        """Apply mood-based filtering to recommendations using range-based logic.
 
         Args:
             recommendations: List of recommendations to filter
@@ -805,24 +895,28 @@ class RecommendationGeneratorAgent(BaseAgent):
         target_features = mood_analysis["target_features"]
         filtered_recommendations = []
         
-        # Define tolerance thresholds for different feature types
-        tolerance_thresholds = {
-            # Critical features - tighter control
-            "speechiness": 0.20,  # Reduced from 0.25
-            "instrumentalness": 0.20,  # Reduced from 0.25
-            # Important features - tighten slightly
-            "energy": 0.25,  # Reduced from 0.3
-            "valence": 0.25,  # Reduced from 0.3
-            "danceability": 0.25,  # Reduced from 0.3
-            # Flexible features - keep reasonable
-            "tempo": 40.0,
-            "loudness": 6.0,
-            "acousticness": 0.35,  # Reduced from 0.4
-            "liveness": 0.35,  # Reduced from 0.4
+        # Define tolerance extensions beyond ranges for different feature types
+        # These extend the acceptable range beyond the target range
+        tolerance_extensions = {
+            # Critical features - moderate extension
+            "speechiness": 0.15,  # Extend range by this amount on each side
+            "instrumentalness": 0.15,
+            # Important features - moderate extension
+            "energy": 0.20,
+            "valence": 0.25,  # Valence can be more flexible
+            "danceability": 0.20,
+            # Flexible features
+            "tempo": 30.0,
+            "loudness": 5.0,
+            "acousticness": 0.25,
+            "liveness": 0.30,  # Liveness is often not critical
             "mode": None,  # Binary, no tolerance
             "key": None,  # Discrete, no tolerance
-            "popularity": 25  # Reduced from 30
+            "popularity": 20
         }
+        
+        # Features that should trigger filtering if violated significantly
+        critical_features = ["energy", "acousticness", "instrumentalness", "danceability"]
 
         for rec in recommendations:
             if not rec.audio_features:
@@ -832,6 +926,7 @@ class RecommendationGeneratorAgent(BaseAgent):
             
             should_filter = False
             violations = []
+            critical_violations = 0
             
             # Check each target feature against the track's audio features
             for feature_name, target_value in target_features.items():
@@ -839,41 +934,71 @@ class RecommendationGeneratorAgent(BaseAgent):
                     continue
                 
                 actual_value = rec.audio_features[feature_name]
-                tolerance = tolerance_thresholds.get(feature_name)
+                tolerance = tolerance_extensions.get(feature_name)
                 
-                # Convert target_value to single value if it's a range
+                # Handle range-based targets (preferred)
                 if isinstance(target_value, list) and len(target_value) == 2:
-                    target_single = sum(target_value) / 2  # Use midpoint
+                    min_val, max_val = target_value
+                    
+                    # Extend the range by tolerance on both sides
+                    if tolerance is not None:
+                        extended_min = max(0, min_val - tolerance)
+                        extended_max = min(1 if feature_name != "tempo" else 250, max_val + tolerance)
+                    else:
+                        extended_min, extended_max = min_val, max_val
+                    
+                    # Check if value falls within extended range
+                    if actual_value < extended_min or actual_value > extended_max:
+                        distance_below = extended_min - actual_value if actual_value < extended_min else 0
+                        distance_above = actual_value - extended_max if actual_value > extended_max else 0
+                        distance = max(distance_below, distance_above)
+                        
+                        violations.append(
+                            f"{feature_name}: range=[{min_val:.2f}, {max_val:.2f}], "
+                            f"extended=[{extended_min:.2f}, {extended_max:.2f}], "
+                            f"actual={actual_value:.2f}, out_by={distance:.2f}"
+                        )
+                        
+                        # Only filter if it's a critical feature and significantly out of range
+                        if feature_name in critical_features:
+                            # Filter if more than 2x tolerance outside the extended range
+                            if distance > tolerance * 2:
+                                critical_violations += 1
+                
+                # Handle single-value targets
                 elif isinstance(target_value, (int, float)):
                     target_single = float(target_value)
-                else:
-                    continue  # Skip if we can't parse the target value
-                
-                if tolerance is None:
-                    # Binary or discrete features - exact or close match required
-                    if feature_name in ["mode", "key"]:
-                        continue  # Skip strict filtering for mode/key
-                else:
-                    # Check if actual value is within tolerance
-                    difference = abs(actual_value - target_single)
-                    if difference > tolerance:
-                        violations.append(f"{feature_name}: target={target_single:.2f}, actual={actual_value:.2f}, diff={difference:.2f}")
-                        
-                        # Critical features cause immediate filtering if moderately out of range
-                        if feature_name in ["speechiness", "instrumentalness"]:
-                            # Filter if difference is more than 1.5x tolerance (was 2x)
-                            if difference > tolerance * 1.5:
-                                should_filter = True
-                        elif feature_name in ["energy", "valence"]:
-                            # Filter if difference is more than 1.8x tolerance
-                            if difference > tolerance * 1.8:
-                                should_filter = True
+                    
+                    if tolerance is None:
+                        # Binary or discrete features - skip strict filtering
+                        if feature_name in ["mode", "key"]:
+                            continue
+                    else:
+                        # Check distance from target
+                        difference = abs(actual_value - target_single)
+                        if difference > tolerance:
+                            violations.append(
+                                f"{feature_name}: target={target_single:.2f}, "
+                                f"actual={actual_value:.2f}, diff={difference:.2f}"
+                            )
+                            
+                            # Only filter critical features if very far off
+                            if feature_name in critical_features and difference > tolerance * 2:
+                                critical_violations += 1
             
-            if should_filter:
-                logger.debug(f"Filtered out '{rec.track_name}' by {', '.join(rec.artists)} due to violations: {'; '.join(violations)}")
+            # Only filter if we have 2+ critical violations (very strict filtering)
+            if critical_violations >= 2:
+                should_filter = True
+                logger.debug(
+                    f"Filtered out '{rec.track_name}' by {', '.join(rec.artists)} "
+                    f"due to {critical_violations} critical violations: {'; '.join(violations)}"
+                )
             else:
                 if violations:
-                    logger.debug(f"Keeping '{rec.track_name}' despite minor violations: {'; '.join(violations)}")
+                    logger.debug(
+                        f"Keeping '{rec.track_name}' despite violations "
+                        f"({critical_violations} critical): {'; '.join(violations[:3])}"
+                    )
                 filtered_recommendations.append(rec)
 
         logger.info(f"Mood filtering: {len(recommendations)} -> {len(filtered_recommendations)} tracks")
@@ -952,6 +1077,10 @@ class RecommendationGeneratorAgent(BaseAgent):
         
         logger.info(f"Generating recommendations from {len(mood_matched_artists)} discovered artists")
         
+        # CRITICAL: Refresh Spotify token RIGHT BEFORE making API calls
+        # This is the most important part - ensure we have a fresh token
+        state = await self._refresh_token_from_workflow(state)
+        
         # Get target features for filtering
         target_features = state.metadata.get("target_features", {})
         
@@ -961,26 +1090,33 @@ class RecommendationGeneratorAgent(BaseAgent):
         # Track successful artists
         successful_artists = 0
         
-        # Get access token for Spotify API
+        # Get access token for Spotify API (after refresh)
         access_token = state.metadata.get("spotify_access_token")
         if not access_token:
-            logger.warning("No Spotify access token available for artist top tracks")
+            logger.error("CRITICAL: No Spotify access token available for artist top tracks (even after refresh attempt)")
             return all_recommendations
         
-        # MAXIMIZE DIVERSITY: Use MORE artists with FEWER tracks each
+        logger.info(f"Using Spotify access token (length: {len(access_token)}, first 20 chars: {access_token[:20]}...)")
+        
+        # MAXIMIZE DIVERSITY: Use MORE artists with MORE tracks each to account for filtering
         # This gives broader representation of the mood/genre
-        # For a target of ~19 tracks: 10 artists × 2-3 tracks = 20-30 tracks before filtering
+        # Account for aggressive filtering: aim for 2-3x target before filtering
         artist_count = min(len(mood_matched_artists), 20)  # Use up to 20 artists for maximum variety
-        tracks_per_artist = max(2, min(int((target_artist_recs * 1.5) // artist_count) + 1, 3))
+        # Request more tracks per artist to compensate for filtering (aim for 2.5x target)
+        tracks_per_artist = max(3, min(int((target_artist_recs * 2.5) // artist_count) + 2, 5))
         
         logger.info(
             f"MAXIMIZING DIVERSITY: Fetching {tracks_per_artist} tracks from up to {artist_count} artists "
-            f"to reach artist target of {target_artist_recs} tracks (95:5 ratio)"
+            f"(aiming for ~{tracks_per_artist * artist_count} tracks before filtering) "
+            f"to reach artist target of {target_artist_recs} tracks after filtering (95:5 ratio)"
         )
         
         # Fetch tracks from each artist (use up to 20 artists for maximum coverage and variety)
-        for artist_id in mood_matched_artists[:20]:  # Increased to 20 artists for max diversity
+        failed_artists = 0
+        for idx, artist_id in enumerate(mood_matched_artists[:20]):  # Increased to 20 artists for max diversity
             try:
+                logger.info(f"Fetching top tracks for artist {idx+1}/{min(len(mood_matched_artists), 20)}: {artist_id}")
+                
                 # Get top tracks from Spotify (more reliable than RecoBeat)
                 artist_tracks = await self.spotify_service.get_artist_top_tracks(
                     access_token=access_token,
@@ -989,10 +1125,21 @@ class RecommendationGeneratorAgent(BaseAgent):
                 )
                 
                 if not artist_tracks:
-                    logger.debug(f"No tracks found for artist {artist_id}")
+                    logger.warning(
+                        f"No tracks returned for artist {artist_id} (artist {idx+1}/{min(len(mood_matched_artists), 20)}) - "
+                        f"This may indicate a Spotify API authentication issue or invalid artist ID"
+                    )
+                    failed_artists += 1
                     continue
                 
+                logger.info(
+                    f"Successfully got {len(artist_tracks)} tracks from artist {artist_id}, "
+                    f"will process top {tracks_per_artist} for recommendations"
+                )
                 successful_artists += 1
+                
+                # Track how many tracks we add from this artist
+                tracks_added_from_artist = 0
                 
                 # Score and filter tracks by audio features (dynamic count)
                 for track in artist_tracks[:tracks_per_artist]:
@@ -1012,10 +1159,14 @@ class RecommendationGeneratorAgent(BaseAgent):
                                 audio_features, target_features
                             )
                             
-                            # Relaxed threshold for artist tracks (0.4 vs 0.6 for RecoBeat)
-                            # Artist tracks are from curated top tracks, less strict filtering needed
-                            if cohesion_score < 0.4:
-                                logger.debug(f"Skipping artist track {track_id} (cohesion: {cohesion_score:.2f} - relaxed threshold)")
+                            # Very relaxed threshold for artist tracks (0.3 vs 0.6 for RecoBeat)
+                            # Artist tracks are from Spotify's curated top tracks, inherently high quality
+                            # We trust Spotify's curation, so only filter extreme outliers
+                            if cohesion_score < 0.3:
+                                logger.info(
+                                    f"Filtering low-cohesion artist track: {track.get('name')} "
+                                    f"(cohesion: {cohesion_score:.2f} < 0.3 threshold)"
+                                )
                                 continue
                         else:
                             cohesion_score = 0.75  # Higher default for artist tracks without features
@@ -1023,11 +1174,14 @@ class RecommendationGeneratorAgent(BaseAgent):
                         # Create recommendation (extract artist names from Spotify format)
                         artist_names = [artist.get("name", "Unknown") for artist in track.get("artists", [])]
                         
+                        # Get Spotify URI - API returns 'uri' field, not 'spotify_uri'
+                        spotify_uri = track.get("spotify_uri") or track.get("uri")
+                        
                         recommendation = TrackRecommendation(
                             track_id=track_id,
                             track_name=track.get("name", "Unknown Track"),
                             artists=artist_names if artist_names else ["Unknown Artist"],
-                            spotify_uri=track.get("spotify_uri"),
+                            spotify_uri=spotify_uri,
                             confidence_score=cohesion_score,
                             audio_features=audio_features,
                             reasoning=f"From mood-matched artist (cohesion: {cohesion_score:.2f})",
@@ -1035,21 +1189,46 @@ class RecommendationGeneratorAgent(BaseAgent):
                         )
                         
                         all_recommendations.append(recommendation)
+                        tracks_added_from_artist += 1
                         
                     except Exception as e:
                         logger.warning(f"Failed to process artist track: {e}")
                         continue
                 
+                # Log how many tracks were actually added from this artist
+                logger.info(
+                    f"Added {tracks_added_from_artist}/{tracks_per_artist} tracks from artist {artist_id} "
+                    f"({len(artist_tracks[:tracks_per_artist]) - tracks_added_from_artist} filtered out)"
+                )
+                
                 # Small delay between artists
                 await asyncio.sleep(0.1)
                 
             except Exception as e:
-                logger.error(f"Error getting tracks for artist {artist_id}: {e}")
+                logger.error(f"Error getting tracks for artist {artist_id} (artist {idx+1}/{min(len(mood_matched_artists), 20)}): {e}", exc_info=True)
+                failed_artists += 1
                 continue
         
+        # Log warning if most artists failed (likely due to auth issues)
+        total_attempted = min(len(mood_matched_artists), 20)
+        if failed_artists > total_attempted * 0.5:  # More than 50% failed
+            logger.error(
+                f"CRITICAL: Artist discovery failed for {failed_artists}/{total_attempted} artists. "
+                f"This may indicate an expired Spotify access token or API issue. "
+                f"Only {successful_artists} artists succeeded."
+            )
+            
+            # If ALL artists failed, raise an error to prevent bad recommendations
+            if successful_artists == 0:
+                raise Exception(
+                    f"Artist discovery completely failed - all {total_attempted} artists returned no tracks. "
+                    "This is likely due to an expired or invalid Spotify access token. "
+                    "The workflow cannot continue without valid artist tracks."
+                )
+        
         logger.info(
-            f"Generated {len(all_recommendations)} recommendations from {successful_artists}/{min(len(mood_matched_artists), 20)} artists "
-            f"(maximized diversity by spreading across more artists)"
+            f"Generated {len(all_recommendations)} recommendations from {successful_artists}/{total_attempted} artists "
+            f"({failed_artists} failed) - maximized diversity by spreading across more artists"
         )
         
         return [rec.dict() for rec in all_recommendations]

@@ -96,11 +96,11 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
       case 'gathering_seeds':
         return '🎵 Diving into your music library to understand your taste...';
       case 'generating_recommendations':
-        return '🎼 Handpicking the perfect tracks just for you...';
+        return '🎼 Curating your perfect music selection...';
       case 'evaluating_quality':
         return '🔍 Making sure every track fits your mood perfectly...';
       case 'optimizing_recommendations':
-        return '✨ Fine-tuning your playlist for the best flow...';
+        return '✨ Perfecting the playlist sequence...';
       case 'awaiting_user_input':
         return '✏️ Ready for your creative touch!';
       case 'processing_edits':
@@ -116,12 +116,6 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
     }
   };
 
-  // Calculate progress percentage
-  const getProgressPercentage = () => {
-    const currentIndex = getCurrentStageIndex(workflowState.status);
-    const totalStages = workflowStages.length - 1; // Exclude completed
-    return Math.round((currentIndex / totalStages) * 100);
-  };
 
 
   const handleRetry = () => {
@@ -193,11 +187,6 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
             <div className="text-sm font-medium flex-1">
               {getStatusMessage(workflowState.status, workflowState.currentStep)}
             </div>
-            {workflowState.status && workflowState.status !== 'completed' && workflowState.status !== 'failed' && (
-              <div className="text-xs text-muted-foreground whitespace-nowrap">
-                {getProgressPercentage()}%
-              </div>
-            )}
           </div>
 
           {/* Enhanced Dot Timeline */}
