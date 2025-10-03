@@ -144,31 +144,15 @@ const clearCachedAuthState = (): void => {
   }
 };
 
+// Note: We don't need to manually refresh tokens in session-based auth.
+// The backend automatically refreshes Spotify tokens via refresh_spotify_token_if_expired()
+// when the session is still valid. This function is kept for backwards compatibility
+// but essentially does nothing since we're using session-based auth.
 const refreshAccessToken = async (): Promise<boolean> => {
-  try {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
-    const cookies = getAuthCookies();
-
-    const response = await fetch(`${backendUrl}/api/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...cookies,
-      },
-      credentials: 'include',
-    });
-
-    if (response.ok) {
-      console.log('Token refresh successful');
-      return true;
-    } else {
-      console.error('Token refresh failed:', response.status);
-      return false;
-    }
-  } catch (error) {
-    console.error('Token refresh error:', error);
-    return false;
-  }
+  // With session-based auth, token refresh is handled automatically by the backend
+  // Just return true to indicate no action needed
+  console.log('Session-based auth: token refresh handled by backend');
+  return true;
 };
 
 interface AuthProviderProps {
