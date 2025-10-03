@@ -5,7 +5,7 @@ import json
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Type, Union
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import httpx
 from langchain_core.tools import BaseTool
@@ -172,23 +172,6 @@ class BaseAPITool(BaseTool, ABC):
                 except:
                     pass
 
-                # Retry on rate limit errors (429) or server errors (5xx)
-                if e.response.status_code == 429 and attempt < self.max_retries - 1:
-                    # Extract retry-after header if available
-                    retry_after = e.response.headers.get("Retry-After", None)
-                    if retry_after:
-                        try:
-                            wait_time = float(retry_after)
-                        except ValueError:
-                            wait_time = (2 ** attempt) * 2.0  # Longer backoff for rate limits
-                    else:
-                        # Exponential backoff with longer delays for rate limits
-                        wait_time = (2 ** attempt) * 2.0
-                    
-                    logger.warning(f"Rate limit (429) when calling {self.name}, retrying in {wait_time}s... (attempt {attempt + 1}/{self.max_retries})")
-                    await asyncio.sleep(wait_time)
-                    continue
-
                 if e.response.status_code >= 500 and attempt < self.max_retries - 1:
                     # Retry on server errors
                     wait_time = (2 ** attempt) * 0.5
@@ -283,7 +266,6 @@ class RateLimitedTool(BaseAPITool):
         description: str,
         base_url: str,
         rate_limit_per_minute: int = 60,
-        min_request_interval: float = 0.0,
         **kwargs
     ):
         """Initialize rate-limited tool.
@@ -293,34 +275,22 @@ class RateLimitedTool(BaseAPITool):
             description: Tool description
             base_url: Base URL for the API
             rate_limit_per_minute: Maximum requests per minute
-            min_request_interval: Minimum seconds between requests (helps avoid bursts)
             **kwargs: Additional arguments for BaseAPITool
         """
         super().__init__(name=name, description=description, base_url=base_url, **kwargs)
         self.rate_limit_per_minute = rate_limit_per_minute
-        self.min_request_interval = min_request_interval
         self.request_times: List[datetime] = []
 
         # Rate limiting state
         self._last_cleanup = datetime.utcnow()
         self._request_count = 0
-        self._last_request_time: Optional[datetime] = None
 
     async def _check_rate_limit(self):
         """Check if we're within rate limits."""
         now = datetime.utcnow()
 
-        # Ensure minimum interval between requests
-        if self.min_request_interval > 0 and self._last_request_time:
-            elapsed = (now - self._last_request_time).total_seconds()
-            if elapsed < self.min_request_interval:
-                wait_time = self.min_request_interval - elapsed
-                logger.debug(f"Enforcing minimum interval for {self.name}, waiting {wait_time:.2f}s")
-                await asyncio.sleep(wait_time)
-                now = datetime.utcnow()
-
         # Clean old requests (older than 1 minute)
-        cutoff = now - timedelta(minutes=1)
+        cutoff = now.replace(second=0, microsecond=0)
         self.request_times = [t for t in self.request_times if t > cutoff]
         self._last_cleanup = now
 
@@ -336,7 +306,6 @@ class RateLimitedTool(BaseAPITool):
         """Record a request for rate limiting."""
         now = datetime.utcnow()
         self.request_times.append(now)
-        self._last_request_time = now
         self._request_count += 1
 
     async def _make_request(
