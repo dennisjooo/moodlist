@@ -836,9 +836,8 @@ async def edit_completed_playlist(
             if is_saved_to_spotify:
                 import httpx
                 async with httpx.AsyncClient() as client:
-                    response = await client.request(
-                        method="DELETE",
-                        url=f"https://api.spotify.com/v1/playlists/{playlist.spotify_playlist_id}/tracks",
+                    response = await client.delete(
+                        f"https://api.spotify.com/v1/playlists/{playlist.spotify_playlist_id}/tracks",
                         headers={"Authorization": f"Bearer {current_user.access_token}"},
                         json={"tracks": [{"uri": track_to_remove.get("spotify_uri")}]}
                     )
