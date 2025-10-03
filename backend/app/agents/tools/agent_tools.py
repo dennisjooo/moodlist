@@ -179,6 +179,14 @@ class BaseAPITool(BaseTool, ABC):
                     await asyncio.sleep(wait_time)
                     continue
 
+                # ADD THIS: Handle 429 rate limits
+                if e.response.status_code == 429 and attempt < self.max_retries - 1:
+                    retry_after = e.response.headers.get("Retry-After")
+                    wait_time = float(retry_after) if retry_after else (2 ** attempt) * 2.0
+                    logger.warning(f"Rate limit (429) when calling {self.name}, retrying in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                    continue
+
                 last_exception = APIError(
                     f"HTTP {e.response.status_code}: {str(e)}",
                     status_code=e.response.status_code,
@@ -266,6 +274,7 @@ class RateLimitedTool(BaseAPITool):
         description: str,
         base_url: str,
         rate_limit_per_minute: int = 60,
+        min_request_interval: float = 0.0,  # NEW
         **kwargs
     ):
         """Initialize rate-limited tool.
@@ -279,11 +288,13 @@ class RateLimitedTool(BaseAPITool):
         """
         super().__init__(name=name, description=description, base_url=base_url, **kwargs)
         self.rate_limit_per_minute = rate_limit_per_minute
+        self.min_request_interval = min_request_interval
         self.request_times: List[datetime] = []
 
         # Rate limiting state
         self._last_cleanup = datetime.utcnow()
         self._request_count = 0
+        self._last_request_time: Optional[datetime] = None
 
     async def _check_rate_limit(self):
         """Check if we're within rate limits."""
@@ -317,10 +328,19 @@ class RateLimitedTool(BaseAPITool):
         headers: Optional[Dict[str, str]] = None
     ) -> Dict[str, Any]:
         """Make a rate-limited HTTP request."""
+        # Check minimum interval since last request
+        if hasattr(self, '_last_request_time') and self._last_request_time and self.min_request_interval > 0:
+            elapsed = (datetime.utcnow() - self._last_request_time).total_seconds()
+            if elapsed < self.min_request_interval:
+                wait_time = self.min_request_interval - elapsed
+                logger.debug(f"Enforcing minimum interval for {self.name}, waiting {wait_time:.2f}s")
+                await asyncio.sleep(wait_time)
+
         await self._check_rate_limit()
 
         response = await super()._make_request(method, endpoint, params, json_data, headers)
 
+        self._last_request_time = datetime.utcnow()  # Track request time
         await self._record_request()
         return response
 
