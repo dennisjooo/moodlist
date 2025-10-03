@@ -29,6 +29,8 @@ import { cn } from '@/lib/utils';
 import { useWorkflow } from '@/lib/workflowContext';
 import {
   Check,
+  ChevronDown,
+  ChevronUp,
   ExternalLink,
   GripVertical,
   Loader2,
@@ -181,6 +183,7 @@ export default function PlaylistEditor({
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isAddingTrack, setIsAddingTrack] = useState(false);
+  const [isAddTracksCollapsed, setIsAddTracksCollapsed] = useState(true);
 
   // Sync tracks when recommendations prop changes (from context updates)
   useEffect(() => {
@@ -332,77 +335,101 @@ export default function PlaylistEditor({
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Column - Add Tracks or Info */}
-        <Card className="lg:sticky lg:top-6 h-fit">
+        <Card className="lg:sticky lg:top-20 h-fit">
           <CardHeader>
-            <CardTitle className="text-lg">Add Tracks</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Search Spotify to find and add songs to your playlist
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search for tracks to add..."
-                value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
-                className="pl-10"
-              />
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1">
+                <CardTitle className="text-lg">Add Tracks</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Search Spotify to find and add songs to your playlist
+                </p>
+              </div>
+              <button
+                onClick={() => setIsAddTracksCollapsed(!isAddTracksCollapsed)}
+                className="lg:hidden p-2 hover:bg-accent rounded-md transition-colors flex-shrink-0 self-center"
+                aria-label={isAddTracksCollapsed ? "Expand add tracks" : "Collapse add tracks"}
+              >
+                {isAddTracksCollapsed ? (
+                  <ChevronDown className="w-5 h-5" />
+                ) : (
+                  <ChevronUp className="w-5 h-5" />
+                )}
+              </button>
             </div>
-
-            {isSearching && (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
+          </CardHeader>
+          <div
+            className={cn(
+              "grid transition-all duration-300 ease-in-out",
+              isAddTracksCollapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
             )}
+          >
+            <div className="overflow-hidden">
+              <CardContent className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search for tracks to add..."
+                    value={searchQuery}
+                    onChange={(e) => handleSearch(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
 
-            {searchResults.length > 0 && (
-              <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
-                {searchResults.map((track) => (
-                  <div
-                    key={track.track_id}
-                    className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent/50 transition-colors"
-                  >
-                    {track.album_image && (
-                      <img
-                        src={track.album_image}
-                        alt={track.album}
-                        className="w-12 h-12 rounded"
-                      />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-sm truncate">{track.track_name}</h4>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {track.artists.join(', ')}
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => handleAddTrack(track.spotify_uri)}
-                      disabled={isAddingTrack}
-                      className="flex items-center gap-1 flex-shrink-0"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Add
-                    </Button>
+                {isSearching && (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                   </div>
-                ))}
-              </div>
-            )}
+                )}
 
-            {!isSearching && searchResults.length === 0 && searchQuery && (
-              <div className="text-center py-8 text-muted-foreground">
-                <p className="text-sm">No results found for "{searchQuery}"</p>
-              </div>
-            )}
+                {searchResults.length > 0 && (
+                  <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
+                    {searchResults.map((track) => (
+                      <div
+                        key={track.track_id}
+                        className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent/50 transition-colors"
+                      >
+                        {track.album_image && (
+                          <img
+                            src={track.album_image}
+                            alt={track.album}
+                            className="w-12 h-12 rounded"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-sm truncate">{track.track_name}</h4>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {track.artists.join(', ')}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => handleAddTrack(track.spotify_uri)}
+                          disabled={isAddingTrack}
+                          className="flex items-center gap-1 flex-shrink-0"
+                        >
+                          <Plus className="w-3 h-3" />
+                          Add
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-            {!searchQuery && (
-              <div className="text-center py-8 text-muted-foreground">
-                <Search className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                <p className="text-sm">Start typing to search for tracks</p>
-              </div>
-            )}
-          </CardContent>
+                {!isSearching && searchResults.length === 0 && searchQuery && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p className="text-sm">No results found for "{searchQuery}"</p>
+                  </div>
+                )}
+
+                {!searchQuery && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Search className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                    <p className="text-sm">Start typing to search for tracks</p>
+                  </div>
+                )}
+              </CardContent>
+            </div>
+          </div>
         </Card>
 
         {/* Right Column - Playlist */}

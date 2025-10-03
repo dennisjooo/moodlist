@@ -9,7 +9,7 @@ interface LoadingDotsProps {
 }
 
 export function LoadingDots({
-  size = "md",
+  size = "sm",
   className,
   containerClassName
 }: LoadingDotsProps) {
