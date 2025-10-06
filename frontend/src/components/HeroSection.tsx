@@ -2,7 +2,7 @@ import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import TypewriterText from '@/components/TypewriterText';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Music, ChevronDown, ArrowDown } from 'lucide-react';
+import { Music, ArrowDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface HeroSectionProps {

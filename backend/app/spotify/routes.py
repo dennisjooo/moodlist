@@ -6,7 +6,7 @@ import structlog
 
 from app.core.database import get_db
 from app.models.user import User
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import require_auth, refresh_spotify_token_if_expired
 from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
@@ -93,11 +93,14 @@ async def exchange_token(
 
 @router.get("/profile")
 async def get_spotify_profile(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
     db: AsyncSession = Depends(get_db)
 ):
     """Get user's Spotify profile information."""
     logger.info("Getting Spotify profile", user_id=current_user.id)
+
+    # Refresh token if expired
+    current_user = await refresh_spotify_token_if_expired(current_user, db)
 
     # Use the stored access token to get profile from Spotify
     async with httpx.AsyncClient() as client:
@@ -194,7 +197,7 @@ async def get_spotify_profile_public(
 
 @router.get("/token/refresh")
 async def refresh_spotify_token(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
     db: AsyncSession = Depends(get_db)
 ):
     """Refresh the user's Spotify access token."""
@@ -240,12 +243,15 @@ async def refresh_spotify_token(
 
 @router.get("/playlists")
 async def get_user_playlists(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
     limit: int = Query(default=20, le=50),
     offset: int = Query(default=0),
     db: AsyncSession = Depends(get_db)
 ):
     """Get user's Spotify playlists."""
+    # Refresh token if expired
+    current_user = await refresh_spotify_token_if_expired(current_user, db)
+    
     logger.info("Getting user playlists", user_id=current_user.id, limit=limit, offset=offset)
     
     async with httpx.AsyncClient() as client:
@@ -277,7 +283,7 @@ async def create_playlist(
     name: str = Query(..., description="Playlist name"),
     description: str = Query(default="", description="Playlist description"),
     public: bool = Query(default=True, description="Whether playlist is public"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new playlist on Spotify."""
@@ -322,11 +328,14 @@ async def add_tracks_to_playlist(
     playlist_id: str,
     track_uris: list = Query(..., description="List of Spotify track URIs"),
     position: Optional[int] = Query(default=None, description="Position to add tracks"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_auth),
     db: AsyncSession = Depends(get_db)
 ):
     """Add tracks to a Spotify playlist."""
     logger.info("Adding tracks to playlist", user_id=current_user.id, playlist_id=playlist_id, track_count=len(track_uris))
+    
+    # Refresh token if expired
+    current_user = await refresh_spotify_token_if_expired(current_user, db)
     
     async with httpx.AsyncClient() as client:
         try:
@@ -352,4 +361,143 @@ async def add_tracks_to_playlist(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to add tracks to playlist"
+            )
+
+
+@router.delete("/playlists/{playlist_id}/tracks")
+async def remove_tracks_from_playlist(
+    playlist_id: str,
+    track_uris: list[str] = Query(..., description="List of Spotify track URIs to remove"),
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
+):
+    """Remove tracks from a Spotify playlist."""
+    logger.info("Removing tracks from playlist", user_id=current_user.id, playlist_id=playlist_id, track_count=len(track_uris))
+    
+    # Refresh token if expired
+    current_user = await refresh_spotify_token_if_expired(current_user, db)
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            # Spotify API expects tracks in format: {"tracks": [{"uri": "..."}, ...]}
+            data = {
+                "tracks": [{"uri": uri} for uri in track_uris]
+            }
+            
+            response = await client.delete(
+                f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks",
+                headers={"Authorization": f"Bearer {current_user.access_token}"},
+                json=data
+            )
+            response.raise_for_status()
+            result_data = response.json()
+            
+            return {
+                "snapshot_id": result_data.get("snapshot_id"),
+                "message": f"Removed {len(track_uris)} tracks from playlist"
+            }
+            
+        except httpx.HTTPStatusError as e:
+            logger.error("Failed to remove tracks from playlist", error=str(e), status_code=e.response.status_code)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to remove tracks from playlist"
+            )
+
+
+@router.put("/playlists/{playlist_id}/tracks")
+async def reorder_playlist_tracks(
+    playlist_id: str,
+    range_start: int = Query(..., description="Position of first track to move"),
+    insert_before: int = Query(..., description="Position where tracks should be inserted"),
+    range_length: int = Query(default=1, description="Number of tracks to move"),
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
+):
+    """Reorder tracks in a Spotify playlist."""
+    logger.info("Reordering playlist tracks", user_id=current_user.id, playlist_id=playlist_id, 
+                range_start=range_start, insert_before=insert_before, range_length=range_length)
+    
+    # Refresh token if expired
+    current_user = await refresh_spotify_token_if_expired(current_user, db)
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            data = {
+                "range_start": range_start,
+                "insert_before": insert_before,
+                "range_length": range_length
+            }
+            
+            response = await client.put(
+                f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks",
+                headers={"Authorization": f"Bearer {current_user.access_token}"},
+                json=data
+            )
+            response.raise_for_status()
+            result_data = response.json()
+            
+            return {
+                "snapshot_id": result_data.get("snapshot_id"),
+                "message": f"Reordered {range_length} track(s) in playlist"
+            }
+            
+        except httpx.HTTPStatusError as e:
+            logger.error("Failed to reorder playlist tracks", error=str(e), status_code=e.response.status_code)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to reorder playlist tracks"
+            )
+
+
+@router.get("/search/tracks")
+async def search_tracks(
+    query: str = Query(..., min_length=1, description="Search query for tracks"),
+    limit: int = Query(default=20, le=50, description="Maximum number of results"),
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
+):
+    """Search Spotify tracks for adding to playlists."""
+    logger.info("Searching tracks", user_id=current_user.id, query=query, limit=limit)
+    
+    # Refresh token if expired
+    current_user = await refresh_spotify_token_if_expired(current_user, db)
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(
+                f"https://api.spotify.com/v1/search",
+                params={"q": query, "type": "track", "limit": limit},
+                headers={"Authorization": f"Bearer {current_user.access_token}"}
+            )
+            response.raise_for_status()
+            search_data = response.json()
+            
+            # Extract and format track results
+            tracks = search_data.get("tracks", {}).get("items", [])
+            formatted_tracks = [
+                {
+                    "track_id": track["id"],
+                    "track_name": track["name"],
+                    "artists": [artist["name"] for artist in track["artists"]],
+                    "spotify_uri": track["uri"],
+                    "album": track["album"]["name"],
+                    "album_image": track["album"]["images"][0]["url"] if track["album"]["images"] else None,
+                    "duration_ms": track["duration_ms"],
+                    "preview_url": track.get("preview_url")
+                }
+                for track in tracks
+            ]
+            
+            return {
+                "tracks": formatted_tracks,
+                "total": len(formatted_tracks),
+                "query": query
+            }
+            
+        except httpx.HTTPStatusError as e:
+            logger.error("Failed to search tracks", error=str(e), status_code=e.response.status_code)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to search tracks"
             )

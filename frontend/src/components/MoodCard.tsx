@@ -36,7 +36,7 @@ export default function MoodCard({ mood, genre, gradient, onClick, className }: 
   const IconComponent = getMoodIcon(mood);
   return (
     <div
-      className={`${autoGradient} rounded-lg cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl h-40 flex-col items-center justify-center relative p-6 text-center group ${className || ''}`}
+      className={`${autoGradient} rounded-lg cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl h-40 flex flex-col items-center justify-center relative p-6 text-center group ${className || ''}`}
       onClick={onClick}
     >
       <div className="absolute inset-0 bg-black/10 group-hover:bg-black/5 transition-colors rounded-lg" />

@@ -3,14 +3,22 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface MoodInputProps {
   onSubmit?: (mood: string) => void;
+  initialMood?: string;
 }
 
-export default function MoodInput({ onSubmit }: MoodInputProps) {
-  const [mood, setMood] = useState('');
+export default function MoodInput({ onSubmit, initialMood }: MoodInputProps) {
+  const [mood, setMood] = useState(initialMood || '');
+
+  // Update mood when initialMood changes
+  useEffect(() => {
+    if (initialMood) {
+      setMood(initialMood);
+    }
+  }, [initialMood]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +46,7 @@ export default function MoodInput({ onSubmit }: MoodInputProps) {
               className="min-h-[120px] resize-none border-0 bg-muted/50 text-base placeholder:text-muted-foreground/60 focus-visible:ring-1"
             />
           </div>
-          
+
           <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
             {moodExamples.map((example) => (
               <button
@@ -55,7 +63,6 @@ export default function MoodInput({ onSubmit }: MoodInputProps) {
           <Button
             type="submit"
             className="w-full h-11"
-            disabled={!mood.trim()}
           >
             Generate Playlist
           </Button>
