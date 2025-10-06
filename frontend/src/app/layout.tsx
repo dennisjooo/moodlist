@@ -1,5 +1,6 @@
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { AuthProvider } from '@/lib/authContext';
+import { WorkflowProvider } from '@/lib/workflowContext';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
@@ -22,7 +23,9 @@ export default function RootLayout({
       <body className={inter.className} suppressHydrationWarning>
         <ThemeProvider>
           <AuthProvider>
-            {children}
+            <WorkflowProvider>
+              {children}
+            </WorkflowProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>
