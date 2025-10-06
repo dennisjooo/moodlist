@@ -55,11 +55,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (response.ok) {
         const data = await response.json();
         if (data.user) {
+          console.log('Auth check successful, user found:', data.user.display_name);
           setUser(data.user);
         } else {
+          console.log('Auth check successful, no user found');
           setUser(null);
         }
       } else if (response.status === 401) {
+        console.log('Auth check failed with 401 - unauthorized');
         setUser(null);
       } else {
         // Other error - if it's our first attempt, try again after a short delay
@@ -115,25 +118,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const logout = async () => {
-    // Immediately clear local state for better UX
-    setUser(null);
-
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
 
-      // Call backend logout to clear session (fire and forget)
-      fetch(`${backendUrl}/api/auth/logout`, {
+      // Call backend logout to clear session
+      const response = await fetch(`${backendUrl}/api/auth/logout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...getAuthCookies(),
         },
         credentials: 'include',
-      }).catch(error => {
-        console.error('Backend logout error:', error);
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Backend logout failed:', response.status, errorText);
+        // Don't throw error - still clear local state for better UX
+      } else {
+        console.log('Backend logout successful');
+      }
     } catch (error) {
       console.error('Logout error:', error);
+      // Don't throw error - still clear local state for better UX
+    } finally {
+      // Always clear local state after attempting backend logout
+      setUser(null);
+
+      // Dispatch logout event to notify other contexts (like workflow context)
+      window.dispatchEvent(new Event('auth-logout'));
     }
   };
 
@@ -142,11 +155,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   useEffect(() => {
-    // Only check auth status if we have cookies (indicating a potential existing session)
-    const sessionToken = getCookie('session_token');
-    if (sessionToken) {
-      checkAuthStatus();
-    }
+    // Always check auth status on mount to ensure we have the latest state
+    checkAuthStatus();
 
     // Listen for auth update events (from callback page)
     const handleAuthUpdate = () => {

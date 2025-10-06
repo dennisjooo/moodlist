@@ -6,8 +6,11 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.middleware import LoggingMiddleware, InvocationStatusMiddleware
+from app.agents.core.cache import cache_manager
 from app.auth.routes import router as auth_router
 from app.spotify.routes import router as spotify_router
+from app.agents.routes import router as agent_router
+from app.playlists.routes import router as playlist_router
 
 
 @asynccontextmanager
@@ -15,13 +18,21 @@ async def lifespan(app: FastAPI):
     """Application lifespan context manager."""
     # Startup
     print(f"Starting {settings.APP_NAME} in {settings.APP_ENV} mode")
-    
+
+    # Initialize cache manager with Valkey if URL is provided
+    global cache_manager
+    if settings.REDIS_URL:
+        print(f"Initializing cache manager with Valkey at {settings.REDIS_URL}")
+        cache_manager = cache_manager.__class__(settings.REDIS_URL)
+    else:
+        print("No Valkey URL provided, using in-memory cache")
+
     # Create database tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     yield
-    
+
     # Shutdown
     print(f"Shutting down {settings.APP_NAME}")
 
@@ -65,6 +76,16 @@ def create_application() -> FastAPI:
         spotify_router,
         prefix="/api/spotify",
         tags=["spotify"]
+    )
+    app.include_router(
+        agent_router,
+        prefix="/api/agents",
+        tags=["agents"]
+    )
+    app.include_router(
+        playlist_router,
+        prefix="/api",
+        tags=["playlists"]
     )
     
     return app

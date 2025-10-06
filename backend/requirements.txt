@@ -18,13 +18,37 @@ passlib
 
 # HTTP client
 httpx
+httpx[http2]
 
 # Environment and configuration
 python-dotenv
 
 # Logging and monitoring
 structlog
+pythonjsonlogger
+
+# Agentic AI and LangGraph
+langgraph
+langchain-openai
+langchain-core
+langchain-community
+python-dotenv
+
+# LLM and AI
+openai
+tiktoken
+
+# Rate limiting and caching
+slowapi
+redis
+python-redis
+
+# Additional utilities
+aiofiles
+backoff
+tenacity
 
 # Development dependencies
 pytest
 pytest-asyncio
+pytest-mock

@@ -11,15 +11,19 @@ class Playlist(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    session_id = Column(String(255), unique=True, nullable=True, index=True)  # Workflow session UUID
     spotify_playlist_id = Column(String(255), nullable=True, index=True)
     mood_prompt = Column(Text, nullable=False)
     playlist_data = Column(JSON, nullable=True)  # Store playlist metadata
+    recommendations_data = Column(JSON, nullable=True)  # Store recommendation list
+    mood_analysis_data = Column(JSON, nullable=True)  # Store mood analysis results
     track_count = Column(Integer, default=0)
     duration_ms = Column(Integer, default=0)
     status = Column(String(50), default="created", nullable=False)  # created, generating, completed, failed
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)  # Soft delete timestamp
     
     # Relationships
     user = relationship("User", back_populates="playlists")

@@ -15,8 +15,7 @@ from app.auth.security import (
     create_access_token, 
     create_refresh_token, 
     verify_token,
-    generate_session_token,
-    encrypt_token
+    generate_session_token
 )
 from app.auth.dependencies import require_auth
 from app.auth.schemas import (
@@ -70,8 +69,8 @@ async def register(
     
     if existing_user:
         # Update existing user's tokens and profile
-        existing_user.access_token = encrypt_token(user_data.access_token)
-        existing_user.refresh_token = encrypt_token(user_data.refresh_token)
+        existing_user.access_token = user_data.access_token
+        existing_user.refresh_token = user_data.refresh_token
         existing_user.token_expires_at = user_data.token_expires_at
         existing_user.display_name = profile_data.get("display_name", existing_user.display_name)
         existing_user.email = profile_data.get("email", existing_user.email)
@@ -93,8 +92,8 @@ async def register(
             spotify_id=profile_data["id"],
             email=profile_data.get("email"),
             display_name=profile_data.get("display_name", "Unknown User"),
-            access_token=encrypt_token(user_data.access_token),
-            refresh_token=encrypt_token(user_data.refresh_token),
+            access_token=user_data.access_token,
+            refresh_token=user_data.refresh_token,
             token_expires_at=user_data.token_expires_at,
             profile_image_url=profile_image_url,
             is_active=True
@@ -107,8 +106,13 @@ async def register(
     
     # Create session
     session_token = generate_session_token()
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
-    
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+
+    # Clean up any existing sessions for this user to prevent conflicts
+    await db.execute(
+        Session.__table__.delete().where(Session.user_id == user.id)
+    )
+
     session = Session(
         user_id=user.id,
         session_token=session_token,
@@ -116,11 +120,11 @@ async def register(
         user_agent=request.headers.get("user-agent"),
         expires_at=expires_at
     )
-    
+
     db.add(session)
     await db.commit()
     await db.refresh(session)
-    
+
     # Set session cookie
     from app.core.config import settings
     is_production = settings.APP_ENV == "production"
@@ -131,7 +135,7 @@ async def register(
         httponly=True,
         secure=is_production,  # Only secure in production (HTTPS)
         samesite="lax",
-        max_age=1800,  # 30 minutes
+        max_age=86400,  # 24 hours
         path="/"  # Ensure cookie is available for all paths
     )
     
@@ -202,6 +206,7 @@ async def refresh_token(
 async def logout(
     response: Response,
     request: Request,
+    db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(require_auth)
 ):
     """Logout user and clear session."""
@@ -217,7 +222,16 @@ async def logout(
         path="/"  # Must match the path used when setting the cookie
     )
 
+    # Delete session from database if user is authenticated
     if current_user:
+        session_token = request.cookies.get("session_token")
+        if session_token:
+            # Delete the session record from database
+            await db.execute(
+                Session.__table__.delete().where(Session.session_token == session_token)
+            )
+            await db.commit()
+
         logger.info("Logout successful", user_id=current_user.id, spotify_id=current_user.spotify_id)
 
     return {"message": "Logged out successfully"}
@@ -243,12 +257,17 @@ async def verify_auth(
     current_user: Optional[User] = Depends(require_auth)
 ):
     """Verify authentication status."""
+    session_token = request.cookies.get("session_token")
+    logger.debug("Auth verification request", has_session_token=bool(session_token), has_user=bool(current_user))
+
     if not current_user:
+        logger.debug("Auth verification failed - no current user")
         return AuthResponse(
             user=None,
             requires_spotify_auth=True
         )
 
+    logger.debug("Auth verification successful", user_id=current_user.id, spotify_id=current_user.spotify_id)
     return AuthResponse(
         user=UserResponse.from_orm(current_user),
         requires_spotify_auth=False
