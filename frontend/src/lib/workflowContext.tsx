@@ -29,7 +29,6 @@ interface WorkflowContextType {
   loadWorkflow: (sessionId: string) => Promise<void>;
   stopWorkflow: () => void;
   resetWorkflow: () => void;
-  applyEdit: (edit: PlaylistEditRequest) => Promise<void>;
   applyCompletedEdit: (
     editType: 'reorder' | 'remove' | 'add',
     options: {
@@ -243,28 +242,6 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
       isLoading: false,
       awaitingInput: false,
     });
-  };
-
-  const applyEdit = async (edit: PlaylistEditRequest) => {
-    if (!workflowState.sessionId) {
-      throw new Error('No active workflow session');
-    }
-
-    setWorkflowState(prev => ({ ...prev, isLoading: true, error: null }));
-
-    try {
-      await workflowAPI.applyPlaylistEdit(workflowState.sessionId, edit);
-      // Refresh the workflow state after edit
-      await refreshResults();
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to apply edit';
-      setWorkflowState(prev => ({
-        ...prev,
-        error: errorMessage,
-        isLoading: false,
-      }));
-      throw error;
-    }
   };
 
   const refreshResults = async () => {
@@ -553,7 +530,6 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     loadWorkflow,
     stopWorkflow,
     resetWorkflow,
-    applyEdit,
     applyCompletedEdit,
     searchTracks,
     refreshResults,
