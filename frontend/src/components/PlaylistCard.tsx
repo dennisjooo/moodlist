@@ -147,7 +147,7 @@ export default function PlaylistCard({ mood, title, createdAt, trackCount, spoti
             {/* Buttons - pushed to bottom */}
             <div className="mt-auto flex gap-2">
               {sessionId && (
-                <Link href={`/create/${sessionId}`} className="flex-1" onClick={(e) => e.stopPropagation()}>
+                <Link href={isCompleted ? `/playlist/${sessionId}` : `/create/${sessionId}`} className="flex-1" onClick={(e) => e.stopPropagation()}>
                   <Button
                     size="sm"
                     className="w-full bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white border-white/30"

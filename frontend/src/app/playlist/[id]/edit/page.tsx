@@ -5,6 +5,7 @@ import PlaylistEditor from '@/components/PlaylistEditor';
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { LoadingDots } from '@/components/ui/loading-dots';
+import { useAuth } from '@/lib/authContext';
 import { cn } from '@/lib/utils';
 import { useWorkflow } from '@/lib/workflowContext';
 import { ArrowLeft } from 'lucide-react';
@@ -16,26 +17,41 @@ function EditPlaylistPageContent() {
     const router = useRouter();
     const sessionId = params.id as string;
     const { workflowState, loadWorkflow } = useWorkflow();
+    const { isAuthenticated, isLoading: authLoading } = useAuth();
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        if (sessionId) {
-            loadWorkflow(sessionId).finally(() => {
-                setIsLoading(false);
-            });
-        }
-    }, [sessionId, loadWorkflow]);
+        const loadData = async () => {
+            // Wait for auth to complete
+            if (authLoading) {
+                return;
+            }
+
+            // Check authentication
+            if (!isAuthenticated) {
+                router.push('/');
+                return;
+            }
+
+            if (sessionId) {
+                await loadWorkflow(sessionId);
+            }
+            setIsLoading(false);
+        };
+
+        loadData();
+    }, [sessionId, loadWorkflow, authLoading, isAuthenticated, router]);
 
     const handleDone = () => {
-        router.push(`/create/${sessionId}`);
+        router.push(`/playlist/${sessionId}`);
     };
 
     const handleCancel = () => {
-        router.push(`/create/${sessionId}`);
+        router.push(`/playlist/${sessionId}`);
     };
 
     // Loading state
-    if (isLoading || workflowState.isLoading) {
+    if (authLoading || isLoading || workflowState.isLoading) {
         return (
             <div className="min-h-screen bg-background relative">
                 <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
@@ -50,7 +66,7 @@ function EditPlaylistPageContent() {
 
                 <main className="relative z-10 flex items-center justify-center min-h-[calc(100vh-80px)]">
                     <div className="text-center">
-                        <LoadingDots className="sm" />
+                        <LoadingDots size="sm" />
                         <p className="mt-4 text-muted-foreground">Loading playlist...</p>
                     </div>
                 </main>
@@ -103,7 +119,7 @@ function EditPlaylistPageContent() {
                         <p className="text-muted-foreground mb-6">
                             This playlist doesn't have any tracks yet.
                         </p>
-                        <Button onClick={() => router.push(`/create/${sessionId}`)}>
+                        <Button onClick={() => router.push(`/playlist/${sessionId}`)}>
                             Go Back
                         </Button>
                     </div>
@@ -134,7 +150,7 @@ function EditPlaylistPageContent() {
                     className="mb-6 gap-2"
                 >
                     <ArrowLeft className="w-4 h-4" />
-                    Back to Results
+                    Back to Playlist
                 </Button>
 
                 <PlaylistEditor
