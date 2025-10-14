@@ -60,7 +60,7 @@ class PlaylistCreatorAgent(BaseAgent):
             playlist_name = await self._generate_playlist_name(state)
 
             # Generate playlist description
-            playlist_description = self._generate_playlist_description(state)
+            playlist_description = await self._generate_playlist_description(state)
 
             # Create playlist on Spotify
             access_token = state.metadata.get("spotify_access_token")
@@ -151,6 +151,8 @@ class PlaylistCreatorAgent(BaseAgent):
             - Make it catchy and relevant to the mood
             - Avoid generic names like "My Playlist"
             - Consider the energy and emotion of the mood
+            
+            Consider it as a unified title, no subtitle.
 
             Return only the playlist name, nothing else.
             """
