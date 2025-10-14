@@ -9,8 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
 
 from .spotify_edit_service import SpotifyEditService
-from ....models.playlist import Playlist
-from ...states.agent_state import TrackRecommendation
+from ...models.playlist import Playlist
+from ...agents.states.agent_state import TrackRecommendation
 
 logger = logging.getLogger(__name__)
 

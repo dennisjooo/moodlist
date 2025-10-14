@@ -3,7 +3,7 @@
 from typing import Any, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...states.agent_state import AgentState
+    from ...agents.states.agent_state import AgentState
 
 
 class PlaylistSummarizer:
