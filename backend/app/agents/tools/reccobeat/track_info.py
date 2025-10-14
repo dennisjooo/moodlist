@@ -1,9 +1,8 @@
 """RecoBeat track information tools."""
 
 import logging
-from typing import Any, Dict, List, Optional, Type
+from typing import List, Type
 
-from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from ..agent_tools import RateLimitedTool, ToolResult
@@ -33,8 +32,9 @@ class GetMultipleTracksTool(RateLimitedTool):
             name="get_multiple_tracks",
             description="Get multiple tracks from RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=120,  # Conservative rate limit to avoid 429 errors
-            min_request_interval=0.5    # 0.5s between requests
+            rate_limit_per_minute=60,   # More conservative rate limit
+            min_request_interval=1.0,   # 1s between requests to avoid rate limiting
+            use_global_semaphore=True   # Use global semaphore to limit concurrent requests
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:
@@ -138,8 +138,9 @@ class GetTrackAudioFeaturesTool(RateLimitedTool):
             name="get_track_audio_features",
             description="Get track audio features from RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=120,  # Conservative rate limit to avoid 429 errors
-            min_request_interval=0.5    # 0.5s between requests
+            rate_limit_per_minute=60,   # More conservative rate limit
+            min_request_interval=1.0,   # 1s between requests to avoid rate limiting
+            use_global_semaphore=True   # Use global semaphore to limit concurrent requests
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:
