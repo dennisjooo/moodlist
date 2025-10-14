@@ -41,7 +41,7 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
 
   const handleEditClick = () => {
     if (workflowState.sessionId) {
-      router.push(`/create/${workflowState.sessionId}/edit`);
+      router.push(`/playlist/${workflowState.sessionId}/edit`);
     }
   };
 
