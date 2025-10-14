@@ -1,7 +1,6 @@
 """Base tool definitions for the agentic system."""
 
 import asyncio
-import json
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Type, Union
@@ -29,8 +28,8 @@ def get_reccobeat_semaphore() -> asyncio.Semaphore:
     """
     global _reccobeat_semaphore
     if _reccobeat_semaphore is None:
-        # Allow max 2 concurrent requests to RecoBeat API
-        _reccobeat_semaphore = asyncio.Semaphore(2)
+        # Allow max 5 concurrent requests to RecoBeat API
+        _reccobeat_semaphore = asyncio.Semaphore(5)
     return _reccobeat_semaphore
 
 
