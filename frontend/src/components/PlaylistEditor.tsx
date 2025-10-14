@@ -17,7 +17,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -184,10 +184,23 @@ export default function PlaylistEditor({
   const [isAddingTrack, setIsAddingTrack] = useState(false);
   const [isAddTracksCollapsed, setIsAddTracksCollapsed] = useState(false);
 
+  // Track the latest search query to prevent race conditions
+  const latestSearchQueryRef = useRef<string>('');
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Sync tracks when recommendations prop changes (from context updates)
   useEffect(() => {
     setTracks(recommendations);
   }, [recommendations]);
+
+  // Cleanup search timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Set up sensors for drag and drop
   const sensors = useSensors(
@@ -264,24 +277,48 @@ export default function PlaylistEditor({
     setEditReasoning('');
   }, [recommendations]);
 
-  const handleSearch = useCallback(async (query: string) => {
+  const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
+
+    // Clear any existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Store the latest query in ref to prevent race conditions
+    latestSearchQueryRef.current = query;
 
     if (!query.trim()) {
       setSearchResults([]);
+      setIsSearching(false);
       return;
     }
 
-    setIsSearching(true);
-    try {
-      const results = await searchTracks(query);
-      setSearchResults(results.tracks || []);
-    } catch (error) {
-      console.error('Search failed:', error);
-      setError('Failed to search tracks');
-    } finally {
-      setIsSearching(false);
-    }
+    // Debounce search - wait 300ms after user stops typing
+    searchTimeoutRef.current = setTimeout(async () => {
+      const currentSearchQuery = query;
+      setIsSearching(true);
+
+      try {
+        const results = await searchTracks(query);
+
+        // Only update results if this is still the latest search
+        if (latestSearchQueryRef.current === currentSearchQuery) {
+          setSearchResults(results.tracks || []);
+        }
+      } catch (error) {
+        console.error('Search failed:', error);
+        // Only show error if this is still the latest search
+        if (latestSearchQueryRef.current === currentSearchQuery) {
+          setError('Failed to search tracks');
+        }
+      } finally {
+        // Only update loading state if this is still the latest search
+        if (latestSearchQueryRef.current === currentSearchQuery) {
+          setIsSearching(false);
+        }
+      }
+    }, 300);
   }, [searchTracks]);
 
   const handleAddTrack = useCallback(async (trackUri: string) => {
@@ -414,7 +451,7 @@ export default function PlaylistEditor({
                   </div>
                 )}
 
-                {!isSearching && searchResults.length === 0 && searchQuery && (
+                {!isSearching && searchResults.length === 0 && searchQuery && searchQuery.length >= 2 && (
                   <div className="text-center py-8 text-muted-foreground">
                     <p className="text-sm">No results found for "{searchQuery}"</p>
                   </div>

@@ -59,10 +59,8 @@ export default function PlaylistsPage() {
   };
 
   const handleCardClick = (playlist: UserPlaylist) => {
-    // If completed and has Spotify URL, go directly to Spotify
-    if (playlist.status === 'completed' && playlist.spotify_url) {
-      window.open(playlist.spotify_url, '_blank');
-    }
+    // Navigate to playlist view page - let the user decide what to do from there
+    // (they can view details, edit, or open in Spotify)
   };
 
   // Format date for display

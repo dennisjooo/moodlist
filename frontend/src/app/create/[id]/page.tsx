@@ -2,7 +2,6 @@
 
 import Navigation from '@/components/Navigation';
 import PlaylistEditor from '@/components/PlaylistEditor';
-import PlaylistResults from '@/components/PlaylistResults';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
@@ -112,6 +111,13 @@ function CreateSessionPageContent() {
         }
     }, [workflowState.sessionId, workflowState.status, workflowState.error, sessionId]);
 
+    // Redirect to playlist page if workflow is completed
+    useEffect(() => {
+        if (workflowState.status === 'completed' && workflowState.recommendations.length > 0 && workflowState.sessionId) {
+            router.push(`/playlist/${workflowState.sessionId}`);
+        }
+    }, [workflowState.status, workflowState.recommendations.length, workflowState.sessionId, router]);
+
     const handleEditComplete = () => {
         // Refresh the page to show final results
         window.location.reload();
@@ -194,37 +200,6 @@ function CreateSessionPageContent() {
 
     // Determine if workflow is in a terminal state
     const isTerminalStatus = workflowState.status === 'completed' || workflowState.status === 'failed';
-
-    // Show results if workflow is completed
-    if (workflowState.status === 'completed' && workflowState.recommendations.length > 0) {
-        return (
-            <div className="min-h-screen bg-background relative">
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
-                    <DotPattern
-                        className={cn(
-                            "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-                        )}
-                    />
-                </div>
-
-                <Navigation />
-
-                <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                    {/* Back Button */}
-                    <Button
-                        variant="ghost"
-                        onClick={handleBack}
-                        className="mb-6 gap-2"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back
-                    </Button>
-
-                    <PlaylistResults />
-                </main>
-            </div>
-        );
-    }
 
     // If workflow is in terminal state but no recommendations, show error or loading state
     if (isTerminalStatus && workflowState.recommendations.length === 0) {
