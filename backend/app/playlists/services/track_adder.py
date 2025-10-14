@@ -5,9 +5,9 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...states.agent_state import AgentState
+    from ...agents.states.agent_state import AgentState
 
-from ...tools.spotify_service import SpotifyService
+from ...agents.tools.spotify_service import SpotifyService
 
 logger = logging.getLogger(__name__)
 
