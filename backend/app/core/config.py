@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = Field(default="INFO", env="LOG_LEVEL")
     
+    # LLM Providers
+    OPENROUTER_API_KEY: str = Field(env="OPENROUTER_API_KEY")
+    GROQ_API_KEY: str = Field(env="GROQ_API_KEY")
+    CEREBRAS_API_KEY: str = Field(env="CEREBRAS_API_KEY")
+    
     @property
     def ALLOWED_HOSTS(self) -> List[str]:
         """Get allowed hosts based on environment."""

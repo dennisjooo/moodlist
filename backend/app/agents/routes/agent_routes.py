@@ -35,24 +35,24 @@ reccobeat_service = RecoBeatService()
 spotify_service = SpotifyService()
 
 llm = ChatOpenAI(
-    model="x-ai/grok-4-fast:free",
+    model="moonshotai/kimi-k2:free",
     temperature=1,
     base_url="https://openrouter.ai/api/v1",
-    api_key="***REMOVED***"
+    api_key=settings.OPENROUTER_API_KEY
 )
 
 groq_llm = ChatOpenAI(
     model="openai/gpt-oss-120b",
     temperature=1,
     base_url="https://api.groq.com/openai/v1",
-    api_key="***REMOVED***"
+    api_key=settings.GROQ_API_KEY
 )
 
 cerebras_llm = ChatOpenAI(
     model="gpt-oss-120b",
     temperature=1,
     base_url="https://api.cerebras.ai/v1",
-    api_key="***REMOVED***"
+    api_key=settings.CEREBRAS_API_KEY
 )
 
 # Create agents with updated dependencies
@@ -70,7 +70,7 @@ recommendation_generator = RecommendationGeneratorAgent(
     verbose=True
 )
 playlist_editor = PlaylistEditorAgent(verbose=True)
-playlist_creator = PlaylistCreatorAgent(spotify_service, llm, verbose=True)
+playlist_creator = PlaylistCreatorAgent(spotify_service, groq_llm, verbose=True)
 
 # Create orchestrator agent (must be created after other agents)
 orchestrator = OrchestratorAgent(
