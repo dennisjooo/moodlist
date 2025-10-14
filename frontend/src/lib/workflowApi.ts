@@ -173,20 +173,6 @@ class WorkflowAPI {
     return this.request<WorkflowResults>(`/api/agents/recommendations/${sessionId}/results`);
   }
 
-  async applyPlaylistEdit(sessionId: string, edit: PlaylistEditRequest): Promise<void> {
-    const params = new URLSearchParams({
-      edit_type: edit.edit_type,
-    });
-
-    if (edit.track_id) params.append('track_id', edit.track_id);
-    if (edit.new_position !== undefined) params.append('new_position', edit.new_position.toString());
-    if (edit.reasoning) params.append('reasoning', edit.reasoning);
-
-    return this.request<void>(`/api/agents/recommendations/${sessionId}/edit?${params.toString()}`, {
-      method: 'POST',
-    });
-  }
-
   async getPlaylistDetails(sessionId: string): Promise<PlaylistDetails> {
     return this.request<PlaylistDetails>(`/api/agents/recommendations/${sessionId}/playlist`);
   }
