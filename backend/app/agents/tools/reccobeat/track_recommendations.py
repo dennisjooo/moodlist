@@ -1,9 +1,8 @@
 """RecoBeat track recommendations tool."""
 
 import logging
-from typing import Any, Dict, List, Optional, Type
+from typing import List, Optional, Type
 
-from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from ..agent_tools import RateLimitedTool, ToolResult
@@ -49,8 +48,9 @@ class TrackRecommendationsTool(RateLimitedTool):
             name="get_track_recommendations",
             description="Get track recommendations from RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=120,  # Conservative rate limit to avoid 429 errors
-            min_request_interval=0.5    # 0.5s between requests
+            rate_limit_per_minute=60,   # More conservative rate limit
+            min_request_interval=1.0,   # 1s between requests to avoid rate limiting
+            use_global_semaphore=True   # Use global semaphore to limit concurrent requests
         )
 
     def _normalize_spotify_uri(self, href: str, track_id: str) -> str:

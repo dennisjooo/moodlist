@@ -17,6 +17,23 @@ from ..states.agent_state import AgentState
 logger = logging.getLogger(__name__)
 
 
+# Global semaphore for RecoBeat API to prevent concurrent requests
+_reccobeat_semaphore: Optional[asyncio.Semaphore] = None
+
+
+def get_reccobeat_semaphore() -> asyncio.Semaphore:
+    """Get or create the global RecoBeat API semaphore.
+    
+    Returns:
+        Semaphore limiting concurrent RecoBeat API requests
+    """
+    global _reccobeat_semaphore
+    if _reccobeat_semaphore is None:
+        # Allow max 2 concurrent requests to RecoBeat API
+        _reccobeat_semaphore = asyncio.Semaphore(2)
+    return _reccobeat_semaphore
+
+
 class AgentTools:
     """Collection of tools available to agents."""
 
@@ -179,10 +196,14 @@ class BaseAPITool(BaseTool, ABC):
                     await asyncio.sleep(wait_time)
                     continue
 
-                # ADD THIS: Handle 429 rate limits
+                # Handle 429 rate limits with aggressive backoff
                 if e.response.status_code == 429 and attempt < self.max_retries - 1:
                     retry_after = e.response.headers.get("Retry-After")
-                    wait_time = float(retry_after) if retry_after else (2 ** attempt) * 2.0
+                    if retry_after:
+                        wait_time = float(retry_after)
+                    else:
+                        # Aggressive exponential backoff: 2s, 8s, 32s
+                        wait_time = (2 ** (attempt + 1)) * 2.0
                     logger.warning(f"Rate limit (429) when calling {self.name}, retrying in {wait_time}s...")
                     await asyncio.sleep(wait_time)
                     continue
@@ -274,7 +295,8 @@ class RateLimitedTool(BaseAPITool):
         description: str,
         base_url: str,
         rate_limit_per_minute: int = 60,
-        min_request_interval: float = 0.0,  # NEW
+        min_request_interval: float = 0.0,
+        use_global_semaphore: bool = False,  # NEW: Enable global request queuing
         **kwargs
     ):
         """Initialize rate-limited tool.
@@ -284,11 +306,14 @@ class RateLimitedTool(BaseAPITool):
             description: Tool description
             base_url: Base URL for the API
             rate_limit_per_minute: Maximum requests per minute
+            min_request_interval: Minimum seconds between requests
+            use_global_semaphore: Use global semaphore to limit concurrent requests
             **kwargs: Additional arguments for BaseAPITool
         """
         super().__init__(name=name, description=description, base_url=base_url, **kwargs)
         self.rate_limit_per_minute = rate_limit_per_minute
         self.min_request_interval = min_request_interval
+        self.use_global_semaphore = use_global_semaphore
         self.request_times: List[datetime] = []
 
         # Rate limiting state
@@ -319,6 +344,30 @@ class RateLimitedTool(BaseAPITool):
         self.request_times.append(now)
         self._request_count += 1
 
+    def _format_params(self, params: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Format parameters for the API request.
+        
+        By default, converts list values to comma-separated strings.
+        Override this method if the API requires different formatting.
+        
+        Args:
+            params: Raw query parameters
+            
+        Returns:
+            Formatted query parameters
+        """
+        if not params:
+            return params
+            
+        formatted = {}
+        for key, value in params.items():
+            if isinstance(value, list):
+                # Convert lists to comma-separated strings by default
+                formatted[key] = ','.join(str(v) for v in value)
+            else:
+                formatted[key] = value
+        return formatted
+
     async def _make_request(
         self,
         method: str,
@@ -328,6 +377,23 @@ class RateLimitedTool(BaseAPITool):
         headers: Optional[Dict[str, str]] = None
     ) -> Dict[str, Any]:
         """Make a rate-limited HTTP request."""
+        # Use global semaphore if enabled (for APIs that don't handle concurrency well)
+        if self.use_global_semaphore:
+            semaphore = get_reccobeat_semaphore()
+            async with semaphore:
+                return await self._make_request_internal(method, endpoint, params, json_data, headers)
+        else:
+            return await self._make_request_internal(method, endpoint, params, json_data, headers)
+    
+    async def _make_request_internal(
+        self,
+        method: str,
+        endpoint: str,
+        params: Optional[Dict[str, Any]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None
+    ) -> Dict[str, Any]:
+        """Internal method to make a rate-limited HTTP request."""
         # Check minimum interval since last request
         if hasattr(self, '_last_request_time') and self._last_request_time and self.min_request_interval > 0:
             elapsed = (datetime.utcnow() - self._last_request_time).total_seconds()
@@ -338,7 +404,10 @@ class RateLimitedTool(BaseAPITool):
 
         await self._check_rate_limit()
 
-        response = await super()._make_request(method, endpoint, params, json_data, headers)
+        # Format parameters (convert lists to appropriate format)
+        formatted_params = self._format_params(params)
+
+        response = await super()._make_request(method, endpoint, formatted_params, json_data, headers)
 
         self._last_request_time = datetime.utcnow()  # Track request time
         await self._record_request()
