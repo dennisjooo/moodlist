@@ -1,13 +1,12 @@
-"""Playlist creator agent for final playlist creation and management."""
+"""Playlist creation service for creating and managing Spotify playlists."""
 
 import logging
 from typing import Optional
 
 from langchain_core.language_models.base import BaseLanguageModel
 
-from ...core.base_agent import BaseAgent
-from ...states.agent_state import AgentState, RecommendationStatus
-from ...tools.spotify_service import SpotifyService
+from ...agents.states.agent_state import AgentState, RecommendationStatus
+from ...agents.tools.spotify_service import SpotifyService
 from .playlist_namer import PlaylistNamer
 from .playlist_describer import PlaylistDescriber
 from .track_adder import TrackAdder
@@ -18,8 +17,8 @@ from .playlist_summarizer import PlaylistSummarizer
 logger = logging.getLogger(__name__)
 
 
-class PlaylistCreatorAgent(BaseAgent):
-    """Agent for creating and managing Spotify playlists."""
+class PlaylistCreationService:
+    """Service for creating and managing Spotify playlists."""
 
     def __init__(
         self,
@@ -27,21 +26,15 @@ class PlaylistCreatorAgent(BaseAgent):
         llm: Optional[BaseLanguageModel] = None,
         verbose: bool = False
     ):
-        """Initialize the playlist creator agent.
+        """Initialize the playlist creation service.
 
         Args:
             spotify_service: Service for Spotify API operations
             llm: Language model for playlist naming
             verbose: Whether to enable verbose logging
         """
-        super().__init__(
-            name="playlist_creator",
-            description="Creates and manages Spotify playlists with recommended tracks",
-            llm=llm,
-            verbose=verbose
-        )
-
         self.spotify_service = spotify_service
+        self.verbose = verbose
 
         # Initialize component classes
         self.playlist_namer = PlaylistNamer(llm=llm)
@@ -50,7 +43,7 @@ class PlaylistCreatorAgent(BaseAgent):
         self.playlist_validator = PlaylistValidator()
         self.playlist_summarizer = PlaylistSummarizer()
 
-    async def execute(self, state: AgentState) -> AgentState:
+    async def create_playlist(self, state: AgentState) -> AgentState:
         """Execute playlist creation.
 
         Args:

@@ -18,14 +18,12 @@ from ...models.playlist import Playlist
 from ..workflows.workflow_manager import WorkflowManager, WorkflowConfig
 from ..tools.reccobeat_service import RecoBeatService
 from ..tools.spotify_service import SpotifyService
-from ..agents import (
+from ..recommender import (
     MoodAnalyzerAgent,
     SeedGathererAgent,
     RecommendationGeneratorAgent,
-    PlaylistCreatorAgent,
     OrchestratorAgent
 )
-from ..agents.playlist_editor import CompletedPlaylistEditor
 
 
 logger = logging.getLogger(__name__)
@@ -69,8 +67,6 @@ recommendation_generator = RecommendationGeneratorAgent(
     max_recommendations=25,  # Limit to 25 tracks for focused playlists
     verbose=True
 )
-playlist_creator = PlaylistCreatorAgent(spotify_service, groq_llm, verbose=True)
-completed_playlist_editor = CompletedPlaylistEditor()
 
 # Create orchestrator agent (must be created after other agents)
 orchestrator = OrchestratorAgent(
@@ -96,7 +92,6 @@ agents = {
     "mood_analyzer": mood_analyzer,
     "seed_gatherer": seed_gatherer,
     "recommendation_generator": recommendation_generator,
-    "playlist_creator": playlist_creator,
     "orchestrator": orchestrator
 }
 
@@ -131,7 +126,7 @@ async def start_recommendation(
 
         # Start the workflow with authenticated user's information
         session_id = await workflow_manager.start_workflow(
-            mood_prompt=mood_prompt,
+            mood_prompt=mood_prompt.strip(),
             user_id=str(current_user.id),
             spotify_user_id=current_user.spotify_id
         )
@@ -408,9 +403,6 @@ async def get_playlist_details(session_id: str):
                 detail=f"Playlist not ready for workflow {session_id}"
             )
 
-        # Get playlist summary
-        playlist_summary = playlist_creator.get_playlist_summary(state)
-
         # Get detailed track information
         tracks = [
             {
@@ -428,7 +420,6 @@ async def get_playlist_details(session_id: str):
 
         return {
             "session_id": session_id,
-            "playlist": playlist_summary,
             "tracks": tracks,
             "mood_analysis": state.mood_analysis,
             "total_tracks": len(tracks),
@@ -442,158 +433,6 @@ async def get_playlist_details(session_id: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get playlist details: {str(e)}"
-        )
-
-
-@router.post("/recommendations/{session_id}/save-to-spotify")
-async def save_playlist_to_spotify(
-    session_id: str,
-    current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
-):
-    """Save the draft playlist to Spotify.
-
-    Args:
-        session_id: Workflow session ID
-        current_user: Authenticated user
-        db: Database session
-
-    Returns:
-        Playlist creation result
-    """
-    try:
-        # Refresh Spotify token if expired before saving to Spotify
-        current_user = await refresh_spotify_token_if_expired(current_user, db)
-        
-        # First try to get from workflow manager (Redis/cache)
-        state = workflow_manager.get_workflow_state(session_id)
-
-        # If not in cache, load from database
-        if not state:
-            from sqlalchemy import select
-            from ..states.agent_state import AgentState, RecommendationStatus, TrackRecommendation
-            
-            query = select(Playlist).where(Playlist.session_id == session_id)
-            result = await db.execute(query)
-            playlist = result.scalar_one_or_none()
-            
-            if not playlist:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Workflow {session_id} not found"
-                )
-            
-            # Check if already saved to Spotify
-            if playlist.spotify_playlist_id:
-                return {
-                    "session_id": session_id,
-                    "already_saved": True,
-                    "playlist_id": playlist.spotify_playlist_id,
-                    "playlist_name": playlist.playlist_data.get("name") if playlist.playlist_data else None,
-                    "spotify_url": playlist.playlist_data.get("spotify_url") if playlist.playlist_data else None,
-                    "message": "Playlist already saved to Spotify"
-                }
-            
-            # Reconstruct state from database
-            recommendations = [
-                TrackRecommendation(
-                    track_id=rec["track_id"],
-                    track_name=rec["track_name"],
-                    artists=rec["artists"],
-                    spotify_uri=rec.get("spotify_uri"),
-                    confidence_score=rec.get("confidence_score", 0.5),
-                    reasoning=rec.get("reasoning", ""),
-                    source=rec.get("source", "unknown")
-                )
-                for rec in (playlist.recommendations_data or [])
-            ]
-            
-            state = AgentState(
-                session_id=session_id,
-                user_id=str(current_user.id),
-                mood_prompt=playlist.mood_prompt,
-                spotify_user_id=current_user.spotify_id,
-                status=RecommendationStatus.COMPLETED,
-                current_step="completed",
-                recommendations=recommendations,
-                mood_analysis=playlist.mood_analysis_data,
-                metadata={"spotify_access_token": current_user.access_token}
-            )
-        else:
-            # In-memory state exists
-            if not state.is_complete():
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Workflow is not complete yet"
-                )
-
-            if state.playlist_id:
-                # Already saved
-                return {
-                    "session_id": session_id,
-                    "already_saved": True,
-                    "playlist_id": state.playlist_id,
-                    "playlist_name": state.playlist_name,
-                    "spotify_url": state.metadata.get("playlist_url"),
-                    "message": "Playlist already saved to Spotify"
-                }
-
-            # Add access token to metadata for playlist creation
-            state.metadata["spotify_access_token"] = current_user.access_token
-
-        # Create playlist on Spotify using the playlist creator agent
-        if not playlist_creator:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Playlist creator not available"
-            )
-
-        state = await playlist_creator.run_with_error_handling(state)
-
-        if not state.playlist_id:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create playlist on Spotify"
-            )
-
-        # Mark as saved
-        state.metadata["playlist_saved_to_spotify"] = True
-        state.metadata["spotify_save_timestamp"] = datetime.utcnow().isoformat()
-        
-        # Update database with final playlist info
-        from sqlalchemy import select
-        query = select(Playlist).where(Playlist.session_id == session_id)
-        result = await db.execute(query)
-        playlist_db = result.scalar_one_or_none()
-        
-        if playlist_db:
-            playlist_db.spotify_playlist_id = state.playlist_id
-            playlist_db.status = "completed"
-            playlist_db.playlist_data = {
-                "name": state.playlist_name,
-                "spotify_url": state.metadata.get("playlist_url"),
-                "spotify_uri": state.metadata.get("playlist_uri")
-            }
-            await db.commit()
-            logger.info(f"Updated playlist {playlist_db.id} with Spotify info")
-
-        return {
-            "session_id": session_id,
-            "playlist_id": state.playlist_id,
-            "playlist_name": state.playlist_name,
-            "spotify_url": state.metadata.get("playlist_url"),
-            "spotify_uri": state.metadata.get("playlist_uri"),
-            "tracks_added": len(state.recommendations),
-            "message": "Playlist successfully saved to Spotify!"
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error saving playlist to Spotify: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save playlist: {str(e)}"
         )
 
 
@@ -677,82 +516,5 @@ async def list_recent_workflows(limit: int = Query(default=10, le=50)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list recent workflows: {str(e)}"
-        )
-
-
-@router.post("/recommendations/{session_id}/edit-completed")
-async def edit_completed_playlist(
-    session_id: str,
-    edit_type: str = Query(..., description="Type of edit (reorder/remove/add)"),
-    track_id: Optional[str] = Query(None, description="Track ID for edit"),
-    new_position: Optional[int] = Query(None, description="New position for reorder"),
-    track_uri: Optional[str] = Query(None, description="Track URI for add operations"),
-    current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
-):
-    """Edit a completed/saved playlist by modifying both local state and Spotify playlist.
-    
-    This endpoint bypasses the is_complete() check and directly modifies the Spotify playlist.
-    
-    Args:
-        session_id: Workflow session ID
-        edit_type: Type of edit (reorder/remove/add)
-        track_id: Track ID for the edit
-        new_position: New position for reorder operations
-        track_uri: Track URI for add operations
-        current_user: Authenticated user
-        db: Database session
-    
-    Returns:
-        Updated playlist information
-    """
-    try:
-        # Refresh Spotify token if expired
-        current_user = await refresh_spotify_token_if_expired(current_user, db)
-        
-        # Use the completed playlist editor service
-        result = await completed_playlist_editor.edit_playlist(
-            session_id=session_id,
-            edit_type=edit_type,
-            db=db,
-            access_token=current_user.access_token,
-            user_id=current_user.id,
-            track_id=track_id,
-            new_position=new_position,
-            track_uri=track_uri
-        )
-        
-        # Update in-memory state if it exists
-        from sqlalchemy import select
-        query = select(Playlist).where(Playlist.session_id == session_id)
-        db_result = await db.execute(query)
-        playlist = db_result.scalar_one_or_none()
-        
-        if playlist and playlist.recommendations_data:
-            await completed_playlist_editor.update_in_memory_state(
-                workflow_manager,
-                session_id,
-                playlist.recommendations_data
-            )
-        
-        return result
-    
-    except PermissionError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e)
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error editing completed playlist: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to edit playlist: {str(e)}"
         )
 

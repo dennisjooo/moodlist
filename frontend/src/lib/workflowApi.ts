@@ -187,7 +187,7 @@ class WorkflowAPI {
     message: string;
     already_saved?: boolean;
   }> {
-    return this.request(`/api/agents/recommendations/${sessionId}/save-to-spotify`, {
+    return this.request(`/api/playlists/${sessionId}/save-to-spotify`, {
       method: 'POST',
     });
   }
@@ -225,7 +225,7 @@ class WorkflowAPI {
     if (options.newPosition !== undefined) params.append('new_position', options.newPosition.toString());
     if (options.trackUri) params.append('track_uri', options.trackUri);
 
-    return this.request(`/api/agents/recommendations/${sessionId}/edit-completed?${params.toString()}`, {
+    return this.request(`/api/playlists/${sessionId}/edit?${params.toString()}`, {
       method: 'POST',
     });
   }
