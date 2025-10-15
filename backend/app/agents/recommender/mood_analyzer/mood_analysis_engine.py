@@ -2,9 +2,10 @@
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from langchain_core.language_models.base import BaseLanguageModel
+from langchain_core.messages import AIMessage
 
 from .prompts import get_mood_analysis_system_prompt
 
@@ -259,7 +260,7 @@ class MoodAnalysisEngine:
             if "speechiness" not in analysis["target_features"]:
                 analysis["target_features"]["speechiness"] = [0.5, 1.0]
 
-    def _parse_llm_response_fallback(self, response_content: str) -> Dict[str, Any]:
+    def _parse_llm_response_fallback(self, response_content: Union[str, AIMessage]) -> Dict[str, Any]:
         """Parse LLM response when JSON parsing fails.
 
         Args:
@@ -268,15 +269,16 @@ class MoodAnalysisEngine:
         Returns:
             Parsed mood analysis
         """
-        content_lower = response_content.lower()
+        content = response_content if isinstance(response_content, str) else response_content.content
+        content_lower = content.lower() 
 
         analysis = {
-            "mood_interpretation": response_content[:200] + "...",
+            "mood_interpretation": content[:200] + "...",
             "primary_emotion": "neutral",
             "energy_level": "medium",
             "target_features": {},
             "search_keywords": [],
-            "reasoning": response_content
+            "reasoning": content
         }
 
         # Extract basic features from text
