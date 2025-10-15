@@ -334,7 +334,7 @@ class WorkflowManager:
             self.success_count += 1
             
             # Dump the state to a file
-            with open(f"workflow_{session_id}.json", "w") as f:
+            with open(f"logs/workflow_{session_id}.json", "w") as f:
                 import json
                 
                 def serialize_datetime(obj):
