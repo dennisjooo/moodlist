@@ -74,7 +74,7 @@ class PlaylistCreationService:
                 access_token=access_token,
                 name=playlist_name,
                 description=playlist_description,
-                public=True
+                public=False
             )
 
             if not playlist_data:
