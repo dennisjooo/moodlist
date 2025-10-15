@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from langchain_core.language_models.base import BaseLanguageModel
 
 from .prompts import get_artist_filtering_prompt
+from .text_processor import TextProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class ArtistDiscovery:
         """
         self.spotify_service = spotify_service
         self.llm = llm
+        self._text_processor = TextProcessor()
 
     async def discover_mood_artists(self, state, mood_analysis: Dict[str, Any]):
         """Discover artists matching the mood using Spotify search and LLM filtering.
@@ -47,7 +49,7 @@ class ArtistDiscovery:
             # Fallback to search keywords if no specific genres/artists identified
             search_keywords = mood_analysis.get("search_keywords", [])
             if not genre_keywords and not artist_recommendations and not search_keywords:
-                search_keywords = self._extract_search_keywords(state.mood_prompt)
+                search_keywords = self._text_processor.extract_search_keywords(state.mood_prompt)
 
             all_artists = []
 
@@ -203,45 +205,3 @@ class ArtistDiscovery:
             logger.error(f"LLM artist filtering failed: {str(e)}")
             # Fallback to popularity-based selection
             return sorted(artists, key=lambda x: x.get("popularity", 0), reverse=True)[:20]  # Increased from 12 to 20
-
-    def _extract_search_keywords(self, mood_prompt: str) -> List[str]:
-        """Extract search keywords from mood prompt.
-
-        Args:
-            mood_prompt: User's mood description
-
-        Returns:
-            List of relevant search keywords
-        """
-        # Simple keyword extraction - can be enhanced with NLP
-        keywords = []
-
-        # Split by common delimiters
-        words = mood_prompt.replace(",", " ").replace(" and ", " ").split()
-
-        # Filter meaningful words (length > 3, not common stop words)
-        stop_words = {"for", "with", "that", "this", "very", "some", "music", "songs", "playlist"}
-        meaningful_words = [
-            word.lower() for word in words
-            if len(word) > 3 and word.lower() not in stop_words
-        ]
-
-        keywords.extend(meaningful_words)
-
-        # Add some common mood-related terms
-        mood_synonyms = {
-            "chill": ["relaxed", "laid-back", "mellow"],
-            "energetic": ["upbeat", "lively", "dynamic"],
-            "sad": ["melancholy", "emotional", "bittersweet"],
-            "happy": ["joyful", "cheerful", "uplifting"],
-            "romantic": ["love", "intimate", "passionate"],
-            "focus": ["concentration", "study", "instrumental"],
-            "party": ["celebration", "fun", "dance"],
-            "workout": ["fitness", "motivation", "pump"],
-        }
-
-        for word in meaningful_words:
-            if word in mood_synonyms:
-                keywords.extend(mood_synonyms[word])
-
-        return list(set(keywords))  # Remove duplicates

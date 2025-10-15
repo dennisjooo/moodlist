@@ -6,6 +6,9 @@ from .artist_discovery import ArtistDiscovery
 from .playlist_target_planner import PlaylistTargetPlanner
 from .keyword_extractor import KeywordExtractor
 from .mood_analyzer import MoodAnalyzerAgent
+from .config import STOP_WORDS, MOOD_SYNONYMS, KNOWN_GENRES, LANGUAGE_INDICATORS, MOOD_PROFILES
+from .text_processor import TextProcessor
+from .mood_profile_matcher import MoodProfileMatcher
 
 __all__ = [
     "MoodAnalysisEngine",
@@ -13,5 +16,12 @@ __all__ = [
     "ArtistDiscovery",
     "PlaylistTargetPlanner",
     "KeywordExtractor",
-    "MoodAnalyzerAgent"
+    "MoodAnalyzerAgent",
+    "TextProcessor",
+    "MoodProfileMatcher",
+    "STOP_WORDS",
+    "MOOD_SYNONYMS",
+    "KNOWN_GENRES",
+    "LANGUAGE_INDICATORS",
+    "MOOD_PROFILES"
 ]
