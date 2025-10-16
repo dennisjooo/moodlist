@@ -4,7 +4,7 @@ import structlog
 from typing import Optional
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from langchain_openai import ChatOpenAI
 from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
