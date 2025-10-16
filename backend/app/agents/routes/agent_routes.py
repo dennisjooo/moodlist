@@ -33,7 +33,7 @@ reccobeat_service = RecoBeatService()
 spotify_service = SpotifyService()
 
 llm = ChatOpenAI(
-    model="moonshotai/kimi-k2:free",
+    model="alibaba/tongyi-deepresearch-30b-a3b:free",
     temperature=1,
     base_url="https://openrouter.ai/api/v1",
     api_key=settings.OPENROUTER_API_KEY
@@ -74,7 +74,7 @@ orchestrator = OrchestratorAgent(
     recommendation_generator=recommendation_generator,
     seed_gatherer=seed_gatherer,
     llm=cerebras_llm,
-    max_iterations=3,
+    max_iterations=1,
     cohesion_threshold=0.75,
     verbose=True
 )
