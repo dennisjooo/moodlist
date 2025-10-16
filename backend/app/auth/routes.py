@@ -2,12 +2,11 @@ import structlog
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
-from app.core.config import settings
 from app.core.constants import SessionConstants
 from app.core.exceptions import SpotifyAuthError, UnauthorizedException, InternalServerError
 from app.core.database import get_db
