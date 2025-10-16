@@ -1,6 +1,6 @@
 """Mood analyzer agent for understanding user mood prompts."""
 
-import logging
+import structlog
 from typing import Optional
 
 from langchain_core.language_models.base import BaseLanguageModel
@@ -15,7 +15,7 @@ from . import (
     KeywordExtractor
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class MoodAnalyzerAgent(BaseAgent):

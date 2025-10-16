@@ -1,12 +1,13 @@
 """Spotify edit service for editing playlists saved to Spotify."""
 
 import json
-import logging
+import structlog
 from typing import List, Optional, Dict, Any
 
-import httpx
+from ...clients.spotify_client import SpotifyAPIClient
+from ...core.exceptions import SpotifyAPIException
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class SpotifyEditService:
@@ -14,7 +15,7 @@ class SpotifyEditService:
 
     def __init__(self):
         """Initialize the Spotify edit service."""
-        pass
+        self.spotify_client = SpotifyAPIClient()
 
     async def remove_track_from_spotify(
         self,
@@ -33,22 +34,16 @@ class SpotifyEditService:
             Whether the operation was successful
         """
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.request(
-                    "DELETE",
-                    f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks",
-                    headers={
-                        "Authorization": f"Bearer {access_token}",
-                        "Content-Type": "application/json"
-                    },
-                    content=json.dumps({"tracks": [{"uri": track_uri}]})
-                )
-                response.raise_for_status()
-                logger.info(f"Removed track {track_uri} from Spotify playlist {playlist_id}")
-                return True
+            await self.spotify_client.remove_tracks_from_playlist(
+                access_token=access_token,
+                playlist_id=playlist_id,
+                track_uris=[track_uri]
+            )
+            logger.info(f"Removed track {track_uri} from Spotify playlist {playlist_id}")
+            return True
         except Exception as e:
             logger.error(f"Error removing track from Spotify: {str(e)}", exc_info=True)
-            raise
+            raise SpotifyAPIException(f"Failed to remove track from Spotify: {str(e)}")
 
     async def reorder_track_in_spotify(
         self,
@@ -69,25 +64,21 @@ class SpotifyEditService:
             Whether the operation was successful
         """
         try:
-            async with httpx.AsyncClient() as client:
-                # Spotify uses insert_before, so if moving down, add 1
-                insert_before = new_position if old_position > new_position else new_position + 1
-                
-                response = await client.put(
-                    f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks",
-                    headers={"Authorization": f"Bearer {access_token}"},
-                    json={
-                        "range_start": old_position,
-                        "insert_before": insert_before,
-                        "range_length": 1
-                    }
-                )
-                response.raise_for_status()
-                logger.info(f"Reordered track from position {old_position} to {new_position} in Spotify")
-                return True
+            # Spotify uses insert_before, so if moving down, add 1
+            insert_before = new_position if old_position > new_position else new_position + 1
+            
+            await self.spotify_client.reorder_playlist_tracks(
+                access_token=access_token,
+                playlist_id=playlist_id,
+                range_start=old_position,
+                insert_before=insert_before,
+                range_length=1
+            )
+            logger.info(f"Reordered track from position {old_position} to {new_position} in Spotify")
+            return True
         except Exception as e:
             logger.error(f"Error reordering track in Spotify: {str(e)}", exc_info=True)
-            raise
+            raise SpotifyAPIException(f"Failed to reorder track in Spotify: {str(e)}")
 
     async def add_track_to_spotify(
         self,
@@ -108,22 +99,17 @@ class SpotifyEditService:
             Whether the operation was successful
         """
         try:
-            async with httpx.AsyncClient() as client:
-                json_data = {"uris": [track_uri]}
-                if position is not None:
-                    json_data["position"] = position
-
-                response = await client.post(
-                    f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks",
-                    headers={"Authorization": f"Bearer {access_token}"},
-                    json=json_data
-                )
-                response.raise_for_status()
-                logger.info(f"Added track {track_uri} to Spotify playlist {playlist_id}")
-                return True
+            await self.spotify_client.add_tracks_to_playlist(
+                access_token=access_token,
+                playlist_id=playlist_id,
+                track_uris=[track_uri],
+                position=position
+            )
+            logger.info(f"Added track {track_uri} to Spotify playlist {playlist_id}")
+            return True
         except Exception as e:
             logger.error(f"Error adding track to Spotify: {str(e)}", exc_info=True)
-            raise
+            raise SpotifyAPIException(f"Failed to add track to Spotify: {str(e)}")
 
     async def get_track_details(
         self,
@@ -140,14 +126,11 @@ class SpotifyEditService:
             Track details dictionary
         """
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"https://api.spotify.com/v1/tracks/{track_id}",
-                    headers={"Authorization": f"Bearer {access_token}"}
-                )
-                response.raise_for_status()
-                return response.json()
+            return await self.spotify_client.get_track(
+                access_token=access_token,
+                track_id=track_id
+            )
         except Exception as e:
             logger.error(f"Error getting track details from Spotify: {str(e)}", exc_info=True)
-            raise
+            raise SpotifyAPIException(f"Failed to get track details from Spotify: {str(e)}")
 

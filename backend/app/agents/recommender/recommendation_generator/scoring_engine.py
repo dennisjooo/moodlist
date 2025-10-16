@@ -1,11 +1,11 @@
 """Scoring engine for confidence calculation and mood matching."""
 
-import logging
+import structlog
 from typing import Any, Dict, Optional
 
 from ...states.agent_state import AgentState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class ScoringEngine:

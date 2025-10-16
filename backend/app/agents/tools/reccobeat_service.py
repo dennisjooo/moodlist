@@ -2,7 +2,7 @@
 
 import asyncio
 import hashlib
-import logging
+import structlog
 from typing import Dict, List, Optional, Any
 
 from .agent_tools import AgentTools
@@ -12,7 +12,7 @@ from .reccobeat.artist_info import SearchArtistTool, GetMultipleArtistsTool, Get
 from ..core.cache import cache_manager
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class RecoBeatService:

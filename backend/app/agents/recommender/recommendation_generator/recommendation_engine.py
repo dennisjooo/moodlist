@@ -1,7 +1,7 @@
 """Recommendation generation engine."""
 
 import asyncio
-import logging
+import structlog
 from typing import Any, Dict, List, Optional
 
 from ...tools.reccobeat_service import RecoBeatService
@@ -12,7 +12,7 @@ from .audio_features import AudioFeaturesHandler
 from .track_filter import TrackFilter
 from .scoring_engine import ScoringEngine
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class RecommendationEngine:

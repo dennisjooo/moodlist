@@ -1,7 +1,7 @@
 """Mood analysis engine for LLM-based and fallback mood analysis."""
 
 import json
-import logging
+import structlog
 from typing import Any, Dict, Optional, Union
 
 from langchain_core.language_models.base import BaseLanguageModel
@@ -11,7 +11,7 @@ from .prompts import get_mood_analysis_system_prompt
 from .text_processor import TextProcessor
 from .mood_profile_matcher import MoodProfileMatcher
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class MoodAnalysisEngine:

@@ -1,7 +1,7 @@
 """Main recommendation generator agent."""
 
 import asyncio
-import logging
+import structlog
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone, timedelta
 import httpx
@@ -18,7 +18,7 @@ from .scoring_engine import ScoringEngine
 from .diversity_manager import DiversityManager
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class RecommendationGeneratorAgent(BaseAgent):

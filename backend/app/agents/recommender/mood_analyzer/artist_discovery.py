@@ -1,7 +1,7 @@
 """Artist discovery component for Spotify artist search and filtering."""
 
 import json
-import logging
+import structlog
 from typing import Any, Dict, List, Optional
 
 from langchain_core.language_models.base import BaseLanguageModel
@@ -9,7 +9,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 from .prompts import get_artist_filtering_prompt
 from .text_processor import TextProcessor
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class ArtistDiscovery:

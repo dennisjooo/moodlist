@@ -1,11 +1,11 @@
 """LLM-based seed selector for intelligent seed selection."""
 
 import json
-import logging
+import structlog
 from typing import Any, Dict, List
 from .prompts.seed_selection import get_seed_selection_prompt
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class LLMSeedSelector:

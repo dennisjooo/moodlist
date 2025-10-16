@@ -4,12 +4,12 @@ import asyncio
 import time
 from typing import Dict, Optional, Tuple
 from collections import defaultdict, deque
-import logging
+import structlog
 
 from fastapi import HTTPException, Request, status
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class RateLimiter:

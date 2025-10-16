@@ -1,7 +1,7 @@
 """Strategy for generating recommendations from seed tracks."""
 
 import asyncio
-import logging
+import structlog
 from typing import Any, Dict, List
 
 from ....tools.reccobeat_service import RecoBeatService
@@ -12,7 +12,7 @@ from ..track_filter import TrackFilter
 from ..scoring_engine import ScoringEngine
 from .base_strategy import RecommendationStrategy
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class SeedBasedStrategy(RecommendationStrategy):

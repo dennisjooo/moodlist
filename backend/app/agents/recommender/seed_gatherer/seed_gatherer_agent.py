@@ -1,6 +1,6 @@
 """Seed gatherer agent for collecting user preference data."""
 
-import logging
+import structlog
 from typing import Any, Dict, List, Optional
 
 from ...core.base_agent import BaseAgent
@@ -10,7 +10,7 @@ from .seed_selector import SeedSelector
 from .audio_enricher import AudioEnricher
 from .llm_seed_selector import LLMSeedSelector
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class SeedGathererAgent(BaseAgent):

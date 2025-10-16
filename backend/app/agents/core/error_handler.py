@@ -1,6 +1,6 @@
 """Enhanced error handling for the agentic system."""
 
-import logging
+import structlog
 import traceback
 from typing import Any, Dict, Optional, Union
 from datetime import datetime
@@ -10,7 +10,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class ErrorSeverity(str, Enum):

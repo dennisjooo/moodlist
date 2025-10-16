@@ -6,7 +6,7 @@ import json
 import pickle
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime, timedelta
-import logging
+import structlog
 
 try:
     import redis.asyncio as redis
@@ -15,7 +15,7 @@ except ImportError:
     REDIS_AVAILABLE = False
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class Cache:

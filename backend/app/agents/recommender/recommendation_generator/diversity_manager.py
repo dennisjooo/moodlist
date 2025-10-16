@@ -1,11 +1,11 @@
 """Diversity management for recommendation lists."""
 
-import logging
+import structlog
 from typing import List
 
 from ...states.agent_state import TrackRecommendation
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class DiversityManager:

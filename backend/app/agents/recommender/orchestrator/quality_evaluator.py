@@ -1,7 +1,7 @@
 """Quality evaluator for assessing playlist quality against mood criteria."""
 
 import json
-import logging
+import structlog
 from typing import Any, Dict, List, Optional
 
 from langchain_core.language_models.base import BaseLanguageModel
@@ -10,7 +10,7 @@ from ...states.agent_state import AgentState
 from .cohesion_calculator import CohesionCalculator
 from .prompts import get_quality_evaluation_prompt
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class QualityEvaluator:

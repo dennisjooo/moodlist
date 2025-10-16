@@ -1,7 +1,7 @@
 """Base tool definitions for the agentic system."""
 
 import asyncio
-import logging
+import structlog
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Type, Union
 from datetime import datetime
@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from ..states.agent_state import AgentState
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # Global semaphore for RecoBeat API to prevent concurrent requests
