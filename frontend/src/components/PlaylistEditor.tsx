@@ -323,9 +323,28 @@ export default function PlaylistEditor({
 
   const handleAddTrack = useCallback(async (trackUri: string) => {
     setAddingTracks(prev => new Set(prev).add(trackUri));
+
+    // Find the track in search results to add optimistically
+    const trackToAdd = searchResults.find(track => track.spotify_uri === trackUri);
+
     try {
-      // Always use applyCompletedEdit - it handles both draft and saved playlists
+      // Apply edit to server first (keep spinner during this)
       await applyCompletedEdit('add', { trackUri });
+
+      // On success (200), immediately add track to UI and show checkmark
+      if (trackToAdd) {
+        const optimisticTrack: Track = {
+          track_id: trackToAdd.track_id,
+          track_name: trackToAdd.track_name,
+          artists: trackToAdd.artists,
+          spotify_uri: trackToAdd.spotify_uri,
+          confidence_score: 0.5, // Default for user-added tracks
+          reasoning: 'Added by user',
+          source: 'user_added'
+        };
+
+        setTracks(prev => [...prev, optimisticTrack]);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to add track';
       setError(errorMessage);
@@ -337,7 +356,7 @@ export default function PlaylistEditor({
         return newSet;
       });
     }
-  }, [applyCompletedEdit, isCompleted]);
+  }, [applyCompletedEdit, searchResults]);
 
   return (
     <div className="space-y-6">
