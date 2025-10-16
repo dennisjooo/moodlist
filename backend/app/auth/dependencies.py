@@ -1,15 +1,16 @@
 import structlog
-import httpx
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status, Request
+from fastapi import Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.security import verify_token
 from app.core.database import get_db
+from app.core.exceptions import UnauthorizedException, InternalServerError, SpotifyAuthError
+from app.clients import SpotifyAPIClient
 from app.models.session import Session
 from app.models.user import User
 from app.core.config import settings
@@ -24,19 +25,11 @@ async def get_current_user(
 ) -> User:
     """Get current authenticated user."""
     if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication credentials not provided",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise UnauthorizedException("Authentication credentials not provided")
     
     payload = verify_token(credentials.credentials)
     if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise UnauthorizedException("Invalid or expired token")
     
     # Get user from database
     result = await db.execute(
@@ -50,10 +43,7 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive",
-        )
+        raise UnauthorizedException("User not found or inactive")
     
     return user
 
@@ -125,10 +115,7 @@ async def require_auth(
 
     if not user and not session:
         logger.debug("No user or session found")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-        )
+        raise UnauthorizedException("Authentication required")
 
     # If we have a session but no user, get user from session
     if not user and session:
@@ -146,10 +133,7 @@ async def require_auth(
 
     if not user:
         logger.debug("No user found after session lookup")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive",
-        )
+        raise UnauthorizedException("User not found or inactive")
 
     return user
 
@@ -183,55 +167,36 @@ async def refresh_spotify_token_if_expired(user: User, db: AsyncSession) -> User
     
     logger.info("Spotify token expired, refreshing", user_id=user.id, expired_at=token_expires_at)
     
-    # Refresh the token
-    async with httpx.AsyncClient() as client:
-        try:
-            data = {
-                "grant_type": "refresh_token",
-                "refresh_token": user.refresh_token,
-                "client_id": settings.SPOTIFY_CLIENT_ID,
-                "client_secret": settings.SPOTIFY_CLIENT_SECRET
-            }
-            
-            response = await client.post(
-                "https://accounts.spotify.com/api/token",
-                data=data
-            )
-            response.raise_for_status()
-            token_data = response.json()
-            
-            # Update user's tokens in database
-            user.access_token = token_data["access_token"]
-            if "refresh_token" in token_data:
-                user.refresh_token = token_data["refresh_token"]
-            
-            # Update expiration time
-            expires_in = token_data.get("expires_in", 3600)
-            user.token_expires_at = datetime.now(timezone.utc).replace(microsecond=0) + \
-                                   timedelta(seconds=expires_in)
-            
-            await db.commit()
-            await db.refresh(user)
-            
-            logger.info("Spotify token refreshed successfully", user_id=user.id, 
-                       new_expires_at=user.token_expires_at)
-            
-            return user
-            
-        except httpx.HTTPStatusError as e:
-            logger.error("Failed to refresh Spotify token", 
-                        user_id=user.id, 
-                        error=str(e), 
-                        status_code=e.response.status_code)
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Failed to refresh Spotify token. Please log in again."
-            )
-        except Exception as e:
-            logger.error("Unexpected error refreshing Spotify token", 
-                        user_id=user.id, 
-                        error=str(e))
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to refresh token: {str(e)}"
-            )
+    # Refresh the token using SpotifyAPIClient
+    spotify_client = SpotifyAPIClient()
+    try:
+        token_data = await spotify_client.refresh_token(user.refresh_token)
+        
+        # Update user's tokens in database
+        user.access_token = token_data["access_token"]
+        if "refresh_token" in token_data:
+            user.refresh_token = token_data["refresh_token"]
+        
+        # Update expiration time
+        expires_in = token_data.get("expires_in", 3600)
+        user.token_expires_at = datetime.now(timezone.utc).replace(microsecond=0) + \
+                               timedelta(seconds=expires_in)
+        
+        await db.commit()
+        await db.refresh(user)
+        
+        logger.info("Spotify token refreshed successfully", user_id=user.id, 
+                   new_expires_at=user.token_expires_at)
+        
+        return user
+        
+    except SpotifyAuthError as e:
+        logger.error("Failed to refresh Spotify token", 
+                    user_id=user.id, 
+                    error=str(e))
+        raise SpotifyAuthError("Failed to refresh Spotify token. Please log in again.")
+    except Exception as e:
+        logger.error("Unexpected error refreshing Spotify token", 
+                    user_id=user.id, 
+                    error=str(e))
+        raise InternalServerError(f"Failed to refresh token: {str(e)}")
