@@ -1,11 +1,22 @@
 'use client';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { playlistAPI } from '@/lib/playlistApi';
 import { useWorkflow } from '@/lib/workflowContext';
-import { Download, Edit, ExternalLink, Loader2, Music, Star } from 'lucide-react';
+import { Download, Edit, ExternalLink, Loader2, Music, Star, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
@@ -19,6 +30,8 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
   const { workflowState, saveToSpotify, resetWorkflow } = useWorkflow();
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const handleSaveToSpotify = async () => {
     setIsSaving(true);
@@ -30,6 +43,27 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
       setSaveError(error instanceof Error ? error.message : 'Failed to save playlist');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!workflowState.sessionId) return;
+
+    setIsDeleting(true);
+    try {
+      // Get the playlist database ID using the session ID
+      const playlistData = await playlistAPI.getPlaylistBySession(workflowState.sessionId);
+      // Delete the playlist
+      await playlistAPI.deletePlaylist(playlistData.id);
+      // Navigate back to playlists page
+      router.push('/playlists');
+    } catch (error) {
+      console.error('Failed to delete playlist:', error);
+      setSaveError('Failed to delete playlist. Please try again.');
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
+      // Clear error after 5 seconds
+      setTimeout(() => setSaveError(null), 5000);
     }
   };
 
@@ -76,10 +110,18 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
                     variant="outline"
                     onClick={handleEditClick}
                     size="lg"
-                    className="flex items-center gap-2"
+                    className="p-2"
                   >
                     <Edit className="w-4 h-4" />
-                    Edit Playlist
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setShowDeleteDialog(true)}
+                    size="lg"
+                    disabled={isDeleting}
+                    className="p-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </Button>
                   {workflowState.playlist?.spotify_url && (
                     <Button asChild size="lg">
@@ -101,10 +143,18 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
                     variant="outline"
                     onClick={handleEditClick}
                     size="lg"
-                    className="flex items-center gap-2"
+                    className="p-2"
                   >
                     <Edit className="w-4 h-4" />
-                    Edit Draft
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setShowDeleteDialog(true)}
+                    size="lg"
+                    disabled={isDeleting}
+                    className="p-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </Button>
                   <Button
                     onClick={handleSaveToSpotify}
@@ -136,6 +186,29 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Playlist</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{workflowState.playlist?.name || workflowState.moodPrompt}"?
+              This action cannot be undone and will remove the playlist from both your account.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Mood Analysis */}
       {workflowState.moodAnalysis && (
