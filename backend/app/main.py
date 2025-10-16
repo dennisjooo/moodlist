@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -12,20 +13,22 @@ from app.spotify.routes import router as spotify_router
 from app.agents.routes import router as agent_router
 from app.playlists.routes import router as playlist_router
 
+logger = structlog.get_logger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan context manager."""
     # Startup
-    print(f"Starting {settings.APP_NAME} in {settings.APP_ENV} mode")
+    logger.info("Starting application", app_name=settings.APP_NAME, environment=settings.APP_ENV)
 
     # Initialize cache manager with Valkey if URL is provided
     global cache_manager
     if settings.REDIS_URL:
-        print(f"Initializing cache manager with Valkey at {settings.REDIS_URL}")
+        logger.info("Initializing cache manager with Valkey", redis_url=settings.REDIS_URL)
         cache_manager = cache_manager.__class__(settings.REDIS_URL)
     else:
-        print("No Valkey URL provided, using in-memory cache")
+        logger.info("No Valkey URL provided, using in-memory cache")
 
     # Create database tables
     async with engine.begin() as conn:
@@ -34,7 +37,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    print(f"Shutting down {settings.APP_NAME}")
+    logger.info("Shutting down application", app_name=settings.APP_NAME)
 
 
 def create_application() -> FastAPI:

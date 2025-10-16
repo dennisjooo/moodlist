@@ -1,11 +1,11 @@
 """Artist discovery component for Spotify artist search and filtering."""
 
+import json
 import logging
 from typing import Any, Dict, List, Optional
 
 from langchain_core.language_models.base import BaseLanguageModel
 
-from ..utils import LLMResponseParser
 from .prompts import get_artist_filtering_prompt
 from .text_processor import TextProcessor
 
@@ -171,11 +171,16 @@ class ArtistDiscovery:
             prompt = get_artist_filtering_prompt(mood_prompt, mood_interpretation, chr(10).join(artists_summary))
 
             response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
+            content = response.content if hasattr(response, 'content') else str(response)
 
-            # Parse JSON response using centralized parser
-            result = LLMResponseParser.extract_json_from_response(response)
+            # Parse JSON response
+            json_start = content.find('{')
+            json_end = content.rfind('}') + 1
 
-            if result:
+            if json_start >= 0 and json_end > json_start:
+                json_str = content[json_start:json_end]
+                result = json.loads(json_str)
+
                 selected_indices = result.get("selected_artist_indices", [])
                 reasoning = result.get("reasoning", "")
 

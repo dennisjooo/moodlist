@@ -1,14 +1,16 @@
 import structlog
-import httpx
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
+from app.core.constants import SessionConstants
+from app.core.exceptions import SpotifyAuthError, UnauthorizedException, InternalServerError
 from app.core.database import get_db
+from app.clients import SpotifyAPIClient
 from app.models.user import User
 from app.models.session import Session
 from app.auth.security import (
@@ -18,6 +20,7 @@ from app.auth.security import (
     generate_session_token
 )
 from app.auth.dependencies import require_auth
+from app.auth.cookie_utils import set_session_cookie, delete_session_cookie
 from app.auth.schemas import (
     UserCreate,
     UserResponse,
@@ -42,22 +45,16 @@ async def register(
     """Register a new user by fetching profile from Spotify."""
     logger.info("Registration attempt with Spotify token")
     
-    # Fetch user profile from Spotify using access token
-    async with httpx.AsyncClient() as client:
-        try:
-            profile_response = await client.get(
-                "https://api.spotify.com/v1/me",
-                headers={"Authorization": f"Bearer {user_data.access_token}"}
-            )
-            profile_response.raise_for_status()
-            profile_data = profile_response.json()
-            
-        except httpx.HTTPStatusError as e:
-            logger.error("Failed to fetch Spotify profile", error=str(e), status_code=e.response.status_code)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid Spotify access token or failed to fetch profile"
-            )
+    # Fetch user profile from Spotify using centralized client
+    spotify_client = SpotifyAPIClient()
+    try:
+        profile_data = await spotify_client.get_user_profile(user_data.access_token)
+    except SpotifyAuthError as e:
+        logger.error("Failed to fetch Spotify profile", error=str(e))
+        raise SpotifyAuthError("Invalid Spotify access token or failed to fetch profile")
+    except Exception as e:
+        logger.error("Unexpected error fetching Spotify profile", error=str(e))
+        raise InternalServerError("Failed to authenticate with Spotify")
     
     logger.info("Profile fetched successfully", spotify_id=profile_data["id"])
     
@@ -106,7 +103,7 @@ async def register(
     
     # Create session
     session_token = generate_session_token()
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=SessionConstants.EXPIRATION_HOURS)
 
     # Clean up any existing sessions for this user to prevent conflicts
     await db.execute(
@@ -125,19 +122,8 @@ async def register(
     await db.commit()
     await db.refresh(session)
 
-    # Set session cookie
-    from app.core.config import settings
-    is_production = settings.APP_ENV == "production"
-
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        secure=is_production,  # Only secure in production (HTTPS)
-        samesite="lax",
-        max_age=86400,  # 24 hours
-        path="/"  # Ensure cookie is available for all paths
-    )
+    # Set session cookie using utility
+    set_session_cookie(response, session_token)
     
     # Create JWT tokens
     token_data = {"sub": user.spotify_id}
@@ -165,10 +151,7 @@ async def refresh_token(
     # Verify refresh token
     payload = verify_token(refresh_data.refresh_token, "refresh")
     if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token"
-        )
+        raise UnauthorizedException("Invalid refresh token")
     
     # Get user
     result = await db.execute(
@@ -182,10 +165,7 @@ async def refresh_token(
     user = result.scalar_one_or_none()
     
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
-        )
+        raise UnauthorizedException("User not found")
     
     # Create new tokens
     token_data = {"sub": user.spotify_id}
@@ -210,21 +190,12 @@ async def logout(
     current_user: Optional[User] = Depends(require_auth)
 ):
     """Logout user and clear session."""
-    # Clear session cookie
-    from app.core.config import settings
-    is_production = settings.APP_ENV == "production"
-
-    response.delete_cookie(
-        key="session_token",
-        httponly=True,
-        secure=is_production,  # Must match the secure setting used when setting the cookie
-        samesite="lax",
-        path="/"  # Must match the path used when setting the cookie
-    )
+    # Clear session cookie using utility
+    delete_session_cookie(response)
 
     # Delete session from database if user is authenticated
     if current_user:
-        session_token = request.cookies.get("session_token")
+        session_token = request.cookies.get(SessionConstants.COOKIE_NAME)
         if session_token:
             # Delete the session record from database
             await db.execute(
@@ -243,10 +214,7 @@ async def get_current_user_info(
 ):
     """Get current user information."""
     if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated"
-        )
+        raise UnauthorizedException("Not authenticated")
 
     return UserResponse.from_orm(current_user)
 
@@ -257,7 +225,7 @@ async def verify_auth(
     current_user: Optional[User] = Depends(require_auth)
 ):
     """Verify authentication status."""
-    session_token = request.cookies.get("session_token")
+    session_token = request.cookies.get(SessionConstants.COOKIE_NAME)
     logger.debug("Auth verification request", has_session_token=bool(session_token), has_user=bool(current_user))
 
     if not current_user:

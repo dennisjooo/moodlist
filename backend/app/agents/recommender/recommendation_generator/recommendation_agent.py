@@ -10,7 +10,7 @@ from ...core.base_agent import BaseAgent
 from ...states.agent_state import AgentState, RecommendationStatus, TrackRecommendation
 from ...tools.reccobeat_service import RecoBeatService
 from ...tools.spotify_service import SpotifyService
-from ..utils import TrackRecommendationFactory
+from .token_manager import TokenManager
 from .recommendation_engine import RecommendationEngine
 from .audio_features import AudioFeaturesHandler
 from .track_filter import TrackFilter
@@ -53,6 +53,7 @@ class RecommendationGeneratorAgent(BaseAgent):
         self.diversity_factor = diversity_factor
 
         # Initialize component classes
+        self.token_manager = TokenManager()
         self.recommendation_engine = RecommendationEngine(reccobeat_service, spotify_service)
         self.audio_features_handler = AudioFeaturesHandler(reccobeat_service)
         self.track_filter = TrackFilter()
@@ -123,34 +124,13 @@ class RecommendationGeneratorAgent(BaseAgent):
         Returns:
             Processed TrackRecommendation objects
         """
-        # Convert raw recommendations to TrackRecommendation objects
-        track_recommendations = []
-        for rec_data in recommendations:
-            try:
-                rec_obj = TrackRecommendationFactory.from_reccobeat_response(
-                    response_data=rec_data,
-                    source=rec_data.get("source", "reccobeat"),
-                    reasoning=rec_data.get("reasoning", "Mood-based recommendation")
-                )
-
-                if rec_obj:
-                    track_recommendations.append(rec_obj)
-                else:
-                    logger.warning("Failed to create recommendation object from data")
-
-            except Exception as e:
-                logger.warning(f"Failed to create recommendation object: {e}")
-                continue
-
-        # Sort by confidence score before filtering
-        track_recommendations.sort(key=lambda x: x.confidence_score, reverse=True)
-
-        # Apply mood-based filtering if available
-        if state.mood_analysis and state.mood_analysis.get("target_features"):
-            track_recommendations = self.track_filter._apply_mood_filtering(track_recommendations, state.mood_analysis)
+        # Filter and rank recommendations
+        filtered_recommendations = self.track_filter._filter_and_rank_recommendations(
+            recommendations, state.mood_analysis
+        )
 
         # Ensure diversity in recommendations
-        return self.diversity_manager._ensure_diversity(track_recommendations)
+        return self.diversity_manager._ensure_diversity(filtered_recommendations)
 
     def _apply_ratio_limits(
         self,
