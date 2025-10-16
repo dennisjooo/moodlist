@@ -4,7 +4,6 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from ...states.agent_state import TrackRecommendation
-from ..utils import TrackRecommendationFactory, RecommendationValidator, ValidationResult
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +29,255 @@ class TrackFilter:
         Returns:
             (is_valid, reason) - True if track is relevant, False with reason if not
         """
-        result = RecommendationValidator.validate_track_relevance(track_name, artists, mood_analysis)
-        return result.is_valid, result.reason
+        if not mood_analysis:
+            return (True, "No mood analysis available")
+
+        # Prepare validation context
+        context = self._prepare_validation_context(track_name, artists, mood_analysis)
+
+        # Check 1: Artist matching (always accept if artist matches)
+        artist_match = self._check_artist_match(context)
+        if artist_match[0]:
+            return artist_match
+
+        # Check 2: Language compatibility
+        language_validation = self._validate_language_compatibility(context)
+        if not language_validation[0]:
+            return language_validation
+
+        # Check 3: Genre compatibility
+        genre_validation = self._validate_genre_compatibility(context)
+        if not genre_validation[0]:
+            return genre_validation
+
+        # If we got here, no obvious red flags
+        return (True, "No obvious mismatches detected")
+
+    def _prepare_validation_context(
+        self,
+        track_name: str,
+        artists: List[str],
+        mood_analysis: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Prepare context data for validation checks.
+
+        Args:
+            track_name: Track name
+            artists: List of artist names
+            mood_analysis: Mood analysis data
+
+        Returns:
+            Context dictionary with normalized data
+        """
+        # Get mood context
+        artist_recommendations = mood_analysis.get("artist_recommendations", [])
+        genre_keywords = mood_analysis.get("genre_keywords", [])
+        search_keywords = mood_analysis.get("search_keywords", [])
+
+        # Normalize for comparison
+        track_lower = track_name.lower()
+        artists_lower = [a.lower() for a in artists]
+        artist_recs_lower = [a.lower() for a in artist_recommendations]
+        all_keywords = genre_keywords + search_keywords
+        track_and_artists = track_lower + " " + " ".join(artists_lower)
+
+        return {
+            "track_name": track_name,
+            "track_lower": track_lower,
+            "artists_lower": artists_lower,
+            "artist_recs_lower": artist_recs_lower,
+            "all_keywords": all_keywords,
+            "track_and_artists": track_and_artists,
+            "mood_analysis": mood_analysis
+        }
+
+    def _check_artist_match(self, context: Dict[str, Any]) -> tuple[bool, str]:
+        """Check if any track artist matches the recommended artists.
+
+        Args:
+            context: Validation context
+
+        Returns:
+            (is_valid, reason) - True if artist matches
+        """
+        for artist in context["artists_lower"]:
+            if any(rec_artist in artist or artist in rec_artist for rec_artist in context["artist_recs_lower"]):
+                return (True, "Artist matches mood recommendations")
+        return (False, "")
+
+    def _validate_language_compatibility(self, context: Dict[str, Any]) -> tuple[bool, str]:
+        """Validate that track language is compatible with mood language.
+
+        Args:
+            context: Validation context
+
+        Returns:
+            (is_valid, reason) - True if language compatible
+        """
+        mood_language = self._detect_mood_language(context["all_keywords"])
+        if not mood_language:
+            return (True, "No specific mood language detected")
+
+        language_indicators = self._get_language_indicators()
+
+        for lang, indicators in language_indicators.items():
+            if lang == mood_language:
+                continue  # Skip checking against the mood's own language
+
+            # Check string indicators
+            for indicator in indicators:
+                if isinstance(indicator, str):
+                    if indicator in context["track_and_artists"]:
+                        return (False, f"Language mismatch: track appears to be {lang}, mood is {mood_language}")
+                else:
+                    # Unicode range check for CJK languages
+                    for char in context["track_name"]:
+                        if indicator <= char <= indicators[indicators.index(indicator) + 1]:
+                            return (False, f"Language mismatch: track appears to be {lang}, mood is {mood_language}")
+
+        return (True, "Language compatible")
+
+    def _detect_mood_language(self, keywords: List[str]) -> Optional[str]:
+        """Detect the language represented by mood keywords.
+
+        Args:
+            keywords: List of mood keywords
+
+        Returns:
+            Detected language or None
+        """
+        for keyword in keywords:
+            keyword_lower = keyword.lower()
+            if any(lang_word in keyword_lower for lang_word in ["french", "français"]):
+                return "french"
+            elif any(lang_word in keyword_lower for lang_word in ["spanish", "latin", "latino"]):
+                return "spanish"
+            elif any(lang_word in keyword_lower for lang_word in ["korean", "k-pop", "kpop"]):
+                return "korean"
+            elif any(lang_word in keyword_lower for lang_word in ["japanese", "j-pop", "jpop", "city pop"]):
+                return "japanese"
+            elif any(lang_word in keyword_lower for lang_word in ["portuguese", "brazilian", "bossa"]):
+                return "portuguese"
+        return None
+
+    def _get_language_indicators(self) -> Dict[str, List[Any]]:
+        """Get language detection indicators.
+
+        Returns:
+            Dictionary mapping languages to indicator lists
+        """
+        return {
+            "spanish": ["el ", "la ", "los ", "las ", "mi ", "tu ", "de ", "con ", "por ", "para "],
+            "korean": ["\u3131", "\u314f", "\uac00", "\ud7a3"],  # Hangul character ranges
+            "japanese": ["\u3040", "\u309f", "\u30a0", "\u30ff"],  # Hiragana/Katakana
+            "chinese": ["\u4e00", "\u9fff"],  # Common CJK
+            "portuguese": ["meu ", "minha ", "você ", "está ", "muito ", "bem "],
+            "german": ["der ", "die ", "das ", "ich ", "du ", "und ", "mit "],
+            "french": ["le ", "la ", "les ", "de ", "je ", "tu ", "avec ", "pour "]
+        }
+
+    def _validate_genre_compatibility(self, context: Dict[str, Any]) -> tuple[bool, str]:
+        """Validate that track genres are compatible with mood genres.
+
+        Args:
+            context: Validation context
+
+        Returns:
+            (is_valid, reason) - True if genres compatible
+        """
+        genre_terms = ["funk", "disco", "house", "techno", "jazz", "rock", "pop", "indie",
+                       "electronic", "hip hop", "rap", "soul", "blues", "metal", "punk",
+                       "reggae", "country", "folk", "classical", "ambient", "trap"]
+
+        track_genres = []
+        mood_genres = []
+
+        # Find genres in track/artist
+        for term in genre_terms:
+            if term in context["track_and_artists"]:
+                track_genres.append(term)
+
+        # Find genres in mood keywords
+        for keyword in context["all_keywords"]:
+            keyword_lower = keyword.lower()
+            for term in genre_terms:
+                if term in keyword_lower:
+                    mood_genres.append(term)
+
+        # If both have genre indicators and they don't overlap at all, flag it
+        if track_genres and mood_genres:
+            # Check for conflicting genres (e.g., "hip hop" for "indie rock")
+            conflicting_pairs = [
+                (["classical", "jazz", "blues"], ["metal", "punk", "trap"]),
+                (["folk", "country", "indie"], ["electronic", "techno", "house"]),
+                (["hip hop", "rap", "trap"], ["rock", "indie", "folk"])
+            ]
+
+            for group1, group2 in conflicting_pairs:
+                has_group1 = any(g in track_genres for g in group1)
+                has_group2 = any(g in mood_genres for g in group2)
+                if has_group1 and has_group2:
+                    return (False, f"Genre conflict: track appears to be {track_genres}, mood is {mood_genres}")
+
+                # Check reverse
+                has_group1_mood = any(g in mood_genres for g in group1)
+                has_group2_track = any(g in track_genres for g in group2)
+                if has_group1_mood and has_group2_track:
+                    return (False, f"Genre conflict: track appears to be {track_genres}, mood is {mood_genres}")
+
+        return (True, "Genres compatible")
+
+    def _filter_and_rank_recommendations(
+        self,
+        recommendations: List[Dict[str, Any]],
+        mood_analysis: Optional[Dict[str, Any]] = None
+    ) -> List[TrackRecommendation]:
+        """Filter and rank recommendations based on mood analysis.
+
+        Args:
+            recommendations: Raw recommendations
+            mood_analysis: Mood analysis results
+
+        Returns:
+            Filtered and ranked TrackRecommendation objects
+        """
+        if not recommendations:
+            return []
+
+        # Convert to TrackRecommendation objects
+        rec_objects = []
+        for rec_data in recommendations:
+            try:
+                # Handle both 'track_id' and 'id' fields for compatibility
+                track_id = rec_data.get("track_id") or rec_data.get("id", "")
+                if not track_id:
+                    logger.warning("Skipping recommendation without track ID")
+                    continue
+
+                rec_obj = TrackRecommendation(
+                    track_id=track_id,
+                    track_name=rec_data.get("track_name", "Unknown Track"),
+                    artists=rec_data.get("artists", ["Unknown Artist"]),
+                    spotify_uri=rec_data.get("spotify_uri"),
+                    confidence_score=rec_data.get("confidence_score", 0.5),
+                    audio_features=rec_data.get("audio_features"),
+                    reasoning=rec_data.get("reasoning", "Mood-based recommendation"),
+                    source=rec_data.get("source", "reccobeat")
+                )
+                rec_objects.append(rec_obj)
+
+            except Exception as e:
+                logger.warning(f"Failed to create recommendation object: {e}")
+                continue
+
+        # Sort by confidence score before filtering
+        rec_objects.sort(key=lambda x: x.confidence_score, reverse=True)
+
+        # Apply mood-based filtering if available
+        if mood_analysis and mood_analysis.get("target_features"):
+            rec_objects = self._apply_mood_filtering(rec_objects, mood_analysis)
+
+        return rec_objects
 
     def _apply_mood_filtering(
         self,
@@ -50,72 +296,29 @@ class TrackFilter:
         if not mood_analysis.get("target_features"):
             return recommendations
 
-        # Prepare filtering parameters
-        filter_params = self._prepare_filtering_parameters(mood_analysis)
-
-        # Apply filtering to each recommendation
+        target_features = mood_analysis["target_features"]
         filtered_recommendations = []
+
+        tolerance_extensions = self._get_tolerance_extensions()
+        critical_features = ["energy", "acousticness", "instrumentalness", "danceability"]
+
         for rec in recommendations:
-            if self._should_keep_recommendation(rec, filter_params):
+            if not rec.audio_features:
+                # Keep tracks without audio features (will have lower confidence anyway)
                 filtered_recommendations.append(rec)
+                continue
 
-        self._log_filtering_results(recommendations, filtered_recommendations)
+            violations, critical_violations = self._evaluate_feature_violations(
+                rec, target_features, tolerance_extensions, critical_features
+            )
+
+            if self._should_filter_recommendation(critical_violations, violations, rec):
+                continue
+
+            filtered_recommendations.append(rec)
+
+        logger.info(f"Mood filtering: {len(recommendations)} -> {len(filtered_recommendations)} tracks")
         return filtered_recommendations
-
-    def _prepare_filtering_parameters(self, mood_analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """Prepare parameters needed for mood-based filtering.
-
-        Args:
-            mood_analysis: Mood analysis results
-
-        Returns:
-            Dictionary containing filtering parameters
-        """
-        return {
-            "target_features": mood_analysis["target_features"],
-            "tolerance_extensions": self._get_tolerance_extensions(),
-            "critical_features": ["energy", "acousticness", "instrumentalness", "danceability"]
-        }
-
-    def _should_keep_recommendation(
-        self,
-        recommendation: TrackRecommendation,
-        filter_params: Dict[str, Any]
-    ) -> bool:
-        """Determine if a recommendation should be kept based on mood filtering.
-
-        Args:
-            recommendation: Track recommendation to evaluate
-            filter_params: Filtering parameters
-
-        Returns:
-            True if recommendation should be kept, False if filtered out
-        """
-        if not recommendation.audio_features:
-            # Keep tracks without audio features (will have lower confidence anyway)
-            return True
-
-        violations, critical_violations = self._evaluate_feature_violations(
-            recommendation,
-            filter_params["target_features"],
-            filter_params["tolerance_extensions"],
-            filter_params["critical_features"]
-        )
-
-        return not self._should_filter_recommendation(critical_violations, violations, recommendation)
-
-    def _log_filtering_results(
-        self,
-        original_recommendations: List[TrackRecommendation],
-        filtered_recommendations: List[TrackRecommendation]
-    ) -> None:
-        """Log the results of mood filtering.
-
-        Args:
-            original_recommendations: Original list of recommendations
-            filtered_recommendations: Filtered list of recommendations
-        """
-        logger.info(f"Mood filtering: {len(original_recommendations)} -> {len(filtered_recommendations)} tracks")
 
     def _get_tolerance_extensions(self) -> Dict[str, Optional[float]]:
         """Get tolerance extensions for different feature types.
@@ -345,4 +548,3 @@ class TrackFilter:
                     f"({critical_violations} critical): {'; '.join(violations[:3])}"
                 )
             return False
-

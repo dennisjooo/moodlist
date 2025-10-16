@@ -4,7 +4,6 @@ import logging
 from typing import List
 
 from ...states.agent_state import TrackRecommendation
-from ..utils import TrackRecommendationFactory
 
 logger = logging.getLogger(__name__)
 

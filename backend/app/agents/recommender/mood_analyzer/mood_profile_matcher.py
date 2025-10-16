@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Tuple
 
-from ..utils import config
+from .config import MOOD_PROFILES
 
 
 class MoodProfileMatcher:
@@ -24,7 +24,7 @@ class MoodProfileMatcher:
         prompt_lower = mood_prompt.lower()
         matched_profiles = []
 
-        for mood_name, profile in config.mood_profiles.items():
+        for mood_name, profile in MOOD_PROFILES.items():
             if any(keyword in prompt_lower for keyword in profile["keywords"]):
                 matched_profiles.append((mood_name, profile))
 
@@ -68,5 +68,5 @@ class MoodProfileMatcher:
         Returns:
             Emotion string (positive, negative, neutral)
         """
-        profile = config.mood_profiles.get(mood_name, {})
+        profile = MOOD_PROFILES.get(mood_name, {})
         return profile.get("emotion", "neutral")

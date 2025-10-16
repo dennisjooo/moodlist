@@ -307,8 +307,7 @@ class CacheManager:
             "top_artists": 1800,   # 30 minutes
             "recommendations": 900,  # 15 minutes
             "mood_analysis": 3600,  # 1 hour
-            "workflow_state": 300,  # 5 minutes
-            "failed_artists": 86400  # 24 hours - skip failed artists for a day
+            "workflow_state": 300   # 5 minutes
         }
 
     def _make_cache_key(self, category: str, *args) -> str:
@@ -447,51 +446,6 @@ class CacheManager:
 
         # For now, we'll rely on TTL expiration
         # In a production system, you might implement key tagging
-
-    async def mark_artist_failed(self, artist_id: str) -> None:
-        """Mark an artist as having failed to return tracks.
-
-        Args:
-            artist_id: Spotify artist ID that failed
-        """
-        key = self._make_cache_key("failed_artist", artist_id)
-        ttl = self.default_ttl["failed_artists"]
-        failure_data = {
-            "artist_id": artist_id,
-            "failed_at": asyncio.get_event_loop().time(),
-            "failure_count": 1
-        }
-
-        # Check if already failed before
-        existing = await self.cache.get(key)
-        if existing:
-            failure_data["failure_count"] = existing.get("failure_count", 0) + 1
-
-        await self.cache.set(key, failure_data, ttl)
-        logger.debug(f"Marked artist {artist_id} as failed (count: {failure_data['failure_count']})")
-
-    async def is_artist_failed(self, artist_id: str) -> bool:
-        """Check if an artist has been marked as failed recently.
-
-        Args:
-            artist_id: Spotify artist ID to check
-
-        Returns:
-            True if artist has failed recently, False otherwise
-        """
-        key = self._make_cache_key("failed_artist", artist_id)
-        failure_data = await self.cache.get(key)
-        return failure_data is not None
-
-    async def clear_failed_artist(self, artist_id: str) -> None:
-        """Clear a failed artist mark (if the artist starts working again).
-
-        Args:
-            artist_id: Spotify artist ID to clear
-        """
-        key = self._make_cache_key("failed_artist", artist_id)
-        await self.cache.delete(key)
-        logger.debug(f"Cleared failed mark for artist {artist_id}")
 
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get comprehensive cache statistics.
