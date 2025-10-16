@@ -181,6 +181,7 @@ export default function PlaylistEditor({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isSearchPending, setIsSearchPending] = useState(false);
   const [addingTracks, setAddingTracks] = useState<Set<string>>(new Set());
   const [isAddTracksCollapsed, setIsAddTracksCollapsed] = useState(false);
 
@@ -291,13 +292,18 @@ export default function PlaylistEditor({
     if (!query.trim()) {
       setSearchResults([]);
       setIsSearching(false);
+      setIsSearchPending(false);
       return;
     }
+
+    // Set pending state immediately when user types
+    setIsSearchPending(true);
 
     // Debounce search - wait 300ms after user stops typing
     searchTimeoutRef.current = setTimeout(async () => {
       const currentSearchQuery = query;
       setIsSearching(true);
+      setIsSearchPending(false);
 
       try {
         const results = await searchTracks(query);
@@ -432,73 +438,90 @@ export default function PlaylistEditor({
                   />
                 </div>
 
-                {isSearching && (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                  </div>
-                )}
-
                 {searchResults.length > 0 && (
-                  <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
-                    {searchResults.map((track) => (
-                      <div
-                        key={track.track_id}
-                        className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent/50 transition-colors"
-                      >
-                        {track.album_image && (
-                          <img
-                            src={track.album_image}
-                            alt={track.album}
-                            className="w-12 h-12 rounded"
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium text-sm truncate">{track.track_name}</h4>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {track.artists.join(', ')}
-                          </p>
-                        </div>
-                        {(() => {
-                          const isAlreadyAdded = tracks.some(t => t.track_id === track.track_id);
-                          const isAdding = addingTracks.has(track.spotify_uri);
+                  <div className="relative">
+                    <div className={cn(
+                      "space-y-2 max-h-[600px] overflow-y-auto pr-2 transition-all duration-200",
+                      isSearching && "blur-sm opacity-50 pointer-events-none"
+                    )}>
+                      {searchResults.map((track) => (
+                        <div
+                          key={track.track_id}
+                          className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent/50 transition-colors"
+                        >
+                          {track.album_image && (
+                            <img
+                              src={track.album_image}
+                              alt={track.album}
+                              className="w-12 h-12 rounded"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-sm truncate">{track.track_name}</h4>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {track.artists.join(', ')}
+                            </p>
+                          </div>
+                          {(() => {
+                            const isAlreadyAdded = tracks.some(t => t.track_id === track.track_id);
+                            const isAdding = addingTracks.has(track.spotify_uri);
 
-                          if (isAlreadyAdded) {
+                            if (isAlreadyAdded) {
+                              return (
+                                <div className="flex items-center gap-1 flex-shrink-0 text-green-600">
+                                  <Check className="w-4 h-4" />
+                                </div>
+                              );
+                            }
+
                             return (
-                              <div className="flex items-center gap-1 flex-shrink-0 text-green-600">
-                                <Check className="w-4 h-4" />
-                              </div>
+                              <Button
+                                size="sm"
+                                onClick={() => handleAddTrack(track.spotify_uri)}
+                                className={cn(
+                                  "flex items-center gap-1 flex-shrink-0",
+                                  isAdding ? "bg-green-600 hover:bg-green-700 text-white" : ""
+                                )}
+                              >
+                                {isAdding ? (
+                                  <>
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    Adding
+                                  </>
+                                ) : (
+                                  <>
+                                    <Plus className="w-3 h-3" />
+                                    Add
+                                  </>
+                                )}
+                              </Button>
                             );
-                          }
+                          })()}
+                        </div>
+                      ))}
+                    </div>
 
-                          return (
-                            <Button
-                              size="sm"
-                              onClick={() => handleAddTrack(track.spotify_uri)}
-                              className={cn(
-                                "flex items-center gap-1 flex-shrink-0",
-                                isAdding ? "bg-green-600 hover:bg-green-700 text-white" : ""
-                              )}
-                            >
-                              {isAdding ? (
-                                <>
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                  Adding
-                                </>
-                              ) : (
-                                <>
-                                  <Plus className="w-3 h-3" />
-                                  Add
-                                </>
-                              )}
-                            </Button>
-                          );
-                        })()}
+                    {isSearching && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm rounded-lg">
+                        <div className="flex flex-col items-center gap-2">
+                          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">Searching...</p>
+                        </div>
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
 
-                {!isSearching && searchResults.length === 0 && searchQuery && searchQuery.length >= 2 && (
+                {(isSearching || isSearchPending) && searchResults.length === 0 && (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">Searching...</p>
+                    </div>
+                  </div>
+                )}
+
+                {!isSearching && !isSearchPending && searchResults.length === 0 && searchQuery && searchQuery.length >= 2 && (
                   <div className="text-center py-8 text-muted-foreground">
                     <p className="text-sm">No results found for "{searchQuery}"</p>
                   </div>
