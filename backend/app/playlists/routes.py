@@ -5,6 +5,7 @@ from typing import Optional
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
+from langchain_openai import ChatOpenAI
 from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +26,6 @@ from ..agents.states.agent_state import AgentState, RecommendationStatus, TrackR
 from ..agents.tools.reccobeat_service import RecoBeatService
 from ..agents.tools.spotify_service import SpotifyService
 from ..core.config import settings
-from langchain_openai import ChatOpenAI
 from .services import CompletedPlaylistEditor
 
 
