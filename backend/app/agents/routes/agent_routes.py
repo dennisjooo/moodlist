@@ -6,12 +6,14 @@ from datetime import datetime
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, BackgroundTasks, Query
 from langchain_openai import ChatOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.config import settings
+from ...core.constants import PlaylistStatus
 from ...core.database import get_db
+from ...core.exceptions import NotFoundException, InternalServerError, ValidationException
 from ...auth.dependencies import require_auth, refresh_spotify_token_if_expired
 from ...models.user import User
 from ...models.playlist import Playlist
@@ -141,7 +143,7 @@ async def start_recommendation(
             user_id=current_user.id,
             session_id=session_id,
             mood_prompt=mood_prompt,
-            status="pending"
+            status=PlaylistStatus.PENDING
         )
         db.add(playlist)
         await db.commit()
@@ -158,10 +160,7 @@ async def start_recommendation(
 
     except Exception as e:
         logger.error(f"Error starting recommendation workflow: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to start recommendation workflow: {str(e)}"
-        )
+        raise InternalServerError(f"Failed to start recommendation workflow: {str(e)}")
 
 
 @router.get("/recommendations/{session_id}/status")
@@ -208,10 +207,7 @@ async def get_workflow_status(session_id: str, db: AsyncSession = Depends(get_db
         playlist = result.scalar_one_or_none()
         
         if not playlist:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Workflow {session_id} not found"
-            )
+            raise NotFoundException("Workflow", session_id)
         
         # Return status from database
         recommendation_count = 0
@@ -221,7 +217,7 @@ async def get_workflow_status(session_id: str, db: AsyncSession = Depends(get_db
         return {
             "session_id": session_id,
             "status": playlist.status,
-            "current_step": "completed" if playlist.status == "completed" else playlist.status,
+            "current_step": "completed" if playlist.status == PlaylistStatus.COMPLETED else playlist.status,
             "mood_prompt": playlist.mood_prompt,
             "mood_analysis": playlist.mood_analysis_data,
             "recommendation_count": recommendation_count,
@@ -232,14 +228,11 @@ async def get_workflow_status(session_id: str, db: AsyncSession = Depends(get_db
             "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None
         }
 
-    except HTTPException:
+    except NotFoundException:
         raise
     except Exception as e:
         logger.error(f"Error getting workflow status: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get workflow status: {str(e)}"
-        )
+        raise InternalServerError(f"Failed to get workflow status: {str(e)}")
 
 
 @router.delete("/recommendations/{session_id}")
@@ -263,7 +256,7 @@ async def cancel_workflow(session_id: str, db: AsyncSession = Depends(get_db)):
         playlist = result.scalar_one_or_none()
         
         if playlist:
-            playlist.status = "cancelled"
+            playlist.status = PlaylistStatus.CANCELLED
             playlist.error_message = "Workflow cancelled by user"
             await db.commit()
             logger.info(f"Updated playlist {playlist.id} status to cancelled")
@@ -271,23 +264,17 @@ async def cancel_workflow(session_id: str, db: AsyncSession = Depends(get_db)):
         if cancelled or playlist:
             return {
                 "session_id": session_id,
-                "status": "cancelled",
+                "status": PlaylistStatus.CANCELLED,
                 "message": "Workflow cancelled successfully"
             }
         else:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Workflow {session_id} not found or already completed"
-            )
+            raise NotFoundException("Workflow", session_id)
 
-    except HTTPException:
+    except NotFoundException:
         raise
     except Exception as e:
         logger.error(f"Error cancelling workflow: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to cancel workflow: {str(e)}"
-        )
+        raise InternalServerError(f"Failed to cancel workflow: {str(e)}")
 
 
 @router.get("/recommendations/{session_id}/results")
@@ -363,19 +350,13 @@ async def get_workflow_results(session_id: str, db: AsyncSession = Depends(get_d
             }
         
         # If we reach here, workflow doesn't exist anywhere
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Workflow {session_id} not found"
-        )
+        raise NotFoundException("Workflow", session_id)
 
-    except HTTPException:
+    except NotFoundException:
         raise
     except Exception as e:
         logger.error(f"Error getting workflow results: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get workflow results: {str(e)}"
-        )
+        raise InternalServerError(f"Failed to get workflow results: {str(e)}")
 
 
 @router.get("/recommendations/{session_id}/playlist")
@@ -392,16 +373,10 @@ async def get_playlist_details(session_id: str):
         state = workflow_manager.get_workflow_state(session_id)
 
         if not state:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Workflow {session_id} not found"
-            )
+            raise NotFoundException("Workflow", session_id)
 
         if not state.is_complete() or not state.playlist_id:
-            raise HTTPException(
-                status_code=status.HTTP_202_ACCEPTED,
-                detail=f"Playlist not ready for workflow {session_id}"
-            )
+            raise ValidationException(f"Playlist not ready for workflow {session_id}")
 
         # Get detailed track information
         tracks = [
@@ -426,14 +401,11 @@ async def get_playlist_details(session_id: str):
             "created_at": state.created_at.isoformat()
         }
 
-    except HTTPException:
+    except (NotFoundException, ValidationException):
         raise
     except Exception as e:
         logger.error(f"Error getting playlist details: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get playlist details: {str(e)}"
-        )
+        raise InternalServerError(f"Failed to get playlist details: {str(e)}")
 
 
 @router.get("/system/status")
@@ -464,10 +436,7 @@ async def get_system_status():
 
     except Exception as e:
         logger.error(f"Error getting system status: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get system status: {str(e)}"
-        )
+        raise InternalServerError(f"Failed to get system status: {str(e)}")
 
 
 @router.get("/workflows/active")
@@ -487,10 +456,7 @@ async def list_active_workflows():
 
     except Exception as e:
         logger.error(f"Error listing active workflows: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list active workflows: {str(e)}"
-        )
+        raise InternalServerError(f"Failed to list active workflows: {str(e)}")
 
 
 @router.get("/workflows/recent")
@@ -513,8 +479,5 @@ async def list_recent_workflows(limit: int = Query(default=10, le=50)):
 
     except Exception as e:
         logger.error(f"Error listing recent workflows: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list recent workflows: {str(e)}"
-        )
+        raise InternalServerError(f"Failed to list recent workflows: {str(e)}")
 
