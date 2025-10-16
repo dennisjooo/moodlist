@@ -9,10 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm.attributes import flag_modified
 
-from .spotify_edit_service import SpotifyEditService
 from ...models.playlist import Playlist
 from ...agents.states.agent_state import TrackRecommendation
 from ...core.exceptions import NotFoundException, ForbiddenException, ValidationException
+from .spotify_edit_service import SpotifyEditService
 
 logger = structlog.get_logger(__name__)
 
@@ -111,6 +111,7 @@ class CompletedPlaylistEditor:
 
                 # Update database with modified recommendations
                 playlist.recommendations_data = recommendations
+                playlist.track_count = len(recommendations)  # Update track count to match recommendations
                 flag_modified(playlist, "recommendations_data")
                 playlist.updated_at = datetime.now(timezone.utc)
                 await db.commit()
