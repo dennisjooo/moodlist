@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 from ....tools.reccobeat_service import RecoBeatService
 from ....tools.spotify_service import SpotifyService
 from ....states.agent_state import AgentState
+from ....core.cache import cache_manager
 from ...utils import TokenService, TrackRecommendationFactory
 from ..audio_features import AudioFeaturesHandler
 from .base_strategy import RecommendationStrategy
@@ -51,6 +52,27 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
 
         if not mood_matched_artists:
             logger.info("No mood-matched artists available for recommendations")
+            return []
+
+        # Filter out artists that have failed recently
+        filtered_artists = []
+        skipped_failed_artists = 0
+
+        for artist_id in mood_matched_artists:
+            if await cache_manager.is_artist_failed(artist_id):
+                logger.info(f"Filtering out previously failed artist {artist_id} from recommendation generation")
+                skipped_failed_artists += 1
+            else:
+                filtered_artists.append(artist_id)
+
+        if skipped_failed_artists > 0:
+            logger.info(f"Filtered out {skipped_failed_artists} previously failed artists, "
+                       f"processing {len(filtered_artists)} remaining artists")
+
+        mood_matched_artists = filtered_artists
+
+        if not mood_matched_artists:
+            logger.info("No valid artists remaining after filtering failed ones")
             return []
 
         logger.info(f"Generating recommendations from {len(mood_matched_artists)} discovered artists")
@@ -178,6 +200,14 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
         Returns:
             List of TrackRecommendation objects from this artist
         """
+        # Check if this artist has failed recently - skip if so
+        if await cache_manager.is_artist_failed(artist_id):
+            logger.info(
+                f"Skipping previously failed artist {artist_id} (artist {artist_index+1}/{min(total_artists, 20)}) - "
+                f"marked as failed, will retry after cache TTL expires"
+            )
+            return []
+
         logger.info(f"Fetching top tracks for artist {artist_index+1}/{min(total_artists, 20)}: {artist_id}")
 
         # Get top tracks from Spotify (more reliable than RecoBeat)
@@ -192,7 +222,12 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
                 f"No tracks returned for artist {artist_id} (artist {artist_index+1}/{min(total_artists, 20)}) - "
                 f"This may indicate a Spotify API authentication issue or invalid artist ID"
             )
+            # Mark this artist as failed so we skip it next time
+            await cache_manager.mark_artist_failed(artist_id)
             return []
+
+        # If we got tracks, clear any previous failure mark (in case it was intermittent)
+        await cache_manager.clear_failed_artist(artist_id)
 
         logger.info(
             f"Successfully got {len(artist_tracks)} tracks from artist {artist_id}, "
