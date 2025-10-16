@@ -1,7 +1,7 @@
 """FastAPI routes for the agentic recommendation system."""
 
 import json
-import logging
+import structlog
 from datetime import datetime
 
 from typing import Optional
@@ -26,7 +26,7 @@ from ..recommender import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Initialize services and agents
 reccobeat_service = RecoBeatService()

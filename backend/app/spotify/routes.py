@@ -5,9 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
 from app.core.database import get_db
+from app.core.config import settings
+from app.core.constants import SpotifyEndpoints
 from app.models.user import User
 from app.auth.dependencies import require_auth, refresh_spotify_token_if_expired
-from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -49,7 +50,7 @@ async def exchange_token(
             }
 
             response = await client.post(
-                "https://accounts.spotify.com/api/token",
+                SpotifyEndpoints.TOKEN_URL,
                 data=data
             )
             response.raise_for_status()
