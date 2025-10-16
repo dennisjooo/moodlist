@@ -1,5 +1,6 @@
 """Service for editing completed/saved playlists."""
 
+import asyncio
 import structlog
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
@@ -22,6 +23,8 @@ class CompletedPlaylistEditor:
     def __init__(self):
         """Initialize the completed playlist editor."""
         self.spotify_edit_service = SpotifyEditService()
+        # Dictionary to store locks per session_id to prevent concurrent edits
+        self._edit_locks: Dict[str, asyncio.Lock] = {}
 
     async def edit_playlist(
         self,
@@ -34,7 +37,7 @@ class CompletedPlaylistEditor:
         new_position: Optional[int] = None,
         track_uri: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Edit a completed playlist.
+        """Edit a completed playlist with per-session locking to prevent race conditions.
 
         Args:
             session_id: Workflow session ID
@@ -52,68 +55,79 @@ class CompletedPlaylistEditor:
         Raises:
             ValueError: If playlist not found or user doesn't have permission
         """
-        # Load playlist from database
-        query = select(Playlist).where(Playlist.session_id == session_id)
-        result = await db.execute(query)
-        playlist = result.scalar_one_or_none()
+        # Get or create a lock for this session_id to prevent concurrent edits
+        if session_id not in self._edit_locks:
+            self._edit_locks[session_id] = asyncio.Lock()
+        
+        async with self._edit_locks[session_id]:
+            try:
+                # Load playlist from database
+                query = select(Playlist).where(Playlist.session_id == session_id)
+                result = await db.execute(query)
+                playlist = result.scalar_one_or_none()
 
-        if not playlist:
-            raise NotFoundException("Playlist", session_id)
+                if not playlist:
+                    raise NotFoundException("Playlist", session_id)
 
-        # Validate user owns this playlist
-        if playlist.user_id != user_id:
-            raise ForbiddenException("You don't have permission to edit this playlist")
+                # Validate user owns this playlist
+                if playlist.user_id != user_id:
+                    raise ForbiddenException("You don't have permission to edit this playlist")
 
-        # Check if playlist has been saved to Spotify
-        is_saved_to_spotify = bool(playlist.spotify_playlist_id)
+                # Check if playlist has been saved to Spotify
+                is_saved_to_spotify = bool(playlist.spotify_playlist_id)
 
-        # Get current recommendations
-        recommendations = playlist.recommendations_data or []
+                # Get current recommendations
+                recommendations = playlist.recommendations_data or []
 
-        # Apply edit based on type
-        if edit_type == "remove":
-            recommendations = await self._handle_remove(
-                recommendations,
-                playlist.spotify_playlist_id,
-                track_id,
-                access_token,
-                is_saved_to_spotify
-            )
-        elif edit_type == "reorder":
-            recommendations = await self._handle_reorder(
-                recommendations,
-                playlist.spotify_playlist_id,
-                track_id,
-                new_position,
-                access_token,
-                is_saved_to_spotify
-            )
-        elif edit_type == "add":
-            recommendations = await self._handle_add(
-                recommendations,
-                playlist.spotify_playlist_id,
-                track_uri,
-                new_position,
-                access_token,
-                is_saved_to_spotify
-            )
-        else:
-            raise ValidationException(f"Invalid edit_type: {edit_type}. Must be one of: reorder, remove, add")
+                # Apply edit based on type
+                if edit_type == "remove":
+                    recommendations = await self._handle_remove(
+                        recommendations,
+                        playlist.spotify_playlist_id,
+                        track_id,
+                        access_token,
+                        is_saved_to_spotify
+                    )
+                elif edit_type == "reorder":
+                    recommendations = await self._handle_reorder(
+                        recommendations,
+                        playlist.spotify_playlist_id,
+                        track_id,
+                        new_position,
+                        access_token,
+                        is_saved_to_spotify
+                    )
+                elif edit_type == "add":
+                    recommendations = await self._handle_add(
+                        recommendations,
+                        playlist.spotify_playlist_id,
+                        track_uri,
+                        new_position,
+                        access_token,
+                        is_saved_to_spotify
+                    )
+                else:
+                    raise ValidationException(f"Invalid edit_type: {edit_type}. Must be one of: reorder, remove, add")
 
-        # Update database with modified recommendations
-        playlist.recommendations_data = recommendations
-        flag_modified(playlist, "recommendations_data")
-        playlist.updated_at = datetime.now(timezone.utc)
-        await db.commit()
-        await db.refresh(playlist)
+                # Update database with modified recommendations
+                playlist.recommendations_data = recommendations
+                flag_modified(playlist, "recommendations_data")
+                playlist.updated_at = datetime.now(timezone.utc)
+                await db.commit()
+                await db.refresh(playlist)
 
-        return {
-            "session_id": session_id,
-            "status": "success",
-            "edit_type": edit_type,
-            "recommendation_count": len(recommendations),
-            "message": f"Successfully applied {edit_type} edit to playlist"
-        }
+                return {
+                    "session_id": session_id,
+                    "status": "success",
+                    "edit_type": edit_type,
+                    "recommendation_count": len(recommendations),
+                    "message": f"Successfully applied {edit_type} edit to playlist"
+                }
+                
+            except Exception as e:
+                await db.rollback()
+                logger.error(f"Failed to edit playlist {session_id}: {str(e)}")
+                raise
 
     async def _handle_remove(
         self,

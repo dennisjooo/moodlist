@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from './authContext';
 import { workflowAPI, WorkflowStatus, WorkflowResults, PlaylistEditRequest } from './workflowApi';
@@ -52,6 +52,7 @@ interface WorkflowProviderProps {
 export function WorkflowProvider({ children }: WorkflowProviderProps) {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const pathname = usePathname();
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [workflowState, setWorkflowState] = useState<WorkflowState>({
     sessionId: null,
@@ -327,13 +328,24 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     try {
       await workflowAPI.applyCompletedPlaylistEdit(workflowState.sessionId, editType, options);
 
-      // Reload in background to sync with server state
-      const results = await workflowAPI.getWorkflowResults(workflowState.sessionId);
-      setWorkflowState(prev => ({
-        ...prev,
-        recommendations: results.recommendations,
-        playlist: results.playlist,
-      }));
+      // Use a debounced refresh to prevent race conditions from concurrent edits
+      // This ensures only the latest edit triggers a state refresh
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+
+      refreshTimeoutRef.current = setTimeout(async () => {
+        try {
+          const results = await workflowAPI.getWorkflowResults(workflowState.sessionId);
+          setWorkflowState(prev => ({
+            ...prev,
+            recommendations: results.recommendations,
+            playlist: results.playlist,
+          }));
+        } catch (error) {
+          console.error('Failed to refresh workflow results after edit:', error);
+        }
+      }, 100); // 100ms debounce to batch concurrent edits
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to apply edit';
       setWorkflowState(prev => ({
@@ -523,6 +535,15 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
       pollingManager.stopPolling(workflowState.sessionId!);
     };
   }, [workflowState.sessionId, workflowState.status, pathname, authLoading, isAuthenticated, user]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const value: WorkflowContextType = {
     workflowState,
