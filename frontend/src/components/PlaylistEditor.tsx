@@ -181,7 +181,7 @@ export default function PlaylistEditor({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [isAddingTrack, setIsAddingTrack] = useState(false);
+  const [addingTracks, setAddingTracks] = useState<Set<string>>(new Set());
   const [isAddTracksCollapsed, setIsAddTracksCollapsed] = useState(false);
 
   // Track the latest search query to prevent race conditions
@@ -322,18 +322,20 @@ export default function PlaylistEditor({
   }, [searchTracks]);
 
   const handleAddTrack = useCallback(async (trackUri: string) => {
-    setIsAddingTrack(true);
+    setAddingTracks(prev => new Set(prev).add(trackUri));
     try {
       // Always use applyCompletedEdit - it handles both draft and saved playlists
       await applyCompletedEdit('add', { trackUri });
-      setSearchQuery('');
-      setSearchResults([]);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to add track';
       setError(errorMessage);
       console.error('Failed to add track:', error);
     } finally {
-      setIsAddingTrack(false);
+      setAddingTracks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(trackUri);
+        return newSet;
+      });
     }
   }, [applyCompletedEdit, isCompleted]);
 
@@ -437,15 +439,41 @@ export default function PlaylistEditor({
                             {track.artists.join(', ')}
                           </p>
                         </div>
-                        <Button
-                          size="sm"
-                          onClick={() => handleAddTrack(track.spotify_uri)}
-                          disabled={isAddingTrack}
-                          className="flex items-center gap-1 flex-shrink-0"
-                        >
-                          <Plus className="w-3 h-3" />
-                          Add
-                        </Button>
+                        {(() => {
+                          const isAlreadyAdded = tracks.some(t => t.track_id === track.track_id);
+                          const isAdding = addingTracks.has(track.spotify_uri);
+
+                          if (isAlreadyAdded) {
+                            return (
+                              <div className="flex items-center gap-1 flex-shrink-0 text-green-600">
+                                <Check className="w-4 h-4" />
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <Button
+                              size="sm"
+                              onClick={() => handleAddTrack(track.spotify_uri)}
+                              className={cn(
+                                "flex items-center gap-1 flex-shrink-0",
+                                isAdding ? "bg-green-600 hover:bg-green-700 text-white" : ""
+                              )}
+                            >
+                              {isAdding ? (
+                                <>
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                  Adding
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="w-3 h-3" />
+                                  Add
+                                </>
+                              )}
+                            </Button>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>
