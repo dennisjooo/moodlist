@@ -4,11 +4,18 @@ import structlog
 from typing import Optional
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
+from ..core.constants import PlaylistStatus
+from ..core.exceptions import (
+    NotFoundException,
+    ForbiddenException,
+    ValidationException,
+    InternalServerError
+)
 from ..auth.dependencies import require_auth, refresh_spotify_token_if_expired
 from ..models.user import User
 from ..models.playlist import Playlist
@@ -69,7 +76,7 @@ async def get_user_playlists(
             .where(
                 Playlist.user_id == current_user.id,
                 Playlist.deleted_at.is_(None),
-                Playlist.status != "cancelled"
+                Playlist.status != PlaylistStatus.CANCELLED
             )
         )
         
@@ -116,7 +123,7 @@ async def get_user_playlists(
         count_query = select(func.count()).select_from(Playlist).where(
             Playlist.user_id == current_user.id,
             Playlist.deleted_at.is_(None),
-            Playlist.status != "cancelled"
+            Playlist.status != PlaylistStatus.CANCELLED
         )
         if status:
             count_query = count_query.where(Playlist.status == status)
@@ -132,10 +139,7 @@ async def get_user_playlists(
 
     except Exception as e:
         logger.error(f"Error getting user playlists: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get user playlists: {str(e)}"
-        )
+        raise InternalServerError(f"Failed to get user playlists: {str(e)}")
 
 
 @router.get("/playlists/{playlist_id}")
@@ -164,10 +168,7 @@ async def get_playlist(
         playlist = result.scalar_one_or_none()
         
         if not playlist:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Playlist not found"
-            )
+            raise NotFoundException("Playlist", str(playlist_id))
         
         return {
             "id": playlist.id,
@@ -185,14 +186,11 @@ async def get_playlist(
             "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
         }
 
-    except HTTPException:
+    except NotFoundException:
         raise
     except Exception as e:
         logger.error(f"Error getting playlist {playlist_id}: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get playlist: {str(e)}"
-        )
+        raise InternalServerError(f"Failed to get playlist: {str(e)}")
 
 
 @router.get("/playlists/session/{session_id}")
@@ -221,10 +219,7 @@ async def get_playlist_by_session(
         playlist = result.scalar_one_or_none()
         
         if not playlist:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Playlist not found"
-            )
+            raise NotFoundException("Playlist", session_id)
         
         return {
             "id": playlist.id,
@@ -242,14 +237,11 @@ async def get_playlist_by_session(
             "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
         }
 
-    except HTTPException:
+    except NotFoundException:
         raise
     except Exception as e:
         logger.error(f"Error getting playlist by session {session_id}: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get playlist: {str(e)}"
-        )
+        raise InternalServerError(f"Failed to get playlist: {str(e)}")
 
 
 @router.delete("/playlists/{playlist_id}")
@@ -278,10 +270,7 @@ async def delete_playlist(
         playlist = result.scalar_one_or_none()
         
         if not playlist:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Playlist not found"
-            )
+            raise NotFoundException("Playlist", str(playlist_id))
         
         # Soft delete by setting deleted_at timestamp
         playlist.deleted_at = datetime.now(timezone.utc)
@@ -294,14 +283,11 @@ async def delete_playlist(
             "playlist_id": playlist_id
         }
 
-    except HTTPException:
+    except NotFoundException:
         raise
     except Exception as e:
         logger.error(f"Error deleting playlist {playlist_id}: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete playlist: {str(e)}"
-        )
+        raise InternalServerError(f"Failed to delete playlist: {str(e)}")
 
 
 @router.get("/playlists/stats/summary")
@@ -330,7 +316,7 @@ async def get_playlist_stats(
         # Completed playlists - exclude soft-deleted
         completed_query = select(func.count()).select_from(Playlist).where(
             Playlist.user_id == current_user.id,
-            Playlist.status == "completed",
+            Playlist.status == PlaylistStatus.COMPLETED,
             Playlist.deleted_at.is_(None)
         )
         completed_result = await db.execute(completed_query)
@@ -353,10 +339,7 @@ async def get_playlist_stats(
 
     except Exception as e:
         logger.error(f"Error getting playlist stats: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get playlist stats: {str(e)}"
-        )
+        raise InternalServerError(f"Failed to get playlist stats: {str(e)}")
 
 
 @router.get("/stats/public")
@@ -382,7 +365,7 @@ async def get_public_stats(db: AsyncSession = Depends(get_db)):
         
         # Completed playlists
         completed_playlists_query = select(func.count()).select_from(Playlist).where(
-            Playlist.status == "completed"
+            Playlist.status == PlaylistStatus.COMPLETED
         )
         completed_playlists_result = await db.execute(completed_playlists_query)
         completed_playlists = completed_playlists_result.scalar()
@@ -395,10 +378,7 @@ async def get_public_stats(db: AsyncSession = Depends(get_db)):
 
     except Exception as e:
         logger.error(f"Error getting public stats: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get public stats: {str(e)}"
-        )
+        raise InternalServerError(f"Failed to get public stats: {str(e)}")
 
 
 @router.post("/playlists/{session_id}/edit")
@@ -446,23 +426,14 @@ async def edit_playlist(
         return result
     
     except PermissionError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(e)
-        )
+        raise ForbiddenException(str(e))
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except HTTPException:
+        raise ValidationException(str(e))
+    except (ForbiddenException, ValidationException):
         raise
     except Exception as e:
         logger.error(f"Error editing playlist: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to edit playlist: {str(e)}"
-        )
+        raise InternalServerError(f"Failed to edit playlist: {str(e)}")
 
 
 @router.post("/playlists/{session_id}/save-to-spotify")
@@ -554,10 +525,7 @@ async def save_playlist_to_spotify(
         else:
             # In-memory state exists
             if not state.is_complete():
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Workflow is not complete yet"
-                )
+                raise ValidationException("Workflow is not complete yet")
 
             if state.playlist_id:
                 # Already saved
@@ -577,10 +545,7 @@ async def save_playlist_to_spotify(
         state = await playlist_creation_service.create_playlist(state)
 
         if not state.playlist_id:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create playlist on Spotify"
-            )
+            raise InternalServerError("Failed to create playlist on Spotify")
 
         # Mark as saved
         state.metadata["playlist_saved_to_spotify"] = True
@@ -593,7 +558,7 @@ async def save_playlist_to_spotify(
 
         if playlist_db:
             playlist_db.spotify_playlist_id = state.playlist_id
-            playlist_db.status = "completed"
+            playlist_db.status = PlaylistStatus.COMPLETED
             playlist_db.playlist_data = {
                 "name": state.playlist_name,
                 "spotify_url": state.metadata.get("playlist_url"),
@@ -612,12 +577,9 @@ async def save_playlist_to_spotify(
             "message": "Playlist successfully saved to Spotify!"
         }
 
-    except HTTPException:
+    except (ValidationException, InternalServerError):
         raise
     except Exception as e:
         logger.error(f"Error saving playlist to Spotify: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save playlist: {str(e)}"
-        )
+        raise InternalServerError(f"Failed to save playlist: {str(e)}")
 
