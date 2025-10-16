@@ -1,8 +1,8 @@
 """Playlist CRUD routes for managing user playlists."""
 
-import logging
+import structlog
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, desc, func
@@ -22,7 +22,7 @@ from langchain_openai import ChatOpenAI
 from .services import CompletedPlaylistEditor
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 
@@ -284,7 +284,7 @@ async def delete_playlist(
             )
         
         # Soft delete by setting deleted_at timestamp
-        playlist.deleted_at = datetime.utcnow()
+        playlist.deleted_at = datetime.now(timezone.utc)
         await db.commit()
         
         logger.info(f"Soft deleted playlist {playlist_id} for user {current_user.id}")

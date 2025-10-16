@@ -1,5 +1,6 @@
 """Improvement strategy for deciding and applying playlist improvements."""
 
+import json
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -7,7 +8,6 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from ...states.agent_state import AgentState, RecommendationStatus
 from ...core.base_agent import BaseAgent
-from ..utils import LLMResponseParser
 from .prompts import get_strategy_decision_prompt
 
 logger = logging.getLogger(__name__)
@@ -307,43 +307,42 @@ class ImprovementStrategy:
         """
         try:
             issues_summary = "\n".join(f"- {issue}" for issue in quality_evaluation.get("issues", []))
-            llm_assessment = quality_evaluation.get("llm_assessment")
+            llm_assessment = quality_evaluation.get("llm_assessment", {})
             playlist_target = state.metadata.get("playlist_target", {})
             target_count = playlist_target.get("target_count", 20)
-
-            # Handle case where LLM assessment failed
-            llm_reasoning = 'N/A'
-            if llm_assessment and isinstance(llm_assessment, dict):
-                llm_reasoning = llm_assessment.get('reasoning', 'N/A')
-
+            
             prompt = get_strategy_decision_prompt(
                 mood_prompt=state.mood_prompt,
                 quality_evaluation=quality_evaluation,
                 issues_summary=issues_summary,
-                llm_assessment_reasoning=llm_reasoning,
+                llm_assessment_reasoning=llm_assessment.get('reasoning', 'N/A'),
                 target_count=target_count,
                 iteration=state.metadata.get('orchestration_iterations', 0)
             )
 
             response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
-
-            # Parse JSON response using centralized parser
-            strategy_decision = LLMResponseParser.extract_json_from_response(response)
-
-            if strategy_decision:
+            content = response.content if hasattr(response, 'content') else str(response)
+            
+            # Parse JSON response
+            json_start = content.find('{')
+            json_end = content.rfind('}') + 1
+            
+            if json_start >= 0 and json_end > json_start:
+                json_str = content[json_start:json_end]
+                strategy_decision = json.loads(json_str)
                 strategies = strategy_decision.get("strategies", [])
                 reasoning = strategy_decision.get("reasoning", "")
-
+                
                 logger.info(f"LLM strategy decision: {strategies}")
                 logger.info(f"LLM reasoning: {reasoning}")
-
+                
                 # Validate strategies
                 valid_strategies = [
                     "filter_and_replace", "reseed_from_clean",
                     "adjust_feature_weights", "generate_more"
                 ]
                 filtered_strategies = [s for s in strategies if s in valid_strategies]
-
+                
                 return filtered_strategies if filtered_strategies else None
             else:
                 logger.warning("Could not parse LLM strategy decision response")

@@ -2,7 +2,7 @@
 
 from typing import List
 
-from ..utils import config
+from .config import STOP_WORDS, MOOD_SYNONYMS, KNOWN_GENRES, LANGUAGE_INDICATORS
 
 
 class TextProcessor:
@@ -27,15 +27,15 @@ class TextProcessor:
         # Filter meaningful words (length > 3, not common stop words)
         meaningful_words = [
             word.lower() for word in words
-            if len(word) > 3 and word.lower() not in config.stop_words
+            if len(word) > 3 and word.lower() not in STOP_WORDS
         ]
 
         keywords.extend(meaningful_words)
 
         # Add some common mood-related terms
         for word in meaningful_words:
-            if word in config.mood_synonyms:
-                keywords.extend(config.mood_synonyms[word])
+            if word in MOOD_SYNONYMS:
+                keywords.extend(MOOD_SYNONYMS[word])
 
         return list(set(keywords))  # Remove duplicates
 
@@ -54,7 +54,7 @@ class TextProcessor:
         artist_recommendations = []
 
         # Check for known genres
-        for genre in config.known_genres:
+        for genre in KNOWN_GENRES:
             if genre in prompt_lower:
                 # Normalize genre (remove spaces for search)
                 normalized_genre = genre.replace(" ", "").replace("-", "")
@@ -75,7 +75,7 @@ class TextProcessor:
                     j += 1
 
                 # Only add if not a genre keyword
-                if potential_artist.lower() not in config.known_genres:
+                if potential_artist.lower() not in KNOWN_GENRES:
                     artist_recommendations.append(potential_artist)
 
         # Remove duplicates
@@ -97,7 +97,7 @@ class TextProcessor:
         text_lower = text.lower()
 
         # Check for language-specific keywords or patterns
-        for lang, indicators in config.language_indicators.items():
+        for lang, indicators in LANGUAGE_INDICATORS.items():
             for indicator in indicators:
                 if isinstance(indicator, str):
                     if indicator in text_lower:
@@ -105,7 +105,7 @@ class TextProcessor:
                 else:
                     # Unicode range check for CJK languages
                     for char in text:
-                        if indicator <= char <= config.language_indicators[lang][config.language_indicators[lang].index(indicator) + 1]:
+                        if indicator <= char <= LANGUAGE_INDICATORS[lang][LANGUAGE_INDICATORS[lang].index(indicator) + 1]:
                             return lang
 
         return "english"  # Default fallback

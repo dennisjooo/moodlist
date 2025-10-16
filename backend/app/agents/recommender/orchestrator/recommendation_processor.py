@@ -4,7 +4,6 @@ import logging
 from typing import List, Dict
 
 from ...states.agent_state import TrackRecommendation
-from ..utils import config
 
 logger = logging.getLogger(__name__)
 
@@ -45,23 +44,19 @@ class RecommendationProcessor:
     def enforce_source_ratio(
         self,
         recommendations: List[TrackRecommendation],
-        max_count: int = None,
-        artist_ratio: float = None
+        max_count: int = 30,
+        artist_ratio: float = 0.95
     ) -> List[TrackRecommendation]:
         """Enforce source ratio between artist discovery and RecoBeat recommendations.
 
         Args:
             recommendations: List of track recommendations
-            max_count: Maximum number of recommendations to return (uses config default)
-            artist_ratio: Ratio of artist recommendations (uses config default)
+            max_count: Maximum number of recommendations to return
+            artist_ratio: Ratio of artist recommendations (default 0.95 for 95% artist)
 
         Returns:
             List with enforced source ratio, sorted by confidence
         """
-        # Use config defaults if not provided
-        max_count = max_count or config.max_playlist_count
-        artist_ratio = artist_ratio or config.artist_recommendation_ratio
-
         # Separate recommendations by source
         source_groups = self.separate_by_source(recommendations)
 

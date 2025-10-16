@@ -1,12 +1,12 @@
 """Quality evaluator for assessing playlist quality against mood criteria."""
 
+import json
 import logging
 from typing import Any, Dict, List, Optional
 
 from langchain_core.language_models.base import BaseLanguageModel
 
 from ...states.agent_state import AgentState
-from ..utils import LLMResponseParser
 from .cohesion_calculator import CohesionCalculator
 from .prompts import get_quality_evaluation_prompt
 
@@ -212,11 +212,15 @@ class QualityEvaluator:
             )
 
             response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
-
-            # Parse JSON response using centralized parser
-            assessment = LLMResponseParser.extract_json_from_response(response)
-
-            if assessment:
+            content = response.content if hasattr(response, 'content') else str(response)
+            
+            # Parse JSON response
+            json_start = content.find('{')
+            json_end = content.rfind('}') + 1
+            
+            if json_start >= 0 and json_end > json_start:
+                json_str = content[json_start:json_end]
+                assessment = json.loads(json_str)
                 logger.info(f"LLM assessment: quality={assessment.get('quality_score')}, "
                            f"meets_expectations={assessment.get('meets_expectations')}")
                 return assessment
