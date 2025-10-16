@@ -8,6 +8,8 @@ from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
+from app.core.config import settings
+from app.core.constants import SessionConstants
 from app.core.database import get_db
 from app.models.user import User
 from app.models.session import Session
@@ -18,6 +20,7 @@ from app.auth.security import (
     generate_session_token
 )
 from app.auth.dependencies import require_auth
+from app.auth.cookie_utils import set_session_cookie, delete_session_cookie
 from app.auth.schemas import (
     UserCreate,
     UserResponse,
@@ -106,7 +109,7 @@ async def register(
     
     # Create session
     session_token = generate_session_token()
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=SessionConstants.EXPIRATION_HOURS)
 
     # Clean up any existing sessions for this user to prevent conflicts
     await db.execute(
@@ -125,19 +128,8 @@ async def register(
     await db.commit()
     await db.refresh(session)
 
-    # Set session cookie
-    from app.core.config import settings
-    is_production = settings.APP_ENV == "production"
-
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        secure=is_production,  # Only secure in production (HTTPS)
-        samesite="lax",
-        max_age=86400,  # 24 hours
-        path="/"  # Ensure cookie is available for all paths
-    )
+    # Set session cookie using utility
+    set_session_cookie(response, session_token)
     
     # Create JWT tokens
     token_data = {"sub": user.spotify_id}
@@ -210,21 +202,12 @@ async def logout(
     current_user: Optional[User] = Depends(require_auth)
 ):
     """Logout user and clear session."""
-    # Clear session cookie
-    from app.core.config import settings
-    is_production = settings.APP_ENV == "production"
-
-    response.delete_cookie(
-        key="session_token",
-        httponly=True,
-        secure=is_production,  # Must match the secure setting used when setting the cookie
-        samesite="lax",
-        path="/"  # Must match the path used when setting the cookie
-    )
+    # Clear session cookie using utility
+    delete_session_cookie(response)
 
     # Delete session from database if user is authenticated
     if current_user:
-        session_token = request.cookies.get("session_token")
+        session_token = request.cookies.get(SessionConstants.COOKIE_NAME)
         if session_token:
             # Delete the session record from database
             await db.execute(
