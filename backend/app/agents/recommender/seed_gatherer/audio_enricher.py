@@ -1,9 +1,9 @@
 """Audio enricher for enhancing tracks with audio features from external services."""
 
-import logging
+import structlog
 from typing import Any, Dict, List
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class AudioEnricher:

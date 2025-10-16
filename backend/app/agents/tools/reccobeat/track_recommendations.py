@@ -1,6 +1,6 @@
 """RecoBeat track recommendations tool."""
 
-import logging
+import structlog
 from typing import List, Optional, Type
 
 from pydantic import BaseModel, Field
@@ -9,7 +9,7 @@ from ..agent_tools import RateLimitedTool, ToolResult
 from ...states.agent_state import TrackRecommendation
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class TrackRecommendationsInput(BaseModel):

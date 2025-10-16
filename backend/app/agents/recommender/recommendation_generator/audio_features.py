@@ -1,11 +1,11 @@
 """Audio features handling for track analysis."""
 
-import logging
+import structlog
 from typing import Any, Dict, Optional
 
 from ...tools.reccobeat_service import RecoBeatService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class AudioFeaturesHandler:

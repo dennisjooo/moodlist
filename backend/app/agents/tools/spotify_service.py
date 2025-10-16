@@ -1,6 +1,6 @@
 """Spotify API service that coordinates all Spotify tools."""
 
-import logging
+import structlog
 from typing import Dict, List, Optional, Any
 
 from .agent_tools import AgentTools
@@ -11,7 +11,7 @@ from .spotify.artist_search import SearchSpotifyArtistsTool, GetSeveralSpotifyAr
 from .spotify.track_search import SearchSpotifyTracksTool
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class SpotifyService:

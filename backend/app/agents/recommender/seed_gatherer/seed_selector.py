@@ -1,11 +1,11 @@
 """Seed selector for choosing the best tracks as seeds."""
 
-import logging
+import structlog
 from typing import Any, Dict, List, Optional
 
 from .feature_matcher import FeatureMatcher
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class SeedSelector:

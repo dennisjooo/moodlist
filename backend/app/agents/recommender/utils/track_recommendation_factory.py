@@ -1,11 +1,11 @@
 """Factory for creating TrackRecommendation objects from various data sources."""
 
-import logging
+import structlog
 from typing import Any, Dict, List, Optional
 
 from ...states.agent_state import TrackRecommendation
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class TrackRecommendationFactory:

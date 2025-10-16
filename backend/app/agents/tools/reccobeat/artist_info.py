@@ -1,13 +1,13 @@
 """RecoBeat artist information tools."""
 
-import logging
+import structlog
 from typing import List, Type
 from pydantic import BaseModel, Field
 
 from ..agent_tools import RateLimitedTool, ToolResult
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class SearchArtistInput(BaseModel):

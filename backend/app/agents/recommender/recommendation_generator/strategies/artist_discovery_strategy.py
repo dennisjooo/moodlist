@@ -1,6 +1,6 @@
 """Strategy for generating recommendations from mood-matched artists."""
 
-import logging
+import structlog
 from typing import Any, Dict, List
 
 from ....tools.reccobeat_service import RecoBeatService
@@ -11,7 +11,7 @@ from ...utils import TokenService, TrackRecommendationFactory
 from ..audio_features import AudioFeaturesHandler
 from .base_strategy import RecommendationStrategy
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class ArtistDiscoveryStrategy(RecommendationStrategy):

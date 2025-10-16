@@ -1,11 +1,11 @@
 """Recommendation processor for handling duplicate removal and ratio enforcement."""
 
-import logging
+import structlog
 from typing import List, Dict
 
 from ...states.agent_state import TrackRecommendation
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class RecommendationProcessor:
