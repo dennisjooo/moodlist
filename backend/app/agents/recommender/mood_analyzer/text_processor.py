@@ -75,7 +75,7 @@ class TextProcessor:
                     j += 1
 
                 # Only add if not a genre keyword
-                if potential_artist.lower() not in KNOWN_GENRES:
+                if potential_artist.lower() not in config.known_genres:
                     artist_recommendations.append(potential_artist)
 
         # Remove duplicates
