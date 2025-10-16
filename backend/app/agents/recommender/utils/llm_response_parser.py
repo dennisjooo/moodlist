@@ -1,12 +1,12 @@
 """LLM response parsing utilities."""
 
 import json
-import logging
+import structlog
 from typing import Any, Dict, Optional, Union
 
 from langchain_core.messages import AIMessage
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class LLMResponseParser:

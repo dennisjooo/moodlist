@@ -1,7 +1,7 @@
 """Improvement strategy for deciding and applying playlist improvements."""
 
 import json
-import logging
+import structlog
 from typing import Any, Dict, List, Optional
 
 from langchain_core.language_models.base import BaseLanguageModel
@@ -10,7 +10,7 @@ from ...states.agent_state import AgentState, RecommendationStatus
 from ...core.base_agent import BaseAgent
 from .prompts import get_strategy_decision_prompt
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class ImprovementStrategy:

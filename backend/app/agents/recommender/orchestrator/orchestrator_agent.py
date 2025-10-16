@@ -1,7 +1,7 @@
 """Orchestrator agent for evaluating and improving playlist quality."""
 
 import asyncio
-import logging
+import structlog
 from typing import Optional, Dict, Any
 
 from langchain_core.language_models.base import BaseLanguageModel
@@ -12,7 +12,7 @@ from .quality_evaluator import QualityEvaluator
 from .improvement_strategy import ImprovementStrategy
 from .recommendation_processor import RecommendationProcessor
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class OrchestratorAgent(BaseAgent):

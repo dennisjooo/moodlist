@@ -1,7 +1,7 @@
 """Track adder component for adding tracks to Spotify playlists."""
 
 import asyncio
-import logging
+import structlog
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 from ...agents.tools.spotify_service import SpotifyService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class TrackAdder:

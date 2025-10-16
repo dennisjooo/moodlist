@@ -1,12 +1,13 @@
 """Playlist creation service for creating and managing Spotify playlists."""
 
-import logging
+import structlog
 from typing import Optional
 
 from langchain_core.language_models.base import BaseLanguageModel
 
 from ...agents.states.agent_state import AgentState, RecommendationStatus
 from ...agents.tools.spotify_service import SpotifyService
+from ...core.exceptions import ValidationException, InternalServerError
 from .playlist_namer import PlaylistNamer
 from .playlist_describer import PlaylistDescriber
 from .track_adder import TrackAdder
@@ -14,7 +15,7 @@ from .playlist_validator import PlaylistValidator
 from .playlist_summarizer import PlaylistSummarizer
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class PlaylistCreationService:
@@ -57,7 +58,7 @@ class PlaylistCreationService:
 
             # Check if we have recommendations to create playlist from
             if not state.recommendations:
-                raise ValueError("No recommendations available for playlist creation")
+                raise ValidationException("No recommendations available for playlist creation")
 
             # Generate playlist name
             playlist_name = await self.playlist_namer.generate_name(state.mood_prompt, len(state.recommendations))
@@ -68,7 +69,7 @@ class PlaylistCreationService:
             # Create playlist on Spotify
             access_token = state.metadata.get("spotify_access_token")
             if not access_token:
-                raise ValueError("No Spotify access token available for playlist creation")
+                raise ValidationException("No Spotify access token available for playlist creation")
 
             playlist_data = await self.spotify_service.create_playlist(
                 access_token=access_token,
@@ -78,7 +79,7 @@ class PlaylistCreationService:
             )
 
             if not playlist_data:
-                raise ValueError("Failed to create playlist on Spotify")
+                raise InternalServerError("Failed to create playlist on Spotify")
 
             # Update state with playlist information
             state.playlist_id = playlist_data["id"]

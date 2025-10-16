@@ -1,9 +1,9 @@
 """Feature matcher for calculating mood match scores between tracks and target features."""
 
-import logging
+import structlog
 from typing import Any, Dict, Optional
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class FeatureMatcher:

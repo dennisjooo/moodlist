@@ -1,13 +1,13 @@
 """Fallback strategy for generating recommendations when no seeds are available."""
 
-import logging
+import structlog
 from typing import Any, Dict, List
 
 from ....tools.reccobeat_service import RecoBeatService
 from ....states.agent_state import AgentState
 from .base_strategy import RecommendationStrategy
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class FallbackStrategy(RecommendationStrategy):

@@ -1,7 +1,7 @@
 """Service for editing completed/saved playlists."""
 
-import logging
-from datetime import datetime
+import structlog
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,8 +11,9 @@ from sqlalchemy.orm.attributes import flag_modified
 from .spotify_edit_service import SpotifyEditService
 from ...models.playlist import Playlist
 from ...agents.states.agent_state import TrackRecommendation
+from ...core.exceptions import NotFoundException, ForbiddenException, ValidationException
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class CompletedPlaylistEditor:
@@ -57,11 +58,11 @@ class CompletedPlaylistEditor:
         playlist = result.scalar_one_or_none()
 
         if not playlist:
-            raise ValueError(f"Playlist with session {session_id} not found")
+            raise NotFoundException("Playlist", session_id)
 
         # Validate user owns this playlist
         if playlist.user_id != user_id:
-            raise PermissionError("You don't have permission to edit this playlist")
+            raise ForbiddenException("You don't have permission to edit this playlist")
 
         # Check if playlist has been saved to Spotify
         is_saved_to_spotify = bool(playlist.spotify_playlist_id)
@@ -97,12 +98,12 @@ class CompletedPlaylistEditor:
                 is_saved_to_spotify
             )
         else:
-            raise ValueError(f"Invalid edit_type: {edit_type}. Must be one of: reorder, remove, add")
+            raise ValidationException(f"Invalid edit_type: {edit_type}. Must be one of: reorder, remove, add")
 
         # Update database with modified recommendations
         playlist.recommendations_data = recommendations
         flag_modified(playlist, "recommendations_data")
-        playlist.updated_at = datetime.utcnow()
+        playlist.updated_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(playlist)
 
@@ -124,7 +125,7 @@ class CompletedPlaylistEditor:
     ) -> List[Dict]:
         """Handle remove edit."""
         if not track_id:
-            raise ValueError("track_id is required for remove operation")
+            raise ValidationException("track_id is required for remove operation")
 
         # Find and remove track
         track_to_remove = None
@@ -134,7 +135,7 @@ class CompletedPlaylistEditor:
                 break
 
         if not track_to_remove:
-            raise ValueError(f"Track {track_id} not found in playlist")
+            raise NotFoundException("Track", track_id)
 
         # Remove from Spotify if playlist is saved
         if is_saved_to_spotify:
@@ -160,7 +161,7 @@ class CompletedPlaylistEditor:
     ) -> List[Dict]:
         """Handle reorder edit."""
         if track_id is None or new_position is None:
-            raise ValueError("track_id and new_position are required for reorder operation")
+            raise ValidationException("track_id and new_position are required for reorder operation")
 
         # Find track index
         old_index = None
@@ -170,7 +171,7 @@ class CompletedPlaylistEditor:
                 break
 
         if old_index is None:
-            raise ValueError(f"Track {track_id} not found in playlist")
+            raise NotFoundException("Track", track_id)
 
         # Reorder in local list
         track = recommendations.pop(old_index)
@@ -201,7 +202,7 @@ class CompletedPlaylistEditor:
     ) -> List[Dict]:
         """Handle add edit."""
         if not track_uri:
-            raise ValueError("track_uri is required for add operation")
+            raise ValidationException("track_uri is required for add operation")
 
         # Extract track ID from URI (format: spotify:track:ID)
         track_id_from_uri = track_uri.split(":")[-1]

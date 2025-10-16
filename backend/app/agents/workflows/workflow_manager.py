@@ -1,21 +1,21 @@
 """Workflow manager for coordinating agentic recommendation process."""
 
 import asyncio
-import logging
+import structlog
 import uuid
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone, timedelta
-import httpx
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from ...clients.spotify_client import SpotifyAPIClient
 from ..core.base_agent import BaseAgent
 from ..states.agent_state import AgentState, RecommendationStatus
 from ..tools.agent_tools import AgentTools
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class WorkflowConfig:
@@ -121,43 +121,26 @@ class WorkflowManager:
                 logger.info(f"Refreshing expired Spotify token for user {user.id}")
                 
                 # Refresh the token
-                from ...core.config import settings
+                spotify_client = SpotifyAPIClient()
+                token_data = await spotify_client.refresh_token(user.refresh_token)
                 
-                async with httpx.AsyncClient() as client:
-                    data = {
-                        "grant_type": "refresh_token",
-                        "refresh_token": user.refresh_token,
-                        "client_id": settings.SPOTIFY_CLIENT_ID,
-                        "client_secret": settings.SPOTIFY_CLIENT_SECRET
-                    }
-                    
-                    response = await client.post(
-                        "https://accounts.spotify.com/api/token",
-                        data=data,
-                        timeout=30.0
-                    )
-                    response.raise_for_status()
-                    token_data = response.json()
-                    
-                    # Update user's tokens in database
-                    user.access_token = token_data["access_token"]
-                    if "refresh_token" in token_data:
-                        user.refresh_token = token_data["refresh_token"]
-                    
-                    # Update expiration time
-                    expires_in = token_data.get("expires_in", 3600)
-                    user.token_expires_at = datetime.now(timezone.utc).replace(microsecond=0) + \
-                                           timedelta(seconds=expires_in)
-                    
-                    await db.commit()
-                    
-                    # Update the state with new token
-                    state.metadata["spotify_access_token"] = user.access_token
-                    
-                    logger.info(f"Successfully refreshed Spotify token for user {user.id}, expires at {user.token_expires_at}")
-                    
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error refreshing Spotify token: {e.response.status_code} - {e.response.text}")
+                # Update user's tokens in database
+                user.access_token = token_data["access_token"]
+                if "refresh_token" in token_data:
+                    user.refresh_token = token_data["refresh_token"]
+                
+                # Update expiration time
+                expires_in = token_data.get("expires_in", 3600)
+                user.token_expires_at = datetime.now(timezone.utc).replace(microsecond=0) + \
+                                       timedelta(seconds=expires_in)
+                
+                await db.commit()
+                
+                # Update the state with new token
+                state.metadata["spotify_access_token"] = user.access_token
+                
+                logger.info(f"Successfully refreshed Spotify token for user {user.id}, expires at {user.token_expires_at}")
+                
         except Exception as e:
             logger.error(f"Failed to refresh Spotify token: {str(e)}", exc_info=True)
         
