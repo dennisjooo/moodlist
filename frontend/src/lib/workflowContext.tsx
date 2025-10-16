@@ -336,6 +336,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
 
       refreshTimeoutRef.current = setTimeout(async () => {
         try {
+          if (!workflowState.sessionId) return;
           const results = await workflowAPI.getWorkflowResults(workflowState.sessionId);
           setWorkflowState(prev => ({
             ...prev,
