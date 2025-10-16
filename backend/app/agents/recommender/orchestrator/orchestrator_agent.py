@@ -8,6 +8,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from ...core.base_agent import BaseAgent
 from ...states.agent_state import AgentState, RecommendationStatus
+from ..utils import config
 from .quality_evaluator import QualityEvaluator
 from .improvement_strategy import ImprovementStrategy
 from .recommendation_processor import RecommendationProcessor
@@ -24,8 +25,8 @@ class OrchestratorAgent(BaseAgent):
         recommendation_generator: BaseAgent,
         seed_gatherer: BaseAgent,
         llm: Optional[BaseLanguageModel] = None,
-        max_iterations: int = 3,
-        cohesion_threshold: float = 0.65,
+        max_iterations: Optional[int] = None,
+        cohesion_threshold: Optional[float] = None,
         verbose: bool = False
     ):
         """Initialize the orchestrator agent.
@@ -49,18 +50,18 @@ class OrchestratorAgent(BaseAgent):
         self.mood_analyzer = mood_analyzer
         self.recommendation_generator = recommendation_generator
         self.seed_gatherer = seed_gatherer
-        self.max_iterations = max_iterations
-        self.cohesion_threshold = cohesion_threshold
+        self.max_iterations = max_iterations or config.max_iterations
+        self.cohesion_threshold = cohesion_threshold or config.cohesion_threshold
 
         # Initialize component modules
         self.quality_evaluator = QualityEvaluator(
             llm=llm,
-            cohesion_threshold=cohesion_threshold
+            cohesion_threshold=self.cohesion_threshold
         )
         self.improvement_strategy = ImprovementStrategy(
             recommendation_generator=recommendation_generator,
             llm=llm,
-            cohesion_threshold=cohesion_threshold
+            cohesion_threshold=self.cohesion_threshold
         )
         self.recommendation_processor = RecommendationProcessor()
 

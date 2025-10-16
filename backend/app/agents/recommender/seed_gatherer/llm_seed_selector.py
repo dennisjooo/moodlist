@@ -1,8 +1,8 @@
 """LLM-based seed selector for intelligent seed selection."""
 
-import json
 import logging
 from typing import Any, Dict, List
+from ..utils import LLMResponseParser
 from .prompts.seed_selection import get_seed_selection_prompt
 
 logger = logging.getLogger(__name__)
@@ -66,16 +66,11 @@ class LLMSeedSelector:
             )
 
             response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
-            content = response.content if hasattr(response, 'content') else str(response)
 
-            # Parse JSON response
-            json_start = content.find('{')
-            json_end = content.rfind('}') + 1
+            # Parse JSON response using centralized parser
+            result = LLMResponseParser.extract_json_from_response(response)
 
-            if json_start >= 0 and json_end > json_start:
-                json_str = content[json_start:json_end]
-                result = json.loads(json_str)
-
+            if result:
                 selected_indices = result.get("selected_indices", [])
                 reasoning = result.get("reasoning", "")
 

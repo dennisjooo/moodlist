@@ -1,12 +1,12 @@
 """Mood analysis engine for LLM-based and fallback mood analysis."""
 
-import json
 import logging
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, List
 
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages import AIMessage
 
+from ..utils import LLMResponseParser, config
 from .prompts import get_mood_analysis_system_prompt
 from .text_processor import TextProcessor
 from .mood_profile_matcher import MoodProfileMatcher
@@ -60,24 +60,14 @@ class MoodAnalysisEngine:
             # Get LLM response
             response = await self.llm.ainvoke(messages)
 
-            # Try to parse JSON response
-            try:
-                # Extract JSON from response
-                content = response.content if hasattr(response, 'content') else str(response)
-                json_start = content.find('{')
-                json_end = content.rfind('}') + 1
+            # Parse JSON response using centralized parser
+            analysis = LLMResponseParser.extract_json_from_response(response)
 
-                if json_start >= 0 and json_end > json_start:
-                    json_str = content[json_start:json_end]
-                    analysis = json.loads(json_str)
-                else:
-                    # Fallback if no JSON found
-                    analysis = self._parse_llm_response_fallback(content)
-
-            except json.JSONDecodeError:
+            if not analysis:
                 # Fallback if JSON parsing fails
-                logger.error(f"JSON parsing failed: {response}")
-                analysis = self._parse_llm_response_fallback(response)
+                content = response.content if hasattr(response, 'content') else str(response)
+                logger.warning("Could not parse JSON from LLM mood analysis response")
+                analysis = self._parse_llm_response_fallback(content)
 
             return analysis
 
@@ -127,63 +117,38 @@ class MoodAnalysisEngine:
         return analysis
 
     def _enhance_features_with_keywords(self, analysis: Dict[str, Any], prompt_lower: str):
-        """Enhance feature analysis with specific keywords."""
-        # Energy analysis
-        high_energy_keywords = ["energetic", "upbeat", "exciting", "workout", "intense", "powerful", "hype"]
-        low_energy_keywords = ["calm", "peaceful", "sleepy", "soft", "gentle", "laid-back"]
+        """Enhance feature analysis with specific keywords using data-driven approach."""
+        # Define keyword-to-feature mappings
+        keyword_mappings = self._get_keyword_feature_mappings()
 
-        if any(keyword in prompt_lower for keyword in high_energy_keywords):
-            analysis["energy_level"] = "high"
-            if "energy" not in analysis["target_features"]:
-                analysis["target_features"]["energy"] = [0.7, 1.0]
-                analysis["target_features"]["valence"] = [0.5, 1.0]
-        elif any(keyword in prompt_lower for keyword in low_energy_keywords):
-            analysis["energy_level"] = "low"
-            if "energy" not in analysis["target_features"]:
-                analysis["target_features"]["energy"] = [0.0, 0.4]
+        # Apply each mapping
+        for mapping in keyword_mappings:
+            self._apply_keyword_mapping(analysis, prompt_lower, mapping)
 
-        # Valence analysis
-        positive_keywords = ["happy", "joyful", "cheerful", "uplifting", "fun", "bright"]
-        negative_keywords = ["sad", "depressed", "dark", "moody", "bittersweet"]
+    def _get_keyword_feature_mappings(self) -> List[Dict[str, Any]]:
+        """Get data-driven keyword to feature mappings from centralized config."""
+        return config.keyword_feature_mappings
 
-        if any(keyword in prompt_lower for keyword in positive_keywords):
-            analysis["primary_emotion"] = "positive"
-            if "valence" not in analysis["target_features"]:
-                analysis["target_features"]["valence"] = [0.7, 1.0]
-        elif any(keyword in prompt_lower for keyword in negative_keywords):
-            analysis["primary_emotion"] = "negative"
-            if "valence" not in analysis["target_features"]:
-                analysis["target_features"]["valence"] = [0.0, 0.4]
+    def _apply_keyword_mapping(
+        self,
+        analysis: Dict[str, Any],
+        prompt_lower: str,
+        mapping: Dict[str, Any]
+    ) -> None:
+        """Apply a single keyword-to-feature mapping."""
+        keywords = mapping["keywords"]
 
-        # Danceability analysis
-        dance_keywords = ["dance", "dancing", "groove", "rhythm", "club"]
-        if any(keyword in prompt_lower for keyword in dance_keywords):
-            if "danceability" not in analysis["target_features"]:
-                analysis["target_features"]["danceability"] = [0.6, 1.0]
+        # Check if any keywords match
+        if any(keyword in prompt_lower for keyword in keywords):
+            # Set emotion/energy level if specified
+            if "emotion_level" in mapping:
+                level_key, level_value = mapping["emotion_level"]
+                analysis[level_key] = level_value
 
-        # Acousticness analysis
-        acoustic_keywords = ["acoustic", "unplugged", "organic", "folk", "singer-songwriter"]
-        if any(keyword in prompt_lower for keyword in acoustic_keywords):
-            if "acousticness" not in analysis["target_features"]:
-                analysis["target_features"]["acousticness"] = [0.7, 1.0]
-
-        # Instrumentalness analysis
-        instrumental_keywords = ["instrumental", "no vocals", "background", "ambient"]
-        if any(keyword in prompt_lower for keyword in instrumental_keywords):
-            if "instrumentalness" not in analysis["target_features"]:
-                analysis["target_features"]["instrumentalness"] = [0.7, 1.0]
-
-        # Live performance analysis
-        live_keywords = ["live", "concert", "performance", "audience"]
-        if any(keyword in prompt_lower for keyword in live_keywords):
-            if "liveness" not in analysis["target_features"]:
-                analysis["target_features"]["liveness"] = [0.6, 1.0]
-
-        # Speech/Talk analysis
-        speech_keywords = ["podcast", "talk", "spoken", "narrative", "story"]
-        if any(keyword in prompt_lower for keyword in speech_keywords):
-            if "speechiness" not in analysis["target_features"]:
-                analysis["target_features"]["speechiness"] = [0.5, 1.0]
+            # Apply feature ranges (only if not already set)
+            for feature_name, feature_range in mapping["features"].items():
+                if feature_name not in analysis["target_features"]:
+                    analysis["target_features"][feature_name] = feature_range
 
     def _parse_llm_response_fallback(self, response_content: Union[str, AIMessage]) -> Dict[str, Any]:
         """Parse LLM response when JSON parsing fails.
