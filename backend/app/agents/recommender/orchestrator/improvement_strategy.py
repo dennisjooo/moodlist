@@ -1,6 +1,5 @@
 """Improvement strategy for deciding and applying playlist improvements."""
 
-import json
 import structlog
 from typing import Any, Dict, List, Optional
 
@@ -8,6 +7,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from ...states.agent_state import AgentState, RecommendationStatus
 from ...core.base_agent import BaseAgent
+from ..utils.llm_response_parser import LLMResponseParser
 from .prompts import get_strategy_decision_prompt
 
 logger = structlog.get_logger(__name__)
@@ -321,15 +321,11 @@ class ImprovementStrategy:
             )
 
             response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
-            content = response.content if hasattr(response, 'content') else str(response)
             
-            # Parse JSON response
-            json_start = content.find('{')
-            json_end = content.rfind('}') + 1
+            # Parse JSON response using centralized parser
+            strategy_decision = LLMResponseParser.extract_json_from_response(response)
             
-            if json_start >= 0 and json_end > json_start:
-                json_str = content[json_start:json_end]
-                strategy_decision = json.loads(json_str)
+            if strategy_decision:
                 strategies = strategy_decision.get("strategies", [])
                 reasoning = strategy_decision.get("reasoning", "")
                 
