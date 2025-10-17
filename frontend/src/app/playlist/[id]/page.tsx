@@ -17,8 +17,9 @@ function PlaylistPageContent() {
     const router = useRouter();
     const sessionId = params.id as string;
     const [isLoadingSession, setIsLoadingSession] = useState(true);
-    const { workflowState, loadWorkflow } = useWorkflow();
+    const { workflowState, loadWorkflow, syncFromSpotify } = useWorkflow();
     const { isAuthenticated, isLoading: authLoading } = useAuth();
+    const [hasAutoSynced, setHasAutoSynced] = useState(false);
 
     const handleBack = () => {
         router.push('/playlists');
@@ -71,6 +72,35 @@ function PlaylistPageContent() {
             setIsLoadingSession(false);
         }
     }, [workflowState.sessionId, workflowState.status, workflowState.error, sessionId]);
+
+    // Auto-sync from Spotify when playlist is loaded and has been saved to Spotify
+    useEffect(() => {
+        const shouldAutoSync =
+            !hasAutoSynced &&
+            !isLoadingSession &&
+            !authLoading &&
+            isAuthenticated &&
+            workflowState.sessionId === sessionId &&
+            workflowState.status === 'completed' &&
+            workflowState.playlist?.id; // Only sync if saved to Spotify
+
+        if (shouldAutoSync) {
+            setHasAutoSynced(true);
+            syncFromSpotify().catch(error => {
+                console.error('Auto-sync failed:', error);
+            });
+        }
+    }, [
+        hasAutoSynced,
+        isLoadingSession,
+        authLoading,
+        isAuthenticated,
+        workflowState.sessionId,
+        workflowState.status,
+        workflowState.playlist?.id,
+        sessionId,
+        syncFromSpotify
+    ]);
 
     // Loading state - show while checking auth or loading playlist
     if (authLoading || isLoadingSession) {
