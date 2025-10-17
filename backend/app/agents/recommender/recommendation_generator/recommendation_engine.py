@@ -55,17 +55,17 @@ class RecommendationEngine:
         playlist_target = state.metadata.get("playlist_target", {})
         target_count = playlist_target.get("target_count", 20)
 
-        # Calculate target split: 95:5 ratio (95% artists, 5% seeds)
-        target_artist_recs = int(target_count * 0.95)  # 95% from artists
-        target_seed_recs = target_count - target_artist_recs  # 5% from seeds
+        # Calculate target split: 98:2 ratio (98% artists, 2% seeds as minimal fallback)
+        target_artist_recs = int(target_count * 0.98)  # 98% from artists (increased from 95%)
+        target_seed_recs = max(1, target_count - target_artist_recs)  # Minimum 1, max 2
 
         # Store targets in state for use by generation methods
         state.metadata["_temp_seed_target"] = target_seed_recs
         state.metadata["_temp_artist_target"] = target_artist_recs
 
         logger.info(
-            f"Target generation split (95:5 ratio): {target_artist_recs} from artists, "
-            f"{target_seed_recs} from seeds (total: {target_count})"
+            f"Target generation split (98:2 ratio): {target_artist_recs} from artists, "
+            f"{target_seed_recs} from seeds (total: {target_count}) - RecoBeat minimal fallback only"
         )
 
         # Generate from discovered artists FIRST (aiming for 2/3 of target - higher priority)
@@ -75,6 +75,9 @@ class RecommendationEngine:
         # Generate from seed tracks (aiming for 1/3 of target - supplement only)
         seed_recommendations = await self._generate_from_seeds(state)
         all_recommendations.extend(seed_recommendations)
+
+        # Include anchor tracks from genre search
+        all_recommendations = await self._include_anchor_tracks(state, all_recommendations)
 
         # Clean up temp metadata
         state.metadata.pop("_temp_seed_target", None)
@@ -693,3 +696,40 @@ class RecommendationEngine:
                     "This is likely due to an expired or invalid Spotify access token. "
                     "The workflow cannot continue without valid artist tracks."
                 )
+
+    async def _include_anchor_tracks(
+        self,
+        state: AgentState,
+        all_recommendations: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Include anchor tracks in recommendations with high confidence.
+        
+        Args:
+            state: Current agent state
+            all_recommendations: Existing recommendations list
+            
+        Returns:
+            Updated recommendations list with anchor tracks included
+        """
+        anchor_tracks = state.metadata.get("anchor_tracks", [])
+        
+        if not anchor_tracks:
+            return all_recommendations
+        
+        # Convert anchor tracks to recommendation format with high confidence
+        for anchor_track in anchor_tracks:
+            rec = TrackRecommendation(
+                track_id=anchor_track["id"],
+                track_name=anchor_track["name"],
+                artists=[a["name"] for a in anchor_track.get("artists", [])],
+                spotify_uri=anchor_track.get("uri") or anchor_track.get("spotify_uri"),
+                confidence_score=0.95,  # High confidence - these are anchor tracks
+                audio_features=anchor_track.get("audio_features", {}),
+                reasoning="Anchor track from genre search - high feature match",
+                source="anchor_track"
+            )
+            # Insert at beginning for high priority
+            all_recommendations.insert(0, rec.dict())
+        
+        logger.info(f"Included {len(anchor_tracks)} anchor tracks in recommendations")
+        return all_recommendations

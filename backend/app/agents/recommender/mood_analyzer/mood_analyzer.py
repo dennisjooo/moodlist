@@ -14,6 +14,7 @@ from . import (
     PlaylistTargetPlanner,
     KeywordExtractor
 )
+from .anchor_track_selector import AnchorTrackSelector
 
 logger = structlog.get_logger(__name__)
 
@@ -25,6 +26,7 @@ class MoodAnalyzerAgent(BaseAgent):
         self,
         llm: Optional[BaseLanguageModel] = None,
         spotify_service=None,
+        reccobeat_service=None,
         verbose: bool = False
     ):
         """Initialize the mood analyzer agent.
@@ -32,6 +34,7 @@ class MoodAnalyzerAgent(BaseAgent):
         Args:
             llm: Language model for mood analysis
             spotify_service: SpotifyService for artist discovery
+            reccobeat_service: RecoBeatService for audio features (anchor tracks)
             verbose: Whether to enable verbose logging
         """
         super().__init__(
@@ -42,6 +45,7 @@ class MoodAnalyzerAgent(BaseAgent):
         )
 
         self.spotify_service = spotify_service
+        self.reccobeat_service = reccobeat_service
 
         # Initialize component classes
         self.mood_analysis_engine = MoodAnalysisEngine(llm=llm)
@@ -49,6 +53,11 @@ class MoodAnalyzerAgent(BaseAgent):
         self.artist_discovery = ArtistDiscovery(spotify_service=spotify_service, llm=llm)
         self.playlist_target_planner = PlaylistTargetPlanner()
         self.keyword_extractor = KeywordExtractor()
+        self.anchor_track_selector = AnchorTrackSelector(
+            spotify_service=spotify_service,
+            reccobeat_service=reccobeat_service,
+            llm=llm
+        )
 
     async def execute(self, state: AgentState) -> AgentState:
         """Execute mood analysis on the user's prompt.
@@ -111,6 +120,26 @@ class MoodAnalyzerAgent(BaseAgent):
             # Discover artists matching the mood (if Spotify service available)
             if self.spotify_service:
                 await self.artist_discovery.discover_mood_artists(state, mood_analysis)
+
+            # Select anchor tracks (user-mentioned tracks + genre-based tracks)
+            if self.spotify_service:
+                try:
+                    anchor_tracks, anchor_ids = await self.anchor_track_selector.select_anchor_tracks(
+                        mood_analysis.get("genre_keywords", []),
+                        target_features,
+                        state.metadata.get("spotify_access_token"),
+                        mood_prompt=state.mood_prompt,
+                        artist_recommendations=mood_analysis.get("artist_recommendations", []),
+                        limit=5
+                    )
+                    state.metadata["anchor_tracks"] = anchor_tracks
+                    state.metadata["anchor_track_ids"] = anchor_ids
+                    logger.info(f"Selected {len(anchor_tracks)} anchor tracks (user-mentioned + genre search)")
+                except Exception as e:
+                    logger.warning(f"Failed to select anchor tracks: {e}")
+                    # Continue without anchor tracks - not critical
+                    state.metadata["anchor_tracks"] = []
+                    state.metadata["anchor_track_ids"] = []
 
         except Exception as e:
             logger.error(f"Error in mood analysis: {str(e)}", exc_info=True)

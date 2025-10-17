@@ -150,25 +150,34 @@ class RecommendationGeneratorAgent(BaseAgent):
         playlist_target = state.metadata.get("playlist_target", {})
         max_recommendations = playlist_target.get("max_count", self.max_recommendations)
 
-        # ENFORCE 95:5 ratio: separate artist vs RecoBeat tracks and cap each
+        # ENFORCE 98:2 ratio: separate artist discovery, anchor, and RecoBeat tracks
         artist_recs = [r for r in recommendations if r.source == "artist_discovery"]
+        anchor_recs = [r for r in recommendations if r.source == "anchor_track"]
         reccobeat_recs = [r for r in recommendations if r.source == "reccobeat"]
 
-        # Calculate strict caps based on 95:5 ratio
-        max_artist = int(max_recommendations * 0.95)  # 95%
-        max_reccobeat = max_recommendations - max_artist  # 5%
+        # Calculate strict caps based on 98:2 ratio (anchor tracks don't count toward ratio)
+        max_artist = int(max_recommendations * 0.98)  # 98% (increased from 95%)
+        max_reccobeat = max(1, max_recommendations - max_artist)  # Minimum 1 for edge cases
+
+        # Anchor tracks get priority (up to 5)
+        capped_anchor = anchor_recs[:5]
+        
+        # Adjust caps to account for anchor tracks
+        remaining_slots = max_recommendations - len(capped_anchor)
+        max_artist = int(remaining_slots * 0.98)
+        max_reccobeat = max(1, remaining_slots - max_artist)
 
         # Take top tracks from each source up to their caps
         capped_artist = artist_recs[:max_artist]
         capped_reccobeat = reccobeat_recs[:max_reccobeat]
 
         logger.info(
-            f"Enforcing 95:5 ratio: {len(capped_artist)} artist tracks (cap: {max_artist}), "
-            f"{len(capped_reccobeat)} RecoBeat tracks (cap: {max_reccobeat})"
+            f"Enforcing 98:2 ratio: {len(capped_anchor)} anchor + {len(capped_artist)} artist tracks (cap: {max_artist}), "
+            f"{len(capped_reccobeat)} RecoBeat tracks (cap: {max_reccobeat}) - RecoBeat minimal fallback only"
         )
 
-        # Combine and sort by confidence
-        final_recommendations = capped_artist + capped_reccobeat
+        # Combine (anchor first for priority, then artist and reccobeat)
+        final_recommendations = capped_anchor + capped_artist + capped_reccobeat
         final_recommendations.sort(key=lambda x: x.confidence_score, reverse=True)
 
         return final_recommendations

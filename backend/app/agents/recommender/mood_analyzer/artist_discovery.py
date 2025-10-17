@@ -53,42 +53,30 @@ class ArtistDiscovery:
 
             all_artists = []
 
-            # 1. Search for artists by name (direct artist search) - EXPANDED
-            for artist_name in artist_recommendations[:10]:  # Increased from 3 to 10 for more variety
-                try:
-                    logger.info(f"Searching for artist: {artist_name}")
-                    artists = await self.spotify_service.search_spotify_artists(
-                        access_token=access_token,
-                        query=artist_name,
-                        limit=3  # Keep at 3 per artist to avoid exact duplicates
-                    )
-                    all_artists.extend(artists)
-                except Exception as e:
-                    logger.error(f"Failed to search for artist '{artist_name}': {e}")
+            # SOURCE 1: LLM-suggested artists (50% weight - reduced from dominant)
+            llm_artists = await self._discover_from_llm_suggestions(
+                artist_recommendations,
+                access_token
+            )
+            all_artists.extend(llm_artists)
+            logger.info(f"Found {len(llm_artists)} artists from LLM suggestions")
 
-            # 2. Search tracks for genre keywords and extract artists - EXPANDED
-            for genre in genre_keywords[:5]:  # Increased from 3 to 5 genres
-                try:
-                    logger.info(f"Searching tracks for genre: {genre}")
-                    # Use genre filter format for better results
-                    query = f"genre:{genre}"
-                    artists = await self.spotify_service.search_tracks_for_artists(
-                        access_token=access_token,
-                        query=query,
-                        limit=20  # Increased from 15 to 20 for more diverse artists
-                    )
-                    all_artists.extend(artists)
-                except Exception as e:
-                    logger.error(f"Failed to search tracks for genre '{genre}': {e}")
+            # SOURCE 2: Genre-based discovery (50% weight - increased from secondary)
+            genre_artists = await self._discover_from_genres(
+                genre_keywords,
+                access_token
+            )
+            all_artists.extend(genre_artists)
+            logger.info(f"Found {len(genre_artists)} artists from genre search")
 
-            # 3. Fallback: use general search keywords with artist search - EXPANDED
+            # Fallback: use general search keywords if both sources failed
             if not all_artists and search_keywords:
-                for keyword in search_keywords[:5]:  # Increased from 3 to 5
+                for keyword in search_keywords[:5]:
                     try:
                         artists = await self.spotify_service.search_spotify_artists(
                             access_token=access_token,
                             query=keyword,
-                            limit=12  # Increased from 8 to 12
+                            limit=12
                         )
                         all_artists.extend(artists)
                     except Exception as e:
@@ -246,3 +234,77 @@ class ArtistDiscovery:
         
         logger.info(f"LLM artist selection reasoning: {reasoning}")
         return filtered_artists
+
+    async def _discover_from_llm_suggestions(
+        self,
+        artist_recommendations: List[str],
+        access_token: str
+    ) -> List[Dict[str, Any]]:
+        """Discover artists from LLM-suggested artist names.
+        
+        Args:
+            artist_recommendations: List of artist names suggested by LLM
+            access_token: Spotify access token
+            
+        Returns:
+            List of artist dictionaries
+        """
+        llm_artists = []
+        
+        # Search for artists by name (reduced from 10 to 8 for 50% weight)
+        for artist_name in artist_recommendations[:8]:
+            try:
+                logger.info(f"Searching for LLM-suggested artist: {artist_name}")
+                artists = await self.spotify_service.search_spotify_artists(
+                    access_token=access_token,
+                    query=artist_name,
+                    limit=3  # Keep at 3 per artist to avoid exact duplicates
+                )
+                llm_artists.extend(artists)
+            except Exception as e:
+                logger.error(f"Failed to search for artist '{artist_name}': {e}")
+        
+        return llm_artists
+
+    async def _discover_from_genres(
+        self,
+        genre_keywords: List[str],
+        access_token: str
+    ) -> List[Dict[str, Any]]:
+        """Discover artists directly from genres (enhanced for 50% weight).
+        
+        Args:
+            genre_keywords: List of genre keywords
+            access_token: Spotify access token
+            
+        Returns:
+            List of artist dictionaries
+        """
+        genre_artists = []
+        
+        # Process up to 10 genres (expanded from 5)
+        for genre in genre_keywords[:10]:
+            try:
+                logger.info(f"Searching artists for genre: {genre}")
+                
+                # Direct artist search by genre (NEW - primary method)
+                direct_artists = await self.spotify_service.search_artists_by_genre(
+                    access_token=access_token,
+                    genre=genre,
+                    limit=40  # Get more artists per genre
+                )
+                genre_artists.extend(direct_artists)
+                
+                # Also search tracks for additional artist discovery
+                track_artists = await self.spotify_service.search_tracks_for_artists(
+                    access_token=access_token,
+                    query=f"genre:{genre}",
+                    limit=30  # Increased from 20
+                )
+                genre_artists.extend(track_artists)
+                
+            except Exception as e:
+                logger.error(f"Failed to search for genre '{genre}': {e}")
+                continue
+        
+        return genre_artists
