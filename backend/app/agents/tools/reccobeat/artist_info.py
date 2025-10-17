@@ -61,7 +61,7 @@ class SearchArtistTool(RateLimitedTool):
         try:
             logger.info(f"Searching for artists: '{search_text}' (page {page}, size {size})")
 
-            # Make API request
+            # Make API request with caching (10 minutes TTL for search results)
             response_data = await self._make_request(
                 method="GET",
                 endpoint="/v1/artist/search",
@@ -69,7 +69,9 @@ class SearchArtistTool(RateLimitedTool):
                     "searchText": search_text,
                     "page": page,
                     "size": size
-                }
+                },
+                use_cache=True,
+                cache_ttl=600  # 10 minutes - search results can change as new artists are added
             )
 
             # Validate response structure
@@ -168,11 +170,13 @@ class GetMultipleArtistsTool(RateLimitedTool):
         try:
             logger.info(f"Getting {len(ids)} artists from RecoBeat")
 
-            # Make API request
+            # Make API request with caching (60 minutes TTL for artist details)
             response_data = await self._make_request(
                 method="GET",
                 endpoint="/v1/artist",
-                params={"ids": ids}
+                params={"ids": ids},
+                use_cache=True,
+                cache_ttl=3600  # 60 minutes - artist data is stable
             )
 
             # Validate response structure
@@ -270,14 +274,16 @@ class GetArtistTracksTool(RateLimitedTool):
         try:
             logger.info(f"Getting tracks for artist {artist_id} (page {page}, size {size})")
 
-            # Make API request
+            # Make API request with caching (15 minutes TTL for artist tracks)
             response_data = await self._make_request(
                 method="GET",
                 endpoint=f"/v1/artist/{artist_id}/track",
                 params={
                     "page": page,
                     "size": size
-                }
+                },
+                use_cache=True,
+                cache_ttl=900  # 15 minutes - artist discographies change occasionally
             )
 
             # Validate response structure
