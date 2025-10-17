@@ -1059,6 +1059,139 @@ function MyComponent() {
 }
 ```
 
+### 4.4 Logging & Refresh Hygiene
+
+**Problem:** Debug `console.log` statements and full-page reloads scattered throughout codebase.
+
+**Impact:**
+- Noisy browser console in production
+- Lost state on page refresh
+- Poor debugging traceability
+- Negative UX with flash of white screen
+
+#### Structured Logger Implementation
+
+```typescript
+// lib/utils/logger.ts
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+interface LogContext {
+  component?: string;
+  action?: string;
+  [key: string]: unknown;
+}
+
+class Logger {
+  private isDev = process.env.NODE_ENV === 'development';
+
+  private log(level: LogLevel, message: string, context?: LogContext) {
+    if (!this.isDev && level === 'debug') return;
+
+    const timestamp = new Date().toISOString();
+    const contextStr = context ? ` ${JSON.stringify(context)}` : '';
+    const entry = `[${timestamp}] [${level.toUpperCase()}] ${message}${contextStr}`;
+
+    switch (level) {
+      case 'error':
+        console.error(entry);
+        // Integrate with Sentry or error tracking here
+        break;
+      case 'warn':
+        console.warn(entry);
+        break;
+      default:
+        console.log(entry);
+    }
+  }
+
+  debug(message: string, context?: LogContext) {
+    this.log('debug', message, context);
+  }
+
+  info(message: string, context?: LogContext) {
+    this.log('info', message, context);
+  }
+
+  warn(message: string, context?: LogContext) {
+    this.log('warn', message, context);
+  }
+
+  error(message: string, error?: Error, context?: LogContext) {
+    this.log('error', message, {
+      ...context,
+      errorMessage: error?.message,
+      stack: error?.stack,
+    });
+  }
+}
+
+export const logger = new Logger();
+```
+
+**Migration examples:**
+```typescript
+// Before
+console.log('Polling already active for session:', sessionId);
+
+// After
+logger.debug('Polling already active', { 
+  component: 'PollingManager', 
+  sessionId 
+});
+
+// Before
+console.error('Auth check failed:', error);
+
+// After
+logger.error('Auth check failed', error, { component: 'AuthContext' });
+```
+
+#### Replace window.location.reload()
+
+**Affected files:**
+- Navigation.tsx (2x)
+- create/page.tsx (2x)
+- create/[id]/page.tsx (3x)
+- playlists/page.tsx (1x)
+
+```typescript
+// Before
+const handleLogout = async () => {
+  await logout();
+  window.location.href = '/';
+};
+
+// After
+import { useRouter } from 'next/navigation';
+
+const router = useRouter();
+const handleLogout = async () => {
+  await logout();
+  router.push('/');
+  router.refresh(); // Revalidate server state
+};
+
+// Before
+const handleEditComplete = () => {
+  window.location.reload();
+};
+
+// After
+const handleEditComplete = async () => {
+  await refreshResults(); // Refresh context state
+  router.push(`/playlist/${sessionId}`);
+};
+```
+
+**Checklist:**
+- [ ] Create `lib/utils/logger.ts`
+- [ ] Replace all `console.log` → `logger.debug`
+- [ ] Replace all `console.error` → `logger.error`
+- [ ] Add ESLint rule: `no-console` with auto-fix
+- [ ] Remove all `window.location.reload()` calls
+- [ ] Replace with router.refresh() or state updates
+- [ ] Test all affected flows
+
 ---
 
 ## Phase 5: Performance Optimization Strategies
