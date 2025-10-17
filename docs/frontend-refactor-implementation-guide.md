@@ -174,6 +174,483 @@ Is data route-scoped (e.g., single workflow session)?
 
 ---
 
+## Phase 2.5: Authentication Flow Optimization Implementation
+
+### 2.5.1 Current Auth Flow Analysis
+
+**Problem: Current authContext.tsx behavior**
+```typescript
+// Issues with current implementation:
+// 1. Every page mount triggers checkAuthStatus()
+// 2. Network request to /auth/verify takes 200-500ms
+// 3. isLoading blocks rendering during verification
+// 4. On refresh, page might render before auth completes
+// 5. No cookie-based optimistic state
+```
+
+**Trace of current flow:**
+```
+User refreshes /playlists/[id]
+  ↓
+1. Page component mounts
+2. AuthProvider.useEffect() fires → checkAuthStatus()
+3. isLoading = true (blocks UI)
+4. fetch('/auth/verify') → 300ms network latency
+5. Response arrives → setUser(data.user)
+6. isLoading = false → page renders
+   
+RACE CONDITION: If page component useEffect runs before step 5,
+it sees isAuthenticated=false and redirects/shows error.
+```
+
+### 2.5.2 Improved Auth Architecture
+
+**New auth state model:**
+```typescript
+// lib/contexts/AuthContext.tsx (improved)
+interface AuthState {
+  user: User | null;
+  // Split loading into stages
+  isInitializing: boolean;  // First mount, checking cookies
+  isValidating: boolean;    // Background verification in progress
+  isValidated: boolean;     // Backend has confirmed session is valid
+  error: AuthError | null;
+}
+
+type AuthStatus = 
+  | 'initializing'    // Checking for session cookie
+  | 'optimistic'      // Cookie found, rendering optimistically
+  | 'authenticated'   // Backend verified session
+  | 'unauthenticated' // No session or session invalid
+  | 'error';          // Network/server error
+
+interface AuthContextType {
+  state: AuthState;
+  status: AuthStatus;
+  isAuthenticated: boolean;  // true for 'optimistic' | 'authenticated'
+  login: (accessToken: string, refreshToken: string) => Promise<void>;
+  logout: () => Promise<void>;
+  revalidate: () => Promise<void>;
+}
+```
+
+**Improved AuthProvider implementation:**
+```typescript
+'use client';
+
+import { createContext, ReactNode, useContext, useEffect, useState, useRef } from 'react';
+import { getCookie } from './cookies';
+
+const AUTH_CACHE_KEY = 'moodlist_auth_cache';
+const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+
+interface CachedAuth {
+  user: User;
+  timestamp: number;
+}
+
+export function AuthProvider({ children }: AuthProviderProps) {
+  const [user, setUser] = useState<User | null>(null);
+  const [status, setStatus] = useState<AuthStatus>('initializing');
+  const verifyTimeoutRef = useRef<NodeJS.Timeout>();
+  const abortControllerRef = useRef<AbortController>();
+
+  // Check cache and cookies on mount for instant state
+  useEffect(() => {
+    const sessionToken = getCookie('session_token');
+    
+    if (!sessionToken) {
+      setStatus('unauthenticated');
+      return;
+    }
+
+    // Try to load from session storage cache
+    const cached = getAuthCache();
+    if (cached) {
+      console.log('[Auth] Using cached user data');
+      setUser(cached.user);
+      setStatus('optimistic'); // Will revalidate in background
+    } else {
+      setStatus('optimistic'); // Cookie exists but no cache
+    }
+
+    // Schedule background verification (non-blocking)
+    verifyTimeoutRef.current = setTimeout(() => {
+      verifySession(sessionToken);
+    }, 100); // Small delay to let page render first
+
+    return () => {
+      if (verifyTimeoutRef.current) {
+        clearTimeout(verifyTimeoutRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
+  const getAuthCache = (): CachedAuth | null => {
+    try {
+      const cached = sessionStorage.getItem(AUTH_CACHE_KEY);
+      if (!cached) return null;
+
+      const data: CachedAuth = JSON.parse(cached);
+      const age = Date.now() - data.timestamp;
+
+      if (age > CACHE_TTL_MS) {
+        sessionStorage.removeItem(AUTH_CACHE_KEY);
+        return null;
+      }
+
+      return data;
+    } catch {
+      return null;
+    }
+  };
+
+  const setAuthCache = (user: User) => {
+    try {
+      const data: CachedAuth = { user, timestamp: Date.now() };
+      sessionStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(data));
+    } catch (err) {
+      console.warn('[Auth] Failed to cache user data:', err);
+    }
+  };
+
+  const clearAuthCache = () => {
+    try {
+      sessionStorage.removeItem(AUTH_CACHE_KEY);
+    } catch {}
+  };
+
+  const verifySession = async (sessionToken: string, retryCount = 0) => {
+    // Abort any in-flight verification
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    abortControllerRef.current = new AbortController();
+
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+      
+      const response = await fetch(`${backendUrl}/api/auth/verify`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.user) {
+          console.log('[Auth] Session verified:', data.user.display_name);
+          setUser(data.user);
+          setAuthCache(data.user);
+          setStatus('authenticated');
+        } else {
+          // Backend returned 200 but no user - session invalid
+          handleInvalidSession();
+        }
+      } else if (response.status === 401) {
+        console.log('[Auth] Session invalid (401)');
+        handleInvalidSession();
+      } else {
+        // Server error - retry once with exponential backoff
+        if (retryCount === 0) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          return verifySession(sessionToken, 1);
+        }
+        
+        // After retry failure, stay optimistic but log error
+        console.error('[Auth] Verification failed, staying optimistic');
+        setStatus('optimistic');
+      }
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('[Auth] Verification aborted');
+        return;
+      }
+
+      console.error('[Auth] Verification error:', error);
+      
+      // On network error, retry once
+      if (retryCount === 0) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return verifySession(sessionToken, 1);
+      }
+
+      // Stay optimistic on persistent errors (offline, etc)
+      setStatus('optimistic');
+    }
+  };
+
+  const handleInvalidSession = () => {
+    setUser(null);
+    clearAuthCache();
+    setStatus('unauthenticated');
+    window.dispatchEvent(new CustomEvent('auth-expired'));
+  };
+
+  const revalidate = async () => {
+    const sessionToken = getCookie('session_token');
+    if (sessionToken) {
+      await verifySession(sessionToken);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+      await fetch(`${backendUrl}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('[Auth] Logout error:', error);
+    } finally {
+      setUser(null);
+      clearAuthCache();
+      setStatus('unauthenticated');
+      window.dispatchEvent(new Event('auth-logout'));
+    }
+  };
+
+  const value: AuthContextType = {
+    state: {
+      user,
+      isInitializing: status === 'initializing',
+      isValidating: status === 'optimistic',
+      isValidated: status === 'authenticated',
+      error: null,
+    },
+    status,
+    isAuthenticated: status === 'optimistic' || status === 'authenticated',
+    login,
+    logout,
+    revalidate,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+```
+
+### 2.5.3 Next.js Middleware for Server-Side Auth
+
+**Create `middleware.ts` in project root:**
+```typescript
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+// Routes that require authentication
+const PROTECTED_ROUTES = [
+  '/create',
+  '/playlists',
+  '/playlist',
+  '/profile',
+];
+
+// Routes to exclude from auth checks
+const PUBLIC_ROUTES = [
+  '/callback', // Spotify OAuth callback
+  '/api',      // API routes handle their own auth
+  '/_next',    // Next.js internals
+];
+
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Skip auth check for public routes
+  if (PUBLIC_ROUTES.some(route => pathname.startsWith(route))) {
+    return NextResponse.next();
+  }
+
+  // Check if route requires authentication
+  const requiresAuth = PROTECTED_ROUTES.some(route => 
+    pathname.startsWith(route)
+  );
+
+  if (!requiresAuth) {
+    return NextResponse.next();
+  }
+
+  // Check for session token in cookies
+  const sessionToken = request.cookies.get('session_token');
+
+  if (!sessionToken) {
+    // No session cookie - redirect to home with auth required flag
+    const url = request.nextUrl.clone();
+    url.pathname = '/';
+    url.searchParams.set('auth', 'required');
+    url.searchParams.set('redirect', pathname);
+    
+    return NextResponse.redirect(url);
+  }
+
+  // Session cookie exists - allow through
+  // (Client-side will verify validity)
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+  ],
+};
+```
+
+### 2.5.4 AuthGuard Component for Protected Pages
+
+**Create `components/auth/AuthGuard.tsx`:**
+```typescript
+'use client';
+
+import { useAuth } from '@/lib/contexts/AuthContext';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
+import { LoadingDots } from '../ui/loading-dots';
+
+interface AuthGuardProps {
+  children: React.ReactNode;
+  /** If true, renders immediately with optimistic state */
+  allowOptimistic?: boolean;
+  /** Custom loading component */
+  fallback?: React.ReactNode;
+  /** Redirect destination if not authenticated */
+  redirectTo?: string;
+}
+
+export function AuthGuard({ 
+  children, 
+  allowOptimistic = false,
+  fallback,
+  redirectTo = '/'
+}: AuthGuardProps) {
+  const { status, isAuthenticated } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    // Listen for auth expiration
+    const handleExpired = () => {
+      const redirect = window.location.pathname;
+      router.push(`${redirectTo}?auth=expired&redirect=${redirect}`);
+    };
+
+    window.addEventListener('auth-expired', handleExpired);
+    return () => window.removeEventListener('auth-expired', handleExpired);
+  }, [router, redirectTo]);
+
+  // Still checking for cookies
+  if (status === 'initializing') {
+    return fallback || (
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingDots size="sm" />
+      </div>
+    );
+  }
+
+  // Not authenticated
+  if (status === 'unauthenticated') {
+    router.push(`${redirectTo}?auth=required`);
+    return null;
+  }
+
+  // Optimistic state - render immediately or wait for validation
+  if (status === 'optimistic' && !allowOptimistic) {
+    return fallback || (
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingDots size="sm" />
+      </div>
+    );
+  }
+
+  // Authenticated or optimistic (when allowed)
+  return <>{children}</>;
+}
+```
+
+**Usage in protected pages:**
+```typescript
+// app/playlists/page.tsx
+'use client';
+
+import { AuthGuard } from '@/components/auth/AuthGuard';
+
+export default function PlaylistsPage() {
+  return (
+    <AuthGuard allowOptimistic>
+      {/* Page content renders immediately with optimistic auth */}
+      <PlaylistsContent />
+    </AuthGuard>
+  );
+}
+```
+
+### 2.5.5 Optimized Page Pattern
+
+**Before (slow, race-prone):**
+```typescript
+export default function PlaylistsPage() {
+  const { isAuthenticated } = useAuth(); // Blocks until verified
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/');
+      return;
+    }
+    fetchData(); // Runs after auth verified
+  }, [isAuthenticated]);
+
+  if (!isAuthenticated) return <LoadingDots />;
+  return <Content data={data} />;
+}
+```
+
+**After (fast, optimistic):**
+```typescript
+export default function PlaylistsPage() {
+  return (
+    <AuthGuard allowOptimistic>
+      <PlaylistsContent />
+    </AuthGuard>
+  );
+}
+
+function PlaylistsContent() {
+  const [data, setData] = useState(null);
+  
+  // Runs immediately, doesn't wait for auth validation
+  useEffect(() => {
+    fetchData(); // Backend will 401 if session invalid
+  }, []);
+
+  return <Content data={data} />;
+}
+```
+
+### 2.5.6 Migration Checklist
+
+- [ ] Update `authContext.tsx` with optimistic cookie checking
+- [ ] Add session storage caching for user data
+- [ ] Create `middleware.ts` for server-side route protection
+- [ ] Build `<AuthGuard>` component with optimistic option
+- [ ] Update all protected pages to use `<AuthGuard>`
+- [ ] Remove redundant `isAuthenticated` checks from page components
+- [ ] Handle `?auth=required` and `?auth=expired` query params on home page
+- [ ] Test refresh behavior on all protected routes
+- [ ] Verify logout clears cache and redirects properly
+- [ ] Measure auth verification performance (should be <50ms for optimistic render)
+
+---
+
 ## Phase 3: Component Refactoring Patterns
 
 ### 3.1 Navigation Decomposition Example
