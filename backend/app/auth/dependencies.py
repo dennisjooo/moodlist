@@ -4,7 +4,6 @@ from typing import Optional
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.security import verify_token
@@ -14,6 +13,9 @@ from app.clients import SpotifyAPIClient
 from app.models.session import Session
 from app.models.user import User
 from app.core.config import settings
+from app.repositories.user_repository import UserRepository
+from app.repositories.session_repository import SessionRepository
+from app.dependencies import get_user_repository, get_session_repository
 
 logger = structlog.get_logger(__name__)
 security = HTTPBearer(auto_error=False)
@@ -21,7 +23,7 @@ security = HTTPBearer(auto_error=False)
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db)
+    user_repo: UserRepository = Depends(get_user_repository)
 ) -> User:
     """Get current authenticated user."""
     if not credentials:
@@ -31,16 +33,7 @@ async def get_current_user(
     if not payload:
         raise UnauthorizedException("Invalid or expired token")
     
-    # Get user from database
-    result = await db.execute(
-        select(User).where(
-            and_(
-                User.spotify_id == payload["sub"],
-                User.is_active == True
-            )
-        )
-    )
-    user = result.scalar_one_or_none()
+    user = await user_repo.get_active_user_by_spotify_id(payload["sub"])
     
     if not user:
         raise UnauthorizedException("User not found or inactive")
@@ -50,7 +43,7 @@ async def get_current_user(
 
 async def get_current_user_optional(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db)
+    user_repo: UserRepository = Depends(get_user_repository)
 ) -> Optional[User]:
     """Get current user if authenticated, otherwise None."""
     if not credentials:
@@ -61,23 +54,14 @@ async def get_current_user_optional(
         if not payload:
             return None
         
-        result = await db.execute(
-            select(User).where(
-                and_(
-                    User.spotify_id == payload["sub"],
-                    User.is_active == True
-                )
-            )
-        )
-        user = result.scalar_one_or_none()
-        return user
+        return await user_repo.get_active_user_by_spotify_id(payload["sub"])
     except Exception:
         return None
 
 
 async def get_current_session(
     request: Request,
-    db: AsyncSession = Depends(get_db)
+    session_repo: SessionRepository = Depends(get_session_repository)
 ) -> Optional[Session]:
     """Get current session from session token."""
     session_token = request.cookies.get("session_token")
@@ -87,15 +71,7 @@ async def get_current_session(
 
     logger.debug("Looking up session", session_token=session_token[:10] + "...")
 
-    result = await db.execute(
-        select(Session).where(
-            and_(
-                Session.session_token == session_token,
-                Session.expires_at > datetime.now(timezone.utc)
-            )
-        )
-    )
-    session = result.scalar_one_or_none()
+    session = await session_repo.get_valid_session_by_token(session_token)
 
     if session:
         logger.debug("Session found", session_id=session.id, user_id=session.user_id, expires_at=session.expires_at)
@@ -108,7 +84,7 @@ async def get_current_session(
 async def require_auth(
     user: Optional[User] = Depends(get_current_user_optional),
     session: Optional[Session] = Depends(get_current_session),
-    db: AsyncSession = Depends(get_db)
+    user_repo: UserRepository = Depends(get_user_repository)
 ) -> User:
     """Require authentication via either JWT token or session."""
     logger.debug("require_auth called", has_user=bool(user), has_session=bool(session))
@@ -120,15 +96,7 @@ async def require_auth(
     # If we have a session but no user, get user from session
     if not user and session:
         logger.debug("Getting user from session", session_id=session.id, user_id=session.user_id)
-        result = await db.execute(
-            select(User).where(
-                and_(
-                    User.id == session.user_id,
-                    User.is_active == True
-                )
-            )
-        )
-        user = result.scalar_one_or_none()
+        user = await user_repo.get_active_user_by_id(session.user_id)
         logger.debug("User from session", found=bool(user))
 
     if not user:
@@ -143,7 +111,7 @@ async def refresh_spotify_token_if_expired(user: User, db: AsyncSession) -> User
     
     Args:
         user: User object with token information
-        db: Database session
+        user_repo: User repository for database operations
         
     Returns:
         User object with refreshed token if needed
@@ -172,23 +140,23 @@ async def refresh_spotify_token_if_expired(user: User, db: AsyncSession) -> User
     try:
         token_data = await spotify_client.refresh_token(user.refresh_token)
         
-        # Update user's tokens in database
-        user.access_token = token_data["access_token"]
-        if "refresh_token" in token_data:
-            user.refresh_token = token_data["refresh_token"]
-        
         # Update expiration time
         expires_in = token_data.get("expires_in", 3600)
-        user.token_expires_at = datetime.now(timezone.utc).replace(microsecond=0) + \
+        new_token_expires_at = datetime.now(timezone.utc).replace(microsecond=0) + \
                                timedelta(seconds=expires_in)
         
-        await db.commit()
-        await db.refresh(user)
+        user_repo = UserRepository(db)
+        updated_user = await user_repo.update_tokens_and_commit(
+            user_id=user.id,
+            access_token=token_data["access_token"],
+            refresh_token=token_data.get("refresh_token", user.refresh_token),
+            token_expires_at=new_token_expires_at
+        )
         
-        logger.info("Spotify token refreshed successfully", user_id=user.id, 
-                   new_expires_at=user.token_expires_at)
+        logger.info("Spotify token refreshed successfully", user_id=updated_user.id, 
+                   new_expires_at=updated_user.token_expires_at)
         
-        return user
+        return updated_user
         
     except SpotifyAuthError as e:
         logger.error("Failed to refresh Spotify token", 
