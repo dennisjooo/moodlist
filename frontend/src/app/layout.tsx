@@ -1,4 +1,5 @@
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { Toaster } from '@/components/ui/sonner';
 import { AuthProvider } from '@/lib/authContext';
 import { WorkflowProvider } from '@/lib/workflowContext';
 import type { Metadata } from 'next';
@@ -24,6 +25,7 @@ export default function RootLayout({
         <ThemeProvider>
           <AuthProvider>
             <WorkflowProvider>
+              <Toaster />
               {children}
             </WorkflowProvider>
           </AuthProvider>
