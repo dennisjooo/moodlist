@@ -75,16 +75,20 @@ class RecommendationProcessor:
         """Separate recommendations by source."""
         source_groups = {
             "artist_discovery": [r for r in recommendations if r.source == "artist_discovery"],
+            "anchor_track": [r for r in recommendations if r.source == "anchor_track"],
             "reccobeat": [r for r in recommendations if r.source == "reccobeat"]
         }
         return source_groups
 
     def calculate_source_limits(self, max_count: int, artist_ratio: float) -> Dict[str, int]:
         """Calculate maximum counts for each source."""
-        max_artist = int(max_count * artist_ratio)
-        max_reccobeat = max_count - max_artist
+        max_anchor = 5  # Always allow up to 5 anchor tracks
+        remaining = max_count - max_anchor
+        max_artist = int(remaining * 0.98)  # 98% of remaining (increased from 95%)
+        max_reccobeat = max(1, remaining - max_artist)  # Minimal fallback
 
         return {
+            "anchor_track": max_anchor,
             "artist_discovery": max_artist,
             "reccobeat": max_reccobeat
         }
@@ -120,14 +124,15 @@ class RecommendationProcessor:
         final_recs.sort(key=lambda r: r.confidence_score, reverse=True)
 
         # Log results
+        anchor_count = len(capped_sources.get("anchor_track", []))
         artist_count = len(capped_sources.get("artist_discovery", []))
         reccobeat_count = len(capped_sources.get("reccobeat", []))
         artist_ratio = artist_count / (artist_count + reccobeat_count) if (artist_count + reccobeat_count) > 0 else 0
 
         logger.info(
-            f"Final enforcement of {artist_ratio*100:.0f}:{(1-artist_ratio)*100:.0f} ratio: "
-            f"{artist_count} artist + {reccobeat_count} RecoBeat "
-            f"= {len(final_recs)} total (was {original_count})"
+            f"Final enforcement: {anchor_count} anchor + {artist_count} artist + {reccobeat_count} RecoBeat "
+            f"= {len(final_recs)} total (was {original_count}, "
+            f"artist:reccobeat ratio {artist_ratio*100:.0f}:{(1-artist_ratio)*100:.0f})"
         )
 
         return final_recs

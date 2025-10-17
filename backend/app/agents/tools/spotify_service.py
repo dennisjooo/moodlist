@@ -326,6 +326,39 @@ class SpotifyService:
 
         return result.data.get("tracks", [])
 
+    async def search_artists_by_genre(
+        self,
+        access_token: str,
+        genre: str,
+        limit: int = 40
+    ) -> List[Dict[str, Any]]:
+        """Search for artists in a specific genre.
+        
+        Args:
+            access_token: Spotify access token
+            genre: Genre to search for
+            limit: Maximum number of artists to return
+            
+        Returns:
+            List of artist dictionaries
+        """
+        try:
+            search_query = f"genre:{genre}"
+            
+            # Use the existing search_spotify_artists method which handles the API call
+            artists = await self.search_spotify_artists(
+                access_token=access_token,
+                query=search_query,
+                limit=min(limit, 50)  # Spotify API max is 50
+            )
+            
+            logger.info(f"Found {len(artists)} artists for genre: {genre}")
+            return artists
+            
+        except Exception as e:
+            logger.error(f"Failed to search artists by genre '{genre}': {e}")
+            return []
+
     async def search_tracks_for_artists(
         self,
         access_token: str,
