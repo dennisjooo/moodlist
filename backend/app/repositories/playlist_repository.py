@@ -1,13 +1,15 @@
 """Playlist repository for playlist-specific database operations."""
 
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 import structlog
 from sqlalchemy import select, and_, desc, func
 from sqlalchemy.orm import selectinload
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.models.playlist import Playlist
 from app.repositories.base_repository import BaseRepository
+from app.core.exceptions import InternalServerError
 
 logger = structlog.get_logger(__name__)
 
@@ -19,6 +21,76 @@ class PlaylistRepository(BaseRepository[Playlist]):
     def model_class(self) -> type[Playlist]:
         """Return the Playlist model class."""
         return Playlist
+
+    async def get_by_user_id_with_filters(
+        self,
+        user_id: int,
+        status: Optional[str] = None,
+        skip: int = 0,
+        limit: Optional[int] = None,
+        include_deleted: bool = False,
+        load_relationships: Optional[List[str]] = None
+    ) -> List[Playlist]:
+        """Get playlists for a specific user with optional status filtering.
+
+        Args:
+            user_id: User ID
+            status: Optional status filter
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            include_deleted: Include soft-deleted playlists
+            load_relationships: List of relationship names to eagerly load
+
+        Returns:
+            List of user's playlists
+        """
+        try:
+            query = select(Playlist).where(Playlist.user_id == user_id)
+
+            # Exclude soft-deleted unless explicitly requested
+            if not include_deleted:
+                query = query.where(Playlist.deleted_at.is_(None))
+
+            # Add status filter if provided
+            if status:
+                query = query.where(Playlist.status == status)
+
+            # Apply pagination
+            if skip:
+                query = query.offset(skip)
+            if limit:
+                query = query.limit(limit)
+
+            # Order by creation date (newest first)
+            query = query.order_by(desc(Playlist.created_at))
+
+            # Apply eager loading
+            if load_relationships:
+                for relationship in load_relationships:
+                    query = query.options(selectinload(getattr(Playlist, relationship)))
+
+            result = await self.session.execute(query)
+            playlists = result.scalars().all()
+
+            self.logger.debug(
+                "User playlists retrieved with filters",
+                user_id=user_id,
+                status=status,
+                count=len(playlists),
+                skip=skip,
+                limit=limit
+            )
+
+            return list(playlists)
+
+        except Exception as e:
+            self.logger.error(
+                "Database error retrieving user playlists with filters",
+                user_id=user_id,
+                status=status,
+                error=str(e)
+            )
+            raise
 
     async def get_by_user_id(
         self,
@@ -78,6 +150,35 @@ class PlaylistRepository(BaseRepository[Playlist]):
             self.logger.error(
                 "Database error retrieving user playlists",
                 user_id=user_id,
+                error=str(e)
+            )
+            raise
+
+    async def get_by_session_id_for_update(self, session_id: str) -> Optional[Playlist]:
+        """Get playlist by session ID for update operations (no user check needed for internal operations).
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            Playlist instance or None if not found
+        """
+        try:
+            query = select(Playlist).where(Playlist.session_id == session_id)
+            result = await self.session.execute(query)
+            playlist = result.scalar_one_or_none()
+
+            if playlist:
+                self.logger.debug("Playlist retrieved by session ID for update", session_id=session_id)
+            else:
+                self.logger.debug("Playlist not found by session ID for update", session_id=session_id)
+
+            return playlist
+
+        except Exception as e:
+            self.logger.error(
+                "Database error retrieving playlist by session ID for update",
+                session_id=session_id,
                 error=str(e)
             )
             raise
@@ -288,6 +389,302 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 error=str(e)
             )
             await self.session.rollback()
+            raise
+
+    async def get_by_session_id_for_user(self, session_id: str, user_id: int, include_deleted: bool = False) -> Optional[Playlist]:
+        """Get playlist by session ID with user ownership check.
+
+        Args:
+            session_id: Session ID
+            user_id: User ID for ownership validation
+            include_deleted: Include soft-deleted playlists
+
+        Returns:
+            Playlist instance or None if not found or not owned by user
+        """
+        try:
+            query = select(Playlist).where(
+                Playlist.session_id == session_id,
+                Playlist.user_id == user_id
+            )
+
+            if not include_deleted:
+                query = query.where(Playlist.deleted_at.is_(None))
+
+            result = await self.session.execute(query)
+            playlist = result.scalar_one_or_none()
+
+            if playlist:
+                self.logger.debug("Playlist retrieved by session ID for user", session_id=session_id, user_id=user_id)
+            else:
+                self.logger.debug("Playlist not found by session ID for user", session_id=session_id, user_id=user_id)
+
+            return playlist
+
+        except SQLAlchemyError as e:
+            self.logger.error(
+                "Database error retrieving playlist by session ID for user",
+                session_id=session_id,
+                user_id=user_id,
+                error=str(e)
+            )
+            raise InternalServerError("Failed to retrieve playlist")
+
+    async def get_by_id_for_user(self, playlist_id: int, user_id: int, include_deleted: bool = False) -> Optional[Playlist]:
+        """Get playlist by ID with user ownership check.
+
+        Args:
+            playlist_id: Playlist ID
+            user_id: User ID for ownership validation
+            include_deleted: Include soft-deleted playlists
+
+        Returns:
+            Playlist instance or None if not found or not owned by user
+        """
+        try:
+            query = select(Playlist).where(
+                Playlist.id == playlist_id,
+                Playlist.user_id == user_id
+            )
+
+            if not include_deleted:
+                query = query.where(Playlist.deleted_at.is_(None))
+
+            result = await self.session.execute(query)
+            playlist = result.scalar_one_or_none()
+
+            if playlist:
+                self.logger.debug("Playlist retrieved for user", playlist_id=playlist_id, user_id=user_id)
+            else:
+                self.logger.debug("Playlist not found for user", playlist_id=playlist_id, user_id=user_id)
+
+            return playlist
+
+        except SQLAlchemyError as e:
+            self.logger.error(
+                "Database error retrieving playlist for user",
+                playlist_id=playlist_id,
+                user_id=user_id,
+                error=str(e)
+            )
+            raise InternalServerError("Failed to retrieve playlist")
+
+    async def get_user_playlist_stats(self, user_id: int) -> Dict[str, int]:
+        """Get comprehensive playlist statistics for a user.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Dictionary with total_playlists, completed_playlists, and total_tracks
+        """
+        try:
+            # Total playlists - exclude soft-deleted
+            total_query = select(func.count(Playlist.id)).where(
+                Playlist.user_id == user_id,
+                Playlist.deleted_at.is_(None)
+            )
+            total_result = await self.session.execute(total_query)
+            total = total_result.scalar() or 0
+
+            # Completed playlists - exclude soft-deleted
+            completed_query = select(func.count(Playlist.id)).where(
+                Playlist.user_id == user_id,
+                Playlist.status == "completed",
+                Playlist.deleted_at.is_(None)
+            )
+            completed_result = await self.session.execute(completed_query)
+            completed = completed_result.scalar() or 0
+
+            # Total tracks - exclude soft-deleted
+            tracks_query = select(func.sum(Playlist.track_count)).where(
+                Playlist.user_id == user_id,
+                Playlist.deleted_at.is_(None)
+            )
+            tracks_result = await self.session.execute(tracks_query)
+            total_tracks = tracks_result.scalar() or 0
+
+            stats = {
+                "total_playlists": total,
+                "completed_playlists": completed,
+                "total_tracks": total_tracks
+            }
+
+            self.logger.debug("User playlist stats retrieved", user_id=user_id, **stats)
+            return stats
+
+        except Exception as e:
+            self.logger.error(
+                "Database error retrieving user playlist stats",
+                user_id=user_id,
+                error=str(e)
+            )
+            raise
+
+    async def get_public_playlist_stats(self) -> Dict[str, int]:
+        """Get public platform statistics.
+
+        Returns:
+            Dictionary with total_users, total_playlists, and completed_playlists
+        """
+        try:
+            from app.models.user import User
+
+            # Total active users
+            users_query = select(func.count(User.id)).where(User.is_active == True)
+            users_result = await self.session.execute(users_query)
+            total_users = users_result.scalar() or 0
+
+            # Total playlists (including soft-deleted for historical stats)
+            playlists_query = select(func.count(Playlist.id))
+            playlists_result = await self.session.execute(playlists_query)
+            total_playlists = playlists_result.scalar() or 0
+
+            # Completed playlists
+            completed_query = select(func.count(Playlist.id)).where(Playlist.status == "completed")
+            completed_result = await self.session.execute(completed_query)
+            completed_playlists = completed_result.scalar() or 0
+
+            stats = {
+                "total_users": total_users,
+                "total_playlists": total_playlists,
+                "completed_playlists": completed_playlists
+            }
+
+            self.logger.debug("Public playlist stats retrieved", **stats)
+            return stats
+
+        except Exception as e:
+            self.logger.error(
+                "Database error retrieving public playlist stats",
+                error=str(e)
+            )
+            raise
+
+    async def update_playlist_spotify_info(
+        self,
+        session_id: str,
+        spotify_playlist_id: str,
+        playlist_name: str,
+        spotify_url: str,
+        spotify_uri: Optional[str] = None
+    ) -> bool:
+        """Update playlist with Spotify information after saving to Spotify.
+
+        Args:
+            session_id: Playlist session ID
+            spotify_playlist_id: Spotify playlist ID
+            playlist_name: Playlist name
+            spotify_url: Spotify playlist URL
+            spotify_uri: Spotify playlist URI (optional)
+
+        Returns:
+            True if updated successfully, False if playlist not found
+        """
+        try:
+            from datetime import datetime, timezone
+            from app.core.constants import PlaylistStatus
+
+            # Build playlist data
+            playlist_data = {
+                "name": playlist_name,
+                "spotify_url": spotify_url
+            }
+            if spotify_uri:
+                playlist_data["spotify_uri"] = spotify_uri
+
+            # Update the playlist
+            update_data = {
+                "spotify_playlist_id": spotify_playlist_id,
+                "status": PlaylistStatus.COMPLETED,
+                "playlist_data": playlist_data,
+                "updated_at": datetime.now(timezone.utc)
+            }
+
+            # Use a raw update query since we need to update by session_id
+            from sqlalchemy import update
+            query = (
+                update(Playlist)
+                .where(Playlist.session_id == session_id)
+                .values(**update_data)
+            )
+
+            result = await self.session.execute(query)
+            updated = result.rowcount > 0
+
+            if updated:
+                self.logger.info(
+                    "Playlist updated with Spotify info",
+                    session_id=session_id,
+                    spotify_playlist_id=spotify_playlist_id
+                )
+            else:
+                self.logger.warning(
+                    "Playlist not found for Spotify info update",
+                    session_id=session_id
+                )
+
+            return updated
+
+        except Exception as e:
+            self.logger.error(
+                "Database error updating playlist Spotify info",
+                session_id=session_id,
+                error=str(e)
+            )
+            await self.session.rollback()
+            raise
+
+    async def count_user_playlists_with_filters(
+        self,
+        user_id: int,
+        status: Optional[str] = None,
+        include_deleted: bool = False
+    ) -> int:
+        """Count playlists for a user with optional status filtering.
+
+        Args:
+            user_id: User ID
+            status: Optional status filter
+            include_deleted: Include soft-deleted playlists
+
+        Returns:
+            Number of playlists matching criteria
+        """
+        try:
+            query = select(func.count(Playlist.id)).where(Playlist.user_id == user_id)
+
+            # Exclude soft-deleted unless explicitly requested
+            if not include_deleted:
+                query = query.where(Playlist.deleted_at.is_(None))
+
+            # Add status filter if provided
+            if status:
+                query = query.where(Playlist.status == status)
+            else:
+                # Exclude cancelled playlists by default unless specifically filtering for them
+                query = query.where(Playlist.status != "cancelled")
+
+            result = await self.session.execute(query)
+            count = result.scalar() or 0
+
+            self.logger.debug(
+                "User playlists counted with filters",
+                user_id=user_id,
+                status=status,
+                count=count,
+                include_deleted=include_deleted
+            )
+
+            return count
+
+        except Exception as e:
+            self.logger.error(
+                "Database error counting user playlists with filters",
+                user_id=user_id,
+                status=status,
+                error=str(e)
+            )
             raise
 
     async def get_user_playlist_count(self, user_id: int, include_deleted: bool = False) -> int:

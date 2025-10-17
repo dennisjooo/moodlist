@@ -6,7 +6,8 @@ from typing import Dict, Optional, Tuple
 from collections import defaultdict, deque
 import structlog
 
-from fastapi import HTTPException, Request, status
+from fastapi import Request
+from app.core.exceptions import RateLimitException
 
 
 logger = structlog.get_logger(__name__)
@@ -289,17 +290,12 @@ async def check_api_rate_limit(request: Request, user_id: Optional[str] = None) 
         user_id: Optional user ID
 
     Raises:
-        HTTPException: If rate limit exceeded
+        RateLimitException: If rate limit exceeded
     """
     allowed = await api_rate_limiter.is_allowed(request, user_id)
     if not allowed:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "error": "Rate limit exceeded",
-                "message": "Too many requests. Please try again later.",
-                "retry_after": 60
-            }
+        raise RateLimitException(
+            detail="Too many requests. Please try again later."
         )
 
 
@@ -310,17 +306,12 @@ async def check_workflow_rate_limit(user_id: str) -> None:
         user_id: User ID for rate limiting
 
     Raises:
-        HTTPException: If rate limit exceeded
+        RateLimitException: If rate limit exceeded
     """
     allowed = await workflow_rate_limiter.is_allowed(f"user:{user_id}")
     if not allowed:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "error": "Workflow rate limit exceeded",
-                "message": "Too many workflow starts. Please wait before starting another.",
-                "retry_after": 60
-            }
+        raise RateLimitException(
+            detail="Too many workflow starts. Please wait before starting another."
         )
 
 
@@ -332,15 +323,10 @@ async def check_recommendation_rate_limit(request: Request, user_id: Optional[st
         user_id: Optional user ID
 
     Raises:
-        HTTPException: If rate limit exceeded
+        RateLimitException: If rate limit exceeded
     """
     allowed = await recommendation_rate_limiter.is_allowed(request, user_id)
     if not allowed:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "error": "Recommendation rate limit exceeded",
-                "message": "Too many recommendation requests. Please try again later.",
-                "retry_after": 60
-            }
+        raise RateLimitException(
+            detail="Too many recommendation requests. Please try again later."
         )

@@ -192,23 +192,25 @@ class PlaylistService:
             NotFoundException: If playlist not found or doesn't belong to user
         """
         try:
-            playlist = await self.playlist_repository.get_by_id_or_fail(playlist_id)
+            playlist = await self.playlist_repository.get_by_id_for_user(playlist_id, user_id)
 
-            # Check ownership
-            if playlist.user_id != user_id:
+            if not playlist:
                 raise NotFoundException("Playlist", str(playlist_id))
 
             return {
                 "id": playlist.id,
-                "spotify_id": playlist.spotify_playlist_id,
-                "name": playlist.name,
-                "description": playlist.description,
+                "session_id": playlist.session_id,
+                "mood_prompt": playlist.mood_prompt,
                 "status": playlist.status,
                 "track_count": playlist.track_count,
-                "created_at": playlist.created_at.isoformat(),
-                "updated_at": playlist.updated_at.isoformat(),
-                "spotify_url": playlist.metadata.get("spotify_url") if playlist.metadata else None,
-                "metadata": playlist.metadata
+                "duration_ms": playlist.duration_ms,
+                "playlist_data": playlist.playlist_data,
+                "recommendations_data": playlist.recommendations_data,
+                "mood_analysis_data": playlist.mood_analysis_data,
+                "spotify_playlist_id": playlist.spotify_playlist_id,
+                "error_message": playlist.error_message,
+                "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
+                "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
             }
 
         except NotFoundException:

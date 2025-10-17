@@ -1,12 +1,12 @@
 """Spotify user profile tools for the agentic system."""
 
 import structlog
-from typing import Any, Dict, List, Optional, Type
+from typing import Type
 
-from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from ..agent_tools import RateLimitedTool, ToolResult
+from ....core.constants import SpotifyEndpoints
 
 
 logger = structlog.get_logger(__name__)
@@ -32,7 +32,7 @@ class GetUserProfileTool(RateLimitedTool):
         super().__init__(
             name="get_user_profile",
             description="Get user profile from Spotify API",
-            base_url="https://api.spotify.com/v1",
+            base_url=SpotifyEndpoints.API_BASE,
             rate_limit_per_minute=60
         )
 
