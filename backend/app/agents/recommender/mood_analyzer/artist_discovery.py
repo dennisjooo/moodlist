@@ -119,7 +119,7 @@ class ArtistDiscovery:
                 # Mix of popular and less popular for variety
                 filtered_artists = sorted(
                     unique_artists,
-                    key=lambda x: x.get("popularity", 0),
+                    key=lambda x: x.get("popularity") or 0,
                     reverse=True
                 )[:20]  # Increased from 8 to 20 for maximum diversity
 
@@ -204,4 +204,4 @@ class ArtistDiscovery:
         except Exception as e:
             logger.error(f"LLM artist filtering failed: {str(e)}")
             # Fallback to popularity-based selection
-            return sorted(artists, key=lambda x: x.get("popularity", 0), reverse=True)[:20]  # Increased from 12 to 20
+            return sorted(artists, key=lambda x: x.get("popularity") or 0, reverse=True)[:20]  # Increased from 12 to 20
