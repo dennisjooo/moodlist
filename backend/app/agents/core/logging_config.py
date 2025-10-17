@@ -4,7 +4,7 @@ import json
 import logging
 import logging.config
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def setup_agent_logging(
@@ -79,7 +79,7 @@ def setup_agent_logging(
         import os
         os.makedirs(log_directory, exist_ok=True)
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         file_handler = {
             "class": "logging.FileHandler",
             "formatter": log_format,
@@ -147,7 +147,7 @@ class AgentLoggerAdapter(logging.LoggerAdapter):
             kwargs["extra"] = {}
 
         kwargs["extra"].update(self.extra)
-        kwargs["extra"]["agent_timestamp"] = datetime.utcnow().isoformat()
+        kwargs["extra"]["agent_timestamp"] = datetime.now(timezone.utc).isoformat()
 
         return msg, kwargs
 
@@ -199,7 +199,7 @@ class PerformanceLogger:
                 "agent_name": agent_name,
                 "execution_time": execution_time,
                 "success": success,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 **metadata
             }
         )
@@ -225,7 +225,7 @@ class PerformanceLogger:
                 "session_id": session_id,
                 "workflow_step": step,
                 "step_duration": duration,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 **metadata
             }
         )
@@ -254,7 +254,7 @@ class PerformanceLogger:
                 "endpoint": endpoint,
                 "call_duration": duration,
                 "success": success,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 **metadata
             }
         )

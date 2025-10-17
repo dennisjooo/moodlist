@@ -1,15 +1,12 @@
 """Base agent class for the mood-based playlist generation system."""
 
-import asyncio
 import structlog
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Union
-from datetime import datetime
-import json
+from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
 
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.tools import BaseTool
-from pydantic import BaseModel, Field
 
 from ..states.agent_state import AgentState
 
@@ -46,7 +43,7 @@ class BaseAgent(ABC):
         # Agent state and memory
         self.state: Optional[AgentState] = None
         self.memory: List[Dict[str, Any]] = []
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
 
         # Performance tracking
         self.execution_count = 0
@@ -82,7 +79,7 @@ class BaseAgent(ABC):
         # Update execution tracking
         self.execution_count += 1
         state.metadata["agent_name"] = self.name
-        state.metadata["execution_start"] = datetime.utcnow().isoformat()
+        state.metadata["execution_start"] = datetime.now(timezone.utc).isoformat()
 
         return state
 
@@ -100,7 +97,7 @@ class BaseAgent(ABC):
         if start_time:
             try:
                 start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-                execution_time = (datetime.utcnow() - start_dt.replace(tzinfo=None)).total_seconds()
+                execution_time = (datetime.now(timezone.utc) - start_dt.replace(tzinfo=timezone.utc)).total_seconds()
                 self.total_execution_time += execution_time
                 state.metadata["execution_time"] = execution_time
             except (ValueError, TypeError):
@@ -109,7 +106,7 @@ class BaseAgent(ABC):
         # Store in memory if significant
         if self._should_store_in_memory(state):
             self.memory.append({
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "state_summary": self._get_state_summary(state),
                 "metadata": state.metadata.copy()
             })
@@ -227,7 +224,7 @@ class BaseAgent(ABC):
             # Update state with error
             state.error_message = str(e)
             state.current_step = "failed"
-            state.metadata["error_timestamp"] = datetime.utcnow().isoformat()
+            state.metadata["error_timestamp"] = datetime.now(timezone.utc).isoformat()
             state.metadata["error_type"] = type(e).__name__
 
             # Ensure post-execution still runs for cleanup

@@ -1,7 +1,7 @@
 """State management for the agentic recommendation system."""
 
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pydantic import BaseModel, Field
 
@@ -19,6 +19,7 @@ class RecommendationStatus(str, Enum):
     CREATING_PLAYLIST = "creating_playlist"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class TrackRecommendation(BaseModel):
@@ -88,12 +89,12 @@ class AgentState(BaseModel):
 
     # Metadata
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     def update_timestamp(self):
         """Update the updated_at timestamp."""
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def add_recommendation(self, recommendation: TrackRecommendation):
         """Add a recommendation to the state.

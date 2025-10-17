@@ -4,19 +4,20 @@ import structlog
 from typing import Optional
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, Query
+from app.core.exceptions import NotFoundException
 from langchain_openai import ChatOpenAI
-from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
-from ..core.constants import PlaylistStatus
 from ..core.exceptions import (
     NotFoundException,
     ForbiddenException,
     ValidationException,
     InternalServerError
 )
+from ..dependencies import get_playlist_service
+from ..services.playlist_service import PlaylistService
 from ..auth.dependencies import require_auth, refresh_spotify_token_if_expired
 from ..models.user import User
 from ..models.playlist import Playlist
@@ -52,7 +53,7 @@ playlist_creation_service = PlaylistCreationService(spotify_service, groq_llm, v
 @router.get("/playlists")
 async def get_user_playlists(
     current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db),
+    playlist_service: PlaylistService = Depends(get_playlist_service),
     limit: int = Query(default=50, le=100),
     offset: int = Query(default=0),
     status: Optional[str] = Query(default=None, description="Filter by status (pending, completed, failed)")
@@ -61,7 +62,7 @@ async def get_user_playlists(
 
     Args:
         current_user: Authenticated user
-        db: Database session
+        playlist_service: Playlist service
         limit: Maximum number of playlists to return
         offset: Number of playlists to skip
         status: Optional status filter
@@ -70,26 +71,14 @@ async def get_user_playlists(
         List of user's playlists with pagination info
     """
     try:
-        # Build query - exclude soft-deleted and cancelled playlists
-        query = (
-            select(Playlist)
-            .where(
-                Playlist.user_id == current_user.id,
-                Playlist.deleted_at.is_(None),
-                Playlist.status != PlaylistStatus.CANCELLED
-            )
+        # Get playlists from repository with filtering
+        playlists = await playlist_service.playlist_repository.get_by_user_id_with_filters(
+            user_id=current_user.id,
+            status=status,
+            skip=offset,
+            limit=limit
         )
-        
-        # Add status filter if provided
-        if status:
-            query = query.where(Playlist.status == status)
-        
-        # Add ordering and pagination
-        query = query.order_by(desc(Playlist.created_at)).limit(limit).offset(offset)
-        
-        result = await db.execute(query)
-        playlists = result.scalars().all()
-        
+
         # Format playlists for response
         playlists_data = []
         for playlist in playlists:
@@ -102,34 +91,29 @@ async def get_user_playlists(
                 "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
                 "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
             }
-            
+
             # Add playlist data if available
             if playlist.playlist_data:
                 playlist_info["name"] = playlist.playlist_data.get("name")
                 playlist_info["spotify_url"] = playlist.playlist_data.get("spotify_url")
                 playlist_info["spotify_uri"] = playlist.playlist_data.get("spotify_uri")
-            
+
             # Add spotify playlist id if available
             if playlist.spotify_playlist_id:
                 playlist_info["spotify_playlist_id"] = playlist.spotify_playlist_id
-            
+
             # Add mood analysis data if available
             if playlist.mood_analysis_data:
                 playlist_info["mood_analysis_data"] = playlist.mood_analysis_data
-            
+
             playlists_data.append(playlist_info)
-        
-        # Get total count for pagination - exclude soft-deleted and cancelled playlists
-        count_query = select(func.count()).select_from(Playlist).where(
-            Playlist.user_id == current_user.id,
-            Playlist.deleted_at.is_(None),
-            Playlist.status != PlaylistStatus.CANCELLED
+
+        # Get total count for pagination
+        total_count = await playlist_service.playlist_repository.count_user_playlists_with_filters(
+            user_id=current_user.id,
+            status=status
         )
-        if status:
-            count_query = count_query.where(Playlist.status == status)
-        count_result = await db.execute(count_query)
-        total_count = count_result.scalar()
-        
+
         return {
             "playlists": playlists_data,
             "total": total_count,
@@ -146,46 +130,20 @@ async def get_user_playlists(
 async def get_playlist(
     playlist_id: int,
     current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
+    playlist_service: PlaylistService = Depends(get_playlist_service)
 ):
     """Get a specific playlist by ID.
 
     Args:
         playlist_id: Playlist database ID
         current_user: Authenticated user
-        db: Database session
+        playlist_service: Playlist service
 
     Returns:
         Playlist details
     """
     try:
-        query = select(Playlist).where(
-            Playlist.id == playlist_id,
-            Playlist.user_id == current_user.id,
-            Playlist.deleted_at.is_(None)
-        )
-        result = await db.execute(query)
-        playlist = result.scalar_one_or_none()
-        
-        if not playlist:
-            raise NotFoundException("Playlist", str(playlist_id))
-        
-        return {
-            "id": playlist.id,
-            "session_id": playlist.session_id,
-            "mood_prompt": playlist.mood_prompt,
-            "status": playlist.status,
-            "track_count": playlist.track_count,
-            "duration_ms": playlist.duration_ms,
-            "playlist_data": playlist.playlist_data,
-            "recommendations_data": playlist.recommendations_data,
-            "mood_analysis_data": playlist.mood_analysis_data,
-            "spotify_playlist_id": playlist.spotify_playlist_id,
-            "error_message": playlist.error_message,
-            "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
-            "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
-        }
-
+        return await playlist_service.get_playlist_by_id(playlist_id, current_user.id)
     except NotFoundException:
         raise
     except Exception as e:
@@ -197,30 +155,27 @@ async def get_playlist(
 async def get_playlist_by_session(
     session_id: str,
     current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
+    playlist_service: PlaylistService = Depends(get_playlist_service)
 ):
     """Get a playlist by its session ID.
 
     Args:
         session_id: Workflow session UUID
         current_user: Authenticated user
-        db: Database session
+        playlist_service: Playlist service
 
     Returns:
         Playlist details
     """
     try:
-        query = select(Playlist).where(
-            Playlist.session_id == session_id,
-            Playlist.user_id == current_user.id,
-            Playlist.deleted_at.is_(None)
+        # Get playlist entity from repository
+        playlist = await playlist_service.playlist_repository.get_by_session_id_for_user(
+            session_id, current_user.id
         )
-        result = await db.execute(query)
-        playlist = result.scalar_one_or_none()
-        
+
         if not playlist:
             raise NotFoundException("Playlist", session_id)
-        
+
         return {
             "id": playlist.id,
             "session_id": playlist.session_id,
@@ -248,36 +203,35 @@ async def get_playlist_by_session(
 async def delete_playlist(
     playlist_id: int,
     current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
+    playlist_service: PlaylistService = Depends(get_playlist_service)
 ):
     """Soft delete a playlist.
 
     Args:
         playlist_id: Playlist database ID
         current_user: Authenticated user
-        db: Database session
+        playlist_service: Playlist service
 
     Returns:
         Success message
     """
     try:
-        query = select(Playlist).where(
-            Playlist.id == playlist_id,
-            Playlist.user_id == current_user.id,
-            Playlist.deleted_at.is_(None)
+        # Check if playlist exists and belongs to user
+        playlist = await playlist_service.playlist_repository.get_by_id_for_user(
+            playlist_id, current_user.id
         )
-        result = await db.execute(query)
-        playlist = result.scalar_one_or_none()
-        
+
         if not playlist:
             raise NotFoundException("Playlist", str(playlist_id))
-        
-        # Soft delete by setting deleted_at timestamp
-        playlist.deleted_at = datetime.now(timezone.utc)
-        await db.commit()
-        
+
+        # Soft delete the playlist
+        deleted = await playlist_service.playlist_repository.soft_delete(playlist_id)
+
+        if not deleted:
+            raise NotFoundException("Playlist", str(playlist_id))
+
         logger.info(f"Soft deleted playlist {playlist_id} for user {current_user.id}")
-        
+
         return {
             "message": "Playlist deleted successfully",
             "playlist_id": playlist_id
@@ -293,47 +247,23 @@ async def delete_playlist(
 @router.get("/playlists/stats/summary")
 async def get_playlist_stats(
     current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
+    playlist_service: PlaylistService = Depends(get_playlist_service)
 ):
     """Get user's playlist statistics.
 
     Args:
         current_user: Authenticated user
-        db: Database session
+        playlist_service: Playlist service
 
     Returns:
         Playlist statistics
     """
     try:
-        # Total playlists - exclude soft-deleted
-        total_query = select(func.count()).select_from(Playlist).where(
-            Playlist.user_id == current_user.id,
-            Playlist.deleted_at.is_(None)
-        )
-        total_result = await db.execute(total_query)
-        total = total_result.scalar()
-        
-        # Completed playlists - exclude soft-deleted
-        completed_query = select(func.count()).select_from(Playlist).where(
-            Playlist.user_id == current_user.id,
-            Playlist.status == PlaylistStatus.COMPLETED,
-            Playlist.deleted_at.is_(None)
-        )
-        completed_result = await db.execute(completed_query)
-        completed = completed_result.scalar()
-        
-        # Total tracks - exclude soft-deleted
-        tracks_query = select(func.sum(Playlist.track_count)).where(
-            Playlist.user_id == current_user.id,
-            Playlist.deleted_at.is_(None)
-        )
-        tracks_result = await db.execute(tracks_query)
-        total_tracks = tracks_result.scalar() or 0
-        
+        # Get statistics from repository
+        stats = await playlist_service.playlist_repository.get_user_playlist_stats(current_user.id)
+
         return {
-            "total_playlists": total,
-            "completed_playlists": completed,
-            "total_tracks": total_tracks,
+            **stats,
             "user_id": current_user.id
         }
 
@@ -343,38 +273,20 @@ async def get_playlist_stats(
 
 
 @router.get("/stats/public")
-async def get_public_stats(db: AsyncSession = Depends(get_db)):
+async def get_public_stats(
+    playlist_service: PlaylistService = Depends(get_playlist_service)
+):
     """Get public platform statistics (no authentication required).
 
     Args:
-        db: Database session
+        playlist_service: Playlist service
 
     Returns:
         Public platform statistics including total users and playlists count
     """
     try:
-        # Total users
-        total_users_query = select(func.count()).select_from(User).where(User.is_active == True)
-        total_users_result = await db.execute(total_users_query)
-        total_users = total_users_result.scalar()
-        
-        # Total playlists
-        total_playlists_query = select(func.count()).select_from(Playlist)
-        total_playlists_result = await db.execute(total_playlists_query)
-        total_playlists = total_playlists_result.scalar()
-        
-        # Completed playlists
-        completed_playlists_query = select(func.count()).select_from(Playlist).where(
-            Playlist.status == PlaylistStatus.COMPLETED
-        )
-        completed_playlists_result = await db.execute(completed_playlists_query)
-        completed_playlists = completed_playlists_result.scalar()
-        
-        return {
-            "total_users": total_users,
-            "total_playlists": total_playlists,
-            "completed_playlists": completed_playlists
-        }
+        # Get public statistics from repository
+        return await playlist_service.playlist_repository.get_public_playlist_stats()
 
     except Exception as e:
         logger.error(f"Error getting public stats: {str(e)}", exc_info=True)
@@ -440,21 +352,28 @@ async def edit_playlist(
 async def save_playlist_to_spotify(
     session_id: str,
     current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
+    playlist_service: PlaylistService = Depends(get_playlist_service)
 ):
     """Save the draft playlist to Spotify.
 
     Args:
         session_id: Playlist session ID
         current_user: Authenticated user
-        db: Database session
+        playlist_service: Playlist service
 
     Returns:
         Playlist creation result
     """
     try:
         # Refresh Spotify token if expired before saving to Spotify
-        current_user = await refresh_spotify_token_if_expired(current_user, db)
+        # TODO: Move this to a service layer method
+        from app.core.database import get_db
+        from sqlalchemy.ext.asyncio import AsyncSession
+        db = await anext(get_db())
+        try:
+            current_user = await refresh_spotify_token_if_expired(current_user, db)
+        finally:
+            await db.close()
 
         # For now, we need to create a workflow manager to get workflow state
         # This is a temporary solution - ideally this logic should be moved to a service
@@ -476,15 +395,10 @@ async def save_playlist_to_spotify(
 
         # If not in cache, load from database
         if not state:
-            query = select(Playlist).where(Playlist.session_id == session_id)
-            result = await db.execute(query)
-            playlist = result.scalar_one_or_none()
+            playlist = await playlist_service.playlist_repository.get_by_session_id_for_update(session_id)
 
             if not playlist:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Playlist {session_id} not found"
-                )
+                raise NotFoundException("Playlist", session_id)
 
             # Check if already saved to Spotify
             if playlist.spotify_playlist_id:
@@ -549,23 +463,19 @@ async def save_playlist_to_spotify(
 
         # Mark as saved
         state.metadata["playlist_saved_to_spotify"] = True
-        state.metadata["spotify_save_timestamp"] = datetime.utcnow().isoformat()
+        state.metadata["spotify_save_timestamp"] = datetime.now(timezone.utc).isoformat()
 
         # Update database with final playlist info
-        query = select(Playlist).where(Playlist.session_id == session_id)
-        result = await db.execute(query)
-        playlist_db = result.scalar_one_or_none()
+        updated = await playlist_service.playlist_repository.update_playlist_spotify_info(
+            session_id=session_id,
+            spotify_playlist_id=state.playlist_id,
+            playlist_name=state.playlist_name,
+            spotify_url=state.metadata.get("playlist_url"),
+            spotify_uri=state.metadata.get("playlist_uri")
+        )
 
-        if playlist_db:
-            playlist_db.spotify_playlist_id = state.playlist_id
-            playlist_db.status = PlaylistStatus.COMPLETED
-            playlist_db.playlist_data = {
-                "name": state.playlist_name,
-                "spotify_url": state.metadata.get("playlist_url"),
-                "spotify_uri": state.metadata.get("playlist_uri")
-            }
-            await db.commit()
-            logger.info(f"Updated playlist {playlist_db.id} with Spotify info")
+        if updated:
+            logger.info(f"Updated playlist with session_id {session_id} with Spotify info")
 
         return {
             "session_id": session_id,

@@ -79,9 +79,23 @@ class SpotifyServerError(SpotifyAPIException):
 
 class SpotifyConnectionError(SpotifyAPIException):
     """Spotify connection error."""
-    
+
     def __init__(self, detail: str = "Failed to connect to Spotify"):
         super().__init__(detail=detail, status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+class RateLimitException(HTTPException):
+    """Rate limit exceeded exception."""
+
+    def __init__(self, detail: str = "Rate limit exceeded", retry_after: int = 60):
+        super().__init__(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "error": "Rate limit exceeded",
+                "message": detail,
+                "retry_after": retry_after
+            }
+        )
 
 
 class InternalServerError(HTTPException):

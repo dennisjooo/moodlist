@@ -293,7 +293,7 @@ class WorkflowManager:
             return
 
         state = self.active_workflows[session_id]
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         try:
             logger.info(f"Executing workflow {session_id}")
@@ -358,7 +358,7 @@ class WorkflowManager:
             
             # Move to completed workflows if still in active
             if session_id in self.active_workflows:
-                completion_time = datetime.utcnow()
+                completion_time = datetime.now(timezone.utc)
                 state.metadata["completion_time"] = completion_time.isoformat()
                 state.metadata["total_duration"] = (completion_time - start_time).total_seconds()
 
@@ -563,7 +563,7 @@ class WorkflowManager:
         Args:
             max_age_hours: Maximum age in hours before cleanup
         """
-        cutoff_time = datetime.utcnow().replace(hour=datetime.utcnow().hour - max_age_hours)
+        cutoff_time = datetime.now(timezone.utc).replace(hour=datetime.now(timezone.utc).hour - max_age_hours)
 
         to_remove = []
         for session_id, state in self.completed_workflows.items():

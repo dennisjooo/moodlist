@@ -3,14 +3,13 @@
 import asyncio
 import structlog
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Type, Union
-from datetime import datetime
+from typing import Any, Dict, List, Optional, Type
+from datetime import datetime, timezone
 
 import httpx
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from ..states.agent_state import AgentState
 
 
 logger = structlog.get_logger(__name__)
@@ -316,13 +315,13 @@ class RateLimitedTool(BaseAPITool):
         self.request_times: List[datetime] = []
 
         # Rate limiting state
-        self._last_cleanup = datetime.utcnow()
+        self._last_cleanup = datetime.now(timezone.utc)
         self._request_count = 0
         self._last_request_time: Optional[datetime] = None
 
     async def _check_rate_limit(self):
         """Check if we're within rate limits."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Clean old requests (older than 1 minute)
         cutoff = now.replace(second=0, microsecond=0)
@@ -339,7 +338,7 @@ class RateLimitedTool(BaseAPITool):
 
     async def _record_request(self):
         """Record a request for rate limiting."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         self.request_times.append(now)
         self._request_count += 1
 
@@ -395,7 +394,7 @@ class RateLimitedTool(BaseAPITool):
         """Internal method to make a rate-limited HTTP request."""
         # Check minimum interval since last request
         if hasattr(self, '_last_request_time') and self._last_request_time and self.min_request_interval > 0:
-            elapsed = (datetime.utcnow() - self._last_request_time).total_seconds()
+            elapsed = (datetime.now(timezone.utc) - self._last_request_time).total_seconds()
             if elapsed < self.min_request_interval:
                 wait_time = self.min_request_interval - elapsed
                 logger.debug(f"Enforcing minimum interval for {self.name}, waiting {wait_time:.2f}s")
@@ -408,7 +407,7 @@ class RateLimitedTool(BaseAPITool):
 
         response = await super()._make_request(method, endpoint, formatted_params, json_data, headers)
 
-        self._last_request_time = datetime.utcnow()  # Track request time
+        self._last_request_time = datetime.now(timezone.utc)  # Track request time
         await self._record_request()
         return response
 
