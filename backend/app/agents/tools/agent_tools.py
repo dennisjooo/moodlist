@@ -1,6 +1,7 @@
 """Base tool definitions for the agentic system."""
 
 import asyncio
+import hashlib
 import structlog
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Type
@@ -9,6 +10,8 @@ from datetime import datetime, timezone
 import httpx
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
+
+from ..core.cache import cache_manager
 
 
 
@@ -149,6 +152,67 @@ class BaseAPITool(BaseTool, ABC):
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.client.aclose()
 
+    def _make_cache_key(self, method: str, endpoint: str, params: Optional[Dict[str, Any]] = None,
+                       json_data: Optional[Dict[str, Any]] = None) -> str:
+        """Generate a cache key for API requests.
+
+        Args:
+            method: HTTP method
+            endpoint: API endpoint
+            params: Query parameters
+            json_data: JSON body data
+
+        Returns:
+            Cache key string
+        """
+        # Create a consistent key from request details
+        key_parts = [method.upper(), endpoint]
+
+        if params:
+            # Sort params for consistent key generation
+            sorted_params = sorted(params.items())
+            key_parts.append(str(sorted_params))
+
+        if json_data:
+            # Sort JSON data for consistent key generation
+            sorted_json = sorted(json_data.items()) if isinstance(json_data, dict) else json_data
+            key_parts.append(str(sorted_json))
+
+        key_string = "|".join(key_parts)
+        return hashlib.md5(key_string.encode()).hexdigest()
+
+    async def _get_cached_response(self, cache_key: str) -> Optional[Dict[str, Any]]:
+        """Get cached API response.
+
+        Args:
+            cache_key: Cache key
+
+        Returns:
+            Cached response data or None
+        """
+        try:
+            cached_data = await cache_manager.cache.get(cache_key)
+            if cached_data:
+                logger.debug(f"Cache hit for {self.name} (key: {cache_key[:8]}...)")
+                return cached_data
+        except Exception as e:
+            logger.warning(f"Error retrieving cached response: {e}")
+        return None
+
+    async def _cache_response(self, cache_key: str, response_data: Dict[str, Any], ttl: int = 300) -> None:
+        """Cache API response.
+
+        Args:
+            cache_key: Cache key
+            response_data: Response data to cache
+            ttl: Time to live in seconds (default 5 minutes)
+        """
+        try:
+            await cache_manager.cache.set(cache_key, response_data, ttl=ttl)
+            logger.debug(f"Cached response for {self.name} (key: {cache_key[:8]}..., ttl: {ttl}s)")
+        except Exception as e:
+            logger.warning(f"Error caching response: {e}")
+
     @abstractmethod
     def _get_input_schema(self) -> Type[BaseModel]:
         """Define the input schema for this tool."""
@@ -227,7 +291,9 @@ class BaseAPITool(BaseTool, ABC):
         endpoint: str,
         params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None,
-        headers: Optional[Dict[str, str]] = None
+        headers: Optional[Dict[str, str]] = None,
+        use_cache: bool = False,
+        cache_ttl: int = 300
     ) -> Dict[str, Any]:
         """Make an HTTP request.
 
@@ -237,10 +303,19 @@ class BaseAPITool(BaseTool, ABC):
             params: Query parameters
             json_data: JSON body data
             headers: Additional headers
+            use_cache: Whether to use caching for this request
+            cache_ttl: Cache TTL in seconds (default 5 minutes)
 
         Returns:
             Response JSON data
         """
+        # Check cache first if caching is enabled
+        if use_cache:
+            cache_key = self._make_cache_key(method, endpoint, params, json_data)
+            cached_response = await self._get_cached_response(cache_key)
+            if cached_response is not None:
+                return cached_response
+
         url = f"{self.base_url}{endpoint}"
 
         # Default headers
@@ -265,7 +340,14 @@ class BaseAPITool(BaseTool, ABC):
             response.raise_for_status()
             return response.json()
 
-        return await self._execute_with_retry(_request)
+        response = await self._execute_with_retry(_request)
+
+        # Cache the response if caching is enabled
+        if use_cache:
+            cache_key = self._make_cache_key(method, endpoint, params, json_data)
+            await self._cache_response(cache_key, response, cache_ttl)
+
+        return response
 
     def _validate_response(self, response_data: Dict[str, Any], required_fields: List[str]) -> bool:
         """Validate response contains required fields.
@@ -372,16 +454,18 @@ class RateLimitedTool(BaseAPITool):
         endpoint: str,
         params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None,
-        headers: Optional[Dict[str, str]] = None
+        headers: Optional[Dict[str, str]] = None,
+        use_cache: bool = False,
+        cache_ttl: int = 300
     ) -> Dict[str, Any]:
         """Make a rate-limited HTTP request."""
         # Use global semaphore if enabled (for APIs that don't handle concurrency well)
         if self.use_global_semaphore:
             semaphore = get_reccobeat_semaphore()
             async with semaphore:
-                return await self._make_request_internal(method, endpoint, params, json_data, headers)
+                return await self._make_request_internal(method, endpoint, params, json_data, headers, use_cache, cache_ttl)
         else:
-            return await self._make_request_internal(method, endpoint, params, json_data, headers)
+            return await self._make_request_internal(method, endpoint, params, json_data, headers, use_cache, cache_ttl)
     
     async def _make_request_internal(
         self,
@@ -389,7 +473,9 @@ class RateLimitedTool(BaseAPITool):
         endpoint: str,
         params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None,
-        headers: Optional[Dict[str, str]] = None
+        headers: Optional[Dict[str, str]] = None,
+        use_cache: bool = False,
+        cache_ttl: int = 300
     ) -> Dict[str, Any]:
         """Internal method to make a rate-limited HTTP request."""
         # Check minimum interval since last request
@@ -405,7 +491,7 @@ class RateLimitedTool(BaseAPITool):
         # Format parameters (convert lists to appropriate format)
         formatted_params = self._format_params(params)
 
-        response = await super()._make_request(method, endpoint, formatted_params, json_data, headers)
+        response = await super()._make_request(method, endpoint, formatted_params, json_data, headers, use_cache, cache_ttl)
 
         self._last_request_time = datetime.now(timezone.utc)  # Track request time
         await self._record_request()
