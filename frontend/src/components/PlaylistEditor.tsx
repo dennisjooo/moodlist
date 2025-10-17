@@ -18,8 +18,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -184,8 +184,6 @@ export default function PlaylistEditor({
   const [tracks, setTracks] = useState<Track[]>(deduplicatedRecommendations);
   const [removingTracks, setRemovingTracks] = useState<Set<string>>(new Set());
   const [isFinalizing, setIsFinalizing] = useState(false);
-  const [editReasoning, setEditReasoning] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -245,7 +243,7 @@ export default function PlaylistEditor({
           // Revert on error
           setTracks(tracks);
           const errorMessage = error instanceof Error ? error.message : 'Failed to reorder track';
-          setError(errorMessage);
+          toast.error(errorMessage);
           console.error('Failed to reorder track:', error);
         }
       }
@@ -265,7 +263,7 @@ export default function PlaylistEditor({
       // Revert on error
       setTracks(deduplicatedRecommendations);
       const errorMessage = error instanceof Error ? error.message : 'Failed to remove track';
-      setError(errorMessage);
+      toast.error(errorMessage);
       console.error('Failed to remove track:', error);
     } finally {
       setRemovingTracks(prev => {
@@ -283,7 +281,6 @@ export default function PlaylistEditor({
 
   const handleReset = useCallback(() => {
     setTracks(deduplicatedRecommendations);
-    setEditReasoning('');
   }, [deduplicatedRecommendations]);
 
   const handleSearch = useCallback((query: string) => {
@@ -324,7 +321,7 @@ export default function PlaylistEditor({
         console.error('Search failed:', error);
         // Only show error if this is still the latest search
         if (latestSearchQueryRef.current === currentSearchQuery) {
-          setError('Failed to search tracks');
+          toast.error('Failed to search tracks');
         }
       } finally {
         // Only update loading state if this is still the latest search
@@ -361,7 +358,7 @@ export default function PlaylistEditor({
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to add track';
-      setError(errorMessage);
+      toast.error(errorMessage);
       console.error('Failed to add track:', error);
     } finally {
       setAddingTracks(prev => {
@@ -385,23 +382,6 @@ export default function PlaylistEditor({
           </p>
         </CardHeader>
       </Card>
-
-      {/* Error Display */}
-      {error && (
-        <Alert className="border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800">
-          <AlertDescription className="text-red-800 dark:text-red-200">
-            {error}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setError(null)}
-              className="ml-2 h-auto p-1 text-red-600 hover:text-red-800"
-            >
-              ✕
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
