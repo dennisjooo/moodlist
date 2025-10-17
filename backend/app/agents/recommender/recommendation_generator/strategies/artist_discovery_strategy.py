@@ -255,12 +255,21 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
         Returns:
             List of TrackRecommendation objects
         """
+        # Batch fetch audio features for all tracks first
+        track_data = []
+        for track in artist_tracks:
+            track_id = track.get("id")
+            if track_id:
+                track_data.append((track_id, None))
+        
+        audio_features_map = await self.audio_features_handler.get_batch_complete_audio_features(track_data)
+        
         recommendations = []
         tracks_added = 0
 
         for track in artist_tracks:
             try:
-                recommendation = await self._create_artist_track_recommendation(track, target_features)
+                recommendation = await self._create_artist_track_recommendation(track, target_features, audio_features_map)
                 if recommendation:
                     recommendations.append(recommendation)
                     tracks_added += 1
@@ -280,13 +289,15 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
     async def _create_artist_track_recommendation(
         self,
         track: Dict[str, Any],
-        target_features: Dict[str, Any]
+        target_features: Dict[str, Any],
+        audio_features_map: Dict[str, Dict[str, Any]]
     ) -> Any:
         """Create a recommendation from an artist track.
 
         Args:
             track: Track data from Spotify
             target_features: Target mood features
+            audio_features_map: Pre-fetched audio features for all tracks
 
         Returns:
             TrackRecommendation object or None if filtered out
@@ -297,8 +308,8 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
             logger.debug(f"Skipping track without ID: {track}")
             return None
 
-        # Get audio features
-        audio_features = await self.audio_features_handler.get_complete_audio_features(track_id)
+        # Get audio features from pre-fetched batch
+        audio_features = audio_features_map.get(track_id, {})
 
         # Score track against mood (RELAXED for artist tracks)
         cohesion_score = self._calculate_artist_track_score(audio_features, target_features)

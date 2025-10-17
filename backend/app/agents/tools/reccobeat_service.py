@@ -272,7 +272,7 @@ class RecoBeatService:
         return id_mapping
 
     async def get_tracks_audio_features(self, track_ids: List[str]) -> Dict[str, Dict[str, Any]]:
-        """Get audio features for multiple tracks.
+        """Get audio features for multiple tracks with parallel processing.
 
         Args:
             track_ids: List of Spotify or RecoBeat track IDs
@@ -288,11 +288,12 @@ class RecoBeatService:
             logger.warning("Audio features tool not available")
             return features_map
 
-        # Try to convert Spotify IDs to RecoBeat IDs first
+        # Try to convert Spotify IDs to RecoBeat IDs first (already batched and parallel)
         id_mapping = await self.convert_spotify_tracks_to_reccobeat(track_ids)
         logger.info(f"Successfully converted {len(id_mapping)}/{len(track_ids)} Spotify tracks to RecoBeat IDs")
 
-        # Get features for each track (only if we have a valid RecoBeat ID)
+        # First pass: check cache for all tracks
+        tracks_needing_fetch = []
         for track_id in track_ids:
             # Skip if we couldn't convert the Spotify ID to RecoBeat ID
             if track_id not in id_mapping:
@@ -308,29 +309,61 @@ class RecoBeatService:
             if cached_features:
                 logger.debug(f"Cache hit for audio features of track {reccobeat_id}")
                 features_map[track_id] = cached_features
-                continue
+            else:
+                tracks_needing_fetch.append((track_id, reccobeat_id))
 
-            try:
-                result = await features_tool._run(track_id=reccobeat_id)
-                if result.success:
-                    # Map back to original Spotify ID
-                    features_map[track_id] = result.data
+        # If all tracks were cached, return early
+        if not tracks_needing_fetch:
+            logger.info(f"All {len(track_ids)} tracks found in cache")
+            return features_map
 
-                    # Cache individual track features for 1 hour
-                    await cache_manager.cache.set(cache_key, result.data, ttl=3600)
-                    logger.debug(f"Cached audio features for track {reccobeat_id}")
-                else:
-                    # 404 errors are common - track might not exist in RecoBeat
-                    if "404" in str(result.error):
-                        logger.debug(f"Track {reccobeat_id} not found in RecoBeat (404)")
+        logger.info(f"Fetching audio features for {len(tracks_needing_fetch)} tracks in parallel (cached: {len(features_map)})")
+
+        # Parallel fetch with concurrency limit
+        semaphore = asyncio.Semaphore(10)  # Max 10 concurrent requests
+
+        async def fetch_single_track_features(track_id: str, reccobeat_id: str) -> tuple[str, Optional[Dict[str, Any]]]:
+            """Fetch audio features for a single track."""
+            async with semaphore:
+                try:
+                    result = await features_tool._run(track_id=reccobeat_id)
+                    if result.success:
+                        # Cache individual track features for 1 hour
+                        cache_key = self._make_cache_key("track_audio_features", reccobeat_id)
+                        await cache_manager.cache.set(cache_key, result.data, ttl=3600)
+                        logger.debug(f"Cached audio features for track {reccobeat_id}")
+                        return track_id, result.data
                     else:
-                        logger.warning(f"Failed to get features for track {reccobeat_id}: {result.error}")
-            except Exception as e:
-                # 404 errors are expected for many Spotify tracks
-                if "404" in str(e):
-                    logger.debug(f"Track {reccobeat_id} not found in RecoBeat: {e}")
-                else:
-                    logger.error(f"Error getting features for track {reccobeat_id}: {e}")
+                        # 404 errors are common - track might not exist in RecoBeat
+                        if "404" in str(result.error):
+                            logger.debug(f"Track {reccobeat_id} not found in RecoBeat (404)")
+                        else:
+                            logger.warning(f"Failed to get features for track {reccobeat_id}: {result.error}")
+                        return track_id, None
+                except Exception as e:
+                    # 404 errors are expected for many Spotify tracks
+                    if "404" in str(e):
+                        logger.debug(f"Track {reccobeat_id} not found in RecoBeat: {e}")
+                    else:
+                        logger.error(f"Error getting features for track {reccobeat_id}: {e}")
+                    return track_id, None
+
+        # Execute all fetches in parallel
+        try:
+            results = await asyncio.gather(*[
+                fetch_single_track_features(track_id, reccobeat_id)
+                for track_id, reccobeat_id in tracks_needing_fetch
+            ])
+
+            # Combine results
+            for track_id, features in results:
+                if features:
+                    features_map[track_id] = features
+
+            logger.info(f"Successfully fetched {len([f for _, f in results if f])}/{len(tracks_needing_fetch)} audio features in parallel")
+
+        except Exception as e:
+            logger.error(f"Error in parallel audio features fetching: {e}")
 
         return features_map
 
