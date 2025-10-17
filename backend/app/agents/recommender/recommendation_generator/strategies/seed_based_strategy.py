@@ -155,11 +155,20 @@ class SeedBasedStrategy(RecommendationStrategy):
             **reccobeat_params
         )
 
+        # Batch fetch audio features for all tracks first
+        track_data = []
+        for rec_data in chunk_recommendations:
+            track_id = rec_data.get("track_id", "")
+            if track_id:
+                track_data.append((track_id, rec_data.get("audio_features")))
+        
+        audio_features_map = await self.audio_features_handler.get_batch_complete_audio_features(track_data)
+        
         # Convert to TrackRecommendation objects
         recommendations = []
         for rec_data in chunk_recommendations:
             try:
-                recommendation = await self._create_seed_recommendation(rec_data, chunk, state)
+                recommendation = await self._create_seed_recommendation(rec_data, chunk, state, audio_features_map)
                 if recommendation:
                     recommendations.append(recommendation)
 
@@ -173,7 +182,8 @@ class SeedBasedStrategy(RecommendationStrategy):
         self,
         rec_data: Dict[str, Any],
         chunk: List[str],
-        state: AgentState
+        state: AgentState,
+        audio_features_map: Dict[str, Dict[str, Any]]
     ) -> Any:
         """Create a recommendation from seed-based RecoBeat data.
 
@@ -181,6 +191,7 @@ class SeedBasedStrategy(RecommendationStrategy):
             rec_data: Recommendation data from RecoBeat
             chunk: Original seed chunk
             state: Current agent state
+            audio_features_map: Pre-fetched audio features for all tracks
 
         Returns:
             TrackRecommendation object or None if invalid
@@ -190,10 +201,8 @@ class SeedBasedStrategy(RecommendationStrategy):
             logger.warning("Skipping recommendation without track ID")
             return None
 
-        # Get complete audio features for this track
-        complete_audio_features = await self.audio_features_handler.get_complete_audio_features(
-            track_id, rec_data.get("audio_features")
-        )
+        # Get audio features from pre-fetched batch
+        complete_audio_features = audio_features_map.get(track_id, {})
 
         # Use confidence score from RecoBeat if available, otherwise calculate
         confidence = rec_data.get("confidence_score")
