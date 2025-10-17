@@ -18,7 +18,7 @@ import { playlistAPI } from '@/lib/playlistApi';
 import { useWorkflow } from '@/lib/workflowContext';
 import { Download, Edit, ExternalLink, Loader2, Music, RefreshCw, Star, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 interface PlaylistResultsProps {
@@ -97,16 +97,6 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
 
   const hasSavedToSpotify = workflowState.playlist?.id;
 
-  // Calculate unique artists count
-  const uniqueArtistsCount = useMemo(() => {
-    if (!workflowState.recommendations) return 0;
-    const artists = new Set();
-    workflowState.recommendations.forEach(track => {
-      track.artists.forEach(artist => artists.add(artist));
-    });
-    return artists.size;
-  }, [workflowState.recommendations]);
-
   const handleEditClick = () => {
     if (workflowState.sessionId) {
       router.push(`/playlist/${workflowState.sessionId}/edit`);
@@ -131,12 +121,9 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
               </div>
               <div>
                 <h3 className="font-semibold text-xl">{hasSavedToSpotify ? (workflowState.playlist?.name || 'Saved Playlist') : 'Your Draft Playlist'}</h3>
-                <div className="text-sm text-muted-foreground mt-0.5">
-                  <p className="mb-1">
-                    {hasSavedToSpotify ? '✅ Saved to Spotify' : '📝 For'} "{workflowState.moodPrompt}"
-                  </p>
-                  <p>{workflowState.recommendations.length} tracks • {uniqueArtistsCount} artists</p>
-                </div>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {hasSavedToSpotify ? '✅ Saved to Spotify' : '📝 Based on'} "{workflowState.moodPrompt}" • {workflowState.recommendations.length} tracks
+                </p>
               </div>
             </div>
 
