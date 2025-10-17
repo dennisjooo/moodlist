@@ -71,20 +71,23 @@ class MoodAnalyzerAgent(BaseAgent):
         try:
             logger.info(f"Analyzing mood prompt: {state.mood_prompt}")
 
-            # Perform mood analysis
-            mood_analysis = await self._perform_mood_analysis(state)
+            # STEP 1: Get initial mood understanding to extract genres/artists
+            initial_analysis = await self._perform_initial_analysis(state)
             
-            # Extract and store features
+            # STEP 2: Select anchor tracks FIRST using initial genres
+            await self._select_anchor_tracks_early(state, initial_analysis)
+            
+            # STEP 3: Discover artists using initial analysis and anchor tracks
+            await self._discover_artists_with_anchors(state, initial_analysis)
+            
+            # STEP 4: Perform full mood analysis with anchor context
+            mood_analysis = await self._perform_mood_analysis_with_anchors(state, initial_analysis)
+            
+            # STEP 5: Extract and store features
             await self._extract_and_store_features(state, mood_analysis)
             
-            # Determine playlist target
+            # STEP 6: Determine playlist target
             await self._determine_playlist_target(state, mood_analysis)
-            
-            # Discover artists
-            await self._discover_artists(state, mood_analysis)
-            
-            # Select anchor tracks
-            await self._select_anchor_tracks(state, mood_analysis)
 
         except Exception as e:
             logger.error(f"Error in mood analysis: {str(e)}", exc_info=True)
@@ -92,23 +95,61 @@ class MoodAnalyzerAgent(BaseAgent):
 
         return state
 
-    async def _perform_mood_analysis(self, state: AgentState) -> dict:
-        """Perform comprehensive mood analysis.
+    async def _perform_initial_analysis(self, state: AgentState) -> dict:
+        """Perform initial lightweight mood analysis to extract genres and artists.
         
         Args:
             state: Current agent state
             
         Returns:
-            Mood analysis dictionary
+            Initial analysis dictionary with genres and artist hints
         """
-        mood_analysis = await self.mood_analysis_engine.analyze_mood(state.mood_prompt)
+        logger.info("Performing initial analysis to extract genres and artists")
+        
+        # Use the same mood analysis engine but we'll use it as initial pass
+        initial_analysis = await self.mood_analysis_engine.analyze_mood(state.mood_prompt)
+        
+        logger.info(
+            f"Initial analysis: {len(initial_analysis.get('genre_keywords', []))} genres, "
+            f"{len(initial_analysis.get('artist_recommendations', []))} artist hints"
+        )
+        
+        return initial_analysis
+
+    async def _perform_mood_analysis_with_anchors(self, state: AgentState, initial_analysis: dict) -> dict:
+        """Perform comprehensive mood analysis informed by anchor tracks.
+        
+        Args:
+            state: Current agent state
+            initial_analysis: Initial analysis from first pass
+            
+        Returns:
+            Full mood analysis dictionary
+        """
+        logger.info("Performing full mood analysis with anchor track context")
+        
+        # Get anchor track info for context
+        anchor_tracks = state.metadata.get("anchor_tracks", [])
+        anchor_info = ""
+        if anchor_tracks:
+            track_list = [f"{t.get('name', '')} by {t.get('artist', '')}" for t in anchor_tracks[:3]]
+            anchor_info = f"\n\nReference tracks found: {', '.join(track_list)}"
+        
+        # Perform full analysis (could be enhanced to use anchor_info in prompt)
+        mood_analysis = await self.mood_analysis_engine.analyze_mood(
+            state.mood_prompt + anchor_info
+        )
+        
+        # Merge with initial analysis if needed
+        mood_analysis["genre_keywords"] = initial_analysis.get("genre_keywords", [])
+        mood_analysis["artist_recommendations"] = initial_analysis.get("artist_recommendations", [])
 
         # Update state with analysis
         state.mood_analysis = mood_analysis
         state.current_step = "mood_analyzed"
         state.status = RecommendationStatus.ANALYZING_MOOD
 
-        logger.info(f"Mood analysis completed for prompt: {state.mood_prompt}")
+        logger.info(f"Full mood analysis completed with anchor context")
         
         return mood_analysis
 
@@ -164,42 +205,90 @@ class MoodAnalyzerAgent(BaseAgent):
             f"{playlist_target['reasoning']}"
         )
 
-    async def _discover_artists(self, state: AgentState, mood_analysis: dict) -> None:
-        """Discover artists matching the mood.
+    async def _select_anchor_tracks_early(self, state: AgentState, initial_analysis: dict) -> None:
+        """Select anchor tracks EARLY using initial genre analysis.
+        
+        This happens BEFORE full mood analysis to provide reference tracks.
         
         Args:
             state: Current agent state
-            mood_analysis: Mood analysis dictionary
-        """
-        if self.spotify_service:
-            await self.artist_discovery.discover_mood_artists(state, mood_analysis)
-
-    async def _select_anchor_tracks(self, state: AgentState, mood_analysis: dict) -> None:
-        """Select anchor tracks (user-mentioned tracks + genre-based tracks).
-        
-        Args:
-            state: Current agent state
-            mood_analysis: Mood analysis dictionary
+            initial_analysis: Initial analysis with genres and artist hints
         """
         if not self.spotify_service:
             return
 
         try:
-            target_features = state.metadata.get("target_features", {})
+            # Use basic target features for early anchor selection
+            # We don't have full features yet, so use initial analysis hints
+            basic_target_features = self._extract_basic_features(initial_analysis)
             
             anchor_tracks, anchor_ids = await self.anchor_track_selector.select_anchor_tracks(
-                mood_analysis.get("genre_keywords", []),
-                target_features,
+                initial_analysis.get("genre_keywords", []),
+                basic_target_features,
                 state.metadata.get("spotify_access_token"),
                 mood_prompt=state.mood_prompt,
-                artist_recommendations=mood_analysis.get("artist_recommendations", []),
+                artist_recommendations=initial_analysis.get("artist_recommendations", []),
                 limit=5
             )
             state.metadata["anchor_tracks"] = anchor_tracks
             state.metadata["anchor_track_ids"] = anchor_ids
-            logger.info(f"Selected {len(anchor_tracks)} anchor tracks (user-mentioned + genre search)")
+            logger.info(f"✓ Selected {len(anchor_tracks)} anchor tracks early (before full mood analysis)")
         except Exception as e:
-            logger.warning(f"Failed to select anchor tracks: {e}")
+            logger.warning(f"Failed to select anchor tracks early: {e}")
             # Continue without anchor tracks - not critical
             state.metadata["anchor_tracks"] = []
             state.metadata["anchor_track_ids"] = []
+
+    async def _discover_artists_with_anchors(self, state: AgentState, initial_analysis: dict) -> None:
+        """Discover artists using initial analysis and anchor track context.
+        
+        Args:
+            state: Current agent state
+            initial_analysis: Initial analysis dictionary
+        """
+        if not self.spotify_service:
+            return
+            
+        logger.info("Discovering artists with anchor track context")
+        
+        # Use initial analysis for artist discovery
+        await self.artist_discovery.discover_mood_artists(state, initial_analysis)
+        
+        # Extract artists from anchor tracks and add to discovered artists
+        anchor_tracks = state.metadata.get("anchor_tracks", [])
+        if anchor_tracks:
+            anchor_artists = []
+            for track in anchor_tracks:
+                artist_name = track.get("artist")
+                artist_id = track.get("artist_id")
+                if artist_name and artist_id:
+                    anchor_artists.append({
+                        "id": artist_id,
+                        "name": artist_name,
+                        "popularity": track.get("popularity", 50),
+                        "source": "anchor_track"
+                    })
+            
+            if anchor_artists:
+                discovered_artists = state.metadata.get("discovered_artists", [])
+                # Add anchor artists but avoid duplicates
+                existing_ids = {a["id"] for a in discovered_artists}
+                for artist in anchor_artists:
+                    if artist["id"] not in existing_ids:
+                        discovered_artists.append(artist)
+                        existing_ids.add(artist["id"])
+                
+                state.metadata["discovered_artists"] = discovered_artists
+                logger.info(f"Added {len(anchor_artists)} artists from anchor tracks")
+
+    def _extract_basic_features(self, initial_analysis: dict) -> dict:
+        """Extract basic target features from initial analysis.
+        
+        Args:
+            initial_analysis: Initial analysis dictionary
+            
+        Returns:
+            Basic target features dictionary
+        """
+        # Use feature extractor with initial analysis
+        return self.feature_extractor.extract_target_features(initial_analysis)
