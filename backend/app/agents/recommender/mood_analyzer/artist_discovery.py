@@ -174,34 +174,75 @@ class ArtistDiscovery:
             content = response.content if hasattr(response, 'content') else str(response)
 
             # Parse JSON response
-            json_start = content.find('{')
-            json_end = content.rfind('}') + 1
-
-            if json_start >= 0 and json_end > json_start:
-                json_str = content[json_start:json_end]
-                result = json.loads(json_str)
-
-                selected_indices = result.get("selected_artist_indices", [])
-                reasoning = result.get("reasoning", "")
-
-                # Map indices to artists (1-indexed in prompt, 0-indexed in list)
-                filtered_artists = [
-                    artists[idx - 1] for idx in selected_indices
-                    if 1 <= idx <= len(artists)
-                ]
-
-                # Store reasoning in state metadata
-                if hasattr(self, '_current_state'):
-                    self._current_state.metadata["artist_discovery_reasoning"] = reasoning
-
-                logger.info(f"LLM selected {len(filtered_artists)} artists: {reasoning}")
-                return filtered_artists[:20]  # Increased from 12 to 20 for max diversity
-
-            else:
-                logger.warning("Could not parse LLM artist filtering response")
-                return artists[:20]  # Increased from 12 to 20
+            filtered_artists = self._parse_llm_artist_response(content, artists)
+            
+            if not filtered_artists:
+                logger.warning("No valid artists selected by LLM, falling back to popularity-based selection")
+                return sorted(artists, key=lambda x: x.get("popularity") or 0, reverse=True)[:20]
+            
+            logger.info(f"LLM selected {len(filtered_artists)} artists")
+            return filtered_artists[:20]  # Increased from 12 to 20 for max diversity
 
         except Exception as e:
-            logger.error(f"LLM artist filtering failed: {str(e)}")
+            logger.error(f"LLM artist filtering failed with unexpected error: {str(e)}")
             # Fallback to popularity-based selection
             return sorted(artists, key=lambda x: x.get("popularity") or 0, reverse=True)[:20]  # Increased from 12 to 20
+
+    def _parse_llm_artist_response(
+        self,
+        content: str,
+        artists: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Parse LLM response and extract selected artists.
+
+        Args:
+            content: Raw LLM response content
+            artists: Original list of artist candidates
+
+        Returns:
+            List of selected artists, or empty list if parsing fails
+        """
+        # Find JSON in response
+        json_start = content.find('{')
+        json_end = content.rfind('}') + 1
+
+        if json_start < 0 or json_end <= json_start:
+            logger.warning("Could not find JSON in LLM artist filtering response")
+            logger.debug(f"Raw LLM response: {content[:500]}")
+            return []
+
+        json_str = content[json_start:json_end]
+        
+        try:
+            result = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse LLM JSON response: {str(e)}")
+            logger.debug(f"Raw LLM response: {content[:500]}")
+            return []
+        
+        # Extract and validate selected indices
+        selected_indices = result.get("selected_artist_indices", [])
+        reasoning = result.get("reasoning", "")
+        
+        if not isinstance(selected_indices, list):
+            logger.warning(f"selected_artist_indices is not a list: {type(selected_indices)}")
+            return []
+        
+        # Map indices to artists (1-indexed in prompt, 0-indexed in list)
+        filtered_artists = []
+        for idx in selected_indices:
+            if isinstance(idx, int) and 1 <= idx <= len(artists):
+                filtered_artists.append(artists[idx - 1])
+            else:
+                logger.warning(f"Invalid artist index: {idx}")
+        
+        if not filtered_artists:
+            logger.warning("No valid artists selected by LLM")
+            return []
+        
+        # Store reasoning in state metadata
+        if hasattr(self, '_current_state'):
+            self._current_state.metadata["artist_discovery_reasoning"] = reasoning
+        
+        logger.info(f"LLM artist selection reasoning: {reasoning}")
+        return filtered_artists
