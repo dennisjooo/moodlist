@@ -1,11 +1,11 @@
 """Artist discovery component for Spotify artist search and filtering."""
 
-import json
 import structlog
 from typing import Any, Dict, List, Optional
 
 from langchain_core.language_models.base import BaseLanguageModel
 
+from ..utils.llm_response_parser import LLMResponseParser
 from .prompts import get_artist_filtering_prompt
 from .text_processor import TextProcessor
 
@@ -190,21 +190,11 @@ class ArtistDiscovery:
         Returns:
             List of selected artists, or empty list if parsing fails
         """
-        # Find JSON in response
-        json_start = content.find('{')
-        json_end = content.rfind('}') + 1
-
-        if json_start < 0 or json_end <= json_start:
-            logger.warning("Could not find JSON in LLM artist filtering response")
-            logger.debug(f"Raw LLM response: {content[:500]}")
-            return []
-
-        json_str = content[json_start:json_end]
+        # Parse using centralized parser utility
+        result = LLMResponseParser.extract_json_from_response(content, fallback={})
         
-        try:
-            result = json.loads(json_str)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse LLM JSON response: {str(e)}")
+        if not result:
+            logger.warning("Could not find JSON in LLM artist filtering response")
             logger.debug(f"Raw LLM response: {content[:500]}")
             return []
         

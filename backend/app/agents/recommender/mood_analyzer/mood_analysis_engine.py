@@ -1,12 +1,12 @@
 """Mood analysis engine for LLM-based and fallback mood analysis."""
 
-import json
 import structlog
 from typing import Any, Dict, Optional, Union
 
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages import AIMessage
 
+from ..utils.llm_response_parser import LLMResponseParser
 from .prompts import get_mood_analysis_system_prompt
 from .text_processor import TextProcessor
 from .mood_profile_matcher import MoodProfileMatcher
@@ -60,23 +60,12 @@ class MoodAnalysisEngine:
             # Get LLM response
             response = await self.llm.ainvoke(messages)
 
-            # Try to parse JSON response
-            try:
-                # Extract JSON from response
-                content = response.content if hasattr(response, 'content') else str(response)
-                json_start = content.find('{')
-                json_end = content.rfind('}') + 1
-
-                if json_start >= 0 and json_end > json_start:
-                    json_str = content[json_start:json_end]
-                    analysis = json.loads(json_str)
-                else:
-                    # Fallback if no JSON found
-                    analysis = self._parse_llm_response_fallback(content)
-
-            except json.JSONDecodeError:
-                # Fallback if JSON parsing fails
-                logger.error(f"JSON parsing failed: {response}")
+            # Parse JSON response using centralized parser
+            analysis = LLMResponseParser.extract_json_from_response(response)
+            
+            if not analysis:
+                # Fallback if parsing fails
+                logger.warning("Failed to parse JSON from LLM response, using fallback")
                 analysis = self._parse_llm_response_fallback(response)
 
             return analysis
