@@ -107,7 +107,8 @@ async def start_recommendation(
     mood_prompt: str = Query(..., description="Mood description for playlist generation"),
     current_user: User = Depends(require_auth),
     background_tasks: BackgroundTasks = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    playlist_repo=Depends(get_playlist_repository)
 ):
     """Start a new mood-based recommendation workflow.
 
@@ -116,11 +117,15 @@ async def start_recommendation(
         current_user: Authenticated user (from session)
         background_tasks: FastAPI background tasks
         db: Database session
+        playlist_repo: Playlist repository
 
     Returns:
         Workflow session information
     """
     try:
+        from ...dependencies import get_playlist_repository
+        from ...repositories.playlist_repository import PlaylistRepository
+        
         logger.info(f"Starting recommendation workflow for user {current_user.id}, mood: {mood_prompt}")
 
         # Refresh Spotify token if expired before starting workflow
@@ -138,16 +143,15 @@ async def start_recommendation(
         if state:
             state.metadata["spotify_access_token"] = current_user.access_token
 
-        # Create initial Playlist DB record
-        playlist = Playlist(
+        # Create initial Playlist DB record using repository
+        playlist_repo_local = PlaylistRepository(db)
+        playlist = await playlist_repo_local.create_playlist_for_session(
             user_id=current_user.id,
             session_id=session_id,
             mood_prompt=mood_prompt,
-            status=PlaylistStatus.PENDING
+            status=PlaylistStatus.PENDING,
+            commit=True
         )
-        db.add(playlist)
-        await db.commit()
-        await db.refresh(playlist)
         
         logger.info(f"Created playlist record {playlist.id} for session {session_id}")
 
@@ -175,6 +179,8 @@ async def get_workflow_status(session_id: str, db: AsyncSession = Depends(get_db
         Current workflow status
     """
     try:
+        from ...repositories.playlist_repository import PlaylistRepository
+        
         # First try to get from workflow manager (Redis/cache)
         state = workflow_manager.get_workflow_state(session_id)
 
@@ -201,10 +207,8 @@ async def get_workflow_status(session_id: str, db: AsyncSession = Depends(get_db
             }
         
         # If not in cache, try to get from database
-        from sqlalchemy import select
-        query = select(Playlist).where(Playlist.session_id == session_id)
-        result = await db.execute(query)
-        playlist = result.scalar_one_or_none()
+        playlist_repo = PlaylistRepository(db)
+        playlist = await playlist_repo.get_by_session_id(session_id)
         
         if not playlist:
             raise NotFoundException("Workflow", session_id)

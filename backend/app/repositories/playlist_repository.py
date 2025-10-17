@@ -722,3 +722,298 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 error=str(e)
             )
             raise
+
+    async def get_by_session_id(
+        self,
+        session_id: str,
+        load_relationships: Optional[List[str]] = None
+    ) -> Optional[Playlist]:
+        """Get playlist by workflow session ID.
+
+        Args:
+            session_id: Workflow session ID
+            load_relationships: List of relationship names to eagerly load
+
+        Returns:
+            Playlist instance or None if not found
+        """
+        try:
+            query = select(Playlist).where(Playlist.session_id == session_id)
+
+            if load_relationships:
+                for relationship in load_relationships:
+                    query = query.options(selectinload(getattr(Playlist, relationship)))
+
+            result = await self.session.execute(query)
+            playlist = result.scalar_one_or_none()
+
+            if playlist:
+                self.logger.debug("Playlist retrieved by session ID", session_id=session_id)
+            else:
+                self.logger.debug("Playlist not found for session ID", session_id=session_id)
+
+            return playlist
+
+        except SQLAlchemyError as e:
+            self.logger.error(
+                "Database error retrieving playlist by session ID",
+                session_id=session_id,
+                error=str(e)
+            )
+            raise InternalServerError("Failed to retrieve playlist")
+
+    async def get_by_session_id_and_user(
+        self,
+        session_id: str,
+        user_id: int,
+        load_relationships: Optional[List[str]] = None
+    ) -> Optional[Playlist]:
+        """Get playlist by session ID and user ID.
+
+        Args:
+            session_id: Workflow session ID
+            user_id: User ID
+            load_relationships: List of relationship names to eagerly load
+
+        Returns:
+            Playlist instance or None if not found
+        """
+        try:
+            query = select(Playlist).where(
+                and_(
+                    Playlist.session_id == session_id,
+                    Playlist.user_id == user_id
+                )
+            )
+
+            if load_relationships:
+                for relationship in load_relationships:
+                    query = query.options(selectinload(getattr(Playlist, relationship)))
+
+            result = await self.session.execute(query)
+            playlist = result.scalar_one_or_none()
+
+            if playlist:
+                self.logger.debug(
+                    "Playlist retrieved by session and user ID",
+                    session_id=session_id,
+                    user_id=user_id
+                )
+            else:
+                self.logger.debug(
+                    "Playlist not found for session and user ID",
+                    session_id=session_id,
+                    user_id=user_id
+                )
+
+            return playlist
+
+        except SQLAlchemyError as e:
+            self.logger.error(
+                "Database error retrieving playlist by session and user ID",
+                session_id=session_id,
+                user_id=user_id,
+                error=str(e)
+            )
+            raise InternalServerError("Failed to retrieve playlist")
+
+    async def create_playlist_for_session(
+        self,
+        user_id: int,
+        session_id: str,
+        mood_prompt: str,
+        status: str,
+        commit: bool = True
+    ) -> Playlist:
+        """Create a new playlist for a workflow session.
+
+        Args:
+            user_id: User ID
+            session_id: Workflow session ID
+            mood_prompt: User's mood description
+            status: Initial playlist status
+            commit: Whether to commit the transaction
+
+        Returns:
+            Created playlist instance
+        """
+        try:
+            playlist = Playlist(
+                user_id=user_id,
+                session_id=session_id,
+                mood_prompt=mood_prompt,
+                status=status
+            )
+
+            self.session.add(playlist)
+
+            if commit:
+                await self.session.commit()
+                await self.session.refresh(playlist)
+            else:
+                await self.session.flush()
+
+            self.logger.info(
+                "Playlist created for session",
+                playlist_id=getattr(playlist, "id", None),
+                session_id=session_id,
+                user_id=user_id
+            )
+
+            return playlist
+
+        except SQLAlchemyError as e:
+            self.logger.error(
+                "Database error creating playlist for session",
+                session_id=session_id,
+                user_id=user_id,
+                error=str(e)
+            )
+            await self.session.rollback()
+            raise InternalServerError("Failed to create playlist")
+
+    async def update_status(
+        self,
+        playlist_id: int,
+        status: str,
+        error_message: Optional[str] = None,
+        commit: bool = True
+    ) -> Playlist:
+        """Update playlist status.
+
+        Args:
+            playlist_id: Playlist ID
+            status: New status
+            error_message: Error message if any (optional)
+            commit: Whether to commit the transaction
+
+        Returns:
+            Updated playlist instance
+        """
+        try:
+            playlist = await self.get_by_id_or_fail(playlist_id)
+
+            playlist.status = status
+            if error_message is not None:
+                playlist.error_message = error_message
+
+            if commit:
+                await self.session.commit()
+                await self.session.refresh(playlist)
+            else:
+                await self.session.flush()
+
+            self.logger.info(
+                "Playlist status updated",
+                playlist_id=playlist_id,
+                status=status
+            )
+
+            return playlist
+
+        except Exception as e:
+            self.logger.error(
+                "Database error updating playlist status",
+                playlist_id=playlist_id,
+                status=status,
+                error=str(e)
+            )
+            await self.session.rollback()
+            raise
+
+    async def update_status_by_session(
+        self,
+        session_id: str,
+        status: str,
+        error_message: Optional[str] = None,
+        commit: bool = True
+    ) -> Optional[Playlist]:
+        """Update playlist status by session ID.
+
+        Args:
+            session_id: Workflow session ID
+            status: New status
+            error_message: Error message if any (optional)
+            commit: Whether to commit the transaction
+
+        Returns:
+            Updated playlist instance or None if not found
+        """
+        try:
+            playlist = await self.get_by_session_id(session_id)
+
+            if not playlist:
+                self.logger.warning("Playlist not found for status update", session_id=session_id)
+                return None
+
+            playlist.status = status
+            if error_message is not None:
+                playlist.error_message = error_message
+
+            if commit:
+                await self.session.commit()
+                await self.session.refresh(playlist)
+            else:
+                await self.session.flush()
+
+            self.logger.info(
+                "Playlist status updated by session",
+                session_id=session_id,
+                status=status
+            )
+
+            return playlist
+
+        except SQLAlchemyError as e:
+            self.logger.error(
+                "Database error updating playlist status by session",
+                session_id=session_id,
+                status=status,
+                error=str(e)
+            )
+            await self.session.rollback()
+            raise InternalServerError("Failed to update playlist status")
+
+    async def update_recommendations_data(
+        self,
+        playlist_id: int,
+        recommendations_data: List[Dict],
+        commit: bool = True
+    ) -> Playlist:
+        """Update playlist recommendations data.
+
+        Args:
+            playlist_id: Playlist ID
+            recommendations_data: List of recommendations
+            commit: Whether to commit the transaction
+
+        Returns:
+            Updated playlist instance
+        """
+        try:
+            playlist = await self.get_by_id_or_fail(playlist_id)
+
+            playlist.recommendations_data = recommendations_data
+
+            if commit:
+                await self.session.commit()
+                await self.session.refresh(playlist)
+            else:
+                await self.session.flush()
+
+            self.logger.info(
+                "Playlist recommendations updated",
+                playlist_id=playlist_id,
+                recommendation_count=len(recommendations_data)
+            )
+
+            return playlist
+
+        except Exception as e:
+            self.logger.error(
+                "Database error updating playlist recommendations",
+                playlist_id=playlist_id,
+                error=str(e)
+            )
+            await self.session.rollback()
+            raise
