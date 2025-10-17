@@ -4,7 +4,7 @@ from typing import List, Optional
 from datetime import datetime, timezone
 
 import structlog
-from sqlalchemy import select, desc, delete
+from sqlalchemy import select, desc, delete, and_
 from sqlalchemy.orm import selectinload
 
 from app.models.session import Session
