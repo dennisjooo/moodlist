@@ -33,28 +33,38 @@ class AudioEnricher:
             return tracks
 
         logger.info(f"Fetching audio features for {len(tracks)} tracks")
-        enriched_tracks = []
+        
+        # Extract all track IDs
+        track_id_to_track = {}
         for track in tracks:
             track_id = track.get("track_id") or track.get("id")
-            if not track_id:
-                enriched_tracks.append(track)
-                continue
-
-            try:
-                # Fetch audio features from RecoBeat
-                features_map = await self.reccobeat_service.get_tracks_audio_features([track_id])
-
-                if track_id in features_map:
+            if track_id:
+                track_id_to_track[track_id] = track
+        
+        # Batch fetch all audio features at once
+        track_ids = list(track_id_to_track.keys())
+        if not track_ids:
+            return tracks
+        
+        try:
+            # Fetch audio features for all tracks in a single batch call
+            features_map = await self.reccobeat_service.get_tracks_audio_features(track_ids)
+            
+            # Merge features into tracks
+            enriched_tracks = []
+            for track in tracks:
+                track_id = track.get("track_id") or track.get("id")
+                if track_id and track_id in features_map:
                     # Merge audio features into track data
                     track_with_features = track.copy()
                     track_with_features.update(features_map[track_id])
                     enriched_tracks.append(track_with_features)
                 else:
                     enriched_tracks.append(track)
-
-            except Exception as e:
-                logger.warning(f"Failed to fetch features for track {track_id}: {e}")
-                enriched_tracks.append(track)
-
-        logger.info(f"Successfully enriched {len([t for t in enriched_tracks if 'energy' in t])} tracks with audio features")
-        return enriched_tracks
+            
+            logger.info(f"Successfully enriched {len([t for t in enriched_tracks if 'energy' in t])} tracks with audio features")
+            return enriched_tracks
+            
+        except Exception as e:
+            logger.warning(f"Failed to fetch features for tracks: {e}")
+            return tracks

@@ -203,11 +203,20 @@ class RecommendationEngine:
             **reccobeat_params
         )
 
+        # Batch fetch audio features for all tracks first
+        track_data = []
+        for rec_data in chunk_recommendations:
+            track_id = rec_data.get("track_id", "")
+            if track_id:
+                track_data.append((track_id, rec_data.get("audio_features")))
+        
+        audio_features_map = await self.audio_features_handler.get_batch_complete_audio_features(track_data)
+        
         # Convert to TrackRecommendation objects
         recommendations = []
         for rec_data in chunk_recommendations:
             try:
-                recommendation = await self._create_seed_recommendation(rec_data, chunk, state)
+                recommendation = await self._create_seed_recommendation(rec_data, chunk, state, audio_features_map)
                 if recommendation:
                     recommendations.append(recommendation)
 
@@ -221,7 +230,8 @@ class RecommendationEngine:
         self,
         rec_data: Dict[str, Any],
         chunk: List[str],
-        state: AgentState
+        state: AgentState,
+        audio_features_map: Dict[str, Dict[str, Any]]
     ) -> Optional[TrackRecommendation]:
         """Create a recommendation from seed-based RecoBeat data.
 
@@ -229,6 +239,7 @@ class RecommendationEngine:
             rec_data: Recommendation data from RecoBeat
             chunk: Original seed chunk
             state: Current agent state
+            audio_features_map: Pre-fetched audio features for all tracks
 
         Returns:
             TrackRecommendation object or None if invalid
@@ -238,10 +249,8 @@ class RecommendationEngine:
             logger.warning("Skipping recommendation without track ID")
             return None
 
-        # Get complete audio features for this track
-        complete_audio_features = await self.audio_features_handler.get_complete_audio_features(
-            track_id, rec_data.get("audio_features")
-        )
+        # Get audio features from pre-fetched batch
+        complete_audio_features = audio_features_map.get(track_id, {})
 
         # Use confidence score from RecoBeat if available, otherwise calculate
         confidence = rec_data.get("confidence_score")
@@ -552,12 +561,21 @@ class RecommendationEngine:
         Returns:
             List of TrackRecommendation objects
         """
+        # Batch fetch audio features for all tracks first
+        track_data = []
+        for track in artist_tracks:
+            track_id = track.get("id")
+            if track_id:
+                track_data.append((track_id, None))
+        
+        audio_features_map = await self.audio_features_handler.get_batch_complete_audio_features(track_data)
+        
         recommendations = []
         tracks_added = 0
 
         for track in artist_tracks:
             try:
-                recommendation = await self._create_artist_track_recommendation(track, target_features)
+                recommendation = await self._create_artist_track_recommendation(track, target_features, audio_features_map)
                 if recommendation:
                     recommendations.append(recommendation)
                     tracks_added += 1
@@ -577,13 +595,15 @@ class RecommendationEngine:
     async def _create_artist_track_recommendation(
         self,
         track: Dict[str, Any],
-        target_features: Dict[str, Any]
+        target_features: Dict[str, Any],
+        audio_features_map: Dict[str, Dict[str, Any]]
     ) -> Optional[TrackRecommendation]:
         """Create a recommendation from an artist track.
 
         Args:
             track: Track data from Spotify
             target_features: Target mood features
+            audio_features_map: Pre-fetched audio features for all tracks
 
         Returns:
             TrackRecommendation object or None if filtered out
@@ -594,8 +614,8 @@ class RecommendationEngine:
             logger.debug(f"Skipping track without ID: {track}")
             return None
 
-        # Get audio features
-        audio_features = await self.audio_features_handler.get_complete_audio_features(track_id)
+        # Get audio features from pre-fetched batch
+        audio_features = audio_features_map.get(track_id, {})
 
         # Score track against mood (RELAXED for artist tracks)
         cohesion_score = self._calculate_artist_track_score(audio_features, target_features)
