@@ -2,12 +2,11 @@
 
 import structlog
 import traceback
-from typing import Any, Dict, Optional, Union
-from datetime import datetime
+from typing import Any, Dict, Optional
+from datetime import datetime, timezone
 from enum import Enum
 
-from fastapi import HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi import HTTPException
 
 
 logger = structlog.get_logger(__name__)
@@ -39,7 +38,7 @@ class AgentError(Exception):
         self.severity = severity
         self.details = details or {}
         self.cause = cause
-        self.timestamp = datetime.utcnow()
+        self.timestamp = datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert error to dictionary for logging/serialization."""
@@ -105,7 +104,7 @@ class ErrorHandler:
     def __init__(self):
         """Initialize the error handler."""
         self.error_counts = {}
-        self.last_error_cleanup = datetime.utcnow()
+        self.last_error_cleanup = datetime.now(timezone.utc)
 
     def handle_error(
         self,
@@ -129,7 +128,7 @@ class ErrorHandler:
             "message": str(error),
             "context": context,
             "traceback": traceback.format_exc(),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
         # Determine severity
@@ -182,7 +181,7 @@ class ErrorHandler:
             context: Error context
         """
         # Clean up old error counts periodically
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if (now - self.last_error_cleanup).seconds > 3600:  # Every hour
             self.error_counts.clear()
             self.last_error_cleanup = now

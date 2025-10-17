@@ -2,7 +2,7 @@
 
 import hashlib
 import pickle
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 import structlog
 
@@ -105,7 +105,7 @@ class MemoryCache(Cache):
             entry = self.cache[key]
 
             # Check if expired
-            if entry["expires_at"] and datetime.utcnow() > entry["expires_at"]:
+            if entry["expires_at"] and datetime.now(timezone.utc) > entry["expires_at"]:
                 del self.cache[key]
                 if key in self.access_order:
                     self.access_order.remove(key)
@@ -127,12 +127,12 @@ class MemoryCache(Cache):
         """Set value in memory cache."""
         expires_at = None
         if ttl:
-            expires_at = datetime.utcnow() + timedelta(seconds=ttl)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
 
         self.cache[key] = {
             "value": value,
             "expires_at": expires_at,
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         }
 
         # Update access order
