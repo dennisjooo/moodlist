@@ -9,6 +9,7 @@ from .mood_analyzer import MoodAnalyzerAgent
 from .config import STOP_WORDS, MOOD_SYNONYMS, KNOWN_GENRES, LANGUAGE_INDICATORS, MOOD_PROFILES
 from .text_processor import TextProcessor
 from .mood_profile_matcher import MoodProfileMatcher
+from .anchor_track_selector import AnchorTrackSelector
 
 __all__ = [
     "MoodAnalysisEngine",
@@ -19,6 +20,7 @@ __all__ = [
     "MoodAnalyzerAgent",
     "TextProcessor",
     "MoodProfileMatcher",
+    "AnchorTrackSelector",
     "STOP_WORDS",
     "MOOD_SYNONYMS",
     "KNOWN_GENRES",

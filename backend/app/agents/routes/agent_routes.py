@@ -54,7 +54,12 @@ cerebras_llm = ChatOpenAI(
 )
 
 # Create agents with updated dependencies
-mood_analyzer = MoodAnalyzerAgent(llm=llm, spotify_service=spotify_service, verbose=True)
+mood_analyzer = MoodAnalyzerAgent(
+    llm=llm,
+    spotify_service=spotify_service,
+    reccobeat_service=reccobeat_service,
+    verbose=True
+)
 seed_gatherer = SeedGathererAgent(
     spotify_service=spotify_service,
     reccobeat_service=reccobeat_service,
