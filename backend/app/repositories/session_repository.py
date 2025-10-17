@@ -4,7 +4,7 @@ from typing import List, Optional
 from datetime import datetime, timezone
 
 import structlog
-from sqlalchemy import select, desc, delete
+from sqlalchemy import select, desc, delete, and_
 from sqlalchemy.orm import selectinload
 
 from app.models.session import Session
@@ -362,4 +362,136 @@ class SessionRepository(BaseRepository[Session]):
                 active_only=active_only,
                 error=str(e)
             )
+            raise
+
+    async def get_valid_session_by_token(
+        self,
+        session_token: str,
+        load_relationships: Optional[List[str]] = None
+    ) -> Optional[Session]:
+        """Get valid (non-expired) session by token.
+
+        Args:
+            session_token: Session token
+            load_relationships: List of relationship names to eagerly load
+
+        Returns:
+            Session instance or None if not found or expired
+        """
+        try:
+            now = datetime.now(timezone.utc)
+            query = select(Session).where(
+                and_(
+                    Session.session_token == session_token,
+                    Session.expires_at > now
+                )
+            )
+
+            if load_relationships:
+                for relationship in load_relationships:
+                    query = query.options(selectinload(getattr(Session, relationship)))
+
+            result = await self.session.execute(query)
+            session = result.scalar_one_or_none()
+
+            if session:
+                self.logger.debug("Valid session retrieved by token", session_token=session_token[:8] + "...")
+            else:
+                self.logger.debug("Valid session not found for token", session_token=session_token[:8] + "...")
+
+            return session
+
+        except Exception as e:
+            self.logger.error(
+                "Database error retrieving valid session by token",
+                session_token=session_token[:8] + "...",
+                error=str(e)
+            )
+            raise
+
+    async def create_session_for_user(
+        self,
+        user_id: int,
+        session_token: str,
+        ip_address: str,
+        user_agent: Optional[str],
+        expires_at: datetime,
+        commit: bool = True
+    ) -> Session:
+        """Create a new session for a user.
+
+        Args:
+            user_id: User ID
+            session_token: Session token
+            ip_address: Client IP address
+            user_agent: User agent string
+            expires_at: Session expiration timestamp
+            commit: Whether to commit the transaction
+
+        Returns:
+            Created session instance
+        """
+        try:
+            session = Session(
+                user_id=user_id,
+                session_token=session_token,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                expires_at=expires_at
+            )
+
+            self.session.add(session)
+
+            if commit:
+                await self.session.commit()
+                await self.session.refresh(session)
+            else:
+                await self.session.flush()
+
+            self.logger.info(
+                "Session created for user",
+                session_id=getattr(session, "id", None),
+                user_id=user_id
+            )
+
+            return session
+
+        except Exception as e:
+            self.logger.error(
+                "Database error creating session for user",
+                user_id=user_id,
+                error=str(e)
+            )
+            await self.session.rollback()
+            raise
+
+    async def delete_by_token(self, session_token: str) -> bool:
+        """Delete session by token.
+
+        Args:
+            session_token: Session token to delete
+
+        Returns:
+            True if deleted, False if not found
+        """
+        try:
+            query = delete(Session).where(Session.session_token == session_token)
+            result = await self.session.execute(query)
+
+            deleted = result.rowcount > 0
+
+            if deleted:
+                self.logger.info("Session deleted by token", session_token=session_token[:8] + "...")
+            else:
+                self.logger.debug("Session not found for deletion", session_token=session_token[:8] + "...")
+
+            return deleted
+
+        except Exception as e:
+            self.logger.error(
+                "Database error deleting session by token",
+                session_token=session_token[:8] + "...",
+                error=str(e)
+            )
+            await self.session.rollback()
             raise
