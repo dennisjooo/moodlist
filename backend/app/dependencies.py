@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.repositories.playlist_repository import PlaylistRepository
 from app.repositories.user_repository import UserRepository
 from app.repositories.session_repository import SessionRepository
+from app.repositories.invocation_repository import InvocationRepository
 from app.clients.spotify_client import SpotifyAPIClient
 from app.services.playlist_service import PlaylistService
 from app.services.token_service import TokenService
@@ -46,6 +47,13 @@ def get_session_repository(
 ) -> SessionRepository:
     """Get session repository."""
     return SessionRepository(db)
+
+
+def get_invocation_repository(
+    db: AsyncSession = Depends(get_db)
+) -> InvocationRepository:
+    """Get invocation repository."""
+    return InvocationRepository(db)
 
 
 # Service dependencies
