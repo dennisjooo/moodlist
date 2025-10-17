@@ -1,10 +1,6 @@
 """FastAPI routes for the agentic recommendation system."""
 
-import json
 import structlog
-from datetime import datetime
-
-from typing import Optional
 
 from fastapi import APIRouter, Depends, BackgroundTasks, Query
 from langchain_openai import ChatOpenAI
@@ -142,9 +138,7 @@ async def start_recommendation(
         if state:
             state.metadata["spotify_access_token"] = current_user.access_token
 
-        # Create initial Playlist DB record using repository
-        playlist_repo_local = PlaylistRepository(db)
-        playlist = await playlist_repo_local.create_playlist_for_session(
+        playlist = await playlist_repo.create_playlist_for_session(
             user_id=current_user.id,
             session_id=session_id,
             mood_prompt=mood_prompt,
