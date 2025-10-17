@@ -40,6 +40,7 @@ interface WorkflowContextType {
   searchTracks: (query: string, limit?: number) => Promise<any>;
   refreshResults: () => Promise<void>;
   saveToSpotify: () => Promise<any>;
+  syncFromSpotify: () => Promise<any>;
   clearError: () => void;
 }
 
@@ -312,6 +313,36 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     }
   };
 
+  const syncFromSpotify = async () => {
+    if (!workflowState.sessionId) {
+      throw new Error('No active workflow session');
+    }
+
+    // Don't show loading state for sync - it should be subtle
+    try {
+      const result = await workflowAPI.syncFromSpotify(workflowState.sessionId);
+
+      // Only update if sync was successful
+      if (result.synced && result.recommendations) {
+        setWorkflowState(prev => ({
+          ...prev,
+          recommendations: result.recommendations || prev.recommendations,
+          playlist: result.playlist_data ? {
+            ...prev.playlist,
+            ...result.playlist_data,
+          } : prev.playlist,
+        }));
+      }
+
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to sync from Spotify';
+      console.error('Sync error:', errorMessage);
+      // Don't set error in state for sync failures - they should be silent or handled by caller
+      throw error;
+    }
+  };
+
   const applyCompletedEdit = async (
     editType: 'reorder' | 'remove' | 'add',
     options: {
@@ -556,6 +587,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     searchTracks,
     refreshResults,
     saveToSpotify,
+    syncFromSpotify,
     clearError,
   };
 

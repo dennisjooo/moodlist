@@ -192,6 +192,24 @@ class WorkflowAPI {
     });
   }
 
+  async syncFromSpotify(sessionId: string): Promise<{
+    session_id: string;
+    synced: boolean;
+    message?: string;
+    changes?: {
+      tracks_before: number;
+      tracks_after: number;
+      tracks_added: number;
+      tracks_removed: number;
+    };
+    recommendations?: Array<any>;
+    playlist_data?: any;
+  }> {
+    return this.request(`/api/playlists/${sessionId}/sync-from-spotify`, {
+      method: 'POST',
+    });
+  }
+
   async cancelWorkflow(sessionId: string): Promise<{
     session_id: string;
     status: string;

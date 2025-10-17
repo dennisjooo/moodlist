@@ -493,3 +493,49 @@ async def save_playlist_to_spotify(
         logger.error(f"Error saving playlist to Spotify: {str(e)}", exc_info=True)
         raise InternalServerError(f"Failed to save playlist: {str(e)}")
 
+
+@router.post("/playlists/{session_id}/sync-from-spotify")
+async def sync_playlist_from_spotify(
+    session_id: str,
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
+):
+    """Sync playlist tracks from Spotify to local database.
+
+    Args:
+        session_id: Playlist session ID
+        current_user: Authenticated user
+        db: Database session
+
+    Returns:
+        Sync results
+    """
+    try:
+        # Refresh Spotify token if expired
+        current_user = await refresh_spotify_token_if_expired(current_user, db)
+
+        # Import dependencies
+        from app.clients.spotify_client import SpotifyAPIClient
+        from app.repositories.playlist_repository import PlaylistRepository
+        from .services.playlist_sync_service import PlaylistSyncService
+
+        # Initialize services
+        spotify_client = SpotifyAPIClient()
+        playlist_repository = PlaylistRepository(db)
+        sync_service = PlaylistSyncService(spotify_client, playlist_repository)
+
+        # Perform sync
+        result = await sync_service.sync_from_spotify(
+            session_id,
+            current_user.access_token,
+            current_user.id
+        )
+
+        return result
+
+    except NotFoundException:
+        raise
+    except Exception as e:
+        logger.error(f"Error syncing playlist from Spotify: {str(e)}", exc_info=True)
+        raise InternalServerError(f"Failed to sync playlist: {str(e)}")
+

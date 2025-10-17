@@ -268,6 +268,43 @@ class SpotifyAPIClient:
         """
         return await self._get(f"/tracks/{track_id}", access_token)
     
+    async def get_playlist_tracks(
+        self,
+        access_token: str,
+        playlist_id: str,
+        limit: int = 100,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """Get tracks from a playlist.
+        
+        Args:
+            access_token: Spotify access token
+            playlist_id: Spotify playlist ID
+            limit: Number of tracks to return (max 100)
+            offset: Offset for pagination
+            
+        Returns:
+            Playlist tracks data
+        """
+        params = {"limit": limit, "offset": offset}
+        return await self._get(f"/playlists/{playlist_id}/tracks", access_token, params=params)
+    
+    async def get_playlist(
+        self,
+        access_token: str,
+        playlist_id: str
+    ) -> Dict[str, Any]:
+        """Get playlist details.
+        
+        Args:
+            access_token: Spotify access token
+            playlist_id: Spotify playlist ID
+            
+        Returns:
+            Playlist details including snapshot_id
+        """
+        return await self._get(f"/playlists/{playlist_id}", access_token)
+    
     async def refresh_token(self, refresh_token: str) -> Dict[str, Any]:
         """Refresh Spotify access token.
         
