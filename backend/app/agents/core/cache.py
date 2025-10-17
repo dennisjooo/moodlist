@@ -1,11 +1,9 @@
 """Caching utilities for the agentic system."""
 
-import asyncio
 import hashlib
-import json
 import pickle
-from typing import Any, Dict, List, Optional, Union
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 import structlog
 
 try:
