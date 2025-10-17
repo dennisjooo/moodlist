@@ -149,6 +149,7 @@ This should be tackled **immediately after Phase 2** (or even in parallel) becau
 3. **Consolidate Spotify auth flows**: Centralize `initiateSpotifyAuth` usage and login guard dialogs to avoid scattered checks.
 4. **Unify notifications & toasts**: Replace ad-hoc `toast` usage with a `useToast` helper that enforces consistent copy and severity levels.
 5. **Shared utility cleanup**: Move duplicated helpers into `src/lib` (e.g., string formatting, date/time) and write unit tests.
+6. **Logging & refresh hygiene**: Strip `console.log` debugging, replace `window.location.reload()` usages with router/state updates, and add a lightweight logger utility for structured diagnostics.
 
 ### Potential Challenges
 - Some duplication may exist to support divergent visual styles; confirm design alignment before merging.

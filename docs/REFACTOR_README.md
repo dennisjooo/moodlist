@@ -28,6 +28,18 @@ This directory contains comprehensive documentation for refactoring the MoodList
 
 **When to use:** Reference this during implementation to see concrete examples and patterns.
 
+### 3. [Code Cleanup Checklist](./code-cleanup-checklist.md)
+**Targeted list of tactical cleanups** uncovered during planning.
+
+**Key Contents:**
+- Console logging & reload hygiene tasks
+- Loading indicator consolidation
+- Config/magic number centralization
+- Error handling and TypeScript improvements
+- Quick wins prioritized by effort & impact
+
+**When to use:** Use this as a punch-list for cleanup work alongside larger refactor phases.
+
 ## Critical Issue: Auth Performance
 
 ### Problem
