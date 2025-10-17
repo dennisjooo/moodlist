@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { playlistAPI } from '@/lib/playlistApi';
 import { useWorkflow } from '@/lib/workflowContext';
-import { Download, Edit, ExternalLink, Loader2, Music, Star, Trash2 } from 'lucide-react';
+import { Download, Edit, ExternalLink, Loader2, Music, RefreshCw, Star, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
@@ -27,9 +27,11 @@ interface PlaylistResultsProps {
 
 export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResultsProps = {}) {
   const router = useRouter();
-  const { workflowState, saveToSpotify, resetWorkflow } = useWorkflow();
+  const { workflowState, saveToSpotify, syncFromSpotify, resetWorkflow } = useWorkflow();
   const [isSaving, setIsSaving] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [syncSuccess, setSyncSuccess] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
@@ -43,6 +45,32 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
       setSaveError(error instanceof Error ? error.message : 'Failed to save playlist');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSyncFromSpotify = async () => {
+    setIsSyncing(true);
+    setSaveError(null);
+    setSyncSuccess(null);
+
+    try {
+      const result = await syncFromSpotify();
+      if (result.synced) {
+        const changes = result.changes;
+        if (changes && (changes.tracks_added > 0 || changes.tracks_removed > 0)) {
+          setSyncSuccess(`Synced! ${changes.tracks_added > 0 ? `Added ${changes.tracks_added} track(s). ` : ''}${changes.tracks_removed > 0 ? `Removed ${changes.tracks_removed} track(s).` : ''}`);
+        } else {
+          setSyncSuccess('Playlist is up to date!');
+        }
+        // Clear success message after 5 seconds
+        setTimeout(() => setSyncSuccess(null), 5000);
+      } else {
+        setSaveError(result.message || 'Could not sync playlist');
+      }
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Failed to sync from Spotify');
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -106,6 +134,16 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
             <div className="flex items-center gap-2">
               {hasSavedToSpotify ? (
                 <>
+                  <Button
+                    variant="outline"
+                    onClick={handleSyncFromSpotify}
+                    size="lg"
+                    disabled={isSyncing}
+                    className="p-2"
+                    title="Sync from Spotify"
+                  >
+                    <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
+                  </Button>
                   <Button
                     variant="outline"
                     onClick={handleEditClick}
@@ -182,6 +220,11 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
           {saveError && (
             <div className="mt-4 p-3 bg-red-100 dark:bg-red-950/50 border border-red-300 dark:border-red-800 rounded-md">
               <p className="text-sm text-red-800 dark:text-red-200">{saveError}</p>
+            </div>
+          )}
+          {syncSuccess && (
+            <div className="mt-4 p-3 bg-green-100 dark:bg-green-950/50 border border-green-300 dark:border-green-800 rounded-md">
+              <p className="text-sm text-green-800 dark:text-green-200">{syncSuccess}</p>
             </div>
           )}
         </CardContent>
