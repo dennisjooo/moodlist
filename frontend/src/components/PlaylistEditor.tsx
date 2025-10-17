@@ -17,7 +17,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -173,7 +173,15 @@ export default function PlaylistEditor({
   onCancel
 }: PlaylistEditorProps) {
   const { applyCompletedEdit, saveToSpotify, searchTracks } = useWorkflow();
-  const [tracks, setTracks] = useState<Track[]>(recommendations);
+
+  // Deduplicate recommendations by track_id to prevent React key conflicts
+  const deduplicatedRecommendations = useMemo(() =>
+    recommendations.filter((track, index, arr) =>
+      arr.findIndex(t => t.track_id === track.track_id) === index
+    ), [recommendations]
+  );
+
+  const [tracks, setTracks] = useState<Track[]>(deduplicatedRecommendations);
   const [removingTracks, setRemovingTracks] = useState<Set<string>>(new Set());
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [editReasoning, setEditReasoning] = useState('');
@@ -191,8 +199,8 @@ export default function PlaylistEditor({
 
   // Sync tracks when recommendations prop changes (from context updates)
   useEffect(() => {
-    setTracks(recommendations);
-  }, [recommendations]);
+    setTracks(deduplicatedRecommendations);
+  }, [deduplicatedRecommendations]);
 
   // Cleanup search timeout on unmount
   useEffect(() => {
@@ -255,7 +263,7 @@ export default function PlaylistEditor({
       await applyCompletedEdit('remove', { trackId });
     } catch (error) {
       // Revert on error
-      setTracks(recommendations);
+      setTracks(deduplicatedRecommendations);
       const errorMessage = error instanceof Error ? error.message : 'Failed to remove track';
       setError(errorMessage);
       console.error('Failed to remove track:', error);
@@ -266,7 +274,7 @@ export default function PlaylistEditor({
         return newSet;
       });
     }
-  }, [applyCompletedEdit, recommendations]);
+  }, [applyCompletedEdit, deduplicatedRecommendations]);
 
   const handleFinalize = useCallback(() => {
     // Just close the editor, don't auto-save to Spotify
@@ -274,9 +282,9 @@ export default function PlaylistEditor({
   }, [onSave]);
 
   const handleReset = useCallback(() => {
-    setTracks(recommendations);
+    setTracks(deduplicatedRecommendations);
     setEditReasoning('');
-  }, [recommendations]);
+  }, [deduplicatedRecommendations]);
 
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
