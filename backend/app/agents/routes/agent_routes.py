@@ -17,6 +17,8 @@ from ...core.exceptions import NotFoundException, InternalServerError, Validatio
 from ...auth.dependencies import require_auth, refresh_spotify_token_if_expired
 from ...models.user import User
 from ...models.playlist import Playlist
+from ...dependencies import get_playlist_repository
+from ...repositories.playlist_repository import PlaylistRepository
 from ..workflows.workflow_manager import WorkflowManager, WorkflowConfig
 from ..tools.reccobeat_service import RecoBeatService
 from ..tools.spotify_service import SpotifyService
@@ -123,9 +125,6 @@ async def start_recommendation(
         Workflow session information
     """
     try:
-        from ...dependencies import get_playlist_repository
-        from ...repositories.playlist_repository import PlaylistRepository
-        
         logger.info(f"Starting recommendation workflow for user {current_user.id}, mood: {mood_prompt}")
 
         # Refresh Spotify token if expired before starting workflow
