@@ -47,6 +47,7 @@ This plan outlines a phased approach for refactoring the MoodList frontend (Next
 3. **State ownership plan**: Determine what remains in client contexts (e.g., workflow state) versus new server components or React cache, considering Next.js 15 capabilities.
 4. **Data-fetching strategy**: Document when to use server actions, route handlers, or client fetches—especially for playlist CRUD and Spotify proxy calls.
 5. **Dependency evaluation**: Decide whether to introduce helpers (e.g., TanStack Query) or extend current utilities (`workflowApi`, `playlistApi`).
+6. **Authentication lifecycle design**: Audit `/api/auth/verify` usage, model a faster verification flow (e.g., SSR session checks + client revalidation), and define how protected routes block rendering until auth state is known.
 
 ### Potential Challenges
 - Balancing server vs. client component boundaries without rewriting business logic.
@@ -55,6 +56,61 @@ This plan outlines a phased approach for refactoring the MoodList frontend (Next
 ### Best Practices
 - Produce architecture diagrams (component tree + data flow) and circulate for review.
 - Favor composition over inheritance; design APIs that are prop-driven and tree-shakeable.
+
+---
+
+## Phase 2.5 – Authentication Flow Optimization (Critical Fix)
+
+### Objectives
+- Fix slow and refresh-unsafe `/auth/verify` behavior that causes protected pages to flash or redirect incorrectly.
+- Implement optimistic auth state from cookies to prevent race conditions on page refresh.
+- Ensure protected routes can load instantly with cached auth state while revalidating in the background.
+
+### Current Problems Identified
+- **Slow verification**: Every protected page calls `/auth/verify` on mount, adding network latency before rendering.
+- **Refresh race condition**: When refreshing `/playlists/[id]`, the page loads before auth verification completes, causing incorrect redirects.
+- **Multiple redundant calls**: Each component that checks `isAuthenticated` may trigger separate verification flows.
+- **No SSR auth**: All auth checks happen client-side, missing opportunities for server-side verification.
+
+### Detailed Steps
+1. **Implement optimistic cookie-based auth state**:
+   - Parse `session_token` cookie on AuthProvider mount to immediately set `isAuthenticated: true` (optimistic).
+   - Set `isValidated: false` until backend verification completes.
+   - Expose both states so UI can render protected content immediately while showing subtle "verifying" indicators if needed.
+
+2. **Add Next.js middleware for auth**:
+   - Create `middleware.ts` to check session cookies on protected routes (`/create/*`, `/playlists`, `/playlist/*`, `/profile`).
+   - Redirect to `/` with `?auth=required` query param if no session cookie exists (server-side, instant).
+   - This prevents protected pages from rendering at all for unauthenticated users.
+
+3. **Lazy revalidation pattern**:
+   - Move `/auth/verify` call to background after initial optimistic render.
+   - Use `stale-while-revalidate` pattern: trust cookie initially, verify async, update state only if mismatch detected.
+   - Add exponential backoff for failed verifications to prevent API spam.
+
+4. **Centralize auth loading states**:
+   - Create `<AuthGuard>` wrapper component for protected routes that shows skeleton until `isValidated: true`.
+   - Pages can opt into instant rendering with optimistic state or wait for full validation.
+
+5. **Add auth state caching**:
+   - Store user object in SessionStorage with short TTL (1-2 minutes).
+   - Check cache before making `/auth/verify` request to skip redundant network calls during navigation.
+
+### Implementation Priority
+This should be tackled **immediately after Phase 2** (or even in parallel) because:
+- It's a critical UX issue affecting all protected routes
+- It blocks effective testing of other refactors
+- The fix is relatively isolated and won't conflict with other phases
+
+### Potential Challenges
+- Middleware redirects may interfere with OAuth callback flow (`/callback` must be excluded).
+- Optimistic rendering could show protected content briefly before catching expired sessions.
+- SessionStorage caching needs proper invalidation on logout/token refresh.
+
+### Best Practices
+- Always exclude `/callback` and `/api/*` from middleware auth checks.
+- Emit custom events (`auth-validated`, `auth-expired`) for components to react to state changes.
+- Document the auth state machine clearly: `unknown -> optimistic -> validated` or `unknown -> unauthenticated`.
 
 ---
 
@@ -69,7 +125,7 @@ This plan outlines a phased approach for refactoring the MoodList frontend (Next
 2. **Decompose workflow screens**: In `/create` and `/create/[id]`, isolate mood input, loading states, editor, and results into distinct components with clear contracts.
 3. **Extract playlist widgets**: Move repeated track list UI from `PlaylistEditor`, `PlaylistResults`, and `PlaylistCard` into shared subcomponents (e.g., `TrackRow`, `TrackList`, `TrackActions`).
 4. **Normalize form primitives**: Reuse components from `src/components/ui` and add any missing ones (Stepper, Tabs) following Tailwind CSS v4 conventions.
-5. **Introduce hooks for side effects**: Replace inline `useEffect` logic with named hooks (`useWorkflowSession`, `useAuthRedirect`) to improve readability.
+5. **Introduce hooks for side effects**: Replace inline `useEffect` logic with named hooks (`useWorkflowSession`, `useAuthRedirect`) and adopt the shared `<AuthGuard>` for protected pages to improve readability and consistency.
 
 ### Potential Challenges
 - Untangling intertwined state (e.g., workflow session resets triggered by router changes).
