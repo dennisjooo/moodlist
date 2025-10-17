@@ -315,3 +315,203 @@ class UserRepository(BaseRepository[User]):
                 error=str(e)
             )
             raise
+
+    async def get_active_user_by_spotify_id(self, spotify_id: str, load_relationships: Optional[List[str]] = None) -> Optional[User]:
+        """Get active user by Spotify ID.
+
+        Args:
+            spotify_id: Spotify user ID
+            load_relationships: List of relationship names to eagerly load
+
+        Returns:
+            Active user instance or None if not found or inactive
+        """
+        try:
+            query = select(User).where(
+                and_(
+                    User.spotify_id == spotify_id,
+                    User.is_active == True
+                )
+            )
+
+            if load_relationships:
+                for relationship in load_relationships:
+                    query = query.options(selectinload(getattr(User, relationship)))
+
+            result = await self.session.execute(query)
+            user = result.scalar_one_or_none()
+
+            if user:
+                self.logger.debug("Active user retrieved by Spotify ID", spotify_id=spotify_id)
+            else:
+                self.logger.debug("Active user not found for Spotify ID", spotify_id=spotify_id)
+
+            return user
+
+        except Exception as e:
+            self.logger.error(
+                "Database error retrieving active user by Spotify ID",
+                spotify_id=spotify_id,
+                error=str(e)
+            )
+            raise
+
+    async def get_active_user_by_id(self, user_id: int, load_relationships: Optional[List[str]] = None) -> Optional[User]:
+        """Get active user by ID.
+
+        Args:
+            user_id: User ID
+            load_relationships: List of relationship names to eagerly load
+
+        Returns:
+            Active user instance or None if not found or inactive
+        """
+        try:
+            query = select(User).where(
+                and_(
+                    User.id == user_id,
+                    User.is_active == True
+                )
+            )
+
+            if load_relationships:
+                for relationship in load_relationships:
+                    query = query.options(selectinload(getattr(User, relationship)))
+
+            result = await self.session.execute(query)
+            user = result.scalar_one_or_none()
+
+            if user:
+                self.logger.debug("Active user retrieved by ID", user_id=user_id)
+            else:
+                self.logger.debug("Active user not found for ID", user_id=user_id)
+
+            return user
+
+        except Exception as e:
+            self.logger.error(
+                "Database error retrieving active user by ID",
+                user_id=user_id,
+                error=str(e)
+            )
+            raise
+
+    async def create_or_update_user(
+        self,
+        spotify_id: str,
+        access_token: str,
+        refresh_token: str,
+        token_expires_at: datetime,
+        display_name: str,
+        email: Optional[str] = None,
+        profile_image_url: Optional[str] = None,
+        commit: bool = True
+    ) -> User:
+        """Create a new user or update existing user's tokens and profile.
+
+        Args:
+            spotify_id: Spotify user ID
+            access_token: Spotify access token
+            refresh_token: Spotify refresh token
+            token_expires_at: Token expiration timestamp
+            display_name: User display name
+            email: User email (optional)
+            profile_image_url: Profile image URL (optional)
+            commit: Whether to commit the transaction
+
+        Returns:
+            Created or updated user instance
+        """
+        try:
+            existing_user = await self.get_by_spotify_id(spotify_id)
+
+            if existing_user:
+                existing_user.access_token = access_token
+                existing_user.refresh_token = refresh_token
+                existing_user.token_expires_at = token_expires_at
+                existing_user.display_name = display_name
+                if email:
+                    existing_user.email = email
+                if profile_image_url:
+                    existing_user.profile_image_url = profile_image_url
+                existing_user.is_active = True
+
+                if commit:
+                    await self.session.commit()
+                    await self.session.refresh(existing_user)
+                else:
+                    await self.session.flush()
+
+                self.logger.info("Updated existing user", user_id=existing_user.id, spotify_id=spotify_id)
+                return existing_user
+            else:
+                user = User(
+                    spotify_id=spotify_id,
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    token_expires_at=token_expires_at,
+                    display_name=display_name,
+                    email=email,
+                    profile_image_url=profile_image_url,
+                    is_active=True
+                )
+
+                self.session.add(user)
+
+                if commit:
+                    await self.session.commit()
+                    await self.session.refresh(user)
+                else:
+                    await self.session.flush()
+
+                self.logger.info("Created new user", user_id=getattr(user, "id", None), spotify_id=spotify_id)
+                return user
+
+        except Exception as e:
+            self.logger.error(
+                "Database error creating or updating user",
+                spotify_id=spotify_id,
+                error=str(e)
+            )
+            await self.session.rollback()
+            raise
+
+    async def update_tokens_and_commit(
+        self,
+        user_id: int,
+        access_token: str,
+        refresh_token: str,
+        token_expires_at: datetime
+    ) -> User:
+        """Update user tokens and commit the transaction.
+
+        Args:
+            user_id: User ID
+            access_token: New access token
+            refresh_token: New refresh token
+            token_expires_at: Token expiration timestamp
+
+        Returns:
+            Updated user instance
+        """
+        try:
+            user = await self.get_by_id_or_fail(user_id)
+
+            user.access_token = access_token
+            user.refresh_token = refresh_token
+            user.token_expires_at = token_expires_at
+
+            await self.session.commit()
+            await self.session.refresh(user)
+
+            self.logger.info("User tokens updated", user_id=user_id)
+            return user
+
+        except Exception as e:
+            self.logger.error(
+                "Database error updating user tokens",
+                user_id=user_id,
+                error=str(e)
+            )
+            await self.session.rollback()
+            raise

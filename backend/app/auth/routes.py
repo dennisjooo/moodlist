@@ -5,7 +5,6 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
 
 from app.core.constants import SessionConstants
 from app.core.exceptions import SpotifyAuthError, UnauthorizedException, InternalServerError
@@ -28,6 +27,9 @@ from app.auth.schemas import (
     RefreshTokenRequest,
     AuthResponse
 )
+from app.repositories.user_repository import UserRepository
+from app.repositories.session_repository import SessionRepository
+from app.dependencies import get_user_repository, get_session_repository
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -40,7 +42,8 @@ async def register(
     request: Request,
     user_data: UserCreate,
     response: Response,
-    db: AsyncSession = Depends(get_db)
+    user_repo: UserRepository = Depends(get_user_repository),
+    session_repo: SessionRepository = Depends(get_session_repository)
 ):
     """Register a new user by fetching profile from Spotify."""
     logger.info("Registration attempt with Spotify token")
@@ -58,69 +61,39 @@ async def register(
     
     logger.info("Profile fetched successfully", spotify_id=profile_data["id"])
     
-    # Check if user already exists
-    result = await db.execute(
-        select(User).where(User.spotify_id == profile_data["id"])
-    )
-    existing_user = result.scalar_one_or_none()
+    # Create or update user
+    profile_image_url = None
+    if profile_data.get("images") and len(profile_data["images"]) > 0:
+        profile_image_url = profile_data["images"][0]["url"]
     
-    if existing_user:
-        # Update existing user's tokens and profile
-        existing_user.access_token = user_data.access_token
-        existing_user.refresh_token = user_data.refresh_token
-        existing_user.token_expires_at = user_data.token_expires_at
-        existing_user.display_name = profile_data.get("display_name", existing_user.display_name)
-        existing_user.email = profile_data.get("email", existing_user.email)
-        if profile_data.get("images"):
-            existing_user.profile_image_url = profile_data["images"][0]["url"]
-        existing_user.is_active = True
-        
-        await db.commit()
-        await db.refresh(existing_user)
-        user = existing_user
-        logger.info("Updated existing user", user_id=user.id, spotify_id=user.spotify_id)
-    else:
-        # Create new user
-        profile_image_url = None
-        if profile_data.get("images") and len(profile_data["images"]) > 0:
-            profile_image_url = profile_data["images"][0]["url"]
-            
-        user = User(
-            spotify_id=profile_data["id"],
-            email=profile_data.get("email"),
-            display_name=profile_data.get("display_name", "Unknown User"),
-            access_token=user_data.access_token,
-            refresh_token=user_data.refresh_token,
-            token_expires_at=user_data.token_expires_at,
-            profile_image_url=profile_image_url,
-            is_active=True
-        )
-        
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-        logger.info("Created new user", user_id=user.id, spotify_id=user.spotify_id)
+    user = await user_repo.create_or_update_user(
+        spotify_id=profile_data["id"],
+        access_token=user_data.access_token,
+        refresh_token=user_data.refresh_token,
+        token_expires_at=user_data.token_expires_at,
+        display_name=profile_data.get("display_name", "Unknown User"),
+        email=profile_data.get("email"),
+        profile_image_url=profile_image_url,
+        commit=True
+    )
+    
+    logger.info("User created/updated", user_id=user.id, spotify_id=user.spotify_id)
     
     # Create session
     session_token = generate_session_token()
     expires_at = datetime.now(timezone.utc) + timedelta(hours=SessionConstants.EXPIRATION_HOURS)
 
     # Clean up any existing sessions for this user to prevent conflicts
-    await db.execute(
-        Session.__table__.delete().where(Session.user_id == user.id)
-    )
+    await session_repo.delete_user_sessions(user.id)
 
-    session = Session(
+    session = await session_repo.create_session_for_user(
         user_id=user.id,
         session_token=session_token,
         ip_address=request.client.host,
         user_agent=request.headers.get("user-agent"),
-        expires_at=expires_at
+        expires_at=expires_at,
+        commit=True
     )
-
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
 
     # Set session cookie using utility
     set_session_cookie(response, session_token)
@@ -143,7 +116,7 @@ async def register(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
     refresh_data: RefreshTokenRequest,
-    db: AsyncSession = Depends(get_db)
+    user_repo: UserRepository = Depends(get_user_repository)
 ):
     """Refresh access token using refresh token."""
     logger.info("Token refresh attempt")
@@ -154,15 +127,7 @@ async def refresh_token(
         raise UnauthorizedException("Invalid refresh token")
     
     # Get user
-    result = await db.execute(
-        select(User).where(
-            and_(
-                User.spotify_id == payload["sub"],
-                User.is_active == True
-            )
-        )
-    )
-    user = result.scalar_one_or_none()
+    user = await user_repo.get_active_user_by_spotify_id(payload["sub"])
     
     if not user:
         raise UnauthorizedException("User not found")
@@ -186,7 +151,7 @@ async def refresh_token(
 async def logout(
     response: Response,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    session_repo: SessionRepository = Depends(get_session_repository),
     current_user: Optional[User] = Depends(require_auth)
 ):
     """Logout user and clear session."""
@@ -197,11 +162,7 @@ async def logout(
     if current_user:
         session_token = request.cookies.get(SessionConstants.COOKIE_NAME)
         if session_token:
-            # Delete the session record from database
-            await db.execute(
-                Session.__table__.delete().where(Session.session_token == session_token)
-            )
-            await db.commit()
+            await session_repo.delete_by_token(session_token)
 
         logger.info("Logout successful", user_id=current_user.id, spotify_id=current_user.spotify_id)
 

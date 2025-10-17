@@ -154,8 +154,12 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         processing_time_ms: int
     ):
         """Create invocation log entry."""
-        invocation = Invocation(
+        from app.repositories.invocation_repository import InvocationRepository
+        
+        invocation_repo = InvocationRepository(db)
+        await invocation_repo.create_invocation_log(
             user_id=user.id if user else None,
+            playlist_id=None,
             endpoint=request.url.path,
             method=request.method,
             status_code=status_code,
@@ -164,11 +168,9 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             error_message=error_message,
             processing_time_ms=processing_time_ms,
             ip_address=request.client.host,
-            user_agent=request.headers.get("user-agent")
+            user_agent=request.headers.get("user-agent"),
+            commit=True
         )
-        
-        db.add(invocation)
-        await db.commit()
 
 
 class InvocationStatusMiddleware(BaseHTTPMiddleware):
