@@ -11,7 +11,6 @@ from .anchor_selection import (
     get_anchor_finalization_prompt,
 )
 from .track_filtering import (
-    get_track_relevance_prompt,
     get_artist_validation_prompt,
     get_batch_track_filter_prompt,
 )
@@ -24,7 +23,6 @@ __all__ = [
     "get_anchor_strategy_prompt",
     "get_anchor_scoring_prompt",
     "get_anchor_finalization_prompt",
-    "get_track_relevance_prompt",
     "get_artist_validation_prompt",
     "get_batch_track_filter_prompt",
     "get_batch_artist_validation_prompt"
