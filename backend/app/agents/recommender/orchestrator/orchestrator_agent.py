@@ -86,7 +86,7 @@ class OrchestratorAgent(BaseAgent):
             quality_evaluation = await self.perform_iterative_improvement(state)
 
             # Final processing and cleanup
-            state = self.perform_final_processing(state, quality_evaluation)
+            state = await self.perform_final_processing(state, quality_evaluation)
 
             logger.info(
                 f"Orchestration completed with {len(state.recommendations)} unique recommendations "
@@ -162,27 +162,108 @@ class OrchestratorAgent(BaseAgent):
 
             # Small delay between iterations
             await asyncio.sleep(0.1)
+            
+            # Remove duplicates
+            state.recommendations = self.recommendation_processor.remove_duplicates(state.recommendations)
 
         return quality_evaluation
 
-    def perform_final_processing(self, state: AgentState, quality_evaluation: Dict[str, Any]) -> AgentState:
-        """Perform final processing and cleanup."""
-        # Final state update
-        state.current_step = "recommendations_ready"
-        state.metadata["final_quality_evaluation"] = quality_evaluation
-
+    async def perform_final_processing(self, state: AgentState, quality_evaluation: Dict[str, Any]) -> AgentState:
+        """Perform final processing and cleanup with outlier filtering."""
+        logger.info("Starting final processing and cleanup...")
+        
         # Remove duplicates
         state.recommendations = self.recommendation_processor.remove_duplicates(state.recommendations)
+        
+        # Run final quality evaluation to get fresh outlier list
+        final_evaluation = await self.quality_evaluator.evaluate_playlist_quality(state)
+        state.metadata["final_quality_evaluation"] = final_evaluation
+        
+        # Filter out outliers from final recommendations (but keep protected tracks)
+        outlier_ids = set(final_evaluation.get("outlier_tracks", []))
+        if outlier_ids:
+            original_count = len(state.recommendations)
+            filtered_recommendations = []
+            protected_kept = 0
+            
+            for rec in state.recommendations:
+                if rec.track_id in outlier_ids:
+                    # CRITICAL: Never filter protected tracks (user-mentioned)
+                    if rec.protected or rec.user_mentioned:
+                        logger.info(
+                            f"Keeping outlier because it's protected: {rec.track_name} by {', '.join(rec.artists)}"
+                        )
+                        filtered_recommendations.append(rec)
+                        protected_kept += 1
+                    else:
+                        logger.info(
+                            f"Filtering outlier from final playlist: {rec.track_name} by {', '.join(rec.artists)} "
+                            f"(cohesion: {final_evaluation['track_scores'].get(rec.track_id, 0):.2f})"
+                        )
+                else:
+                    filtered_recommendations.append(rec)
+            
+            state.recommendations = filtered_recommendations
+            
+            logger.info(
+                f"Final outlier filtering: removed {original_count - len(filtered_recommendations)} tracks "
+                f"({protected_kept} protected tracks kept despite being outliers)"
+            )
+            
+            # Check if we're below target after filtering - regenerate to meet target
+            playlist_target = state.metadata.get("playlist_target", {})
+            target_count = playlist_target.get("target_count", 20)
+            min_count = playlist_target.get("min_count", 15)
 
-        # Cap recommendations at max_count to respect target plan
+            if len(state.recommendations) < target_count:
+                shortfall = target_count - len(state.recommendations)
+                logger.warning(
+                    f"Below target after filtering ({len(state.recommendations)} < {target_count}). "
+                    f"Generating {shortfall} additional recommendations..."
+                )
+
+                # Use remaining good tracks as seeds
+                if state.recommendations:
+                    state.seed_tracks = [rec.track_id for rec in state.recommendations[:5]]
+
+                # Generate enough to reach target (recommendation generator will add to existing)
+                # Store current count to know how many were added
+                before_count = len(state.recommendations)
+                state = await self.recommendation_generator.run_with_error_handling(state)
+                added_count = len(state.recommendations) - before_count
+
+                logger.info(f"Added {added_count} tracks, now have {len(state.recommendations)} total")
+            elif len(state.recommendations) < min_count:
+                # Emergency regeneration if somehow below minimum
+                logger.error(f"Critical: Below minimum after filtering ({len(state.recommendations)} < {min_count})")
+                if state.recommendations:
+                    state.seed_tracks = [rec.track_id for rec in state.recommendations[:5]]
+                state = await self.recommendation_generator.run_with_error_handling(state)
+        
+
+        # Enforce ratio respecting the target count
         playlist_target = state.metadata.get("playlist_target", {})
+        target_count = playlist_target.get("target_count", 20)
         max_count = playlist_target.get("max_count", 30)
 
-        # Enforce 95:5 ratio (95% artist, 5% RecoBeat) even after iterations
+        # Use target_count as the limit since we regenerated to meet it
+        # But cap at max_count as a safety measure
+        final_limit = min(target_count, max_count, len(state.recommendations))
+
+        # Enforce 95:5 ratio (95% artist, 5% RecoBeat) at the target count
         state.recommendations = self.recommendation_processor.enforce_source_ratio(
             recommendations=state.recommendations,
-            max_count=max_count,
+            max_count=final_limit,
             artist_ratio=0.95
+        )
+        
+        # Final state update
+        state.current_step = "recommendations_ready"
+        
+        logger.info(
+            f"Final processing complete: {len(state.recommendations)} tracks delivered "
+            f"(cohesion: {final_evaluation['cohesion_score']:.2f}, "
+            f"overall: {final_evaluation['overall_score']:.2f})"
         )
 
         return state
