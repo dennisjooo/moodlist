@@ -127,9 +127,10 @@ class QualityEvaluator:
             # Adjust overall score based on LLM assessment
             if llm_assessment:
                 llm_score = llm_assessment.get("quality_score", 0.5)
-                # Blend algorithmic and LLM scores (70% algo, 30% LLM)
+                # Blend algorithmic and LLM scores (50% algo, 50% LLM)
+                # LLM is better at detecting language/genre/cultural mismatches
                 evaluation["overall_score"] = (
-                    evaluation["overall_score"] * 0.7 + llm_score * 0.3
+                    evaluation["overall_score"] * 0.5 + llm_score * 0.5
                 )
                 
                 # Update issues with LLM insights
@@ -153,20 +154,13 @@ class QualityEvaluator:
                     )
 
         # Check if meets threshold using target's quality threshold
-        # Relaxed: cohesion >= 0.65 AND overall >= 0.60 OR (cohesion >= 0.70 with some outliers)
-        meets_strict = (
-            evaluation["cohesion_score"] >= self.cohesion_threshold and
-            len(recommendations) >= target_count and
-            len(evaluation["outlier_tracks"]) == 0 and
-            evaluation["overall_score"] >= quality_threshold
-        )
-        meets_relaxed = (
-            evaluation["cohesion_score"] >= 0.65 and
-            evaluation["overall_score"] >= 0.60 and
+        # More relaxed since LLM handles cultural/genre matching and we filter outliers in final processing
+        meets_quality = (
+            evaluation["overall_score"] >= quality_threshold and  # LLM-weighted score
             len(recommendations) >= min_count and
-            len(evaluation["outlier_tracks"]) <= 2  # Allow up to 2 minor outliers
+            len(evaluation["outlier_tracks"]) <= len(recommendations) // 3  # Allow up to 1/3 outliers (will be filtered)
         )
-        evaluation["meets_threshold"] = meets_strict or meets_relaxed
+        evaluation["meets_threshold"] = meets_quality
 
         return evaluation
 
