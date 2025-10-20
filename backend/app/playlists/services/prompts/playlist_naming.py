@@ -21,9 +21,8 @@ def get_playlist_naming_prompt(mood_prompt: str, track_count: int) -> str:
     - Make it catchy and relevant to the mood
     - Avoid generic names like "My Playlist"
     - Consider the energy and emotion of the mood
-
-    Do not use a subtitle and track count in the name. 
-    Example: "Playlist: A Playlist" or "Playlist: A Playlist with 10 tracks" are not allowed.
+    - DO NOT use a subtitle and track count in the name. 
+    Example you should avoid: "Playlist: A Playlist" or "Playlist: A Playlist with 10 tracks" are not allowed.
 
     Return only the playlist name, nothing else.
     """
