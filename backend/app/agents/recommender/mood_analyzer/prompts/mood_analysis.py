@@ -61,6 +61,20 @@ CRITICAL: Always suggest specific artist names that match the mood:
   * This is CRUCIAL for artist discovery - more artists = more diverse playlist
 - genre_keywords: Genre terms and mood descriptors (e.g., "indie", "city pop", "jazz", "electronic", "chill")
 
+CRITICAL: Determine the cultural/regional context of the music request:
+- preferred_regions: List of regions that match the request (e.g., ["Western", "French", "European"] for "French funk")
+- excluded_regions: List of regions to avoid (e.g., ["Indonesian", "Southeast Asian", "Eastern European"] for "French funk")
+
+Common regional categories:
+- Western: USA, UK, Canada, Australia (English-speaking mainstream)
+- European: France, Germany, Netherlands, Belgium, Sweden, etc.
+- French: Specifically French artists/culture
+- Asian: Korea, Japan, China (K-pop, J-pop, C-pop)
+- Southeast Asian: Indonesia, Malaysia, Thailand, Philippines, Vietnam
+- Eastern European: Poland, Russia, Czech, etc.
+- Latin American: Brazil, Mexico, Argentina, etc.
+- Middle Eastern: Arabic, Persian, Turkish, Israeli
+
 Provide your analysis in valid JSON format with this structure:
 {
   "mood_interpretation": "Clear description of the intended mood",
@@ -79,6 +93,8 @@ Provide your analysis in valid JSON format with this structure:
   "search_keywords": ["indie", "alternative", "underground"],
   "artist_recommendations": ["Artist Name 1", "Artist Name 2"],
   "genre_keywords": ["indie", "alternative", "rock"],
+  "preferred_regions": ["Western", "European"],
+  "excluded_regions": ["Southeast Asian", "Indonesian"],
   "reasoning": "Explanation of feature choices and mood interpretation"
 }"""
 
