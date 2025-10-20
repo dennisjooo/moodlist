@@ -19,6 +19,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { logger } from '@/lib/utils/logger';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -244,7 +245,7 @@ export default function PlaylistEditor({
           setTracks(tracks);
           const errorMessage = error instanceof Error ? error.message : 'Failed to reorder track';
           toast.error(errorMessage);
-          console.error('Failed to reorder track:', error);
+          logger.error('Failed to reorder track', error, { component: 'PlaylistEditor', sessionId });
         }
       }
     }
@@ -264,7 +265,7 @@ export default function PlaylistEditor({
       setTracks(deduplicatedRecommendations);
       const errorMessage = error instanceof Error ? error.message : 'Failed to remove track';
       toast.error(errorMessage);
-      console.error('Failed to remove track:', error);
+      logger.error('Failed to remove track', error, { component: 'PlaylistEditor', trackId });
     } finally {
       setRemovingTracks(prev => {
         const newSet = new Set(prev);
@@ -318,7 +319,7 @@ export default function PlaylistEditor({
           setSearchResults(results.tracks || []);
         }
       } catch (error) {
-        console.error('Search failed:', error);
+        logger.error('Search failed', error, { component: 'PlaylistEditor' });
         // Only show error if this is still the latest search
         if (latestSearchQueryRef.current === currentSearchQuery) {
           toast.error('Failed to search tracks');
@@ -359,7 +360,7 @@ export default function PlaylistEditor({
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to add track';
       toast.error(errorMessage);
-      console.error('Failed to add track:', error);
+      logger.error('Failed to add track', error, { component: 'PlaylistEditor', trackUri });
     } finally {
       setAddingTracks(prev => {
         const newSet = new Set(prev);

@@ -20,6 +20,7 @@ import { Download, Edit, ExternalLink, Loader2, Music, RefreshCw, Star, Trash2 }
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { logger } from '@/lib/utils/logger';
 
 interface PlaylistResultsProps {
   onEdit?: () => void;
@@ -84,7 +85,7 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
       // Navigate back to playlists page
       router.push('/playlists');
     } catch (error) {
-      console.error('Failed to delete playlist:', error);
+      logger.error('Failed to delete playlist', error, { component: 'PlaylistResults', sessionId: workflowState.sessionId });
       toast.error('Failed to delete playlist. Please try again.');
       setIsDeleting(false);
       setShowDeleteDialog(false);
@@ -329,7 +330,7 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
         <Button
           variant="outline"
           onClick={() => {
-            console.log('Create New Playlist button clicked');
+            logger.debug('Create New Playlist button clicked', { component: 'PlaylistResults' });
             resetWorkflow();
             router.replace('/create');
           }}

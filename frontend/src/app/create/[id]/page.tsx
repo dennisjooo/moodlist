@@ -12,6 +12,7 @@ import { useWorkflow } from '@/lib/workflowContext';
 import { ArrowLeft, Sparkles } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
+import { logger } from '@/lib/utils/logger';
 
 // Main content component for dynamic session route
 function CreateSessionPageContent() {
@@ -60,10 +61,14 @@ function CreateSessionPageContent() {
     }, []);
 
     const loadSessionCallback = useCallback(async () => {
-        console.log('[Page] loadSessionCallback called, sessionId:', sessionId, 'state:', {
-            sessionId: workflowState.sessionId,
-            status: workflowState.status,
-            isLoading: workflowState.isLoading,
+        logger.debug('[Page] loadSessionCallback called', {
+            component: 'CreateSessionPage',
+            sessionId,
+            state: {
+                sessionId: workflowState.sessionId,
+                status: workflowState.status,
+                isLoading: workflowState.isLoading,
+            },
         });
 
         if (!sessionId) {
@@ -73,18 +78,18 @@ function CreateSessionPageContent() {
 
         // If we already have this session loaded with status, mark as done
         if (workflowState.sessionId === sessionId && workflowState.status !== null) {
-            console.log('[Page] Session already loaded with status, skipping');
+            logger.debug('[Page] Session already loaded with status, skipping', { component: 'CreateSessionPage', sessionId });
             setIsLoadingSession(false);
             return;
         }
 
         // If workflow is already loading, don't start another load
         if (workflowState.isLoading) {
-            console.log('[Page] Workflow already loading, waiting...');
+            logger.debug('[Page] Workflow already loading, waiting...', { component: 'CreateSessionPage', sessionId });
             return;
         }
 
-        console.log('[Page] Calling loadWorkflow from page component');
+        logger.info('[Page] Calling loadWorkflow from page component', { component: 'CreateSessionPage', sessionId });
         // Load the workflow state from the API
         // The workflowContext will handle waiting for auth to complete
         await loadWorkflow(sessionId);

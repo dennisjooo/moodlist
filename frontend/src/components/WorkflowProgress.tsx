@@ -9,6 +9,7 @@ import { useWorkflow } from '@/lib/workflowContext';
 import { AlertCircle, CheckCircle, Loader2, Music, XCircle, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { logger } from '@/lib/utils/logger';
 
 interface WorkflowProgressProps {
   onComplete?: () => void;
@@ -129,9 +130,9 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
       try {
         const { workflowAPI } = await import('@/lib/workflowApi');
         await workflowAPI.cancelWorkflow(workflowState.sessionId);
-        console.log('Workflow cancelled on backend');
+        logger.info('Workflow cancelled on backend', { component: 'WorkflowProgress', sessionId: workflowState.sessionId });
       } catch (error) {
-        console.error('Failed to cancel workflow on backend:', error);
+        logger.error('Failed to cancel workflow on backend', error, { component: 'WorkflowProgress', sessionId: workflowState.sessionId });
         // Continue with local cleanup even if backend call fails
       }
     }
