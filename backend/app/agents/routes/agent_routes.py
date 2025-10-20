@@ -3,10 +3,9 @@
 import structlog
 
 from fastapi import APIRouter, Depends, BackgroundTasks, Query
-from langchain_openai import ChatOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.config import settings
+from ...core.llm_factory import create_logged_llm
 from ...core.constants import PlaylistStatus
 from ...core.database import get_db
 from ...core.exceptions import NotFoundException, InternalServerError, ValidationException
@@ -32,25 +31,14 @@ logger = structlog.get_logger(__name__)
 reccobeat_service = RecoBeatService()
 spotify_service = SpotifyService()
 
-llm = ChatOpenAI(
-    model="alibaba/tongyi-deepresearch-30b-a3b:free",
-    temperature=1,
-    base_url="https://openrouter.ai/api/v1",
-    api_key=settings.OPENROUTER_API_KEY
-)
-
-groq_llm = ChatOpenAI(
-    model="openai/gpt-oss-120b",
-    temperature=1,
-    base_url="https://api.groq.com/openai/v1",
-    api_key=settings.GROQ_API_KEY
-)
-
-cerebras_llm = ChatOpenAI(
-    model="gpt-oss-120b",
-    temperature=1,
-    base_url="https://api.cerebras.ai/v1",
-    api_key=settings.CEREBRAS_API_KEY
+# Create logged LLM instance
+# Note: DB session will be injected in route handlers for proper request context
+llm = create_logged_llm(
+    db_session=None,  # Will be set per request
+    model="google/gemini-2.5-flash-lite-preview-09-2025",
+    temperature=0.25,
+    enable_logging=True,
+    log_full_response=True
 )
 
 # Create agents with updated dependencies
@@ -63,7 +51,7 @@ mood_analyzer = MoodAnalyzerAgent(
 seed_gatherer = SeedGathererAgent(
     spotify_service=spotify_service,
     reccobeat_service=reccobeat_service,
-    llm=groq_llm,
+    llm=llm,
     verbose=True
 )
 recommendation_generator = RecommendationGeneratorAgent(
@@ -78,8 +66,8 @@ orchestrator = OrchestratorAgent(
     mood_analyzer=mood_analyzer,
     recommendation_generator=recommendation_generator,
     seed_gatherer=seed_gatherer,
-    llm=cerebras_llm,
-    max_iterations=1,
+    llm=llm,
+    max_iterations=5,
     cohesion_threshold=0.75,
     verbose=True
 )
@@ -131,6 +119,9 @@ async def start_recommendation(
         # Refresh Spotify token if expired before starting workflow
         current_user = await refresh_spotify_token_if_expired(current_user, db)
 
+        # Set database session for LLM logging
+        llm.set_db_session(db)
+        
         # Start the workflow with authenticated user's information
         session_id = await workflow_manager.start_workflow(
             mood_prompt=mood_prompt.strip(),
@@ -149,6 +140,13 @@ async def start_recommendation(
             mood_prompt=mood_prompt,
             status=PlaylistStatus.PENDING,
             commit=True
+        )
+        
+        # Set LLM context for logging
+        llm.set_context(
+            user_id=current_user.id,
+            playlist_id=playlist.id,
+            session_id=session_id
         )
         
         logger.info(f"Created playlist record {playlist.id} for session {session_id}")
