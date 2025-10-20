@@ -11,6 +11,7 @@ import { useWorkflow } from '@/lib/workflowContext';
 import { ArrowLeft } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
+import { logger } from '@/lib/utils/logger';
 
 function PlaylistPageContent() {
     const params = useParams();
@@ -87,7 +88,7 @@ function PlaylistPageContent() {
         if (shouldAutoSync) {
             setHasAutoSynced(true);
             syncFromSpotify().catch(error => {
-                console.error('Auto-sync failed:', error);
+                logger.error('Auto-sync failed', error, { component: 'PlaylistPage', sessionId });
             });
         }
     }, [
