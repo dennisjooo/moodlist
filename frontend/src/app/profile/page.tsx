@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/lib/authContext';
 import { getAuthCookies } from '@/lib/cookies';
+import { config } from '@/lib/config';
+import { logger } from '@/lib/utils/logger';
 import { ArrowLeft, Mail, MapPin, Music, User, Users } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -56,7 +58,7 @@ export default function ProfilePage() {
 
     try {
       setProfileLoading(true);
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+      const backendUrl = config.api.baseUrl;
 
       const response = await fetch(`${backendUrl}/api/spotify/profile`, {
         method: 'GET',
@@ -74,10 +76,10 @@ export default function ProfilePage() {
         // Not authenticated, redirect to home
         router.push('/');
       } else {
-        console.error('Failed to fetch Spotify profile');
+        logger.error('Failed to fetch Spotify profile', undefined, { component: 'ProfilePage' });
       }
     } catch (error) {
-      console.error('Error fetching Spotify profile:', error);
+      logger.error('Error fetching Spotify profile', error, { component: 'ProfilePage' });
     } finally {
       setProfileLoading(false);
     }
