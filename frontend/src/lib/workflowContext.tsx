@@ -99,7 +99,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     try {
       // Backend will use the authenticated user's tokens automatically
       const response = await workflowAPI.startWorkflow({
-        mood_prompt: `${moodPrompt} ${genreHint ? `in the genre of ${genreHint}` : ''}`,
+        mood_prompt: `${moodPrompt} ${genreHint ? `in the genre of ${genreHint}` : ''}`.trim(),
       });
 
       setWorkflowState(prev => ({
