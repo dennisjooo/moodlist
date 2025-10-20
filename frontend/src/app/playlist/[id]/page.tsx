@@ -12,6 +12,7 @@ import { ArrowLeft } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
 import { logger } from '@/lib/utils/logger';
+import { AuthGuard } from '@/components/auth/AuthGuard';
 
 function PlaylistPageContent() {
     const params = useParams();
@@ -205,6 +206,10 @@ function PlaylistPageContent() {
 }
 
 export default function PlaylistPage() {
-    return <PlaylistPageContent />;
+    return (
+        <AuthGuard allowOptimistic>
+            <PlaylistPageContent />
+        </AuthGuard>
+    );
 }
 

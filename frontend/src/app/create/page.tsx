@@ -22,7 +22,7 @@ function CreatePageContent() {
   const { isAuthenticated } = useAuth();
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [showLoginDialog, setShowLoginDialog] = useState(false);
-  const { workflowState, startWorkflow, resetWorkflow } = useWorkflow();
+  const { workflowState, startWorkflow, resetWorkflow, refreshResults } = useWorkflow();
 
   // Get mood from URL params if present
   useEffect(() => {
@@ -83,13 +83,23 @@ function CreatePageContent() {
 
 
   const handleEditComplete = () => {
-    // Refresh the page to show final results
-    window.location.reload();
+    // Fetch latest results and navigate to session page
+    try {
+      refreshResults();
+    } catch (e) {
+      logger.error('Failed to refresh results after edit complete', e as Error, { component: 'CreatePage' });
+    } finally {
+      if (workflowState.sessionId) {
+        router.push(`/create/${workflowState.sessionId}`);
+      }
+    }
   };
 
   const handleEditCancel = () => {
-    // Go back to results view
-    window.location.reload();
+    // Return to session page without full reload
+    if (workflowState.sessionId) {
+      router.push(`/create/${workflowState.sessionId}`);
+    }
   };
 
   // Show editor if workflow is awaiting user input

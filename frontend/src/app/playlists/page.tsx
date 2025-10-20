@@ -14,6 +14,7 @@ import { Music } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { logger } from '@/lib/utils/logger';
+import { AuthGuard } from '@/components/auth/AuthGuard';
 
 export default function PlaylistsPage() {
   const [playlists, setPlaylists] = useState<UserPlaylist[]>([]);
@@ -75,15 +76,16 @@ export default function PlaylistsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background relative">
-      {/* Fixed Dot Pattern Background */}
-      <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
-        <DotPattern
-          className={cn(
-            "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-          )}
-        />
-      </div>
+    <AuthGuard allowOptimistic>
+      <div className="min-h-screen bg-background relative">
+        {/* Fixed Dot Pattern Background */}
+        <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
+          <DotPattern
+            className={cn(
+              "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
+            )}
+          />
+        </div>
 
       {/* Navigation */}
       <Navigation />
@@ -147,7 +149,7 @@ export default function PlaylistsPage() {
             <Music className="w-16 h-16 text-destructive mx-auto mb-4" />
             <h3 className="text-xl font-semibold mb-2">Failed to load playlists</h3>
             <p className="text-muted-foreground mb-6">{error}</p>
-            <Button onClick={() => window.location.reload()}>Try Again</Button>
+            <Button onClick={fetchPlaylists}>Try Again</Button>
           </motion.div>
         ) : playlists.length === 0 ? (
           <motion.div
@@ -206,5 +208,6 @@ export default function PlaylistsPage() {
         )}
       </main>
     </div>
+    </AuthGuard>
   );
 }

@@ -10,6 +10,7 @@ import { ArrowLeft, Mail, MapPin, Music, User, Users } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { AuthGuard } from '@/components/auth/AuthGuard';
 
 interface SpotifyProfile {
   id: string;
@@ -48,6 +49,7 @@ export default function ProfilePage() {
           <div className="w-4 h-4 bg-primary rounded-full animate-bounce"></div>
           <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
           <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+        </div>
         </div>
       </div>
     );
@@ -109,8 +111,9 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted p-4">
-      <div className="max-w-4xl mx-auto">
+    <AuthGuard allowOptimistic>
+      <div className="min-h-screen bg-gradient-to-br from-background to-muted p-4">
+        <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-6">
           <Button
@@ -235,5 +238,6 @@ export default function ProfilePage() {
         </div>
       </div>
     </div>
+    </AuthGuard>
   );
 }

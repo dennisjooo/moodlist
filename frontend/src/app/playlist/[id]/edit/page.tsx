@@ -11,6 +11,7 @@ import { useWorkflow } from '@/lib/workflowContext';
 import { ArrowLeft } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { AuthGuard } from '@/components/auth/AuthGuard';
 
 function EditPlaylistPageContent() {
     const params = useParams();
@@ -166,6 +167,10 @@ function EditPlaylistPageContent() {
 }
 
 export default function EditPlaylistPage() {
-    return <EditPlaylistPageContent />;
+    return (
+        <AuthGuard allowOptimistic>
+            <EditPlaylistPageContent />
+        </AuthGuard>
+    );
 }
 

@@ -13,6 +13,7 @@ import { ArrowLeft, Sparkles } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
 import { logger } from '@/lib/utils/logger';
+import { AuthGuard } from '@/components/auth/AuthGuard';
 
 // Main content component for dynamic session route
 function CreateSessionPageContent() {
@@ -21,7 +22,7 @@ function CreateSessionPageContent() {
     const sessionId = params.id as string;
     const [isMobile, setIsMobile] = useState(false);
     const [isLoadingSession, setIsLoadingSession] = useState(true);
-    const { workflowState, startWorkflow, loadWorkflow } = useWorkflow();
+    const { workflowState, startWorkflow, loadWorkflow, refreshResults } = useWorkflow();
 
     const handleBack = () => {
         // Check if we're currently on an edit page - if so, go back to the parent create page
@@ -124,13 +125,17 @@ function CreateSessionPageContent() {
     }, [workflowState.status, workflowState.recommendations.length, workflowState.sessionId, router]);
 
     const handleEditComplete = () => {
-        // Refresh the page to show final results
-        window.location.reload();
+        // Refresh results to get latest and let redirect effect handle navigation
+        try {
+            refreshResults();
+        } catch (e) {
+            logger.error('Failed to refresh after edit complete', e as Error, { component: 'CreateSessionPage' });
+        }
     };
 
     const handleEditCancel = () => {
-        // Go back to results view
-        window.location.reload();
+        // Simply navigate back to the session page without full reload
+        router.push(`/create/${sessionId}`);
     };
 
 
@@ -310,6 +315,10 @@ function CreateSessionPageContent() {
 }
 
 export default function CreateSessionPage() {
-    return <CreateSessionPageContent />;
+    return (
+        <AuthGuard allowOptimistic>
+            <CreateSessionPageContent />
+        </AuthGuard>
+    );
 }
 
