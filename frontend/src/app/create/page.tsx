@@ -13,6 +13,7 @@ import { useWorkflow } from '@/lib/workflowContext';
 import { Sparkles } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { logger } from '@/lib/utils/logger';
 
 // Main content component that uses workflow context
 function CreatePageContent() {
@@ -39,10 +40,10 @@ function CreatePageContent() {
     // it means we're coming from a cancelled workflow or navigating back
     // Clear it to show a fresh state
     if (workflowState.sessionId) {
-      console.log('Clearing workflow state on /create mount');
+      logger.debug('Clearing workflow state on /create mount', { component: 'CreatePage' });
       resetWorkflow();
     }
-  }, []); // Only run on mount
+
 
   // Also clear workflow state when it changes while on /create page
   // This handles cases where user stops workflow while already on /create
@@ -53,7 +54,7 @@ function CreatePageContent() {
                            window.location.pathname === '/create';
 
     if (isBaseCreatePage && workflowState.sessionId) {
-      console.log('Clearing workflow state due to session presence on /create');
+      logger.debug('Clearing workflow state due to session presence on /create', { component: 'CreatePage' });
       resetWorkflow();
     }
   }, [workflowState.sessionId, resetWorkflow]);
@@ -76,7 +77,7 @@ function CreatePageContent() {
       await startWorkflow(mood, genreHint);
       // Note: Redirect happens in useEffect above when sessionId is set
     } catch (error) {
-      console.error('Failed to start workflow:', error);
+      logger.error('Failed to start workflow', error, { component: 'CreatePage' });
     }
   };
 

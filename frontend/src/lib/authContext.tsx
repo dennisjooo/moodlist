@@ -2,6 +2,8 @@
 
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { getAuthCookies, getCookie } from './cookies';
+import { config } from '@/lib/config';
+import { logger } from '@/lib/utils/logger';
 
 export interface User {
   id: number;
@@ -40,7 +42,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       // Fetch user info from backend
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+      const backendUrl = config.api.baseUrl;
       const cookies = getAuthCookies();
 
       const response = await fetch(`${backendUrl}/api/auth/verify`, {
@@ -55,14 +57,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (response.ok) {
         const data = await response.json();
         if (data.user) {
-          console.log('Auth check successful, user found:', data.user.display_name);
+          logger.info('Auth check successful, user found', { component: 'AuthContext', display_name: data.user.display_name });
           setUser(data.user);
         } else {
-          console.log('Auth check successful, no user found');
+          logger.info('Auth check successful, no user found', { component: 'AuthContext' });
           setUser(null);
         }
       } else if (response.status === 401) {
-        console.log('Auth check failed with 401 - unauthorized');
+        logger.warn('Auth check failed with 401 - unauthorized', { component: 'AuthContext' });
         setUser(null);
       } else {
         // Other error - if it's our first attempt, try again after a short delay
@@ -73,7 +75,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setUser(null);
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
+      logger.error('Auth check failed', error, { component: 'AuthContext' });
       // If it's our first attempt and we get a network error, try again
       if (retryCount === 0) {
         await new Promise(resolve => setTimeout(resolve, 200));
@@ -87,7 +89,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = async (accessToken: string, refreshToken: string) => {
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+      const backendUrl = config.api.baseUrl;
 
       // Send tokens to backend for user creation/session
       const response = await fetch(`${backendUrl}/api/auth/login`, {
@@ -112,14 +114,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Refresh user data
       await checkAuthStatus();
     } catch (error) {
-      console.error('Authentication error:', error);
+      logger.error('Authentication error', error, { component: 'AuthContext' });
       throw error;
     }
   };
 
   const logout = async () => {
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+      const backendUrl = config.api.baseUrl;
 
       // Call backend logout to clear session
       const response = await fetch(`${backendUrl}/api/auth/logout`, {
@@ -133,13 +135,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Backend logout failed:', response.status, errorText);
+        logger.error('Backend logout failed', undefined, { component: 'AuthContext', status: response.status, errorText });
         // Don't throw error - still clear local state for better UX
       } else {
-        console.log('Backend logout successful');
+        logger.info('Backend logout successful', { component: 'AuthContext' });
       }
     } catch (error) {
-      console.error('Logout error:', error);
+      logger.error('Logout error', error, { component: 'AuthContext' });
       // Don't throw error - still clear local state for better UX
     } finally {
       // Always clear local state after attempting backend logout

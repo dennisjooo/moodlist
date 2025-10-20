@@ -15,6 +15,7 @@ import { MoodAnalysis } from '@/lib/playlistApi';
 import { Calendar, ExternalLink, Music, Play, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { logger } from '@/lib/utils/logger';
 
 interface PlaylistCardProps {
   mood: string;
@@ -52,7 +53,7 @@ export default function PlaylistCard({ mood, title, createdAt, trackCount, spoti
       await onDelete(playlistId);
       setShowDeleteDialog(false);
     } catch (error) {
-      console.error('Failed to delete:', error);
+      logger.error('Failed to delete playlist card item', error, { component: 'PlaylistCard', playlistId });
       setIsDeleting(false);
     }
   };

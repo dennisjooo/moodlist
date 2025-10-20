@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from './authContext';
 import { workflowAPI, WorkflowStatus, WorkflowResults, PlaylistEditRequest } from './workflowApi';
 import { pollingManager } from './pollingManager';
+import { logger } from '@/lib/utils/logger';
 
 export interface WorkflowState {
   sessionId: string | null;
@@ -70,7 +71,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
   const startWorkflow = async (moodPrompt: string, genreHint?: string) => {
     // Wait for authentication verification to complete if it's still loading
     if (authLoading) {
-      console.log('Auth still loading, waiting for verification to complete...');
+      logger.debug('Auth still loading, waiting for verification to complete', { component: 'WorkflowContext' });
       // Wait for auth loading to complete
       await new Promise<void>((resolve) => {
         const checkAuth = () => {
@@ -120,26 +121,30 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
   };
 
   const loadWorkflow = async (sessionId: string) => {
-    console.log('[loadWorkflow] Called with sessionId:', sessionId, 'current state:', {
-      sessionId: workflowState.sessionId,
-      status: workflowState.status,
-      isLoading: workflowState.isLoading,
+    logger.debug('[loadWorkflow] Called', {
+      component: 'WorkflowContext',
+      sessionId,
+      state: {
+        sessionId: workflowState.sessionId,
+        status: workflowState.status,
+        isLoading: workflowState.isLoading,
+      }
     });
 
     // Prevent concurrent calls
     if (workflowState.isLoading) {
-      console.log('[loadWorkflow] Already loading, skipping duplicate call');
+      logger.debug('[loadWorkflow] Already loading, skipping duplicate call', { component: 'WorkflowContext' });
       return;
     }
 
     // If auth is still loading, defer the load - the useEffect will retry when ready
     if (authLoading) {
-      console.log('[loadWorkflow] Auth still loading, deferring');
+      logger.debug('[loadWorkflow] Auth still loading, deferring', { component: 'WorkflowContext' });
       return;
     }
 
     if (!isAuthenticated || !user) {
-      console.log('[loadWorkflow] User not authenticated');
+      logger.warn('[loadWorkflow] User not authenticated', { component: 'WorkflowContext' });
       setWorkflowState(prev => ({
         ...prev,
         error: 'Please log in to view this session',
@@ -152,11 +157,11 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     if (workflowState.sessionId === sessionId &&
       (workflowState.status === 'completed' || workflowState.status === 'failed') &&
       workflowState.recommendations.length > 0) {
-      console.log('[loadWorkflow] Already loaded and terminal, skipping');
+      logger.debug('[loadWorkflow] Already loaded and terminal, skipping', { component: 'WorkflowContext', sessionId });
       return;
     }
 
-    console.log('[loadWorkflow] Proceeding with API calls');
+    logger.debug('[loadWorkflow] Proceeding with API calls', { component: 'WorkflowContext', sessionId });
     setWorkflowState(prev => ({
       ...prev,
       isLoading: true,
@@ -164,7 +169,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     }));
 
     try {
-      console.log('[loadWorkflow] Fetching status for session:', sessionId);
+      logger.debug('[loadWorkflow] Fetching status', { component: 'WorkflowContext', sessionId });
       // Load workflow status once
       const status = await workflowAPI.getWorkflowStatus(sessionId);
 
@@ -172,15 +177,15 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
       let results = null;
       const isTerminal = status.status === 'completed' || status.status === 'failed';
       if (isTerminal) {
-        console.log('Workflow is terminal, loading results for session:', sessionId);
+        logger.debug('Workflow is terminal, loading results', { component: 'WorkflowContext', sessionId });
         try {
           results = await workflowAPI.getWorkflowResults(sessionId);
         } catch (e) {
           // Results might not be ready yet, that's ok
-          console.log('Results not ready yet for terminal workflow:', e);
+          logger.warn('Results not ready yet for terminal workflow', { component: 'WorkflowContext', sessionId });
         }
       } else {
-        console.log('Workflow is active, status:', status.status, 'for session:', sessionId);
+        logger.debug('Workflow is active', { component: 'WorkflowContext', status: status.status, sessionId });
       }
 
       setWorkflowState(prev => ({
@@ -197,7 +202,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
         isLoading: false,
       }));
 
-      console.log('Workflow loaded successfully for session:', sessionId, 'status:', status.status);
+      logger.info('Workflow loaded', { component: 'WorkflowContext', sessionId, status: status.status });
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load workflow';
@@ -206,7 +211,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
         error: errorMessage,
         isLoading: false,
       }));
-      console.error('Failed to load workflow for session:', sessionId, error);
+      logger.error('Failed to load workflow for session', error, { component: 'WorkflowContext', sessionId });
     }
   };
 
@@ -231,7 +236,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
   };
 
   const resetWorkflow = () => {
-    console.log('Resetting workflow state, preserving auth');
+    logger.debug('Resetting workflow state, preserving auth', { component: 'WorkflowContext' });
     // Reset workflow state to start fresh while preserving auth
     setWorkflowState({
       sessionId: null,
@@ -252,11 +257,11 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     // Don't fetch results if we're already in a terminal state and have results
     if ((workflowState.status === 'completed' || workflowState.status === 'failed') &&
       workflowState.recommendations.length > 0) {
-      console.log('Results already loaded for terminal workflow, skipping refresh');
+      logger.debug('Results already loaded for terminal workflow, skipping refresh', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
       return;
     }
 
-    console.log('Fetching results for session:', workflowState.sessionId);
+    logger.debug('Fetching results', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
     setWorkflowState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
@@ -267,7 +272,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
         playlist: results.playlist,
         isLoading: false,
       }));
-      console.log('Results fetched successfully for session:', workflowState.sessionId);
+      logger.info('Results fetched successfully', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to refresh results';
       setWorkflowState(prev => ({
@@ -275,7 +280,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
         error: errorMessage,
         isLoading: false,
       }));
-      console.error('Failed to fetch results for session:', workflowState.sessionId, error);
+      logger.error('Failed to fetch results', error, { component: 'WorkflowContext', sessionId: workflowState.sessionId });
     }
   };
 
@@ -337,7 +342,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
       return result;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to sync from Spotify';
-      console.error('Sync error:', errorMessage);
+      logger.error('Sync error', error, { component: 'WorkflowContext', errorMessage });
       // Don't set error in state for sync failures - they should be silent or handled by caller
       throw error;
     }
@@ -375,7 +380,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
             playlist: results.playlist,
           }));
         } catch (error) {
-          console.error('Failed to refresh workflow results after edit:', error);
+          logger.error('Failed to refresh workflow results after edit', error, { component: 'WorkflowContext' });
         }
       }, 100); // 100ms debounce to batch concurrent edits
     } catch (error) {
@@ -441,9 +446,9 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
           (workflowState.sessionId === sessionId && workflowState.status === null && !workflowState.isLoading)
         );
         if (needsLoad) {
-          console.log('Auth verification completed, loading workflow:', sessionId);
+          logger.info('Auth verification completed, loading workflow', { component: 'WorkflowContext', sessionId });
           loadWorkflow(sessionId).catch(error => {
-            console.error('Failed to load workflow after auth verification:', error);
+            logger.error('Failed to load workflow after auth verification', error, { component: 'WorkflowContext', sessionId });
           });
         }
       }
@@ -459,20 +464,20 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
 
     // Don't poll if auth is still loading
     if (authLoading) {
-      console.log('Auth still loading, skipping workflow polling for session:', workflowState.sessionId);
+      logger.debug('Auth still loading, skipping workflow polling', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
       return;
     }
 
     // Don't poll if not authenticated
     if (!isAuthenticated || !user) {
-      console.log('User not authenticated, skipping workflow polling for session:', workflowState.sessionId);
+      logger.debug('User not authenticated, skipping workflow polling', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
       return;
     }
 
     // Only poll when on /create/[id] pages
     const isCreatePage = pathname?.startsWith('/create/') && pathname.split('/').length === 3;
     if (!isCreatePage) {
-      console.log('Not on create page, stopping polling for session:', workflowState.sessionId);
+      logger.debug('Not on create page, stopping polling', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
       pollingManager.stopPolling(workflowState.sessionId);
       return;
     }
@@ -480,7 +485,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     // Check if workflow is in a terminal state - if so, stop any polling and don't start new
     const isTerminalState = workflowState.status === 'completed' || workflowState.status === 'failed';
     if (isTerminalState) {
-      console.log('Workflow in terminal state, stopping polling for session:', workflowState.sessionId);
+      logger.debug('Workflow in terminal state, stopping polling', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
       pollingManager.stopPolling(workflowState.sessionId);
       return;
     }
@@ -495,16 +500,16 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
 
       if (isTerminal) {
         // Stop polling immediately when terminal state is detected
-        console.log('Terminal state detected, stopping polling for session:', workflowState.sessionId);
+        logger.debug('Terminal state detected, stopping polling', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
         pollingManager.stopPolling(workflowState.sessionId!);
 
         // Fetch results when workflow completes
         let results = null;
         try {
-          console.log('Fetching results for completed workflow:', workflowState.sessionId);
+          logger.debug('Fetching results for completed workflow', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
           results = await workflowAPI.getWorkflowResults(workflowState.sessionId!);
         } catch (e) {
-          console.error('Failed to fetch results for completed workflow:', e);
+          logger.error('Failed to fetch results for completed workflow', e, { component: 'WorkflowContext', sessionId: workflowState.sessionId });
         }
 
         // Update state with terminal status and results
@@ -519,7 +524,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
           playlist: results?.playlist || prev.playlist,
         }));
 
-        console.log('Terminal state set with results, polling stopped for session:', workflowState.sessionId);
+        logger.info('Terminal state set with results, polling stopped', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
       } else {
         // For non-terminal states, just update the status
         setWorkflowState(prev => ({
@@ -535,7 +540,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     };
 
     const handleError = (error: Error) => {
-      console.error('Workflow polling error:', error);
+      logger.error('Workflow polling error', error, { component: 'WorkflowContext', sessionId: workflowState.sessionId });
       // Set error state for persistent errors
       setWorkflowState(prev => ({
         ...prev,
@@ -545,10 +550,10 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
 
     const handleAwaitingInput = () => {
       // Optional: Handle when workflow is waiting for user input
-      console.log('Workflow awaiting user input');
+      logger.debug('Workflow awaiting user input', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
     };
 
-    console.log('Starting polling for session:', workflowState.sessionId, 'status:', workflowState.status);
+    logger.debug('Starting polling', { component: 'WorkflowContext', sessionId: workflowState.sessionId, status: workflowState.status });
     pollingManager.startPolling(
       workflowState.sessionId,
       pollWorkflow,
@@ -560,10 +565,10 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     );
 
     // Double-check that polling starts with correct state
-    console.log('Polling started for session:', workflowState.sessionId);
+    logger.debug('Polling started', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
 
     return () => {
-      console.log('Cleanup: stopping polling for session:', workflowState.sessionId);
+      logger.debug('Cleanup: stopping polling', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
       pollingManager.stopPolling(workflowState.sessionId!);
     };
   }, [workflowState.sessionId, workflowState.status, pathname, authLoading, isAuthenticated, user]);

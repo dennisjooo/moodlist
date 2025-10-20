@@ -2,6 +2,8 @@
  * Shared Spotify OAuth utility functions
  */
 
+import { logger } from '@/lib/utils/logger';
+
 export interface SpotifyAuthConfig {
   clientId: string;
   redirectUri: string;
@@ -17,7 +19,7 @@ export function initiateSpotifyAuth(): void {
   const scope = 'playlist-modify-public playlist-modify-private user-read-private user-read-email user-top-read';
 
   if (!clientId) {
-    console.error('Spotify Client ID not configured');
+    logger.error('Spotify Client ID not configured', undefined, { component: 'spotifyAuth' });
     return;
   }
 
