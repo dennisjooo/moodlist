@@ -145,14 +145,28 @@ class ImprovementStrategy:
         """
         outlier_ids = set(quality_evaluation.get("outlier_tracks", []))
         
-        # Filter out outliers
-        good_recommendations = [
-            rec for rec in state.recommendations
-            if rec.track_id not in outlier_ids
-        ]
+        # Filter out outliers BUT ALWAYS KEEP protected tracks (user-mentioned)
+        good_recommendations = []
+        protected_kept = 0
+        for rec in state.recommendations:
+            if rec.track_id in outlier_ids:
+                # Check if this is a protected track
+                if rec.protected or rec.user_mentioned:
+                    # CRITICAL: Never filter user-mentioned tracks
+                    logger.info(
+                        f"Keeping outlier because it's protected: {rec.track_name} by {', '.join(rec.artists)} "
+                        f"(user_mentioned={rec.user_mentioned})"
+                    )
+                    good_recommendations.append(rec)
+                    protected_kept += 1
+                    outlier_ids.discard(rec.track_id)  # Remove from outlier set
+                # else: filter it out (don't add to good_recommendations)
+            else:
+                good_recommendations.append(rec)
 
         logger.info(
-            f"Filtering {len(outlier_ids)} outliers, keeping {len(good_recommendations)} good tracks"
+            f"Filtering {len(outlier_ids)} outliers, keeping {len(good_recommendations)} good tracks "
+            f"({protected_kept} protected tracks kept despite being outliers)"
         )
 
         # Add outliers to negative seeds (limit to 5 for RecoBeat API)
@@ -214,9 +228,18 @@ class ImprovementStrategy:
         top_tracks = scored_recs[:5]
         new_seeds = [rec.track_id for rec, _ in top_tracks]
         
-        # Add bottom tracks as negative seeds
+        # Add bottom tracks as negative seeds (but NEVER protected tracks)
         bottom_tracks = scored_recs[-3:]  # Take bottom 3
-        outlier_ids = [rec.track_id for rec, _ in bottom_tracks]
+        outlier_ids = []
+        for rec, score in bottom_tracks:
+            # CRITICAL: Never add protected tracks to negative seeds
+            if not (rec.protected or rec.user_mentioned):
+                outlier_ids.append(rec.track_id)
+            else:
+                logger.info(
+                    f"Skipping protected track from negative seeds: {rec.track_name} "
+                    f"(user_mentioned={rec.user_mentioned})"
+                )
         
         if outlier_ids:
             # Add to negative seeds

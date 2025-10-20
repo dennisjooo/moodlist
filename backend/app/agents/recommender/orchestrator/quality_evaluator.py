@@ -187,11 +187,16 @@ class QualityEvaluator:
         try:
             # Prepare playlist summary for LLM (first 15 tracks for better assessment)
             tracks_summary = []
+            user_mentioned_tracks = []
             for i, rec in enumerate(state.recommendations[:15], 1):
+                # Mark user-mentioned tracks with [USER FAVORITE] tag
+                prefix = "[USER FAVORITE] " if rec.user_mentioned else ""
                 tracks_summary.append(
-                    f"{i}. {rec.track_name} by {', '.join(rec.artists)} "
+                    f"{i}. {prefix}{rec.track_name} by {', '.join(rec.artists)} "
                     f"(confidence: {rec.confidence_score:.2f}, source: {rec.source})"
                 )
+                if rec.user_mentioned:
+                    user_mentioned_tracks.append(f"{rec.track_name} by {', '.join(rec.artists)}")
             
             mood_interpretation = state.mood_analysis.get("mood_interpretation", "N/A")
             artist_recommendations = state.mood_analysis.get("artist_recommendations", [])
@@ -208,7 +213,8 @@ class QualityEvaluator:
                 target_features=target_features,
                 tracks_summary=chr(10).join(tracks_summary),
                 target_count=target_count,
-                evaluation=evaluation
+                evaluation=evaluation,
+                user_mentioned_tracks=user_mentioned_tracks
             )
 
             response = await self.llm.ainvoke([{"role": "user", "content": prompt}])

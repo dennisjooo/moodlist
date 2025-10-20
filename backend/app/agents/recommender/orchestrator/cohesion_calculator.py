@@ -195,6 +195,16 @@ class CohesionCalculator:
         cohesion_scores = []
 
         for rec in recommendations:
+            # CRITICAL: Skip quality evaluation for protected tracks (user-mentioned anchors)
+            if rec.protected or rec.user_mentioned:
+                logger.info(
+                    f"Skipping outlier detection for protected track: {rec.track_name} by {', '.join(rec.artists)} "
+                    f"(user_mentioned={rec.user_mentioned}, anchor_type={rec.anchor_type})"
+                )
+                # Include in cohesion scores with perfect score (don't penalize playlist)
+                cohesion_scores.append(1.0)
+                continue
+            
             track_cohesion = track_scores[rec.track_id]
             is_reccobeat = rec.source == "reccobeat"
 
@@ -271,6 +281,15 @@ class CohesionCalculator:
             
             # Match against recommendations (case-insensitive, partial match for robustness)
             for rec in recommendations:
+                # CRITICAL: Skip protected tracks (user-mentioned anchors)
+                if rec.protected or rec.user_mentioned:
+                    if rec.track_name.lower() == track_name_part.lower() or track_name_part.lower() in rec.track_name.lower():
+                        logger.warning(
+                            f"LLM tried to flag protected track as outlier: {rec.track_name} by {', '.join(rec.artists)} "
+                            f"(user_mentioned={rec.user_mentioned}) - IGNORING LLM suggestion"
+                        )
+                    continue
+                
                 # Exact match (case-insensitive)
                 if rec.track_name.lower() == track_name_part.lower():
                     outlier_track_ids.append(rec.track_id)
