@@ -2,6 +2,8 @@
  * Shared Spotify OAuth utility functions
  */
 
+import { logger } from '@/lib/utils/logger';
+
 export interface SpotifyAuthConfig {
   clientId: string;
   redirectUri: string;

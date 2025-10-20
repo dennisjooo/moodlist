@@ -1,5 +1,7 @@
 // Polling manager with exponential backoff for workflow status updates
 // Based on the polling strategy from FRONTEND_INTEGRATION_GUIDE.md
+import { config } from '@/lib/config';
+import { logger } from '@/lib/utils/logger';
 
 export interface PollingConfig {
   interval: number;        // Base polling interval in ms
@@ -20,9 +22,9 @@ export class PollingManager {
   private retryCount: Map<string, number> = new Map();
 
   private defaultConfig: PollingConfig = {
-    interval: 2000,      // 2 seconds base interval
-    maxBackoff: 30000,   // 30 seconds max backoff
-    maxRetries: 3,       // 3 retry attempts
+    interval: config.polling.baseInterval,
+    maxBackoff: config.polling.maxBackoff,
+    maxRetries: config.polling.maxRetries,
   };
 
   startPolling(
@@ -33,7 +35,7 @@ export class PollingManager {
   ) {
     // Stop any existing polling for this session first
     if (this.intervals.has(sessionId)) {
-      console.log('Polling already active for session:', sessionId, '- stopping old one');
+      logger.debug('Polling already active - restarting', { component: 'PollingManager', sessionId });
       this.stopPolling(sessionId);
     }
 
@@ -67,7 +69,7 @@ export class PollingManager {
         }
 
       } catch (error) {
-        console.error('Polling error:', error);
+        logger.error('Polling error', error, { component: 'PollingManager', sessionId });
 
         const currentRetryCount = this.retryCount.get(sessionId) || 0;
         const currentBackoff = this.backoffMs.get(sessionId) || mergedConfig.interval;
@@ -98,7 +100,7 @@ export class PollingManager {
 
   private getNextInterval(status: string, awaitingInput: boolean): number {
     if (awaitingInput) {
-      return 5000; // Poll every 5 seconds when waiting for user input
+      return config.polling.awaitingInputInterval; // Poll less frequently when waiting for user input
     }
 
     switch (status) {
@@ -107,14 +109,14 @@ export class PollingManager {
       case 'generating_recommendations':
       case 'processing_edits':
       case 'creating_playlist':
-        return 2000; // Poll every 2 seconds during active processing
+        return config.polling.baseInterval; // Active processing interval
       case 'pending':
-        return 3000; // Poll every 3 seconds for pending
+        return config.polling.pendingInterval; // Pending interval
       case 'completed':
       case 'failed':
         return 0; // Stop polling
       default:
-        return 2000; // Default to 2 seconds
+        return config.polling.baseInterval; // Default interval
     }
   }
 
