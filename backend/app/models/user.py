@@ -25,6 +25,7 @@ class User(Base):
     sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
     playlists = relationship("Playlist", back_populates="user", cascade="all, delete-orphan")
     invocations = relationship("Invocation", back_populates="user", cascade="all, delete-orphan")
+    llm_invocations = relationship("LLMInvocation", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User(id={self.id}, spotify_id={self.spotify_id}, display_name={self.display_name})>"
