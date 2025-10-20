@@ -1,6 +1,8 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { motion } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
+import { config } from '@/lib/config';
+import { logger } from '@/lib/utils/logger';
 
 interface PublicStats {
   total_users: number;
@@ -21,13 +23,13 @@ export default function SocialProof() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000'}/api/stats/public`);
+        const response = await fetch(`${config.api.baseUrl}/api/stats/public`);
         if (response.ok) {
           const data = await response.json();
           setStats(data);
         }
       } catch (error) {
-        console.error('Failed to fetch public stats:', error);
+        logger.error('Failed to fetch public stats', error, { component: 'SocialProof' });
       } finally {
         setLoading(false);
       }

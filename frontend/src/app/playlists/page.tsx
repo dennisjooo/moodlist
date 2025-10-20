@@ -13,6 +13,7 @@ import { motion } from 'framer-motion';
 import { Music } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { logger } from '@/lib/utils/logger';
 
 export default function PlaylistsPage() {
   const [playlists, setPlaylists] = useState<UserPlaylist[]>([]);
@@ -27,7 +28,7 @@ export default function PlaylistsPage() {
       const response = await playlistAPI.getUserPlaylists();
       setPlaylists(response.playlists);
     } catch (err) {
-      console.error('Failed to fetch playlists:', err);
+      logger.error('Failed to fetch playlists', err, { component: 'PlaylistsPage' });
       const errorMessage = err instanceof Error ? err.message : 'Failed to load playlists';
 
       // Check if it's a 401 Unauthorized error
@@ -51,7 +52,7 @@ export default function PlaylistsPage() {
       // Remove from local state
       setPlaylists(prev => prev.filter(p => p.id !== playlistId));
     } catch (err) {
-      console.error('Failed to delete playlist:', err);
+      logger.error('Failed to delete playlist', err, { component: 'PlaylistsPage' });
       setError('Failed to delete playlist. Please try again.');
       // Clear error after 5 seconds
       setTimeout(() => setError(null), 5000);
