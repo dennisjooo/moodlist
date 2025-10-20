@@ -228,6 +228,7 @@ class MoodAnalyzerAgent(BaseAgent):
                 state.metadata.get("spotify_access_token"),
                 mood_prompt=state.mood_prompt,
                 artist_recommendations=initial_analysis.get("artist_recommendations", []),
+                mood_analysis=initial_analysis,  # Pass initial analysis for LLM context
                 limit=5
             )
             state.metadata["anchor_tracks"] = anchor_tracks

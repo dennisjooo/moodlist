@@ -1,7 +1,7 @@
 """Mood analysis engine for LLM-based and fallback mood analysis."""
 
 import structlog
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, List
 
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages import AIMessage
@@ -113,7 +113,51 @@ class MoodAnalysisEngine:
         analysis["genre_keywords"] = genre_keywords
         analysis["artist_recommendations"] = artist_recommendations
 
+        # Add regional context (rule-based inference)
+        preferred_regions, excluded_regions = self._infer_regional_context(prompt_lower)
+        analysis["preferred_regions"] = preferred_regions
+        analysis["excluded_regions"] = excluded_regions
+
         return analysis
+
+    def _infer_regional_context(self, prompt_lower: str) -> tuple[List[str], List[str]]:
+        """Infer regional preferences from the mood prompt.
+
+        Args:
+            prompt_lower: Lowercase mood prompt
+
+        Returns:
+            Tuple of (preferred_regions, excluded_regions)
+        """
+        preferred = []
+        excluded = []
+
+        # French/European indicators
+        if any(term in prompt_lower for term in ['french', 'france', 'parisian']):
+            preferred.extend(['French', 'European', 'Western'])
+            excluded.extend(['Southeast Asian', 'Indonesian', 'Eastern European'])
+        
+        # General European
+        elif any(term in prompt_lower for term in ['european', 'euro', 'nu-disco', 'house', 'disco']):
+            preferred.extend(['European', 'Western'])
+            excluded.extend(['Southeast Asian', 'Indonesian'])
+        
+        # K-pop / Asian
+        elif any(term in prompt_lower for term in ['k-pop', 'kpop', 'korean', 'j-pop', 'jpop', 'japanese', 'anime']):
+            preferred.append('Asian')
+            excluded.extend(['Southeast Asian', 'Western'])
+        
+        # Latin
+        elif any(term in prompt_lower for term in ['latin', 'reggaeton', 'spanish', 'salsa', 'bachata']):
+            preferred.append('Latin American')
+            excluded.extend(['Southeast Asian', 'Asian'])
+        
+        # Default to Western if no specific region detected
+        elif not preferred:
+            preferred.append('Western')
+            excluded.extend(['Southeast Asian', 'Indonesian'])
+
+        return preferred, excluded
 
     def _enhance_features_with_keywords(self, analysis: Dict[str, Any], prompt_lower: str):
         """Enhance feature analysis with specific keywords."""

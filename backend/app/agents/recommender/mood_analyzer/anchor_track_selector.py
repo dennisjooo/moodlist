@@ -6,7 +6,14 @@ from typing import Any, Dict, List, Optional
 from langchain_core.language_models.base import BaseLanguageModel
 
 from ..utils.llm_response_parser import LLMResponseParser
-from .prompts import get_track_extraction_prompt
+from .prompts import (
+    get_track_extraction_prompt,
+    get_anchor_strategy_prompt,
+    get_anchor_scoring_prompt,
+    get_anchor_finalization_prompt,
+    get_batch_track_filter_prompt,
+    get_batch_artist_validation_prompt,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -33,19 +40,21 @@ class AnchorTrackSelector:
         access_token: str,
         mood_prompt: str = "",
         artist_recommendations: List[str] = None,
+        mood_analysis: Dict[str, Any] = None,
         limit: int = 5
     ) -> tuple[List[Dict[str, Any]], List[str]]:
         """
-        Select anchor tracks from user-mentioned tracks and top genre results.
-        
+        Select anchor tracks using LLM-guided analysis instead of hard-coded logic.
+
         Args:
             genre_keywords: List of genre keywords to search
             target_features: Target audio features from mood analysis
             access_token: Spotify access token
             mood_prompt: Original user mood prompt for extracting track mentions
             artist_recommendations: List of artist names from mood analysis
-            limit: Maximum number of anchor tracks to select
-            
+            mood_analysis: Full mood analysis results for LLM context
+            limit: Maximum number of anchor tracks to select (fallback if LLM doesn't specify)
+
         Returns:
             Tuple of (anchor_tracks_for_playlist, anchor_track_ids_for_reference)
         """
@@ -53,36 +62,18 @@ class AnchorTrackSelector:
             logger.warning("No Spotify service available for anchor track selection")
             return [], []
 
-        anchor_candidates = []
-        
-        # PRIORITY 1: Add user-mentioned tracks with highest priority
-        user_candidates = await self._get_user_mentioned_candidates(
-            mood_prompt,
-            artist_recommendations or [],
-            access_token
-        )
-        anchor_candidates.extend(user_candidates)
-        logger.info(f"Found {len(user_candidates)} user-mentioned tracks as anchors")
-        
-        # PRIORITY 2: Add genre-based tracks
-        if not genre_keywords and user_candidates:
-            logger.info("No genre keywords, but using user-mentioned tracks as anchors")
-        else:
-            # Use top 5 genres for better diversity (increased from 3)
-            genre_candidates = await self._get_genre_based_candidates(
-                genre_keywords[:5],
-                target_features,
-                access_token,
-                mood_prompt
+        # Use LLM-driven selection if available, otherwise fallback to original logic
+        if self.llm and mood_analysis:
+            return await self._llm_driven_anchor_selection(
+                genre_keywords, target_features, access_token, mood_prompt,
+                artist_recommendations or [], mood_analysis, limit
             )
-            anchor_candidates.extend(genre_candidates)
-        
-        if not anchor_candidates:
-            logger.warning("No anchor track candidates found")
-            return [], []
-        
-        # Sort and select top anchors
-        return self._select_top_anchors(anchor_candidates, limit)
+        else:
+            logger.info("No LLM available, using fallback anchor selection")
+            return await self._fallback_anchor_selection(
+                genre_keywords, target_features, access_token, mood_prompt,
+                artist_recommendations or [], limit
+            )
 
     async def _get_user_mentioned_candidates(
         self,
@@ -593,4 +584,580 @@ class AnchorTrackSelector:
                         track_hints.append((track_name, primary_artist))
         
         return track_hints
+
+    async def _llm_driven_anchor_selection(
+        self,
+        genre_keywords: List[str],
+        target_features: Dict[str, Any],
+        access_token: str,
+        mood_prompt: str,
+        artist_recommendations: List[str],
+        mood_analysis: Dict[str, Any],
+        limit: int
+    ) -> tuple[List[Dict[str, Any]], List[str]]:
+        """Use LLM analysis to determine and select optimal anchor tracks.
+
+        Args:
+            genre_keywords: List of genre keywords to search
+            target_features: Target audio features from mood analysis
+            access_token: Spotify access token
+            mood_prompt: Original user mood prompt
+            artist_recommendations: List of artist names from mood analysis
+            mood_analysis: Full mood analysis results
+            limit: Fallback limit if LLM doesn't specify
+
+        Returns:
+            Tuple of (anchor_tracks_for_playlist, anchor_track_ids_for_reference)
+        """
+        try:
+            # Step 1: Get user-mentioned tracks (always priority)
+            user_candidates = await self._get_user_mentioned_candidates(
+                mood_prompt, artist_recommendations, access_token
+            )
+            logger.info(f"Found {len(user_candidates)} user-mentioned tracks as anchors")
+
+            # Step 2: Get tracks from top recommended artists (especially those mentioned in prompt)
+            artist_candidates = await self._get_artist_based_candidates(
+                mood_prompt, artist_recommendations, target_features, access_token, mood_analysis
+            )
+            logger.info(f"Found {len(artist_candidates)} artist-based track candidates")
+
+            # Step 3: Get genre-based candidates for LLM to evaluate
+            genre_candidates = []
+            if genre_keywords:
+                genre_candidates = await self._get_genre_based_candidates(
+                    genre_keywords[:8],  # Allow more candidates for LLM to choose from
+                    target_features,
+                    access_token,
+                    mood_prompt
+                )
+                logger.info(f"Found {len(genre_candidates)} genre-based track candidates")
+
+            # Combine all candidates
+            all_candidates = user_candidates + artist_candidates + genre_candidates
+
+            if not all_candidates:
+                logger.warning("No anchor track candidates found")
+                return [], []
+
+            # Step 3: LLM-based filtering for cultural/linguistic relevance
+            all_candidates = await self._filter_tracks_by_relevance(
+                all_candidates, mood_prompt, mood_analysis
+            )
+
+            if not all_candidates:
+                logger.warning("No anchor track candidates after LLM filtering")
+                return [], []
+
+            # Step 4: Use LLM to determine optimal selection strategy
+            strategy = await self._get_anchor_selection_strategy(
+                mood_prompt, mood_analysis, genre_keywords, target_features, all_candidates
+            )
+
+            anchor_count = strategy.get('anchor_count', limit)
+            selection_criteria = strategy.get('selection_criteria', {})
+
+            # Step 5: Use LLM to score all candidates
+            scored_candidates = await self._llm_score_candidates(
+                all_candidates, target_features, mood_analysis, selection_criteria
+            )
+
+            # Step 6: Use LLM to finalize selection
+            selected_tracks, selected_ids = await self._llm_finalize_selection(
+                scored_candidates, anchor_count, mood_analysis
+            )
+
+            logger.info(
+                f"LLM-selected {len(selected_tracks)} anchor tracks from {len(all_candidates)} candidates"
+            )
+
+            return selected_tracks, selected_ids
+
+        except Exception as e:
+            logger.error(f"LLM-driven anchor selection failed: {e}")
+            # Fallback to original logic
+            return await self._fallback_anchor_selection(
+                genre_keywords, target_features, access_token, mood_prompt,
+                artist_recommendations, limit
+            )
+
+    async def _get_anchor_selection_strategy(
+        self,
+        mood_prompt: str,
+        mood_analysis: Dict[str, Any],
+        genre_keywords: List[str],
+        target_features: Dict[str, Any],
+        candidates: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Use LLM to determine the optimal strategy for anchor track selection.
+
+        Args:
+            mood_prompt: User's mood prompt
+            mood_analysis: Full mood analysis
+            genre_keywords: Genre keywords
+            target_features: Target audio features
+            candidates: Available track candidates
+
+        Returns:
+            Strategy dictionary with anchor count and selection criteria
+        """
+        try:
+            prompt = get_anchor_strategy_prompt(
+                mood_prompt, mood_analysis, genre_keywords, target_features, candidates
+            )
+
+            response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
+            result = LLMResponseParser.extract_json_from_response(response)
+
+            logger.info("LLM determined anchor selection strategy")
+            return result
+
+        except Exception as e:
+            logger.warning(f"Failed to get LLM anchor strategy: {e}")
+            # Return default strategy
+            return {
+                "anchor_count": 5,
+                "selection_criteria": {
+                    "prioritize_user_mentioned": True,
+                    "feature_weights": {
+                        "danceability": 1.0,
+                        "energy": 0.9,
+                        "valence": 0.8,
+                        "tempo": 0.9,
+                        "instrumentalness": 0.7
+                    },
+                    "popularity_weight": 0.3,
+                    "genre_diversity": True
+                }
+            }
+
+    async def _llm_score_candidates(
+        self,
+        candidates: List[Dict[str, Any]],
+        target_features: Dict[str, Any],
+        mood_analysis: Dict[str, Any],
+        selection_criteria: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Use LLM to score anchor track candidates.
+
+        Args:
+            candidates: List of track candidates
+            target_features: Target audio features
+            selection_criteria: Criteria from strategy analysis
+
+        Returns:
+            List of candidates with LLM-assigned scores
+        """
+        try:
+            prompt = get_anchor_scoring_prompt(
+                candidates, target_features, selection_criteria
+            )
+
+            response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
+            result = LLMResponseParser.extract_json_from_response(response)
+
+            track_scores = result.get('track_scores', [])
+
+            # Attach scores back to candidates
+            scored_candidates = []
+            for score_data in track_scores:
+                track_index = score_data.get('track_index', 0)
+                if 0 <= track_index < len(candidates):
+                    candidate = candidates[track_index].copy()
+                    candidate['llm_score'] = score_data.get('score', 0.5)
+                    candidate['llm_confidence'] = score_data.get('confidence', 0.5)
+                    candidate['llm_reasoning'] = score_data.get('reasoning', '')
+                    scored_candidates.append(candidate)
+
+            logger.info(f"LLM scored {len(scored_candidates)} anchor candidates")
+            return scored_candidates
+
+        except Exception as e:
+            logger.warning(f"Failed to get LLM candidate scores: {e}")
+            # Return candidates with default scores
+            for candidate in candidates:
+                candidate['llm_score'] = 0.6
+                candidate['llm_confidence'] = 0.5
+                candidate['llm_reasoning'] = 'Default scoring due to LLM failure'
+            return candidates
+
+    async def _llm_finalize_selection(
+        self,
+        scored_candidates: List[Dict[str, Any]],
+        target_count: int,
+        mood_analysis: Dict[str, Any]
+    ) -> tuple[List[Dict[str, Any]], List[str]]:
+        """Use LLM to finalize the selection of anchor tracks.
+
+        Args:
+            scored_candidates: Candidates with LLM scores
+            target_count: Target number of anchors
+            mood_analysis: Mood analysis context
+
+        Returns:
+            Tuple of (selected_tracks, selected_track_ids)
+        """
+        try:
+            prompt = get_anchor_finalization_prompt(
+                scored_candidates, target_count, mood_analysis
+            )
+
+            response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
+            result = LLMResponseParser.extract_json_from_response(response)
+
+            selected_indices = result.get('selected_indices', [])
+            selection_reasoning = result.get('selection_reasoning', '')
+
+            # Extract selected tracks and IDs
+            selected_tracks = []
+            selected_ids = []
+
+            for idx in selected_indices:
+                if 0 <= idx < len(scored_candidates):
+                    candidate = scored_candidates[idx]
+                    track = candidate.get('track', {})
+
+                    # Add LLM metadata
+                    track['llm_score'] = candidate.get('llm_score', 0.5)
+                    track['llm_reasoning'] = candidate.get('llm_reasoning', '')
+                    track['anchor_type'] = candidate.get('anchor_type', 'llm_selected')
+                    track['protected'] = candidate.get('protected', False)
+
+                    selected_tracks.append(track)
+                    if track.get('id'):
+                        selected_ids.append(track['id'])
+
+            logger.info(
+                f"LLM finalized selection of {len(selected_tracks)} anchor tracks: {selection_reasoning}"
+            )
+
+            return selected_tracks, selected_ids
+
+        except Exception as e:
+            logger.warning(f"Failed to finalize LLM selection: {e}")
+            # Fallback: sort by LLM score and take top N
+            scored_candidates.sort(key=lambda x: x.get('llm_score', 0), reverse=True)
+            top_candidates = scored_candidates[:target_count]
+
+            selected_tracks = [c.get('track', {}) for c in top_candidates]
+            selected_ids = [t.get('id') for t in selected_tracks if t.get('id')]
+
+            return selected_tracks, selected_ids
+
+    async def _fallback_anchor_selection(
+        self,
+        genre_keywords: List[str],
+        target_features: Dict[str, Any],
+        access_token: str,
+        mood_prompt: str,
+        artist_recommendations: List[str],
+        limit: int
+    ) -> tuple[List[Dict[str, Any]], List[str]]:
+        """Fallback anchor selection using original hard-coded logic.
+
+        Args:
+            genre_keywords: List of genre keywords to search
+            target_features: Target audio features from mood analysis
+            access_token: Spotify access token
+            mood_prompt: Original user mood prompt
+            artist_recommendations: List of artist names from mood analysis
+            limit: Maximum number of anchor tracks to select
+
+        Returns:
+            Tuple of (anchor_tracks_for_playlist, anchor_track_ids_for_reference)
+        """
+        anchor_candidates = []
+
+        # PRIORITY 1: Add user-mentioned tracks with highest priority
+        user_candidates = await self._get_user_mentioned_candidates(
+            mood_prompt, artist_recommendations, access_token
+        )
+        anchor_candidates.extend(user_candidates)
+        logger.info(f"Found {len(user_candidates)} user-mentioned tracks as anchors")
+
+        # PRIORITY 2: Add tracks from mentioned artists
+        if artist_recommendations:
+            # Create minimal mood_analysis for fallback mode
+            fallback_mood_analysis = {
+                'mood_interpretation': '',
+                'genre_keywords': genre_keywords,
+                'artist_recommendations': artist_recommendations
+            }
+            artist_candidates = await self._get_artist_based_candidates(
+                mood_prompt, artist_recommendations, target_features, access_token, fallback_mood_analysis
+            )
+            anchor_candidates.extend(artist_candidates)
+            logger.info(f"Found {len(artist_candidates)} artist-based tracks as anchors")
+
+        # PRIORITY 3: Add genre-based tracks
+        if not genre_keywords and (user_candidates or artist_candidates):
+            logger.info("No genre keywords, but using user/artist-mentioned tracks as anchors")
+        else:
+            # Use top 5 genres for better diversity (increased from 3)
+            genre_candidates = await self._get_genre_based_candidates(
+                genre_keywords[:5],
+                target_features,
+                access_token,
+                mood_prompt
+            )
+            anchor_candidates.extend(genre_candidates)
+
+        if not anchor_candidates:
+            logger.warning("No anchor track candidates found")
+            return [], []
+
+        # Sort and select top anchors
+        return self._select_top_anchors(anchor_candidates, limit)
+
+    async def _get_artist_based_candidates(
+        self,
+        mood_prompt: str,
+        artist_recommendations: List[str],
+        target_features: Dict[str, Any],
+        access_token: str,
+        mood_analysis: Dict[str, Any] = None
+    ) -> List[Dict[str, Any]]:
+        """Get anchor candidates from top recommended artists, prioritizing those mentioned in prompt.
+
+        Args:
+            mood_prompt: User's mood prompt
+            artist_recommendations: List of artist names from mood analysis
+            target_features: Target audio features
+            access_token: Spotify access token
+
+        Returns:
+            List of artist-based track candidate dictionaries
+        """
+        if not self.spotify_service or not artist_recommendations:
+            return []
+
+        candidates = []
+        prompt_lower = mood_prompt.lower()
+
+        # Prioritize artists mentioned in the prompt
+        mentioned_artists = []
+        other_artists = []
+
+        for artist in artist_recommendations:
+            if artist.lower() in prompt_lower:
+                mentioned_artists.append(artist)
+            else:
+                other_artists.append(artist)
+
+        # Process mentioned artists first (up to 3), then other top artists (up to 5 total)
+        artists_to_process = mentioned_artists[:3] + other_artists[:5]
+
+        # First, fetch all artist info
+        artist_infos = []
+        for artist_name in artists_to_process[:8]:  # Limit to 8 artists total
+            try:
+                logger.info(f"Searching for artist: {artist_name}")
+
+                # Search for artist first to get the Spotify artist ID
+                artists = await self.spotify_service.search_spotify_artists(
+                    access_token=access_token,
+                    query=artist_name,
+                    limit=1
+                )
+
+                if not artists:
+                    continue
+
+                artist_info = artists[0]
+                artist_id = artist_info.get('id')
+                if artist_id:
+                    artist_infos.append({
+                        'info': artist_info,
+                        'name': artist_name,
+                        'is_mentioned': artist_name in mentioned_artists
+                    })
+
+            except Exception as e:
+                logger.warning(f"Failed to search for artist '{artist_name}': {e}")
+                continue
+
+        # Batch validate artists with LLM
+        if self.llm and mood_analysis and artist_infos:
+            validated_artists = await self._batch_validate_artists(
+                [a['info'] for a in artist_infos],
+                mood_prompt,
+                mood_analysis
+            )
+            validated_names = {a.get('name') for a in validated_artists}
+            
+            # Filter artist_infos to only validated ones
+            artist_infos = [
+                a for a in artist_infos 
+                if a['info'].get('name') in validated_names
+            ]
+            logger.info(f"After batch validation: {len(artist_infos)} artists remaining")
+
+        # Now fetch tracks for validated artists
+        for artist_data in artist_infos:
+            artist_info = artist_data['info']
+            artist_name = artist_data['name']
+            artist_id = artist_info.get('id')
+            
+            try:
+
+                # Get top tracks for this artist
+                tracks = await self.spotify_service.get_artist_top_tracks(
+                    access_token=access_token,
+                    artist_id=artist_id,
+                    market='US'  # Could be made configurable
+                )
+
+                if not tracks:
+                    continue
+
+                # Take top 2 tracks per artist for mentioned artists, 1 for others
+                limit_per_artist = 2 if artist_name in mentioned_artists else 1
+                selected_tracks = tracks[:limit_per_artist]
+
+                # Create candidates for each track
+                for track in selected_tracks:
+                    if not track.get('id'):
+                        continue
+
+                    # Get audio features if available
+                    features = {}
+                    if self.reccobeat_service:
+                        try:
+                            features_map = await self.reccobeat_service.get_tracks_audio_features([track['id']])
+                            features = features_map.get(track['id'], {})
+                            track['audio_features'] = features
+                        except Exception as e:
+                            logger.warning(f"Failed to get features for artist track: {e}")
+
+                    # Mark as artist-based anchor
+                    is_mentioned_artist = artist_data['is_mentioned']
+                    track['user_mentioned'] = is_mentioned_artist  # Mentioned artists get high priority
+                    track['anchor_type'] = 'artist_mentioned' if is_mentioned_artist else 'artist_recommended'
+                    track['protected'] = is_mentioned_artist  # Protect mentioned artist tracks
+
+                    candidates.append({
+                        'track': track,
+                        'score': 0.9 if is_mentioned_artist else 0.8,  # High base score for artist tracks
+                        'confidence': 0.95 if is_mentioned_artist else 0.9,
+                        'features': features,
+                        'artist': artist_name,
+                        'source': 'artist_top_tracks',
+                        'anchor_type': track['anchor_type'],
+                        'user_mentioned': is_mentioned_artist,
+                        'protected': is_mentioned_artist
+                    })
+
+            except Exception as e:
+                logger.warning(f"Failed to get tracks for artist '{artist_name}': {e}")
+                continue
+
+        return candidates
+
+    async def _batch_validate_artists(
+        self,
+        artists: List[Dict[str, Any]],
+        mood_prompt: str,
+        mood_analysis: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Use LLM to batch validate artists for cultural/linguistic relevance.
+
+        More efficient than individual validation and allows better comparative decisions.
+
+        Args:
+            artists: List of artist information from Spotify
+            mood_prompt: User's mood prompt
+            mood_analysis: Mood analysis context
+
+        Returns:
+            List of validated artists
+        """
+        if not self.llm or not artists:
+            return artists  # No LLM available, allow all by default
+
+        try:
+            prompt = get_batch_artist_validation_prompt(artists, mood_prompt, mood_analysis)
+            response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
+            result = LLMResponseParser.extract_json_from_response(response)
+
+            keep_indices = result.get('keep_artists', [])
+            filtered_info = result.get('filtered_artists', [])
+            
+            # Log filtered artists
+            for filter_info in filtered_info:
+                name = filter_info.get('name', 'Unknown')
+                reason = filter_info.get('reason', '')
+                logger.info(f"LLM filtered artist '{name}': {reason}")
+            
+            # Return validated artists
+            validated = []
+            for idx in keep_indices:
+                if 0 <= idx < len(artists):
+                    validated.append(artists[idx])
+            
+            logger.info(f"Batch artist validation: kept {len(validated)}/{len(artists)} artists")
+            return validated
+
+        except Exception as e:
+            logger.warning(f"Batch artist validation LLM call failed: {e}")
+            return artists  # Default to allowing all if LLM fails
+
+    async def _filter_tracks_by_relevance(
+        self,
+        tracks: List[Dict[str, Any]],
+        mood_prompt: str,
+        mood_analysis: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Use LLM to filter out culturally/linguistically irrelevant tracks.
+
+        Args:
+            tracks: List of track candidates
+            mood_prompt: User's mood prompt
+            mood_analysis: Mood analysis context
+
+        Returns:
+            Filtered list of relevant tracks
+        """
+        if not self.llm or not tracks:
+            return tracks
+
+        try:
+            # Format tracks for LLM
+            tracks_for_llm = []
+            for track in tracks:
+                track_data = track.get('track', track)
+                tracks_for_llm.append({
+                    'name': track_data.get('name', ''),
+                    'artists': track_data.get('artists', [])
+                })
+
+            prompt = get_batch_track_filter_prompt(tracks_for_llm, mood_prompt, mood_analysis)
+            response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
+            result = LLMResponseParser.extract_json_from_response(response)
+
+            relevant_indices = set(result.get('relevant_tracks', []))
+            filtered_out = result.get('filtered_out', [])
+            
+            # Log filtered tracks
+            for filter_info in filtered_out:
+                track_idx = filter_info.get('track_index', -1)
+                reason = filter_info.get('reason', '')
+                if 0 <= track_idx < len(tracks_for_llm):
+                    track_name = tracks_for_llm[track_idx].get('name', 'Unknown')
+                    logger.info(f"LLM filtered track '{track_name}': {reason}")
+
+            # Return only relevant tracks
+            filtered_tracks = [
+                tracks[i] for i in range(len(tracks))
+                if i in relevant_indices
+            ]
+
+            logger.info(
+                f"LLM track filtering: kept {len(filtered_tracks)}/{len(tracks)} tracks"
+            )
+
+            return filtered_tracks
+
+        except Exception as e:
+            logger.warning(f"Track filtering LLM call failed: {e}")
+            return tracks  # Return all tracks if LLM fails
 
