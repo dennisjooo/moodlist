@@ -223,8 +223,8 @@ class CohesionCalculator:
                     cohesion_scores.append(track_cohesion)
             else:
                 # Artist tracks: relaxed outlier detection (curated by Spotify, more trustworthy)
-                # Outlier only if: very low cohesion
-                if track_cohesion < 0.4:
+                # Outlier only if: extremely low cohesion (let LLM handle cultural/genre mismatches)
+                if track_cohesion < 0.3:
                     outliers.append(rec.track_id)
                     logger.debug(
                         f"Outlier detected (Artist): {rec.track_name} by {', '.join(rec.artists)} "

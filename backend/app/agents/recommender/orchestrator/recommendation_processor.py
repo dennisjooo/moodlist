@@ -57,6 +57,9 @@ class RecommendationProcessor:
         Returns:
             List with enforced source ratio, sorted by confidence
         """
+        # Remove duplicates from the original list
+        recommendations = self.remove_duplicates(recommendations)
+        
         # Separate recommendations by source
         source_groups = self.separate_by_source(recommendations)
 
@@ -68,7 +71,7 @@ class RecommendationProcessor:
 
         # Combine and sort final list
         final_recommendations = self.combine_and_sort_final(capped_sources, len(recommendations))
-
+        
         return final_recommendations
 
     def separate_by_source(self, recommendations: List[TrackRecommendation]) -> Dict[str, List[TrackRecommendation]]:

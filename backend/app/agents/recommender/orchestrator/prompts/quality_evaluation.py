@@ -47,7 +47,7 @@ def get_quality_evaluation_prompt(
 **Expected Artists**: {', '.join(artist_recommendations[:8])}
 **Expected Genres**: {', '.join(genre_keywords[:5])}
 
-**Target Audio Features**: {', '.join(f'{k}={v:.2f}' for k, v in list(target_features.items())[:5])}
+**Target Audio Features**: {', '.join(f'{k}={v:.2f}' if isinstance(v, (int, float)) else f'{k}={v}' for k, v in list(target_features.items())[:5])}
 
 **Playlist** ({len(tracks_summary.split(chr(10)))} tracks, target: {target_count}):
 {tracks_summary}
@@ -68,8 +68,11 @@ def get_quality_evaluation_prompt(
 **CRITICAL**: Flag ANY track that doesn't match the language, genre, or cultural style of the mood request.
 For example:
 - Latin/Spanish music in a French playlist = OUT OF PLACE
-- K-pop in a British indie playlist = OUT OF PLACE  
+- K-pop in a British indie playlist = OUT OF PLACE
 - Regional Mexican music in an electronic playlist = OUT OF PLACE
+- Indonesian/Malay tracks in an English trap/R&B playlist = OUT OF PLACE
+- Italian rap in a US hip-hop playlist = OUT OF PLACE
+- Unknown artists with no genre fit = OUT OF PLACE
 
 **IMPORTANT**: In "specific_concerns", explicitly identify tracks that should be REMOVED from the playlist.
 Use exact format: "Track Name by Artist Name feels out of place because..."
