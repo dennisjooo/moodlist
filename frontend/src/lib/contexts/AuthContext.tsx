@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { getAuthCookies, getCookie } from './cookies';
+import { getAuthCookies, getCookie } from '../cookies';
 import { config } from '@/lib/config';
 import { logger } from '@/lib/utils/logger';
 

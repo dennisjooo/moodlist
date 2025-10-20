@@ -7,10 +7,11 @@ import PopularMoods from '@/components/PopularMoods';
 import SocialProof from '@/components/SocialProof';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { ToastContainer, useToast } from '@/components/ui/toast';
-import { useAuth } from '@/lib/authContext';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
+import { Loading } from '@/components/ui/loading';
 
 export default function Home() {
   const { toasts, removeToast, info, warning } = useToast();
@@ -35,9 +36,8 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-background relative flex items-center justify-center">
         <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-primary rounded-full animate-bounce"></div>
-          <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-          <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+          {/* Unified loading component */}
+          <Loading size="sm" variant="dots" />
         </div>
       </div>
     );

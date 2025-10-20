@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/lib/authContext';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { getAuthCookies } from '@/lib/cookies';
 import { config } from '@/lib/config';
 import { logger } from '@/lib/utils/logger';

@@ -2,9 +2,9 @@
 
 import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
-import { useAuth } from './authContext';
-import { workflowAPI, WorkflowStatus, WorkflowResults, PlaylistEditRequest } from './workflowApi';
-import { pollingManager } from './pollingManager';
+import { useAuth } from './AuthContext';
+import { workflowAPI, WorkflowStatus, WorkflowResults, PlaylistEditRequest } from '../workflowApi';
+import { pollingManager } from '../pollingManager';
 import { logger } from '@/lib/utils/logger';
 
 export interface WorkflowState {

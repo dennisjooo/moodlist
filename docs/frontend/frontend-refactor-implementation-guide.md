@@ -65,22 +65,21 @@ What changed in codebase during Phase 2 (architecture + auth lifecycle refinemen
 
 What is NOT done yet (remaining Phase 2 items):
 - Component taxonomy and folder structure
-  - Navigation decomposition into `layout/Navigation/*` is not yet implemented
+  - Navigation decomposition into `layout/Navigation/*` is partially implemented (file relocated under layout with re-export); subcomponents/hooks extraction still pending
   - No broader feature folder migration (`components/features/*`) yet; this is planned for Phase 3
 - Contexts and state ownership
-  - Context rename to `src/lib/contexts/*` and import path updates are not done
+  - Contexts have been migrated to `src/lib/contexts/*` and imports updated
   - State boundary enforcement (server vs client components) is documented but not yet applied
 - Data fetching strategy
   - No adoption of server actions or TanStack Query; current API clients remain
 - UI primitives
-  - Unified `Loading` component not introduced; existing spinners remain (tracked in cleanup checklist)
+  - Unified `Loading` component introduced at `src/components/ui/loading.tsx`; rollout to replace ad-hoc loaders will proceed incrementally
 
 Next steps recommended for Phase 2 completion:
 1) Decompose `Navigation` into subcomponents and colocate simple hooks (e.g., `useDropdown`, `useMobileNav`)
 2) Establish `components/features/*` folders incrementally for auth, mood, workflow, and playlist
-3) Move contexts under `src/lib/contexts` and update imports
-4) Draft a minimal data-fetching decision doc and tag candidates for server components
-5) Add a unified `Loading` primitive (spinner/dots/pulse variants) and replace ad-hoc loaders
+3) Draft a minimal data-fetching decision doc and tag candidates for server components
+4) Replace scattered loaders with the new `Loading` primitive across pages/components
 
 ### 1.1 Component Complexity Scoring
 
@@ -147,7 +146,7 @@ npx lighthouse http://localhost:3000 \
 
 ## Phase 2: Component Architecture Design
 
-### 2.1 Component Folder Structure (Proposed)
+### 2.1 Component Folder Structure (Proposed → initial adoption in this branch)
 
 ```
 src/
@@ -247,6 +246,14 @@ Is data route-scoped (e.g., single workflow session)?
     ├─ YES → Keep in root layout provider
     └─ NO → Feature-level provider (WorkflowProvider near /create routes)
 ```
+
+### 2.4 Data-Fetching Decision Notes (Phase 2 outcome)
+
+- Marketing/static pages (/, /about): Prefer Server Components; keep animations client-side only.
+- Authenticated flows: Client components with `credentials: 'include'` via API clients (`workflowApi`, `playlistApi`).
+- Route handlers vs. direct backend calls: Defer to backend FastAPI for auth/session and Spotify proxies; Next route handlers unnecessary at this stage.
+- Caching: Rely on browser cache and light sessionStorage for auth; no global SWR/TanStack Query yet.
+- Error handling: Normalize toast + logger usage; surface user-friendly messages.
 
 ---
 
