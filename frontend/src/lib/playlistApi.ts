@@ -1,6 +1,7 @@
 // API client for playlist-related endpoints
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+import { config } from '@/lib/config';
+import { logger } from '@/lib/utils/logger';
 
 export interface MoodAnalysis {
     mood_interpretation?: string;
@@ -41,9 +42,9 @@ class PlaylistAPI {
         endpoint: string,
         options: RequestInit = {}
     ): Promise<T> {
-        const url = `${API_BASE_URL}${endpoint}`;
+        const url = `${config.api.baseUrl}${endpoint}`;
 
-        const config: RequestInit = {
+        const reqConfig: RequestInit = {
             headers: {
                 'Content-Type': 'application/json',
                 ...options.headers,
@@ -52,9 +53,10 @@ class PlaylistAPI {
             ...options,
         };
 
-        const response = await fetch(url, config);
+        const response = await fetch(url, reqConfig);
 
         if (!response.ok) {
+            logger.error('Playlist API request failed', undefined, { component: 'PlaylistAPI', status: response.status, statusText: response.statusText, endpoint });
             throw new Error(`API request failed: ${response.status} ${response.statusText}`);
         }
 

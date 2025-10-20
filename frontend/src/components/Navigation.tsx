@@ -7,6 +7,7 @@ import { initiateSpotifyAuth, isSpotifyAuthConfigured } from '@/lib/spotifyAuth'
 import { LogOut, Menu, Music, User, X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { logger } from '@/lib/utils/logger';
 
 export default function Navigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -51,7 +52,7 @@ export default function Navigation() {
       // Force page reload to clear any cached state
       window.location.href = '/';
     } catch (error) {
-      console.error('Logout failed:', error);
+      logger.error('Logout failed', error, { component: 'Navigation' });
       // Even if backend logout fails, redirect to clear frontend state
       window.location.href = '/';
     }
