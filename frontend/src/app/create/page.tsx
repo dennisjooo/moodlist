@@ -43,6 +43,7 @@ function CreatePageContent() {
       logger.debug('Clearing workflow state on /create mount', { component: 'CreatePage' });
       resetWorkflow();
     }
+  }, []);
 
 
   // Also clear workflow state when it changes while on /create page
