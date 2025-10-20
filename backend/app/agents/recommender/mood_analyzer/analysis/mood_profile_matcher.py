@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Tuple
 
-from .config import MOOD_PROFILES
+from ..config import MOOD_PROFILES
 
 
 class MoodProfileMatcher:

@@ -5,12 +5,12 @@ from typing import Any, Dict, List, Optional
 
 from langchain_core.language_models.base import BaseLanguageModel
 
-from ..utils.llm_response_parser import LLMResponseParser
-from .prompts import (
+from ...utils.llm_response_parser import LLMResponseParser
+from ..prompts import (
     get_artist_filtering_prompt,
     get_batch_artist_validation_prompt,
 )
-from .text_processor import TextProcessor
+from ..text import TextProcessor
 
 logger = structlog.get_logger(__name__)
 

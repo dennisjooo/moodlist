@@ -1,15 +1,14 @@
 """Mood analyzer package for analyzing user mood prompts and extracting audio features."""
 
-from .mood_analysis_engine import MoodAnalysisEngine
-from .feature_extractor import FeatureExtractor
-from .artist_discovery import ArtistDiscovery
-from .playlist_target_planner import PlaylistTargetPlanner
-from .keyword_extractor import KeywordExtractor
+# Import from organized subpackages
+from .analysis import MoodAnalysisEngine, MoodProfileMatcher
+from .features import FeatureExtractor
+from .discovery import ArtistDiscovery
+from .planning import PlaylistTargetPlanner
+from .text import TextProcessor, KeywordExtractor
 from .mood_analyzer import MoodAnalyzerAgent
 from .config import STOP_WORDS, MOOD_SYNONYMS, KNOWN_GENRES, LANGUAGE_INDICATORS, MOOD_PROFILES
-from .text_processor import TextProcessor
-from .mood_profile_matcher import MoodProfileMatcher
-from .anchor_track_selector import AnchorTrackSelector
+from .anchor_selection import AnchorTrackSelector
 
 __all__ = [
     "MoodAnalysisEngine",

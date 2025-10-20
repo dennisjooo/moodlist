@@ -14,7 +14,7 @@ from . import (
     PlaylistTargetPlanner,
     KeywordExtractor
 )
-from .anchor_track_selector import AnchorTrackSelector
+from .anchor_selection import AnchorTrackSelector
 
 logger = structlog.get_logger(__name__)
 
