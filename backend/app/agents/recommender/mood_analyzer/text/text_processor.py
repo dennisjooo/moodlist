@@ -2,7 +2,7 @@
 
 from typing import List
 
-from .config import STOP_WORDS, MOOD_SYNONYMS, KNOWN_GENRES, LANGUAGE_INDICATORS
+from ..config import STOP_WORDS, MOOD_SYNONYMS, KNOWN_GENRES, LANGUAGE_INDICATORS
 
 
 class TextProcessor:
