@@ -68,10 +68,12 @@ class AnchorTrackSelector:
         if not genre_keywords and user_candidates:
             logger.info("No genre keywords, but using user-mentioned tracks as anchors")
         else:
+            # Use top 5 genres for better diversity (increased from 3)
             genre_candidates = await self._get_genre_based_candidates(
-                genre_keywords[:3],
+                genre_keywords[:5],
                 target_features,
-                access_token
+                access_token,
+                mood_prompt
             )
             anchor_candidates.extend(genre_candidates)
         
@@ -119,11 +121,20 @@ class AnchorTrackSelector:
                 except Exception as e:
                     logger.warning(f"Failed to get features for user-mentioned track: {e}")
             
+            # Mark track metadata for protection
+            track['user_mentioned'] = True  # CRITICAL: Never filter this track
+            track['anchor_type'] = 'user'  # User anchor (guaranteed inclusion)
+            track['protected'] = True  # Protected from quality filtering
+            
             candidates.append({
                 'track': track,
                 'score': 1.0,  # Highest priority for user-mentioned tracks
+                'confidence': 1.0,  # Maximum confidence
                 'features': features,
-                'source': 'user_mentioned'
+                'source': 'user_mentioned',
+                'anchor_type': 'user',
+                'user_mentioned': True,
+                'protected': True
             })
         
         return candidates
@@ -132,7 +143,8 @@ class AnchorTrackSelector:
         self,
         genres: List[str],
         target_features: Dict[str, Any],
-        access_token: str
+        access_token: str,
+        mood_prompt: str = ""
     ) -> List[Dict[str, Any]]:
         """Get anchor candidates from genre-based track search.
         
@@ -140,6 +152,7 @@ class AnchorTrackSelector:
             genres: List of genre keywords to search
             target_features: Target audio features for scoring
             access_token: Spotify access token
+            mood_prompt: Original user prompt for context-aware filtering
             
         Returns:
             List of anchor candidate dictionaries from genre searches
@@ -158,7 +171,9 @@ class AnchorTrackSelector:
                 genre_candidates = await self._score_and_create_candidates(
                     tracks,
                     target_features,
-                    genre
+                    genre,
+                    mood_prompt,
+                    genres
                 )
                 candidates.extend(genre_candidates)
                 
@@ -172,7 +187,9 @@ class AnchorTrackSelector:
         self,
         tracks: List[Dict[str, Any]],
         target_features: Dict[str, Any],
-        genre: str
+        genre: str,
+        mood_prompt: str = "",
+        genre_keywords: List[str] = None
     ) -> List[Dict[str, Any]]:
         """Score tracks and create anchor candidates.
         
@@ -180,6 +197,8 @@ class AnchorTrackSelector:
             tracks: List of track dictionaries from Spotify
             target_features: Target audio features for scoring
             genre: Genre name for metadata
+            mood_prompt: Original user prompt for context-aware filtering
+            genre_keywords: All genre keywords for context
             
         Returns:
             List of anchor candidate dictionaries
@@ -204,16 +223,45 @@ class AnchorTrackSelector:
                     
                     features = features_map.get(track_id, {})
                     if features:
-                        score = self._calculate_feature_match(features, target_features)
+                        feature_score = self._calculate_feature_match(features, target_features)
                         track['audio_features'] = features
                     else:
-                        score = 0.6
+                        feature_score = 0.6
+                    
+                    # Phase 3: Weight popularity for better mainstream alignment
+                    popularity = track.get('popularity', 50) / 100.0  # Normalize to 0-1
+                    final_score = feature_score * 0.7 + popularity * 0.3
+                    
+                    # Phase 3: Context-aware language filtering
+                    # Only penalize if language doesn't match user intent
+                    artist_names = [a.get('name', '') for a in track.get('artists', [])]
+                    track_script = self._detect_track_script(track.get('name', ''), artist_names)
+                    
+                    if self._should_apply_language_penalty(
+                        track_script,
+                        mood_prompt,
+                        genre_keywords or []
+                    ):
+                        final_score *= 0.5  # Penalty for language mismatch
+                        logger.debug(
+                            f"Applied language mismatch penalty to '{track.get('name')}' "
+                            f"by {', '.join(artist_names)} (script: {track_script})"
+                        )
+                    
+                    # Mark genre-based anchor metadata (can be filtered if poor fit)
+                    track['user_mentioned'] = False
+                    track['anchor_type'] = 'genre'
+                    track['protected'] = False  # Genre anchors can be filtered
                     
                     candidates.append({
                         'track': track,
-                        'score': score,
+                        'score': final_score,
+                        'confidence': 0.85,  # Standard confidence for genre anchors
                         'features': features,
-                        'genre': genre
+                        'genre': genre,
+                        'anchor_type': 'genre',
+                        'user_mentioned': False,
+                        'protected': False
                     })
                     
             except Exception as e:
@@ -221,21 +269,35 @@ class AnchorTrackSelector:
                 # Add tracks with default scores
                 for track in tracks:
                     if track.get('id'):
+                        track['user_mentioned'] = False
+                        track['anchor_type'] = 'genre'
+                        track['protected'] = False
                         candidates.append({
                             'track': track,
                             'score': 0.6,
+                            'confidence': 0.85,
                             'features': {},
-                            'genre': genre
+                            'genre': genre,
+                            'anchor_type': 'genre',
+                            'user_mentioned': False,
+                            'protected': False
                         })
         else:
             # No RecoBeat service, add tracks with default scores
             for track in tracks:
                 if track.get('id'):
+                    track['user_mentioned'] = False
+                    track['anchor_type'] = 'genre'
+                    track['protected'] = False
                     candidates.append({
                         'track': track,
                         'score': 0.65,
+                        'confidence': 0.85,
                         'features': {},
-                        'genre': genre
+                        'genre': genre,
+                        'anchor_type': 'genre',
+                        'user_mentioned': False,
+                        'protected': False
                     })
         
         return candidates
@@ -267,6 +329,91 @@ class AnchorTrackSelector:
         )
         
         return anchor_tracks, anchor_ids
+
+    def _detect_track_script(self, track_name: str, artist_names: List[str]) -> str:
+        """Detect the writing system/script used in track and artist names.
+        
+        Args:
+            track_name: Name of the track
+            artist_names: List of artist names
+            
+        Returns:
+            Script type: 'latin', 'cjk', 'arabic', 'hebrew', 'thai', 'cyrillic'
+        """
+        text = f"{track_name} {' '.join(artist_names)}"
+        
+        # Check for various scripts (order matters - check more specific first)
+        if any('\u4e00' <= char <= '\u9fff' or  # Chinese
+                '\u3040' <= char <= '\u309f' or  # Hiragana
+                '\u30a0' <= char <= '\u30ff' or  # Katakana
+                '\uac00' <= char <= '\ud7af'     # Korean
+                for char in text):
+            return 'cjk'
+        
+        if any('\u0600' <= char <= '\u06ff' for char in text):
+            return 'arabic'
+        
+        if any('\u0590' <= char <= '\u05ff' for char in text):
+            return 'hebrew'
+        
+        if any('\u0e00' <= char <= '\u0e7f' for char in text):
+            return 'thai'
+        
+        if any('\u0400' <= char <= '\u04ff' for char in text):
+            return 'cyrillic'
+        
+        # Default to Latin (English, Spanish, French, German, etc.)
+        return 'latin'
+    
+    def _should_apply_language_penalty(
+        self,
+        track_script: str,
+        mood_prompt: str,
+        genre_keywords: List[str]
+    ) -> bool:
+        """Determine if a language penalty should be applied based on context.
+        
+        Only penalize tracks if their language clearly doesn't match user intent.
+        
+        Args:
+            track_script: Detected script of the track ('cjk', 'arabic', 'latin', etc.)
+            mood_prompt: Original user prompt
+            genre_keywords: List of genre keywords from mood analysis
+            
+        Returns:
+            True if penalty should be applied, False otherwise
+        """
+        # If track is Latin script (English/European languages), never penalize
+        # This covers the vast majority of music and avoids false positives
+        if track_script == 'latin':
+            return False
+        
+        # Check if user explicitly requested non-English music
+        prompt_lower = mood_prompt.lower()
+        genres_lower = ' '.join(genre_keywords).lower()
+        
+        # Language/region indicators in prompt or genres
+        non_english_indicators = {
+            'cjk': ['korean', 'k-pop', 'kpop', 'japanese', 'j-pop', 'jpop', 'chinese', 
+                    'c-pop', 'cpop', 'mandarin', 'cantonese', 'anime', 'asian'],
+            'arabic': ['arabic', 'middle eastern', 'persian', 'turkish'],
+            'hebrew': ['hebrew', 'israeli'],
+            'thai': ['thai', 'southeast asian'],
+            'cyrillic': ['russian', 'cyrillic', 'slavic']
+        }
+        
+        # If user explicitly wants this language/region, don't penalize
+        indicators = non_english_indicators.get(track_script, [])
+        for indicator in indicators:
+            if indicator in prompt_lower or indicator in genres_lower:
+                logger.debug(
+                    f"Not applying language penalty - user requested {indicator} music"
+                )
+                return False
+        
+        # If we got here: track is non-Latin and user didn't request it
+        # Apply penalty (likely a cultural mismatch)
+        return True
 
     def _calculate_feature_match(
         self,

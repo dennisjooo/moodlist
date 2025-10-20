@@ -718,18 +718,38 @@ class RecommendationEngine:
         
         # Convert anchor tracks to recommendation format with high confidence
         for anchor_track in anchor_tracks:
+            # Get metadata for protection
+            user_mentioned = anchor_track.get("user_mentioned", False)
+            anchor_type = anchor_track.get("anchor_type", "genre")
+            protected = anchor_track.get("protected", False)
+            confidence = anchor_track.get("confidence", 0.95)
+            
+            # Build reasoning based on anchor type
+            if user_mentioned:
+                reasoning = "User-mentioned track - guaranteed inclusion"
+            else:
+                reasoning = "Anchor track from genre search - high feature match"
+            
             rec = TrackRecommendation(
                 track_id=anchor_track["id"],
                 track_name=anchor_track["name"],
                 artists=[a["name"] for a in anchor_track.get("artists", [])],
                 spotify_uri=anchor_track.get("uri") or anchor_track.get("spotify_uri"),
-                confidence_score=0.95,  # High confidence - these are anchor tracks
+                confidence_score=confidence,
                 audio_features=anchor_track.get("audio_features", {}),
-                reasoning="Anchor track from genre search - high feature match",
-                source="anchor_track"
+                reasoning=reasoning,
+                source="anchor_track",
+                user_mentioned=user_mentioned,
+                anchor_type=anchor_type,
+                protected=protected
             )
             # Insert at beginning for high priority
             all_recommendations.insert(0, rec.dict())
         
-        logger.info(f"Included {len(anchor_tracks)} anchor tracks in recommendations")
+        user_count = sum(1 for t in anchor_tracks if t.get("user_mentioned", False))
+        genre_count = len(anchor_tracks) - user_count
+        logger.info(
+            f"Included {len(anchor_tracks)} anchor tracks in recommendations "
+            f"({user_count} user-mentioned, {genre_count} genre-based)"
+        )
         return all_recommendations

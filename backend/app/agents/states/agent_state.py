@@ -32,6 +32,11 @@ class TrackRecommendation(BaseModel):
     audio_features: Optional[Dict[str, Any]] = Field(None, description="Audio features")
     reasoning: str = Field(..., description="Why this track was recommended")
     source: str = Field(..., description="Source of recommendation (reccobeat/spotify)")
+    
+    # Anchor track protection metadata (Phase 1)
+    user_mentioned: bool = Field(default=False, description="Whether track was explicitly mentioned by user")
+    anchor_type: Optional[str] = Field(None, description="Type of anchor: 'user' or 'genre'")
+    protected: bool = Field(default=False, description="Whether track is protected from quality filtering")
 
     class Config:
         """Pydantic configuration."""

@@ -9,7 +9,8 @@ def get_quality_evaluation_prompt(
     target_features: dict,
     tracks_summary: str,
     target_count: int,
-    evaluation: dict
+    evaluation: dict,
+    user_mentioned_tracks: list = None
 ) -> str:
     """Get the prompt for evaluating playlist quality.
     
@@ -22,16 +23,27 @@ def get_quality_evaluation_prompt(
         tracks_summary: Summary of tracks in the playlist
         target_count: Target number of tracks
         evaluation: Algorithmic evaluation results
+        user_mentioned_tracks: List of tracks explicitly mentioned by user (protected)
         
     Returns:
         Prompt string for LLM quality evaluation
     """
+    # Build user favorites section if applicable
+    user_favorites_section = ""
+    if user_mentioned_tracks:
+        user_favorites_section = f"""
+**USER FAVORITES (PROTECTED)**: The following tracks were explicitly mentioned by the user and MUST stay in the playlist:
+{chr(10).join(f'- {track}' for track in user_mentioned_tracks)}
+
+⚠️ DO NOT flag these tracks as outliers or suggest removal, even if they seem to not fit perfectly.
+"""
+    
     return f"""You are a STRICT music curator expert evaluating a playlist for quality and cohesion.
 
 **User's Mood Request**: "{mood_prompt}"
 
 **Mood Analysis**: {mood_interpretation}
-
+{user_favorites_section}
 **Expected Artists**: {', '.join(artist_recommendations[:8])}
 **Expected Genres**: {', '.join(genre_keywords[:5])}
 
