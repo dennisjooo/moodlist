@@ -6,9 +6,9 @@ from typing import Any, Dict, Optional, Union, List
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages import AIMessage
 
-from ..utils.llm_response_parser import LLMResponseParser
-from .prompts import get_mood_analysis_system_prompt
-from .text_processor import TextProcessor
+from ...utils.llm_response_parser import LLMResponseParser
+from ..prompts import get_mood_analysis_system_prompt
+from ..text import TextProcessor
 from .mood_profile_matcher import MoodProfileMatcher
 
 logger = structlog.get_logger(__name__)
