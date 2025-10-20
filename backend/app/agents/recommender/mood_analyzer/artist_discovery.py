@@ -6,7 +6,10 @@ from typing import Any, Dict, List, Optional
 from langchain_core.language_models.base import BaseLanguageModel
 
 from ..utils.llm_response_parser import LLMResponseParser
-from .prompts import get_artist_filtering_prompt
+from .prompts import (
+    get_artist_filtering_prompt,
+    get_batch_artist_validation_prompt,
+)
 from .text_processor import TextProcessor
 
 logger = structlog.get_logger(__name__)
@@ -97,11 +100,20 @@ class ArtistDiscovery:
 
             logger.info(f"Found {len(unique_artists)} unique artists from search")
 
-            # Use LLM to filter artists if available - EXPANDED for diversity
+            # Use LLM to filter artists based on cultural/genre relevance
             if self.llm and len(unique_artists) > 10:
-                filtered_artists = await self._llm_filter_artists(
+                # Use batch LLM validation for efficiency and better context
+                filtered_artists = await self._llm_batch_validate_artists(
                     unique_artists, state.mood_prompt, mood_analysis
                 )
+                logger.info(f"After LLM batch validation: {len(filtered_artists)} artists")
+                
+                # If LLM returns too few, fall back to the original LLM filtering method
+                if len(filtered_artists) < 5:
+                    logger.warning("LLM batch validation returned too few artists, using fallback")
+                    filtered_artists = await self._llm_filter_artists(
+                        unique_artists, state.mood_prompt, mood_analysis
+                    )
             else:
                 # Take more artists sorted by popularity for diversity
                 # Mix of popular and less popular for variety
@@ -298,3 +310,65 @@ class ArtistDiscovery:
                 continue
         
         return genre_artists
+
+    async def _llm_batch_validate_artists(
+        self,
+        artists: List[Dict[str, Any]],
+        mood_prompt: str,
+        mood_analysis: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Use LLM to batch validate artists for cultural/genre relevance.
+
+        This is more efficient than individual validation and allows the LLM
+        to make better comparative decisions across all artists.
+
+        Args:
+            artists: List of artist candidates
+            mood_prompt: User's mood prompt
+            mood_analysis: Mood analysis results
+
+        Returns:
+            Filtered list of validated artists
+        """
+        if not self.llm:
+            return artists
+        
+        try:
+            # Process artists in batches of 30
+            all_validated = []
+            batch_size = 30
+            
+            for i in range(0, len(artists), batch_size):
+                batch = artists[i:i + batch_size]
+                
+                prompt = get_batch_artist_validation_prompt(batch, mood_prompt, mood_analysis)
+                response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
+                result = LLMResponseParser.extract_json_from_response(response)
+                
+                keep_indices = result.get('keep_artists', [])
+                filtered_info = result.get('filtered_artists', [])
+                
+                # Log filtered artists
+                for filter_info in filtered_info:
+                    artist_idx = filter_info.get('index', -1)
+                    reason = filter_info.get('reason', '')
+                    name = filter_info.get('name', 'Unknown')
+                    logger.info(f"LLM filtered artist '{name}': {reason}")
+                
+                # Add kept artists to validated list
+                for idx in keep_indices:
+                    if 0 <= idx < len(batch):
+                        all_validated.append(batch[idx])
+                    else:
+                        logger.warning(f"Invalid artist index from LLM: {idx}")
+            
+            logger.info(
+                f"LLM batch validation: kept {len(all_validated)}/{len(artists)} artists"
+            )
+            
+            return all_validated[:20]  # Return top 20 for diversity
+        
+        except Exception as e:
+            logger.error(f"LLM batch artist validation failed: {e}")
+            # Fallback to returning all artists on error
+            return artists
