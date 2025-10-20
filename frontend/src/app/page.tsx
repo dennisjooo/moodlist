@@ -9,10 +9,22 @@ import { DotPattern } from '@/components/ui/dot-pattern';
 import { ToastContainer, useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/authContext';
 import { cn } from '@/lib/utils';
+import { useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
 
 export default function Home() {
-  const { toasts, removeToast } = useToast();
+  const { toasts, removeToast, info, warning } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const auth = searchParams.get('auth');
+    if (auth === 'required') {
+      info('Please log in to continue.');
+    } else if (auth === 'expired') {
+      warning('Your session has expired. Please log in again.');
+    }
+  }, [searchParams, info, warning]);
 
   // Only show loading if we're actually checking auth (not just initializing)
   // If isLoading is true but we have no session cookie, don't show loading

@@ -17,9 +17,10 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { logger } from '@/lib/utils/logger';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -188,27 +189,17 @@ export default function PlaylistEditor({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [isSearchPending, setIsSearchPending] = useState(false);
+  const debouncedQuery = useDebounce(searchQuery, 300);
+  const isSearchPending = searchQuery.trim().length > 0 && searchQuery !== debouncedQuery;
   const [addingTracks, setAddingTracks] = useState<Set<string>>(new Set());
   const [isAddTracksCollapsed, setIsAddTracksCollapsed] = useState(false);
-
-  // Track the latest search query to prevent race conditions
-  const latestSearchQueryRef = useRef<string>('');
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sync tracks when recommendations prop changes (from context updates)
   useEffect(() => {
     setTracks(deduplicatedRecommendations);
   }, [deduplicatedRecommendations]);
 
-  // Cleanup search timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, []);
+
 
   // Set up sensors for drag and drop
   const sensors = useSensors(
@@ -286,52 +277,42 @@ export default function PlaylistEditor({
 
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
+  }, []);
 
-    // Clear any existing timeout
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    // Store the latest query in ref to prevent race conditions
-    latestSearchQueryRef.current = query;
-
-    if (!query.trim()) {
+  // Perform search when debounced query changes
+  useEffect(() => {
+    const q = debouncedQuery.trim();
+    if (!q) {
       setSearchResults([]);
       setIsSearching(false);
-      setIsSearchPending(false);
       return;
     }
 
-    // Set pending state immediately when user types
-    setIsSearchPending(true);
-
-    // Debounce search - wait 300ms after user stops typing
-    searchTimeoutRef.current = setTimeout(async () => {
-      const currentSearchQuery = query;
+    let cancelled = false;
+    const run = async () => {
       setIsSearching(true);
-      setIsSearchPending(false);
-
       try {
-        const results = await searchTracks(query);
-
-        // Only update results if this is still the latest search
-        if (latestSearchQueryRef.current === currentSearchQuery) {
+        const results = await searchTracks(q);
+        if (!cancelled) {
           setSearchResults(results.tracks || []);
         }
       } catch (error) {
         logger.error('Search failed', error, { component: 'PlaylistEditor' });
-        // Only show error if this is still the latest search
-        if (latestSearchQueryRef.current === currentSearchQuery) {
+        if (!cancelled) {
           toast.error('Failed to search tracks');
         }
       } finally {
-        // Only update loading state if this is still the latest search
-        if (latestSearchQueryRef.current === currentSearchQuery) {
+        if (!cancelled) {
           setIsSearching(false);
         }
       }
-    }, 300);
-  }, [searchTracks]);
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery, searchTracks]);
 
   const handleAddTrack = useCallback(async (trackUri: string) => {
     setAddingTracks(prev => new Set(prev).add(trackUri));
