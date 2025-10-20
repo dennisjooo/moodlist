@@ -28,6 +28,7 @@ class Playlist(Base):
     # Relationships
     user = relationship("User", back_populates="playlists")
     invocations = relationship("Invocation", back_populates="playlist", cascade="all, delete-orphan")
+    llm_invocations = relationship("LLMInvocation", back_populates="playlist", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Playlist(id={self.id}, user_id={self.user_id}, mood_prompt={self.mood_prompt[:50]}...)>"

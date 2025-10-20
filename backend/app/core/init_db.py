@@ -13,7 +13,7 @@ backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))
 
 from app.core.database import engine, Base
-from app.models import User, Session, Playlist, Invocation
+from app.models import User, Session, Playlist, Invocation, LLMInvocation
 import structlog
 
 logger = structlog.get_logger(__name__)

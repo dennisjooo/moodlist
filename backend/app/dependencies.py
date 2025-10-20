@@ -9,6 +9,7 @@ from app.repositories.playlist_repository import PlaylistRepository
 from app.repositories.user_repository import UserRepository
 from app.repositories.session_repository import SessionRepository
 from app.repositories.invocation_repository import InvocationRepository
+from app.repositories.llm_invocation_repository import LLMInvocationRepository
 from app.clients.spotify_client import SpotifyAPIClient
 from app.services.playlist_service import PlaylistService
 from app.services.token_service import TokenService
@@ -54,6 +55,13 @@ def get_invocation_repository(
 ) -> InvocationRepository:
     """Get invocation repository."""
     return InvocationRepository(db)
+
+
+def get_llm_invocation_repository(
+    db: AsyncSession = Depends(get_db)
+) -> LLMInvocationRepository:
+    """Get LLM invocation repository."""
+    return LLMInvocationRepository(db)
 
 
 # Service dependencies
