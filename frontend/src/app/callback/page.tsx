@@ -5,6 +5,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { CheckCircle, Music, XCircle } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { config } from '@/lib/config';
+import { logger } from '@/lib/utils/logger';
 
 export default function CallbackPage() {
   const router = useRouter();
@@ -42,7 +44,7 @@ export default function CallbackPage() {
 
       try {
         // Exchange code for tokens using backend
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+        const backendUrl = config.api.baseUrl;
         const tokenResponse = await fetch(`${backendUrl}/api/spotify/token?code=${encodeURIComponent(code)}`, {
           method: 'POST',
         });
@@ -79,7 +81,7 @@ export default function CallbackPage() {
           // Dispatch custom event to notify other components to refresh auth state
           window.dispatchEvent(new CustomEvent('auth-update'));
         } catch (authError) {
-          console.error('Authentication failed:', authError);
+          logger.error('Authentication failed', authError, { component: 'CallbackPage' });
           setStatus('error');
           setErrorMessage('Authentication failed - please try again');
           return;
@@ -93,7 +95,7 @@ export default function CallbackPage() {
         }, 2000);
 
       } catch (error) {
-        console.error('Token exchange failed:', error);
+        logger.error('Token exchange failed', error, { component: 'CallbackPage' });
         setStatus('error');
         setErrorMessage('Failed to complete authentication');
       }

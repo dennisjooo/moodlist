@@ -6,6 +6,47 @@ Companion to the main refactoring plan, this guide provides technical implementa
 
 ## Phase 1: Implementation Details
 
+### Phase 1 progress update (branch: refactor/frontend-phase-1)
+
+Date: 2025-10-20
+
+What changed in codebase during Phase 1 cleanup baseline:
+- Centralized configuration
+  - Added `src/lib/config.ts` with `api.baseUrl`, `auth`, and `polling` settings
+  - Added `src/lib/constants.ts` with `ROUTES`, `TIMING`, and `COOKIES` for future use
+- Logging standardization
+  - Added `src/lib/utils/logger.ts` and began replacing `console.*` calls with structured `logger` usage
+  - `logger.debug` is suppressed in production; use `logger.info/warn/error` for important events
+- API client hardening
+  - Updated `src/lib/workflowApi.ts` and `src/lib/playlistApi.ts` to use `config.api.baseUrl`
+  - Standardized request init as `reqConfig` and enforced `credentials: 'include'`
+  - Added structured request/response/error logging via `logger`
+- Polling strategy configuration
+  - Updated `src/lib/pollingManager.ts` to source intervals/backoff from `config.polling` and use `logger`
+- Auth flow incremental hygiene (prep for Phase 2.5)
+  - Updated `src/lib/authContext.tsx` to use `config.api.baseUrl` and structured logging
+- Misc client updates
+  - Updated `src/components/SocialProof.tsx` and `src/app/profile/page.tsx` to use `config.api.baseUrl` + `logger`
+
+What is NOT done yet (planned next steps):
+- Phase 2.5 critical auth optimizations (optimistic auth provider state machine, `middleware.ts`, and `<AuthGuard>`) remain TODO
+- Finish replacing all `console.*` calls across the app (search with grep and convert to `logger`)
+- Replace `window.location.reload()` patterns with router navigation/state updates
+- Introduce a unified Loading UI and replace ad-hoc spinners
+
+Usage guidelines introduced by these changes:
+- Prefer `config.api.baseUrl` over inline `process.env` lookups
+- Use the `logger` for all diagnostics: `logger.debug/info/warn/error` with a `component` context
+- Pull reusable values from `constants.ts` (`ROUTES`/`TIMING`/`COOKIES`) instead of magic strings/numbers
+
+Touched files in this pass:
+- New: `src/lib/config.ts`, `src/lib/constants.ts`, `src/lib/utils/logger.ts`
+- Updated: `src/lib/workflowApi.ts`, `src/lib/playlistApi.ts`, `src/lib/pollingManager.ts`, `src/lib/authContext.tsx`
+- Updated: `src/components/SocialProof.tsx`, `src/app/profile/page.tsx`
+
+Impact:
+- No user-visible behavior changes expected; groundwork laid for Phase 2.5 and later phases (single source of truth for URLs/timing, structured logging).
+
 ### 1.1 Component Complexity Scoring
 
 **Current large components identified:**
