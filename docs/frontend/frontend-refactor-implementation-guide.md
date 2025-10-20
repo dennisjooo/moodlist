@@ -47,6 +47,41 @@ Touched files in this pass:
 Impact:
 - No user-visible behavior changes expected; groundwork laid for Phase 2.5 and later phases (single source of truth for URLs/timing, structured logging).
 
+### Phase 2 progress update (branch: refactor/continue-frontend-docs)
+
+Date: 2025-10-20
+
+What changed in codebase during Phase 2 (architecture + auth lifecycle refinements):
+- Auth lifecycle and route protection
+  - Added `frontend/middleware.ts` with server-side cookie checks on protected routes (`/create/*`, `/playlists`, `/playlist/*`, `/profile`), intentionally leaving `/create` public per UX
+  - Built `<AuthGuard>` at `src/components/auth/AuthGuard.tsx` and wrapped protected pages (`/playlists`, `/playlist/[id]`, `/playlist/[id]/edit`, `/create/[id]`, `/profile`)
+  - Upgraded `src/lib/authContext.tsx` to an optimistic, cookie-driven state machine with background verification, sessionStorage caching (2 min TTL), and `auth-validated`/`auth-expired` events
+- DX and hooks
+  - Added shared hooks: `useDebounce` and `useLocalStorage` under `src/lib/hooks`
+  - Refactored `PlaylistEditor` search to use `useDebounce` for clearer, testable logic
+- UX hygiene
+  - Replaced `window.location.reload()` usages with router navigation/state refresh in Create and Playlist pages; Navigation logout now uses `router.push('/')` + `router.refresh()`
+  - Home page now reads `?auth=required|expired` and surfaces user-friendly toasts
+
+What is NOT done yet (remaining Phase 2 items):
+- Component taxonomy and folder structure
+  - Navigation decomposition into `layout/Navigation/*` is not yet implemented
+  - No broader feature folder migration (`components/features/*`) yet; this is planned for Phase 3
+- Contexts and state ownership
+  - Context rename to `src/lib/contexts/*` and import path updates are not done
+  - State boundary enforcement (server vs client components) is documented but not yet applied
+- Data fetching strategy
+  - No adoption of server actions or TanStack Query; current API clients remain
+- UI primitives
+  - Unified `Loading` component not introduced; existing spinners remain (tracked in cleanup checklist)
+
+Next steps recommended for Phase 2 completion:
+1) Decompose `Navigation` into subcomponents and colocate simple hooks (e.g., `useDropdown`, `useMobileNav`)
+2) Establish `components/features/*` folders incrementally for auth, mood, workflow, and playlist
+3) Move contexts under `src/lib/contexts` and update imports
+4) Draft a minimal data-fetching decision doc and tag candidates for server components
+5) Add a unified `Loading` primitive (spinner/dots/pulse variants) and replace ad-hoc loaders
+
 ### 1.1 Component Complexity Scoring
 
 **Current large components identified:**

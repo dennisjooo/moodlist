@@ -17,6 +17,16 @@ See Phase 2.5 in `frontend-refactor-plan.md` for complete solution.
 
 ## Code Quality Issues
 
+### Progress Update (2025-10-20)
+- Replaced window.location.reload() in:
+  - Navigation logout → router.push('/') + router.refresh()
+  - /app/create/page.tsx edit handlers → router navigation + context refresh
+  - /app/create/[id]/page.tsx edit handlers → context refresh + router navigation
+  - /app/playlists/page.tsx retry button → refetch function
+- Middleware and AuthGuard introduced to reduce redundant auth checks and flashing on protected pages
+- Debounced search in PlaylistEditor using `useDebounce`
+
+
 ### 1. Console Logging Cleanup
 
 **Problem:** Debug `console.log` statements left in production code.

@@ -182,6 +182,6 @@ Track these throughout the refactor:
 
 ---
 
-**Last updated:** October 2024  
+**Last updated:** October 2025  
 **Maintained by:** Engineering team  
-**Status:** Planning complete, ready for implementation
+**Status:** Phase 2.5 auth optimization implemented; Phase 2 architecture in progress (Navigation decomposition, folder normalization next)
