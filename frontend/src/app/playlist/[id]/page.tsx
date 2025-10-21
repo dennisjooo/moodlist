@@ -1,5 +1,6 @@
 'use client';
 
+import { AuthGuard } from '@/components/AuthGuard';
 import Navigation from '@/components/Navigation';
 import PlaylistResults from '@/components/PlaylistResults';
 import { Button } from '@/components/ui/button';
@@ -19,7 +20,7 @@ function PlaylistPageContent() {
     const sessionId = params.id as string;
     const [isLoadingSession, setIsLoadingSession] = useState(true);
     const { workflowState, loadWorkflow, syncFromSpotify } = useWorkflow();
-    const { isAuthenticated, isLoading: authLoading } = useAuth();
+    const { isAuthenticated } = useAuth();
     const [hasAutoSynced, setHasAutoSynced] = useState(false);
 
     const handleBack = () => {
@@ -29,17 +30,6 @@ function PlaylistPageContent() {
     const loadSessionCallback = useCallback(async () => {
         if (!sessionId) {
             router.push('/playlists');
-            return;
-        }
-
-        // Wait for auth to finish loading
-        if (authLoading) {
-            return;
-        }
-
-        // Check authentication
-        if (!isAuthenticated) {
-            router.push('/');
             return;
         }
 
@@ -56,7 +46,7 @@ function PlaylistPageContent() {
 
         // Load the workflow state from the API
         await loadWorkflow(sessionId);
-    }, [sessionId, authLoading, isAuthenticated, workflowState.sessionId, workflowState.status, workflowState.isLoading, router, loadWorkflow]);
+    }, [sessionId, workflowState.sessionId, workflowState.status, workflowState.isLoading, router, loadWorkflow]);
 
     // Load session if not already in context
     useEffect(() => {
@@ -79,7 +69,6 @@ function PlaylistPageContent() {
         const shouldAutoSync =
             !hasAutoSynced &&
             !isLoadingSession &&
-            !authLoading &&
             isAuthenticated &&
             workflowState.sessionId === sessionId &&
             workflowState.status === 'completed' &&
@@ -94,7 +83,6 @@ function PlaylistPageContent() {
     }, [
         hasAutoSynced,
         isLoadingSession,
-        authLoading,
         isAuthenticated,
         workflowState.sessionId,
         workflowState.status,
@@ -103,8 +91,8 @@ function PlaylistPageContent() {
         syncFromSpotify
     ]);
 
-    // Loading state - show while checking auth or loading playlist
-    if (authLoading || isLoadingSession) {
+    // Loading state - show while loading playlist
+    if (isLoadingSession) {
         return (
             <div className="min-h-screen bg-background relative">
                 <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
@@ -205,6 +193,10 @@ function PlaylistPageContent() {
 }
 
 export default function PlaylistPage() {
-    return <PlaylistPageContent />;
+    return (
+        <AuthGuard optimistic={true}>
+            <PlaylistPageContent />
+        </AuthGuard>
+    );
 }
 

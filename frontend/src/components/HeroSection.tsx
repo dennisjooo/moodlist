@@ -1,9 +1,12 @@
+'use client';
+
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import TypewriterText from '@/components/TypewriterText';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Music, ArrowDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 interface HeroSectionProps {
   isLoggedIn: boolean;
@@ -12,6 +15,11 @@ interface HeroSectionProps {
 
 export default function HeroSection({ isLoggedIn, onLoginSuccess }: HeroSectionProps) {
   const router = useRouter();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   return (
     <div className="relative h-screen flex items-center justify-center px-6 lg:px-8">
@@ -45,7 +53,12 @@ export default function HeroSection({ isLoggedIn, onLoginSuccess }: HeroSectionP
           </p>
 
           <div className="flex flex-col items-center mb-16">
-            {!isLoggedIn ? (
+            {!isClient ? (
+              <div className="flex flex-col items-center space-y-4 min-h-[120px] justify-center">
+                {/* Placeholder to prevent layout shift during hydration */}
+                <div className="h-12 w-64" />
+              </div>
+            ) : !isLoggedIn ? (
               <div className="flex flex-col items-center space-y-4 min-h-[120px] justify-center">
                 <SpotifyLoginButton />
                 <p className="text-sm text-muted-foreground">

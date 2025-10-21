@@ -11,10 +11,16 @@ type Props = {
 };
 
 export const AnimatedThemeToggler = ({ className, onToggle }: Props) => {
-  const [isDark, setIsDark] = useState(false);
+  // Initialize with SSR-safe check - will update on mount
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return document.documentElement.classList.contains("dark");
+  });
+  const [isMounted, setIsMounted] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
+    setIsMounted(true);
     const updateTheme = () => {
       setIsDark(document.documentElement.classList.contains("dark"));
     };
@@ -66,6 +72,19 @@ export const AnimatedThemeToggler = ({ className, onToggle }: Props) => {
       },
     );
   }, [isDark, onToggle]);
+
+  // Don't render until mounted to avoid hydration mismatch
+  if (!isMounted) {
+    return (
+      <button
+        ref={buttonRef}
+        className={cn("flex items-center justify-center", className)}
+        disabled
+      >
+        <div className="h-4 w-4" /> {/* Placeholder to prevent layout shift */}
+      </button>
+    );
+  }
 
   return (
     <button

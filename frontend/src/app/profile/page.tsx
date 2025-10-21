@@ -1,10 +1,11 @@
 'use client';
 
+import { AuthGuard } from '@/components/AuthGuard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/lib/authContext';
-import { getAuthCookies } from '@/lib/cookies';
 import { config } from '@/lib/config';
+import { getAuthCookies } from '@/lib/cookies';
 import { logger } from '@/lib/utils/logger';
 import { ArrowLeft, Mail, MapPin, Music, User, Users } from 'lucide-react';
 import Image from 'next/image';
@@ -20,38 +21,17 @@ interface SpotifyProfile {
   followers: number;
 }
 
-export default function ProfilePage() {
+function ProfilePageContent() {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [spotifyProfile, setSpotifyProfile] = useState<SpotifyProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/');
-      return;
-    }
-
     if (isAuthenticated && user) {
       fetchSpotifyProfile();
     }
-  }, [isAuthenticated, user, isLoading, router]);
-
-  // Only show loading if we're actually checking auth and have a session
-  const hasSessionCookie = typeof document !== 'undefined' && document.cookie.includes('session_token');
-  const shouldShowLoading = isLoading && hasSessionCookie;
-
-  if (shouldShowLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted">
-        <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-primary rounded-full animate-bounce"></div>
-          <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-          <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-        </div>
-      </div>
-    );
-  }
+  }, [isAuthenticated, user]);
 
   const fetchSpotifyProfile = async () => {
     if (!user) return;
@@ -88,25 +68,6 @@ export default function ProfilePage() {
   const handleBack = () => {
     router.back();
   };
-
-
-  if (!isAuthenticated || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <p className="text-muted-foreground mb-4">Please log in to view your profile</p>
-              <Button onClick={handleBack}>
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Go Back
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted p-4">
@@ -163,15 +124,15 @@ export default function ProfilePage() {
               {/* Profile Details */}
               <div className="flex-1 space-y-4">
                 <div>
-                  <h2 className="text-2xl font-semibold">{user.display_name}</h2>
-                  <p className="text-muted-foreground">@{user.spotify_id}</p>
+                  <h2 className="text-2xl font-semibold">{user?.display_name}</h2>
+                  <p className="text-muted-foreground">@{user?.spotify_id}</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {user.email && (
+                  {user?.email && (
                     <div className="flex items-center space-x-2">
                       <Mail className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">{user.email}</span>
+                      <span className="text-sm">{user?.email}</span>
                     </div>
                   )}
 
@@ -235,5 +196,13 @@ export default function ProfilePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <AuthGuard optimistic={false}>
+      <ProfilePageContent />
+    </AuthGuard>
   );
 }
