@@ -10,10 +10,9 @@ import { useEffect, useState } from 'react';
 
 interface HeroSectionProps {
   isLoggedIn: boolean;
-  onLoginSuccess?: () => void;
 }
 
-export default function HeroSection({ isLoggedIn, onLoginSuccess }: HeroSectionProps) {
+export default function HeroSection({ isLoggedIn }: HeroSectionProps) {
   const router = useRouter();
   const [isClient, setIsClient] = useState(false);
 
@@ -48,7 +47,7 @@ export default function HeroSection({ isLoggedIn, onLoginSuccess }: HeroSectionP
             </span>
           </h1>
           <p className="text-lg leading-8 text-muted-foreground max-w-2xl mb-12">
-            Describe how you're feeling and we'll create the perfect Spotify playlist for your moment.
+            Describe how you&apos;re feeling and we&apos;ll create the perfect Spotify playlist for your moment.
             Powered by AI, personalized for you.
           </p>
 

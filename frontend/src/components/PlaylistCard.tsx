@@ -65,7 +65,7 @@ export default function PlaylistCard({ mood, title, createdAt, trackCount, spoti
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Playlist</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{title}"? This action cannot be undone.
+              Are you sure you want to delete &quot;{title}&quot;? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

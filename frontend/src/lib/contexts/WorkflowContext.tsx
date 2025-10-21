@@ -3,8 +3,31 @@
 import { logger } from '@/lib/utils/logger';
 import { usePathname } from 'next/navigation';
 import { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { pollingManager } from './pollingManager';
-import { workflowAPI, WorkflowResults, WorkflowStatus } from './workflowApi';
+import { pollingManager } from '../pollingManager';
+import { workflowAPI, WorkflowResults, WorkflowStatus } from '../workflowApi';
+
+// Track type alias matching the structure from WorkflowResults
+export type Track = {
+  track_id: string;
+  track_name: string;
+  artists: string[];
+  spotify_uri?: string;
+  confidence_score: number;
+  reasoning: string;
+  source: string;
+};
+
+// Search result track type (from Spotify search API)
+export type SearchTrack = {
+  track_id: string;
+  track_name: string;
+  artists: string[];
+  spotify_uri: string;
+  album: string;
+  album_image?: string;
+  duration_ms: number;
+  preview_url?: string;
+};
 
 export interface WorkflowState {
   sessionId: string | null;
@@ -37,10 +60,19 @@ interface WorkflowContextType {
       trackUri?: string;
     }
   ) => Promise<void>;
-  searchTracks: (query: string, limit?: number) => Promise<any>;
+  searchTracks: (query: string, limit?: number) => Promise<{ tracks: SearchTrack[]; total: number; query: string }>;
   refreshResults: () => Promise<void>;
-  saveToSpotify: () => Promise<any>;
-  syncFromSpotify: () => Promise<any>;
+  saveToSpotify: () => Promise<{
+    session_id: string;
+    playlist_id: string;
+    playlist_name: string;
+    spotify_url?: string;
+    spotify_uri?: string;
+    tracks_added: number;
+    message: string;
+    already_saved?: boolean;
+  }>;
+  syncFromSpotify: () => Promise<{ synced: boolean; message?: string; changes?: { tracks_added: number; tracks_removed: number } }>;
   clearError: () => void;
 }
 
@@ -142,7 +174,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
         logger.debug('Workflow is terminal, loading results', { component: 'WorkflowContext', sessionId });
         try {
           results = await workflowAPI.getWorkflowResults(sessionId);
-        } catch (e) {
+        } catch {
           // Results might not be ready yet, that's ok
           logger.warn('Results not ready yet for terminal workflow', { component: 'WorkflowContext', sessionId });
         }
@@ -412,6 +444,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
         });
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, workflowState.sessionId, workflowState.status, workflowState.isLoading]);
 
   // Auto-refresh workflow status when there's an active session

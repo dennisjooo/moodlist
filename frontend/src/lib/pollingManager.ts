@@ -2,6 +2,7 @@
 // Based on the polling strategy from FRONTEND_INTEGRATION_GUIDE.md
 import { config } from '@/lib/config';
 import { logger } from '@/lib/utils/logger';
+import { WorkflowStatus } from './workflowApi';
 
 export interface PollingConfig {
   interval: number;        // Base polling interval in ms
@@ -10,7 +11,7 @@ export interface PollingConfig {
 }
 
 export interface PollingCallbacks {
-  onStatus: (status: any) => void;
+  onStatus: (status: WorkflowStatus) => void;
   onError?: (error: Error) => void;
   onComplete?: () => void;
   onAwaitingInput?: () => void;
@@ -29,7 +30,7 @@ export class PollingManager {
 
   startPolling(
     sessionId: string,
-    pollFn: () => Promise<any>,
+    pollFn: () => Promise<WorkflowStatus>,
     callbacks: PollingCallbacks,
     config: Partial<PollingConfig> = {}
   ) {
@@ -62,10 +63,10 @@ export class PollingManager {
         } else if (result.awaiting_input && callbacks.onAwaitingInput) {
           callbacks.onAwaitingInput();
           // Poll less frequently when waiting for user input
-          this.schedulePoll(sessionId, nextInterval, poll, mergedConfig);
+          this.schedulePoll(sessionId, nextInterval, poll);
         } else {
           // Normal polling during active processing
-          this.schedulePoll(sessionId, nextInterval, poll, mergedConfig);
+          this.schedulePoll(sessionId, nextInterval, poll);
         }
 
       } catch (error) {
@@ -85,7 +86,7 @@ export class PollingManager {
           this.backoffMs.set(sessionId, nextBackoff);
           this.retryCount.set(sessionId, currentRetryCount + 1);
 
-          this.schedulePoll(sessionId, nextBackoff, poll, mergedConfig);
+          this.schedulePoll(sessionId, nextBackoff, poll);
 
           if (callbacks.onError) {
             callbacks.onError(error instanceof Error ? error : new Error('Polling failed'));
@@ -127,8 +128,7 @@ export class PollingManager {
   private schedulePoll(
     sessionId: string,
     delayMs: number,
-    pollFn: () => Promise<void>,
-    config: PollingConfig
+    pollFn: () => Promise<void>
   ) {
     this.stopPolling(sessionId);
 

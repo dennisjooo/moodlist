@@ -15,19 +15,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { playlistAPI } from '@/lib/playlistApi';
-import { useWorkflow } from '@/lib/workflowContext';
+import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { Download, Edit, ExternalLink, Loader2, Music, RefreshCw, Star, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { logger } from '@/lib/utils/logger';
 
-interface PlaylistResultsProps {
-  onEdit?: () => void;
-  onNewPlaylist?: () => void;
-}
-
-export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResultsProps = {}) {
+export default function PlaylistResults() {
   const router = useRouter();
   const { workflowState, saveToSpotify, syncFromSpotify, resetWorkflow } = useWorkflow();
   const [isSaving, setIsSaving] = useState(false);
@@ -123,7 +118,7 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
               <div>
                 <h3 className="font-semibold text-xl">{hasSavedToSpotify ? (workflowState.playlist?.name || 'Saved Playlist') : 'Your Draft Playlist'}</h3>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  {hasSavedToSpotify ? '✅ Saved to Spotify' : '📝 Based on'} "{workflowState.moodPrompt}" • {workflowState.recommendations.length} tracks
+                  {hasSavedToSpotify ? '✅ Saved to Spotify' : '📝 Based on'} &quot;{workflowState.moodPrompt}&quot; • {workflowState.recommendations.length} tracks
                 </p>
               </div>
             </div>
@@ -222,7 +217,7 @@ export default function PlaylistResults({ onEdit, onNewPlaylist }: PlaylistResul
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Playlist</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{workflowState.playlist?.name || workflowState.moodPrompt}"?
+              Are you sure you want to delete &quot;{workflowState.playlist?.name || workflowState.moodPrompt}&quot;?
               This action cannot be undone and will remove the playlist from both your account.
             </AlertDialogDescription>
           </AlertDialogHeader>

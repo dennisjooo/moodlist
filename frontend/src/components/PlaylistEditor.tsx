@@ -20,13 +20,14 @@ import { CSS } from '@dnd-kit/utilities';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { logger } from '@/lib/utils/logger';
+import Image from 'next/image';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { useWorkflow } from '@/lib/workflowContext';
+import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import {
   Check,
   ChevronDown,
@@ -173,7 +174,7 @@ export default function PlaylistEditor({
   onSave,
   onCancel
 }: PlaylistEditorProps) {
-  const { applyCompletedEdit, saveToSpotify, searchTracks } = useWorkflow();
+  const { applyCompletedEdit, searchTracks } = useWorkflow();
 
   // Deduplicate recommendations by track_id to prevent React key conflicts
   const deduplicatedRecommendations = useMemo(() =>
@@ -184,9 +185,8 @@ export default function PlaylistEditor({
 
   const [tracks, setTracks] = useState<Track[]>(deduplicatedRecommendations);
   const [removingTracks, setRemovingTracks] = useState<Set<string>>(new Set());
-  const [isFinalizing, setIsFinalizing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<Track[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isSearchPending, setIsSearchPending] = useState(false);
   const [addingTracks, setAddingTracks] = useState<Set<string>>(new Set());
@@ -249,7 +249,7 @@ export default function PlaylistEditor({
         }
       }
     }
-  }, [tracks, applyCompletedEdit]);
+  }, [tracks, applyCompletedEdit, sessionId]);
 
   const handleRemoveTrack = useCallback(async (trackId: string) => {
     setRemovingTracks(prev => new Set(prev).add(trackId));
@@ -379,7 +379,7 @@ export default function PlaylistEditor({
             ✏️ Edit Your Playlist
           </CardTitle>
           <p className="text-muted-foreground">
-            {isCompleted ? 'Search and add tracks, or drag to reorder and remove songs.' : 'Drag tracks to reorder them, or remove songs you don\'t like.'}
+            {isCompleted ? 'Search and add tracks, or drag to reorder and remove songs.' : 'Drag tracks to reorder them, or remove songs you don&apos;t like.'}
           </p>
         </CardHeader>
       </Card>
@@ -439,9 +439,11 @@ export default function PlaylistEditor({
                           className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent/50 transition-colors"
                         >
                           {track.album_image && (
-                            <img
+                            <Image
                               src={track.album_image}
-                              alt={track.album}
+                              alt={track.album || 'Album cover'}
+                              width={48}
+                              height={48}
                               className="w-12 h-12 rounded"
                             />
                           )}
@@ -512,7 +514,7 @@ export default function PlaylistEditor({
 
                 {!isSearching && !isSearchPending && searchResults.length === 0 && searchQuery && searchQuery.length >= 2 && (
                   <div className="text-center py-8 text-muted-foreground">
-                    <p className="text-sm">No results found for "{searchQuery}"</p>
+                    <p className="text-sm">No results found for &quot;{searchQuery}&quot;</p>
                   </div>
                 )}
 

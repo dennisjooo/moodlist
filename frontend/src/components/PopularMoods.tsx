@@ -2,7 +2,7 @@
 
 import LoginRequiredDialog from '@/components/LoginRequiredDialog';
 import MoodCard from '@/components/MoodCard';
-import { useAuth } from '@/lib/authContext';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { getMoodGenre } from '@/lib/moodColors';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';

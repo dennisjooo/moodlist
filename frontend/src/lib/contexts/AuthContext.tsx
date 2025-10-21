@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
-import { getAuthCookies, getCookie } from './cookies';
+import { getAuthCookies, getCookie } from '../cookies';
 import { config } from '@/lib/config';
 import { logger } from '@/lib/utils/logger';
 
@@ -39,7 +39,9 @@ interface CachedAuthData {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isValidated, setIsValidated] = useState(false); // Track if backend verification completed
+  // Track if backend verification completed
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [isValidated, setIsValidated] = useState(false);
 
   // Get cached auth data from SessionStorage
   const getCachedAuth = (): CachedAuthData | null => {
@@ -276,6 +278,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => {
       window.removeEventListener('auth-update', handleAuthUpdate);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const value: AuthContextType = {

@@ -1,7 +1,7 @@
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { Toaster } from '@/components/ui/sonner';
-import { AuthProvider } from '@/lib/authContext';
-import { WorkflowProvider } from '@/lib/workflowContext';
+import { AuthProvider } from '@/lib/contexts/AuthContext';
+import { WorkflowProvider } from '@/lib/contexts/WorkflowContext';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
