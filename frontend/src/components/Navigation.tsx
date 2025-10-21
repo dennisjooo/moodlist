@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/authContext';
 import { initiateSpotifyAuth, isSpotifyAuthConfigured } from '@/lib/spotifyAuth';
 import { LogOut, Menu, Music, User, X } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { logger } from '@/lib/utils/logger';
 
@@ -14,23 +15,11 @@ export default function Navigation() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const { user, isAuthenticated, logout } = useAuth();
+  const router = useRouter();
 
   // Only show auth-dependent UI after client-side hydration
   useEffect(() => {
     setIsClient(true);
-  }, []);
-
-  // Listen for auth updates - must be called before any early returns
-  useEffect(() => {
-    const handleAuthUpdate = () => {
-      // Force re-render when auth state changes
-      window.location.reload();
-    };
-
-    window.addEventListener('auth-update', handleAuthUpdate);
-    return () => {
-      window.removeEventListener('auth-update', handleAuthUpdate);
-    };
   }, []);
 
   const handleLogout = async () => {
@@ -38,12 +27,14 @@ export default function Navigation() {
       await logout();
       setIsDropdownOpen(false);
       setIsMenuOpen(false);
-      // Force page reload to clear any cached state
-      window.location.href = '/';
+      // Navigate to home and refresh to clear any cached state
+      router.push('/');
+      router.refresh();
     } catch (error) {
       logger.error('Logout failed', error, { component: 'Navigation' });
       // Even if backend logout fails, redirect to clear frontend state
-      window.location.href = '/';
+      router.push('/');
+      router.refresh();
     }
   };
 

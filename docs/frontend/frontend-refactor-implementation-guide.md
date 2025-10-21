@@ -29,11 +29,14 @@ What changed in codebase during Phase 1 cleanup baseline:
 - Misc client updates
   - Updated `src/components/SocialProof.tsx` and `src/app/profile/page.tsx` to use `config.api.baseUrl` + `logger`
 
-What is NOT done yet (planned next steps):
+Phase 1 cleanup completed ✅:
 
-- Finish replacing all `console.*` calls across the app (search with grep and convert to `logger`)
-- Replace `window.location.reload()` patterns with router navigation/state updates
-- Introduce a unified Loading UI and replace ad-hoc spinners
+- ✅ **window.location.reload() replacement**: All 6 instances replaced with proper router navigation:
+  - Navigation.tsx: Removed auth-update event listener (unnecessary with new auth system), replaced logout redirects
+  - playlists/page.tsx: "Try Again" button now calls fetchPlaylists() instead of reload
+  - create/[id]/page.tsx: Edit complete/cancel handlers now navigate to playlist view
+  - create/page.tsx: Edit complete/cancel handlers now navigate to playlist view
+- ✅ **Loading UI consolidation**: LoadingDots component used consistently for page-level loading; custom spinners used appropriately for specific contexts (AuthGuard verification, AI startup animation)
 
 Usage guidelines introduced by these changes:
 
@@ -53,6 +56,7 @@ Impact:
 - **Frontend optimizations**: Optimistic rendering, SessionStorage caching, middleware protection
 - **No user-visible behavior changes**: Backwards compatible, groundwork laid for remaining phases
 - **Single source of truth**: Centralized URLs/timing, structured logging established
+- **Phase 1 Status**: 100% complete - all assessment, optimization, and cleanup tasks finished
 
 ### 1.1 Component Complexity Scoring
 
