@@ -3,7 +3,7 @@
 import { AuthGuard } from '@/components/AuthGuard';
 import Navigation from '@/components/Navigation';
 import PlaylistCard from '@/components/PlaylistCard';
-import SpotifyLoginButton from '@/components/SpotifyLoginButton';
+import { SpotifyLoginButton } from '@/components/features/auth/SpotifyLoginButton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';

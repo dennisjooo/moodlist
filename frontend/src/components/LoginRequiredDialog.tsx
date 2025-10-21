@@ -1,6 +1,6 @@
 'use client';
 
-import SpotifyLoginButton from '@/components/SpotifyLoginButton';
+import { SpotifyLoginButton } from '@/components/features/auth/SpotifyLoginButton';
 import {
     AlertDialog,
     AlertDialogCancel,
