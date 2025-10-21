@@ -17,6 +17,7 @@ import {
 import { Music } from 'lucide-react';
 import { TrackItem } from './TrackItem';
 import type { Track } from '@/lib/contexts/WorkflowContext';
+import { useCallback } from 'react';
 
 export interface TrackListProps {
     tracks: Track[];
@@ -51,6 +52,10 @@ export function TrackList({ tracks, onReorder, onRemove, removingTracks }: Track
         }
     };
 
+    const handleRemove = useCallback((trackId: string) => {
+        onRemove(trackId);
+    }, [onRemove]);
+
     if (tracks.length === 0) {
         return (
             <div className="text-center py-12 text-muted-foreground">
@@ -76,7 +81,7 @@ export function TrackList({ tracks, onReorder, onRemove, removingTracks }: Track
                             key={track.track_id}
                             track={track}
                             index={index}
-                            onRemove={onRemove}
+                            onRemove={handleRemove}
                             isRemoving={removingTracks.has(track.track_id)}
                         />
                     ))}

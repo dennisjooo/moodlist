@@ -4,8 +4,14 @@ import { AuthGuard } from '@/components/AuthGuard';
 import LoginRequiredDialog from '@/components/LoginRequiredDialog';
 import MoodInput from '@/components/MoodInput';
 import Navigation from '@/components/Navigation';
-import PlaylistEditor from '@/components/PlaylistEditor';
-import PlaylistResults from '@/components/PlaylistResults';
+import dynamic from 'next/dynamic';
+const PlaylistEditor = dynamic(() => import('@/components/PlaylistEditor'), {
+  loading: () => <EditorSkeleton />,
+  ssr: false,
+});
+const PlaylistResults = dynamic(() => import('@/components/PlaylistResults'), {
+  loading: () => <ResultsSkeleton />,
+});
 import { Badge } from '@/components/ui/badge';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -15,6 +21,30 @@ import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { Sparkles } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+
+function EditorSkeleton() {
+  return (
+    <div className="flex items-center justify-center min-h-[300px]">
+      <div className="animate-pulse w-full max-w-2xl space-y-4">
+        <div className="h-8 bg-muted rounded" />
+        <div className="h-40 bg-muted rounded" />
+        <div className="h-8 bg-muted rounded" />
+      </div>
+    </div>
+  );
+}
+
+function ResultsSkeleton() {
+  return (
+    <div className="flex items-center justify-center min-h-[200px]">
+      <div className="animate-pulse w-full max-w-xl space-y-4">
+        <div className="h-6 bg-muted rounded" />
+        <div className="h-6 bg-muted rounded" />
+        <div className="h-6 bg-muted rounded" />
+      </div>
+    </div>
+  );
+}
 
 // Main content component that uses workflow context
 function CreatePageContent() {

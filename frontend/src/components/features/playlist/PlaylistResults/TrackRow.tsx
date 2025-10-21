@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { ExternalLink, Star } from 'lucide-react';
+import { memo } from 'react';
 
 interface Track {
   track_id: string;
@@ -16,7 +17,7 @@ interface TrackRowProps {
   index: number;
 }
 
-export default function TrackRow({ track, index }: TrackRowProps) {
+function TrackRow({ track, index }: TrackRowProps) {
   const getSpotifyUrl = (uri?: string) => {
     if (!uri) return null;
     if (uri.startsWith('http')) return uri;
@@ -66,4 +67,6 @@ export default function TrackRow({ track, index }: TrackRowProps) {
     </div>
   );
 }
+
+export default memo(TrackRow);
 
