@@ -1,11 +1,11 @@
 'use client';
 
+import { AuthGuard } from '@/components/AuthGuard';
 import Navigation from '@/components/Navigation';
 import PlaylistEditor from '@/components/PlaylistEditor';
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { LoadingDots } from '@/components/ui/loading-dots';
-import { useAuth } from '@/lib/authContext';
 import { cn } from '@/lib/utils';
 import { useWorkflow } from '@/lib/workflowContext';
 import { ArrowLeft } from 'lucide-react';
@@ -17,22 +17,10 @@ function EditPlaylistPageContent() {
     const router = useRouter();
     const sessionId = params.id as string;
     const { workflowState, loadWorkflow } = useWorkflow();
-    const { isAuthenticated, isLoading: authLoading } = useAuth();
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         const loadData = async () => {
-            // Wait for auth to complete
-            if (authLoading) {
-                return;
-            }
-
-            // Check authentication
-            if (!isAuthenticated) {
-                router.push('/');
-                return;
-            }
-
             if (sessionId) {
                 await loadWorkflow(sessionId);
             }
@@ -40,7 +28,7 @@ function EditPlaylistPageContent() {
         };
 
         loadData();
-    }, [sessionId, loadWorkflow, authLoading, isAuthenticated, router]);
+    }, [sessionId, loadWorkflow]);
 
     const handleDone = () => {
         router.push(`/playlist/${sessionId}`);
@@ -51,7 +39,7 @@ function EditPlaylistPageContent() {
     };
 
     // Loading state
-    if (authLoading || isLoading || workflowState.isLoading) {
+    if (isLoading || workflowState.isLoading) {
         return (
             <div className="min-h-screen bg-background relative">
                 <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
@@ -64,10 +52,12 @@ function EditPlaylistPageContent() {
 
                 <Navigation />
 
-                <main className="relative z-10 flex items-center justify-center min-h-[calc(100vh-80px)]">
-                    <div className="text-center">
-                        <LoadingDots size="sm" />
-                        <p className="mt-4 text-muted-foreground">Loading playlist...</p>
+                <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+                    <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
+                        <div className="text-center">
+                            <LoadingDots size="sm" />
+                            <p className="mt-4 text-muted-foreground">Loading playlist...</p>
+                        </div>
                     </div>
                 </main>
             </div>
@@ -166,6 +156,10 @@ function EditPlaylistPageContent() {
 }
 
 export default function EditPlaylistPage() {
-    return <EditPlaylistPageContent />;
+    return (
+        <AuthGuard optimistic={true}>
+            <EditPlaylistPageContent />
+        </AuthGuard>
+    );
 }
 

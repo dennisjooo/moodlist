@@ -5,7 +5,7 @@ export const config = {
   auth: {
     sessionCookieName: 'session_token',
     cacheKey: 'moodlist_auth_cache',
-    cacheTTL: 2 * 60 * 1000, // 2 minutes
+    cacheTTL: 24 * 60 * 60 * 1000, // 24 hours - matches session expiration
   },
   polling: {
     baseInterval: 2000,

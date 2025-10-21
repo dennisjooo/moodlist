@@ -1,11 +1,10 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
-import { usePathname } from 'next/navigation';
-import { useAuth } from './authContext';
-import { workflowAPI, WorkflowStatus, WorkflowResults, PlaylistEditRequest } from './workflowApi';
-import { pollingManager } from './pollingManager';
 import { logger } from '@/lib/utils/logger';
+import { usePathname } from 'next/navigation';
+import { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import { pollingManager } from './pollingManager';
+import { workflowAPI, WorkflowResults, WorkflowStatus } from './workflowApi';
 
 export interface WorkflowState {
   sessionId: string | null;
@@ -52,7 +51,6 @@ interface WorkflowProviderProps {
 }
 
 export function WorkflowProvider({ children }: WorkflowProviderProps) {
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const pathname = usePathname();
   const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -69,26 +67,6 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
   });
 
   const startWorkflow = async (moodPrompt: string, genreHint?: string) => {
-    // Wait for authentication verification to complete if it's still loading
-    if (authLoading) {
-      logger.debug('Auth still loading, waiting for verification to complete', { component: 'WorkflowContext' });
-      // Wait for auth loading to complete
-      await new Promise<void>((resolve) => {
-        const checkAuth = () => {
-          if (!authLoading) {
-            resolve();
-          } else {
-            setTimeout(checkAuth, 50);
-          }
-        };
-        checkAuth();
-      });
-    }
-
-    if (!isAuthenticated || !user) {
-      throw new Error('User must be authenticated to start workflow');
-    }
-
     setWorkflowState(prev => ({
       ...prev,
       isLoading: true,
@@ -134,22 +112,6 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     // Prevent concurrent calls
     if (workflowState.isLoading) {
       logger.debug('[loadWorkflow] Already loading, skipping duplicate call', { component: 'WorkflowContext' });
-      return;
-    }
-
-    // If auth is still loading, defer the load - the useEffect will retry when ready
-    if (authLoading) {
-      logger.debug('[loadWorkflow] Auth still loading, deferring', { component: 'WorkflowContext' });
-      return;
-    }
-
-    if (!isAuthenticated || !user) {
-      logger.warn('[loadWorkflow] User not authenticated', { component: 'WorkflowContext' });
-      setWorkflowState(prev => ({
-        ...prev,
-        error: 'Please log in to view this session',
-        isLoading: false,
-      }));
       return;
     }
 
@@ -432,45 +394,30 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     };
   }, []);
 
-  // Handle auth state changes - retry workflow loading if auth becomes available
+  // Handle pathname changes - load workflow when navigating to create pages
   useEffect(() => {
-    // If auth was loading and is now complete, and we have a pending workflow load
-    if (!authLoading && isAuthenticated && user) {
-      // Check if we're on a create page and need to load a workflow
-      const isCreatePage = pathname?.startsWith('/create/') && pathname.split('/').length === 3;
-      if (isCreatePage) {
-        const sessionId = pathname.split('/')[2];
-        // Only load if: different session OR (same session but no status loaded yet and not currently loading)
-        const needsLoad = sessionId && (
-          (workflowState.sessionId !== sessionId && !workflowState.isLoading) ||
-          (workflowState.sessionId === sessionId && workflowState.status === null && !workflowState.isLoading)
-        );
-        if (needsLoad) {
-          logger.info('Auth verification completed, loading workflow', { component: 'WorkflowContext', sessionId });
-          loadWorkflow(sessionId).catch(error => {
-            logger.error('Failed to load workflow after auth verification', error, { component: 'WorkflowContext', sessionId });
-          });
-        }
+    // Check if we're on a create page and need to load a workflow
+    const isCreatePage = pathname?.startsWith('/create/') && pathname.split('/').length === 3;
+    if (isCreatePage) {
+      const sessionId = pathname.split('/')[2];
+      // Only load if: different session OR (same session but no status loaded yet and not currently loading)
+      const needsLoad = sessionId && (
+        (workflowState.sessionId !== sessionId && !workflowState.isLoading) ||
+        (workflowState.sessionId === sessionId && workflowState.status === null && !workflowState.isLoading)
+      );
+      if (needsLoad) {
+        logger.info('Loading workflow for page navigation', { component: 'WorkflowContext', sessionId });
+        loadWorkflow(sessionId).catch(error => {
+          logger.error('Failed to load workflow', error, { component: 'WorkflowContext', sessionId });
+        });
       }
     }
-  }, [authLoading, isAuthenticated, user, pathname, workflowState.sessionId, workflowState.status, workflowState.isLoading]);
+  }, [pathname, workflowState.sessionId, workflowState.status, workflowState.isLoading]);
 
   // Auto-refresh workflow status when there's an active session
   useEffect(() => {
     // Don't poll if no session
     if (!workflowState.sessionId) {
-      return;
-    }
-
-    // Don't poll if auth is still loading
-    if (authLoading) {
-      logger.debug('Auth still loading, skipping workflow polling', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
-      return;
-    }
-
-    // Don't poll if not authenticated
-    if (!isAuthenticated || !user) {
-      logger.debug('User not authenticated, skipping workflow polling', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
       return;
     }
 
@@ -571,7 +518,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
       logger.debug('Cleanup: stopping polling', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
       pollingManager.stopPolling(workflowState.sessionId!);
     };
-  }, [workflowState.sessionId, workflowState.status, pathname, authLoading, isAuthenticated, user]);
+  }, [workflowState.sessionId, workflowState.status, pathname]);
 
   // Cleanup timeout on unmount
   useEffect(() => {

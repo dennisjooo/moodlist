@@ -30,6 +30,7 @@ from app.auth.schemas import (
 from app.repositories.user_repository import UserRepository
 from app.repositories.session_repository import SessionRepository
 from app.dependencies import get_user_repository, get_session_repository
+from app.agents.core.cache import cache_manager
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -162,6 +163,10 @@ async def logout(
     if current_user:
         session_token = request.cookies.get(SessionConstants.COOKIE_NAME)
         if session_token:
+            # Clear auth verification cache
+            cache_key = f"auth_verify:{session_token}"
+            await cache_manager.cache.delete(cache_key)
+
             await session_repo.delete_by_token(session_token)
 
         logger.info("Logout successful", user_id=current_user.id, spotify_id=current_user.spotify_id)
@@ -183,21 +188,75 @@ async def get_current_user_info(
 @router.get("/verify", response_model=AuthResponse)
 async def verify_auth(
     request: Request,
-    current_user: Optional[User] = Depends(require_auth)
+    session_repo: SessionRepository = Depends(get_session_repository),
 ):
-    """Verify authentication status."""
-    session_token = request.cookies.get(SessionConstants.COOKIE_NAME)
-    logger.debug("Auth verification request", has_session_token=bool(session_token), has_user=bool(current_user))
+    """
+    Verify authentication status with optimized session-based auth and caching.
 
-    if not current_user:
-        logger.debug("Auth verification failed - no current user")
+    Performance optimization: Single database query with join instead of multiple lookups,
+    plus server-side caching to reduce database load.
+    Before: 2-3 queries (session lookup + user lookup)
+    After: 1 query with eager loading + 5-minute cache
+    """
+    session_token = request.cookies.get(SessionConstants.COOKIE_NAME)
+
+    if not session_token:
+        logger.debug("Auth verification failed - no session token")
         return AuthResponse(
             user=None,
             requires_spotify_auth=True
         )
 
-    logger.debug("Auth verification successful", user_id=current_user.id, spotify_id=current_user.spotify_id)
-    return AuthResponse(
-        user=UserResponse.from_orm(current_user),
-        requires_spotify_auth=False
-    )
+    # Create cache key based on session token
+    cache_key = f"auth_verify:{session_token}"
+
+    # Try to get from cache first
+    cached_result = await cache_manager.cache.get(cache_key)
+    if cached_result is not None:
+        logger.debug("Auth verification cache hit", session_token=session_token[:8] + "...")
+        return cached_result
+
+    # Single optimized query: get session with user in one go
+    session = await session_repo.get_valid_session_with_user(session_token)
+
+    if not session or not session.user:
+        logger.debug("Auth verification failed - invalid session or no user",
+                    has_session=bool(session), has_user=bool(session.user if session else False))
+        result = AuthResponse(
+            user=None,
+            requires_spotify_auth=True
+        )
+    elif not session.user.is_active:
+        logger.debug("Auth verification failed - user not active", user_id=session.user.id)
+        result = AuthResponse(
+            user=None,
+            requires_spotify_auth=True
+        )
+    else:
+        logger.debug("Auth verification successful",
+                    user_id=session.user.id,
+                    spotify_id=session.user.spotify_id,
+                    session_id=session.id)
+        result = AuthResponse(
+            user=UserResponse.from_orm(session.user),
+            requires_spotify_auth=False
+        )
+
+    # Cache with TTL based on session expiration time
+    # If session expires soon (< 1 hour), cache for shorter time
+    # If session is fresh (> 12 hours left), cache longer
+    now = datetime.now(timezone.utc)
+    if session and session.expires_at:
+        time_until_expiry = (session.expires_at - now).total_seconds()
+        if time_until_expiry < 3600:  # Less than 1 hour left
+            cache_ttl = 60  # Cache for 1 minute
+        elif time_until_expiry > 43200:  # More than 12 hours left
+            cache_ttl = 1800  # Cache for 30 minutes
+        else:
+            cache_ttl = 300  # Cache for 5 minutes (default)
+    else:
+        cache_ttl = 300  # Default 5 minutes
+
+    await cache_manager.cache.set(cache_key, result, ttl=cache_ttl)
+
+    return result
