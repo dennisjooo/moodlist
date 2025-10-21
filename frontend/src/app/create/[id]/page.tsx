@@ -125,13 +125,13 @@ function CreateSessionPageContent() {
     }, [workflowState.status, workflowState.recommendations.length, workflowState.sessionId, router]);
 
     const handleEditComplete = () => {
-        // Refresh the page to show final results
-        window.location.reload();
+        // Navigate to playlist view to show final results
+        router.push(`/playlist/${sessionId}`);
     };
 
     const handleEditCancel = () => {
         // Go back to results view
-        window.location.reload();
+        router.push(`/playlist/${sessionId}`);
     };
 
 

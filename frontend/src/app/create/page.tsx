@@ -85,13 +85,17 @@ function CreatePageContent() {
 
 
   const handleEditComplete = () => {
-    // Refresh the page to show final results
-    window.location.reload();
+    // Navigate to playlist view to show final results
+    if (workflowState.sessionId) {
+      router.push(`/playlist/${workflowState.sessionId}`);
+    }
   };
 
   const handleEditCancel = () => {
     // Go back to results view
-    window.location.reload();
+    if (workflowState.sessionId) {
+      router.push(`/playlist/${workflowState.sessionId}`);
+    }
   };
 
   // Show editor if workflow is awaiting user input
