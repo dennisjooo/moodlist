@@ -74,7 +74,7 @@ export function usePlaylistEdits({ sessionId, initialTracks }: UsePlaylistEditsO
             showError(errorMessage);
             logger.error('Failed to reorder track', error, { component: 'usePlaylistEdits', sessionId });
         }
-    }, [tracks, applyCompletedEdit, sessionId]);
+    }, [tracks, applyCompletedEdit, sessionId, showError]);
 
     const removeTrack = useCallback(async (trackId: string) => {
         setRemovingTracks(prev => new Set(prev).add(trackId));
@@ -97,7 +97,7 @@ export function usePlaylistEdits({ sessionId, initialTracks }: UsePlaylistEditsO
                 return newSet;
             });
         }
-    }, [applyCompletedEdit, deduplicatedTracks]);
+    }, [applyCompletedEdit, deduplicatedTracks, showError]);
 
     const addTrack = useCallback(async (trackUri: string, trackInfo?: SearchTrack) => {
         setAddingTracks(prev => new Set(prev).add(trackUri));
@@ -131,7 +131,7 @@ export function usePlaylistEdits({ sessionId, initialTracks }: UsePlaylistEditsO
                 return newSet;
             });
         }
-    }, [applyCompletedEdit]);
+    }, [applyCompletedEdit, showError]);
 
     const searchTracks = useCallback((query: string) => {
         setSearchQuery(query);
@@ -180,7 +180,7 @@ export function usePlaylistEdits({ sessionId, initialTracks }: UsePlaylistEditsO
                 }
             }
         }, 300);
-    }, [searchTracksApi]);
+    }, [searchTracksApi, showError]);
 
     const resetTracks = useCallback(() => {
         setTracks(deduplicatedTracks);

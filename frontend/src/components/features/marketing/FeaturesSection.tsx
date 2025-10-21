@@ -1,3 +1,5 @@
+'use client';
+
 import { motion } from 'framer-motion';
 import { Brain, MessageCircle, Music } from 'lucide-react';
 import { useRef } from 'react';
