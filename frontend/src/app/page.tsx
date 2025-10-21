@@ -6,12 +6,10 @@ import Navigation from '@/components/Navigation';
 import PopularMoods from '@/components/PopularMoods';
 import SocialProof from '@/components/SocialProof';
 import { DotPattern } from '@/components/ui/dot-pattern';
-import { ToastContainer, useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 export default function Home() {
-  const { toasts, removeToast } = useToast();
   const { isAuthenticated } = useAuth();
 
   return (
@@ -24,9 +22,6 @@ export default function Home() {
           )}
         />
       </div>
-
-      {/* Toast Notifications */}
-      <ToastContainer toasts={toasts} removeToast={removeToast} />
 
       {/* Navigation - Always render */}
       <Navigation />
