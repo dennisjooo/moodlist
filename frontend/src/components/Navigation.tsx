@@ -4,23 +4,17 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/authContext';
 import { initiateSpotifyAuth, isSpotifyAuthConfigured } from '@/lib/spotifyAuth';
+import { logger } from '@/lib/utils/logger';
 import { LogOut, Menu, Music, User, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { logger } from '@/lib/utils/logger';
+import { useState } from 'react';
 
 export default function Navigation() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [isClient, setIsClient] = useState(false);
   const { user, isAuthenticated, logout } = useAuth();
   const router = useRouter();
-
-  // Only show auth-dependent UI after client-side hydration
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
 
   const handleLogout = async () => {
     try {
@@ -75,7 +69,7 @@ export default function Navigation() {
 
           {/* Right Side - Profile & Mobile Menu Button */}
           <div className="flex items-center space-x-4 lg:absolute lg:right-0">
-            {isClient && isAuthenticated && user ? (
+            {isAuthenticated && user ? (
               <div className="flex items-center space-x-3">
                 {/* Profile Dropdown */}
                 <div className="relative">
@@ -135,7 +129,7 @@ export default function Navigation() {
                   )}
                 </div>
               </div>
-            ) : isClient ? (
+            ) : (
               <button
                 onClick={() => {
                   if (!isSpotifyAuthConfigured()) {
@@ -155,8 +149,6 @@ export default function Navigation() {
                 </svg>
                 Login
               </button>
-            ) : (
-              <div className="w-[120px]" /> /* Placeholder to prevent layout shift */
             )}
 
             {/* Theme Toggle - Hidden on mobile */}
@@ -201,7 +193,7 @@ export default function Navigation() {
             ))}
 
             {/* Profile Link in Mobile Menu */}
-            {isClient && isAuthenticated && user ? (
+            {isAuthenticated && user ? (
               <Link
                 href="/profile"
                 className={`block px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-accent transition-all duration-200 transform ${isMenuOpen
@@ -218,7 +210,7 @@ export default function Navigation() {
                   <span>View Profile</span>
                 </div>
               </Link>
-            ) : isClient ? (
+            ) : (
               <button
                 onClick={() => {
                   if (!isSpotifyAuthConfigured()) {
@@ -246,7 +238,7 @@ export default function Navigation() {
                   <span>Login</span>
                 </div>
               </button>
-            ) : null}
+            )}
 
             {/* Theme Toggle in Mobile Menu */}
             <div className={`transform ${isMenuOpen
