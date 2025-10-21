@@ -3,31 +3,10 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { cn } from '@/lib/utils';
-import { Headphones, Heart, Music, Target, Zap } from 'lucide-react';
+import { Music } from 'lucide-react';
+import { FeaturesSection } from '@/components/features/marketing';
 
 export default function AboutPage() {
-  const features = [
-    {
-      icon: Target,
-      title: 'AI-Powered Matching',
-      description: 'Advanced algorithms analyze your mood and match it with the perfect musical vibe.',
-    },
-    {
-      icon: Zap,
-      title: 'Instant Generation',
-      description: 'Get your personalized playlist in seconds, not minutes. No waiting, just music.',
-    },
-    {
-      icon: Headphones,
-      title: 'Spotify Integration',
-      description: 'Seamlessly creates playlists directly in your Spotify account for easy access.',
-    },
-    {
-      icon: Heart,
-      title: 'Personal History',
-      description: 'Keep track of all your mood-based playlists and revisit your musical journey.',
-    },
-  ];
 
   return (
     <div className="min-h-screen bg-background relative">
@@ -86,29 +65,9 @@ export default function AboutPage() {
           </Card>
         </div>
 
-        {/* Features Grid */}
+        {/* Features Section (reused) */}
         <div className="mb-16">
-          <h2 className="text-3xl font-bold text-center mb-12">How It Works</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {features.map((feature, index) => {
-              const IconComponent = feature.icon;
-              return (
-                <Card key={index} className="border-0 shadow-lg">
-                  <CardHeader>
-                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-                      <IconComponent className="w-6 h-6 text-primary" />
-                    </div>
-                    <CardTitle className="text-xl">{feature.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <CardDescription className="text-base leading-relaxed">
-                      {feature.description}
-                    </CardDescription>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+          <FeaturesSection />
         </div>
 
         {/* Stats Section */}
