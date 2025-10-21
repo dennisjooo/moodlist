@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { arrayMove } from '@dnd-kit/sortable';
-import { toast } from 'sonner';
+import { useToast } from '@/lib/hooks/useToast';
 import { logger } from '@/lib/utils/logger';
 import { useWorkflow, type Track, type SearchTrack } from '@/lib/contexts/WorkflowContext';
 
@@ -16,6 +16,7 @@ interface UsePlaylistEditsOptions {
  * Handles track reordering, removal, addition, and search with optimistic updates
  */
 export function usePlaylistEdits({ sessionId, initialTracks }: UsePlaylistEditsOptions) {
+    const { error: showError } = useToast();
     const { applyCompletedEdit, searchTracks: searchTracksApi } = useWorkflow();
 
     // Deduplicate recommendations by track_id to prevent React key conflicts
@@ -70,7 +71,7 @@ export function usePlaylistEdits({ sessionId, initialTracks }: UsePlaylistEditsO
             // Revert on error
             setTracks(tracks);
             const errorMessage = error instanceof Error ? error.message : 'Failed to reorder track';
-            toast.error(errorMessage);
+            showError(errorMessage);
             logger.error('Failed to reorder track', error, { component: 'usePlaylistEdits', sessionId });
         }
     }, [tracks, applyCompletedEdit, sessionId]);
@@ -87,7 +88,7 @@ export function usePlaylistEdits({ sessionId, initialTracks }: UsePlaylistEditsO
             // Revert on error
             setTracks(deduplicatedTracks);
             const errorMessage = error instanceof Error ? error.message : 'Failed to remove track';
-            toast.error(errorMessage);
+            showError(errorMessage);
             logger.error('Failed to remove track', error, { component: 'usePlaylistEdits', trackId });
         } finally {
             setRemovingTracks(prev => {
@@ -121,7 +122,7 @@ export function usePlaylistEdits({ sessionId, initialTracks }: UsePlaylistEditsO
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to add track';
-            toast.error(errorMessage);
+            showError(errorMessage);
             logger.error('Failed to add track', error, { component: 'usePlaylistEdits', trackUri });
         } finally {
             setAddingTracks(prev => {
@@ -170,7 +171,7 @@ export function usePlaylistEdits({ sessionId, initialTracks }: UsePlaylistEditsO
                 logger.error('Search failed', error, { component: 'usePlaylistEdits' });
                 // Only show error if this is still the latest search
                 if (latestSearchQueryRef.current === currentSearchQuery) {
-                    toast.error('Failed to search tracks');
+                    showError('Failed to search tracks');
                 }
             } finally {
                 // Only update loading state if this is still the latest search

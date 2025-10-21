@@ -5,7 +5,7 @@ import { playlistAPI } from '@/lib/playlistApi';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { toast } from 'sonner';
+import { useToast } from '@/lib/hooks/useToast';
 import { logger } from '@/lib/utils/logger';
 import PlaylistStatusBanner from './PlaylistStatusBanner';
 import MoodAnalysisCard from './MoodAnalysisCard';
@@ -19,15 +19,16 @@ export default function PlaylistResults() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const { success, error: showError } = useToast();
 
   const handleSaveToSpotify = async () => {
     setIsSaving(true);
 
     try {
       await saveToSpotify();
-      toast.success('Playlist saved to Spotify!');
+      success('Playlist saved to Spotify!');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save playlist');
+      showError(error instanceof Error ? error.message : 'Failed to save playlist');
     } finally {
       setIsSaving(false);
     }
@@ -41,17 +42,17 @@ export default function PlaylistResults() {
       if (result.synced) {
         const changes = result.changes;
         if (changes && (changes.tracks_added > 0 || changes.tracks_removed > 0)) {
-          toast.success('Playlist synced!', {
+          success('Playlist synced!', {
             description: `${changes.tracks_added > 0 ? `Added ${changes.tracks_added} track(s). ` : ''}${changes.tracks_removed > 0 ? `Removed ${changes.tracks_removed} track(s).` : ''}`.trim()
           });
         } else {
-          toast.success('Playlist is up to date!');
+          success('Playlist is up to date!');
         }
       } else {
-        toast.error(result.message || 'Could not sync playlist');
+        showError(result.message || 'Could not sync playlist');
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to sync from Spotify');
+      showError(error instanceof Error ? error.message : 'Failed to sync from Spotify');
     } finally {
       setIsSyncing(false);
     }
@@ -66,12 +67,12 @@ export default function PlaylistResults() {
       const playlistData = await playlistAPI.getPlaylistBySession(workflowState.sessionId);
       // Delete the playlist
       await playlistAPI.deletePlaylist(playlistData.id);
-      toast.success('Playlist deleted');
+      success('Playlist deleted');
       // Navigate back to playlists page
       router.push('/playlists');
     } catch (error) {
       logger.error('Failed to delete playlist', error, { component: 'PlaylistResults', sessionId: workflowState.sessionId });
-      toast.error('Failed to delete playlist. Please try again.');
+      showError('Failed to delete playlist. Please try again.');
       setIsDeleting(false);
       setShowDeleteDialog(false);
     }
