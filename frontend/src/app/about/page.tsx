@@ -72,13 +72,13 @@ export default function AboutPage() {
             </CardHeader>
             <CardContent className="prose prose-neutral dark:prose-invert max-w-none">
               <p className="text-muted-foreground leading-relaxed">
-                We believe that music is more than just sound—it's emotion, memory, and connection.
+                We believe that music is more than just sound—it&apos;s emotion, memory, and connection.
                 MoodList was born from the simple idea that finding the right music for your mood
-                shouldn't be a chore. Whether you're feeling nostalgic on a rainy evening, need energy
-                for a workout, or want focus music for deep work, we've got you covered.
+                shouldn&apos;t be a chore. Whether you&apos;re feeling nostalgic on a rainy evening, need energy
+                for a workout, or want focus music for deep work, we&apos;ve got you covered.
               </p>
               <p className="text-muted-foreground leading-relaxed mt-4">
-                By combining the power of AI with Spotify's vast music library, we create personalized
+                By combining the power of AI with Spotify&apos;s vast music library, we create personalized
                 playlists that truly understand and enhance your emotional state. Every playlist is
                 unique, just like every moment in your life.
               </p>

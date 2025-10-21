@@ -5,16 +5,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { useWorkflow } from '@/lib/workflowContext';
+import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { AlertCircle, CheckCircle, Loader2, Music, XCircle, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { logger } from '@/lib/utils/logger';
-
-interface WorkflowProgressProps {
-  onComplete?: () => void;
-  onError?: (error: string) => void;
-}
 
 // Fun music facts to keep users entertained
 const MUSIC_FACTS = [
@@ -30,9 +25,9 @@ const MUSIC_FACTS = [
   "The right playlist can make your workout feel 15% easier!",
 ];
 
-export default function WorkflowProgress({ onComplete, onError }: WorkflowProgressProps) {
+export default function WorkflowProgress() {
   const router = useRouter();
-  const { workflowState, startWorkflow, stopWorkflow, clearError } = useWorkflow();
+  const { workflowState, stopWorkflow, clearError } = useWorkflow();
   const [currentFactIndex, setCurrentFactIndex] = useState(0);
 
   // Rotate fun facts every 6 seconds
@@ -90,7 +85,7 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
     }
   };
 
-  const getStatusMessage = (status: string | null, currentStep?: string) => {
+  const getStatusMessage = (status: string | null) => {
     switch (status) {
       case 'analyzing_mood':
         return '🤔 Analyzing your mood and finding the perfect vibe...';
@@ -186,7 +181,7 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div className="text-sm font-medium flex-1">
-              {getStatusMessage(workflowState.status, workflowState.currentStep)}
+              {getStatusMessage(workflowState.status)}
             </div>
           </div>
 
@@ -270,7 +265,7 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
               <div className="flex items-start gap-2">
                 <Sparkles className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0 space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">What we're cooking:</p>
+                  <p className="text-xs font-medium text-muted-foreground">What we&apos;re cooking:</p>
 
                   {/* Show different insights based on workflow stage */}
                   {workflowState.status === 'analyzing_mood' && (
@@ -384,9 +379,6 @@ export default function WorkflowProgress({ onComplete, onError }: WorkflowProgre
         {/* Completion Actions */}
         {workflowState.status === 'completed' && workflowState.playlist && (
           <div className="flex gap-2 pt-2">
-            <Button onClick={onComplete} className="flex-1">
-              View Playlist
-            </Button>
             <Button variant="outline" onClick={handleStop}>
               Start New
             </Button>

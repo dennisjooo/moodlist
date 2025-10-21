@@ -10,7 +10,7 @@ import { LoadingDots } from '@/components/ui/loading-dots';
 import WorkflowProgress from '@/components/WorkflowProgress';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
-import { useWorkflow } from '@/lib/workflowContext';
+import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { ArrowLeft, Sparkles } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -20,9 +20,8 @@ function CreateSessionPageContent() {
     const params = useParams();
     const router = useRouter();
     const sessionId = params.id as string;
-    const [isMobile, setIsMobile] = useState(false);
     const [isLoadingSession, setIsLoadingSession] = useState(true);
-    const { workflowState, startWorkflow, loadWorkflow } = useWorkflow();
+    const { workflowState, loadWorkflow } = useWorkflow();
 
     const handleBack = () => {
         // Check if we're currently on an edit page - if so, go back to the parent create page
@@ -54,12 +53,6 @@ function CreateSessionPageContent() {
         }
     };
 
-    useEffect(() => {
-        const checkMobile = () => setIsMobile(window.innerWidth < 768);
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, []);
 
     const loadSessionCallback = useCallback(async () => {
         logger.debug('[Page] loadSessionCallback called', {

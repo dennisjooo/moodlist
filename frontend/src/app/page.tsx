@@ -7,7 +7,7 @@ import PopularMoods from '@/components/PopularMoods';
 import SocialProof from '@/components/SocialProof';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { ToastContainer, useToast } from '@/components/ui/toast';
-import { useAuth } from '@/lib/authContext';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 export default function Home() {

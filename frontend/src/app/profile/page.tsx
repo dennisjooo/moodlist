@@ -3,7 +3,7 @@
 import { AuthGuard } from '@/components/AuthGuard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/lib/authContext';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { config } from '@/lib/config';
 import { getAuthCookies } from '@/lib/cookies';
 import { logger } from '@/lib/utils/logger';
@@ -25,19 +25,18 @@ function ProfilePageContent() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const [spotifyProfile, setSpotifyProfile] = useState<SpotifyProfile | null>(null);
-  const [profileLoading, setProfileLoading] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated && user) {
       fetchSpotifyProfile();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user]);
 
   const fetchSpotifyProfile = async () => {
     if (!user) return;
 
     try {
-      setProfileLoading(true);
       const backendUrl = config.api.baseUrl;
 
       const response = await fetch(`${backendUrl}/api/spotify/profile`, {
@@ -60,8 +59,6 @@ function ProfilePageContent() {
       }
     } catch (error) {
       logger.error('Error fetching Spotify profile', error, { component: 'ProfilePage' });
-    } finally {
-      setProfileLoading(false);
     }
   };
 
