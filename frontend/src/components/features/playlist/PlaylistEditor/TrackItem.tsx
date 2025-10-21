@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Track } from '@/lib/contexts/WorkflowContext';
+import { memo } from 'react';
 
 export interface TrackItemProps {
     track: Track;
@@ -15,7 +16,7 @@ export interface TrackItemProps {
     isRemoving: boolean;
 }
 
-export function TrackItem({ track, index, onRemove, isRemoving }: TrackItemProps) {
+export const TrackItem = memo(function TrackItem({ track, index, onRemove, isRemoving }: TrackItemProps) {
     const {
         attributes,
         listeners,
@@ -113,5 +114,5 @@ export function TrackItem({ track, index, onRemove, isRemoving }: TrackItemProps
             </div>
         </div>
     );
-}
+});
 
