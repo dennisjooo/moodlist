@@ -8,6 +8,7 @@ from sqlalchemy import select, desc, delete, and_
 from sqlalchemy.orm import selectinload
 
 from app.models.session import Session
+from app.models.user import User
 from app.repositories.base_repository import BaseRepository
 
 logger = structlog.get_logger(__name__)
@@ -407,6 +408,48 @@ class SessionRepository(BaseRepository[Session]):
                 session_token=session_token[:8] + "...",
                 error=str(e)
             )
+            raise
+
+    async def get_valid_session_with_user(
+        self,
+        session_token: str
+    ) -> Optional[Session]:
+        """Get valid session with user loaded in single query (optimized for auth verification).
+
+        Args:
+            session_token: Session token
+
+        Returns:
+            Session instance with user relationship loaded, or None if not found or expired
+        """
+        try:            
+            now = datetime.now(timezone.utc)
+            query = select(Session).where(
+                and_(
+                    Session.session_token == session_token,
+                    Session.expires_at > now
+                )
+            ).join(Session.user).where(
+                User.is_active == True
+            ).options(selectinload(Session.user))  # Load user in same query
+
+            result = await self.session.execute(query)
+            session = result.scalar_one_or_none()
+
+            if session:
+                self.logger.debug("Valid session with user retrieved",
+                                session_token=session_token[:8] + "...",
+                                user_id=session.user_id)
+            else:
+                self.logger.debug("Valid session with active user not found",
+                                session_token=session_token[:8] + "...")
+
+            return session
+
+        except Exception as e:
+            self.logger.error("Error retrieving session with user",
+                            error=str(e),
+                            session_token=session_token[:8] + "...")
             raise
 
     async def create_session_for_user(

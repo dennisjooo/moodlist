@@ -1,5 +1,6 @@
 'use client';
 
+import { AuthGuard } from '@/components/AuthGuard';
 import Navigation from '@/components/Navigation';
 import PlaylistCard from '@/components/PlaylistCard';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
@@ -15,7 +16,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { logger } from '@/lib/utils/logger';
 
-export default function PlaylistsPage() {
+function PlaylistsPageContent() {
   const [playlists, setPlaylists] = useState<UserPlaylist[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -206,5 +207,13 @@ export default function PlaylistsPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function PlaylistsPage() {
+  return (
+    <AuthGuard optimistic={true}>
+      <PlaylistsPageContent />
+    </AuthGuard>
   );
 }

@@ -12,24 +12,7 @@ import { cn } from '@/lib/utils';
 
 export default function Home() {
   const { toasts, removeToast } = useToast();
-  const { isAuthenticated, isLoading } = useAuth();
-
-  // Only show loading if we're actually checking auth (not just initializing)
-  // If isLoading is true but we have no session cookie, don't show loading
-  const hasSessionCookie = typeof document !== 'undefined' && document.cookie.includes('session_token');
-  const shouldShowLoading = isLoading && hasSessionCookie;
-
-  if (shouldShowLoading) {
-    return (
-      <div className="min-h-screen bg-background relative flex items-center justify-center">
-        <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-primary rounded-full animate-bounce"></div>
-          <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-          <div className="w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-        </div>
-      </div>
-    );
-  }
+  const { isAuthenticated } = useAuth();
 
   return (
     <div className="min-h-screen bg-background relative">
@@ -45,10 +28,10 @@ export default function Home() {
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
-      {/* Navigation */}
+      {/* Navigation - Always render */}
       <Navigation />
 
-      {/* Main Content */}
+      {/* Main Content - Render immediately (optimistic) */}
       <main className="relative z-10">
         {/* Hero Section */}
         <HeroSection

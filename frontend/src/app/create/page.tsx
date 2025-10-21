@@ -1,5 +1,6 @@
 'use client';
 
+import { AuthGuard } from '@/components/AuthGuard';
 import LoginRequiredDialog from '@/components/LoginRequiredDialog';
 import MoodInput from '@/components/MoodInput';
 import Navigation from '@/components/Navigation';
@@ -9,11 +10,11 @@ import { Badge } from '@/components/ui/badge';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { useAuth } from '@/lib/authContext';
 import { cn } from '@/lib/utils';
+import { logger } from '@/lib/utils/logger';
 import { useWorkflow } from '@/lib/workflowContext';
 import { Sparkles } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { logger } from '@/lib/utils/logger';
 
 // Main content component that uses workflow context
 function CreatePageContent() {
@@ -52,7 +53,7 @@ function CreatePageContent() {
     // Only reset if we're on the base /create page (not /create/[id])
     // and we have a session ID (indicating a workflow was stopped)
     const isBaseCreatePage = !window.location.pathname.includes('/create/') ||
-                           window.location.pathname === '/create';
+      window.location.pathname === '/create';
 
     if (isBaseCreatePage && workflowState.sessionId) {
       logger.debug('Clearing workflow state due to session presence on /create', { component: 'CreatePage' });
@@ -229,5 +230,9 @@ function CreatePageContent() {
 }
 
 export default function CreatePage() {
-  return <CreatePageContent />;
+  return (
+    <AuthGuard optimistic={true}>
+      <CreatePageContent />
+    </AuthGuard>
+  );
 }

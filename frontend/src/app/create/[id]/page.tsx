@@ -1,5 +1,6 @@
 'use client';
 
+import { AuthGuard } from '@/components/AuthGuard';
 import Navigation from '@/components/Navigation';
 import PlaylistEditor from '@/components/PlaylistEditor';
 import { Badge } from '@/components/ui/badge';
@@ -8,11 +9,11 @@ import { DotPattern } from '@/components/ui/dot-pattern';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import WorkflowProgress from '@/components/WorkflowProgress';
 import { cn } from '@/lib/utils';
+import { logger } from '@/lib/utils/logger';
 import { useWorkflow } from '@/lib/workflowContext';
 import { ArrowLeft, Sparkles } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState, useCallback } from 'react';
-import { logger } from '@/lib/utils/logger';
+import { useCallback, useEffect, useState } from 'react';
 
 // Main content component for dynamic session route
 function CreateSessionPageContent() {
@@ -310,6 +311,10 @@ function CreateSessionPageContent() {
 }
 
 export default function CreateSessionPage() {
-    return <CreateSessionPageContent />;
+    return (
+        <AuthGuard optimistic={true}>
+            <CreateSessionPageContent />
+        </AuthGuard>
+    );
 }
 
