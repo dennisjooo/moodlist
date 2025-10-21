@@ -10,17 +10,19 @@ import { DotPattern } from '@/components/ui/dot-pattern';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { playlistAPI, UserPlaylist } from '@/lib/playlistApi';
 import { cn } from '@/lib/utils';
+import { logger } from '@/lib/utils/logger';
 import { motion } from 'framer-motion';
 import { Music } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { logger } from '@/lib/utils/logger';
 
 function PlaylistsPageContent() {
   const [playlists, setPlaylists] = useState<UserPlaylist[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUnauthorized, setIsUnauthorized] = useState(false);
+  const router = useRouter();
 
   const fetchPlaylists = async () => {
     try {
@@ -148,7 +150,7 @@ function PlaylistsPageContent() {
             <Music className="w-16 h-16 text-destructive mx-auto mb-4" />
             <h3 className="text-xl font-semibold mb-2">Failed to load playlists</h3>
             <p className="text-muted-foreground mb-6">{error}</p>
-            <Button onClick={() => window.location.reload()}>Try Again</Button>
+            <Button onClick={() => fetchPlaylists()}>Try Again</Button>
           </motion.div>
         ) : playlists.length === 0 ? (
           <motion.div
