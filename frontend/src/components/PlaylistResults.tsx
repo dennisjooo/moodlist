@@ -108,7 +108,7 @@ export default function PlaylistResults() {
       )}>
         <CardContent>
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 pr-3">
               <div className={cn(
                 "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0",
                 hasSavedToSpotify ? "bg-green-500" : "bg-yellow-500"
