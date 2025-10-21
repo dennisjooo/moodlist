@@ -3,8 +3,9 @@
 import { logger } from '@/lib/utils/logger';
 import { usePathname } from 'next/navigation';
 import { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { pollingManager } from '../pollingManager';
-import { workflowAPI, WorkflowResults, WorkflowStatus } from '../workflowApi';
+import type { WorkflowResults, WorkflowStatus } from '../api/workflow';
+import { useWorkflowApi } from '../hooks/useWorkflowApi';
+import { useWorkflowPolling } from '../hooks/useWorkflowPolling';
 
 // Track type alias matching the structure from WorkflowResults
 export type Track = {
@@ -85,6 +86,7 @@ interface WorkflowProviderProps {
 export function WorkflowProvider({ children }: WorkflowProviderProps) {
   const pathname = usePathname();
   const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const api = useWorkflowApi();
 
   const [workflowState, setWorkflowState] = useState<WorkflowState>({
     sessionId: null,
@@ -98,6 +100,56 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     awaitingInput: false,
   });
 
+  // Only poll when on /create/[id] pages
+  const isCreatePage = pathname?.startsWith('/create/') && pathname.split('/').length === 3;
+  const shouldPoll = Boolean(workflowState.sessionId && isCreatePage);
+
+  // Use the polling hook with callbacks
+  // Cast to satisfy type - 'started' is a valid transient status
+  useWorkflowPolling(
+    workflowState.sessionId,
+    workflowState.status === 'started' ? 'pending' : workflowState.status,
+    {
+      enabled: shouldPoll,
+      callbacks: {
+        onStatus: async (status: WorkflowStatus) => {
+          // For non-terminal states, just update the status
+          setWorkflowState(prev => ({
+            ...prev,
+            status: status.status,
+            currentStep: status.current_step,
+            awaitingInput: status.awaiting_input,
+            error: status.error || null,
+            moodAnalysis: status.mood_analysis || prev.moodAnalysis,
+            metadata: status.metadata || prev.metadata,
+          }));
+        },
+        onTerminal: async (status: WorkflowStatus, results: WorkflowResults | null) => {
+          // Update state with terminal status and results
+          setWorkflowState(prev => ({
+            ...prev,
+            status: status.status,
+            currentStep: status.current_step,
+            awaitingInput: status.awaiting_input,
+            error: status.error || null,
+            moodAnalysis: results?.mood_analysis || prev.moodAnalysis,
+            recommendations: results?.recommendations || prev.recommendations,
+            playlist: results?.playlist || prev.playlist,
+          }));
+        },
+        onError: (error: Error) => {
+          logger.error('Workflow polling error', error, { component: 'WorkflowContext', sessionId: workflowState.sessionId });
+          setWorkflowState(prev => ({
+            ...prev,
+            error: 'Connection error. Please check your internet connection.',
+          }));
+        },
+        onAwaitingInput: () => {
+          logger.debug('Workflow awaiting user input', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
+        },
+      },
+    });
+
   const startWorkflow = async (moodPrompt: string, genreHint?: string) => {
     setWorkflowState(prev => ({
       ...prev,
@@ -107,10 +159,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     }));
 
     try {
-      // Backend will use the authenticated user's tokens automatically
-      const response = await workflowAPI.startWorkflow({
-        mood_prompt: `${moodPrompt} ${genreHint ? `in the genre of ${genreHint}` : ''}`.trim(),
-      });
+      const response = await api.startWorkflow(moodPrompt, genreHint);
 
       setWorkflowState(prev => ({
         ...prev,
@@ -165,7 +214,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     try {
       logger.debug('[loadWorkflow] Fetching status', { component: 'WorkflowContext', sessionId });
       // Load workflow status once
-      const status = await workflowAPI.getWorkflowStatus(sessionId);
+      const status = await api.loadWorkflowStatus(sessionId);
 
       // Only load results if workflow is in terminal state (completed or failed)
       let results = null;
@@ -173,7 +222,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
       if (isTerminal) {
         logger.debug('Workflow is terminal, loading results', { component: 'WorkflowContext', sessionId });
         try {
-          results = await workflowAPI.getWorkflowResults(sessionId);
+          results = await api.loadWorkflowResults(sessionId);
         } catch {
           // Results might not be ready yet, that's ok
           logger.warn('Results not ready yet for terminal workflow', { component: 'WorkflowContext', sessionId });
@@ -210,12 +259,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
   };
 
   const stopWorkflow = () => {
-    // Stop polling immediately if there's an active session
-    if (workflowState.sessionId) {
-      pollingManager.stopPolling(workflowState.sessionId);
-    }
-
-    // Don't clear auth state, just reset workflow state
+    // Polling is handled by the hook, just reset state
     setWorkflowState({
       sessionId: null,
       status: null,
@@ -259,7 +303,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     setWorkflowState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const results = await workflowAPI.getWorkflowResults(workflowState.sessionId);
+      const results = await api.loadWorkflowResults(workflowState.sessionId);
       setWorkflowState(prev => ({
         ...prev,
         recommendations: results.recommendations,
@@ -286,7 +330,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     setWorkflowState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const result = await workflowAPI.saveToSpotify(workflowState.sessionId);
+      const result = await api.saveToSpotify(workflowState.sessionId);
 
       // Update state with playlist information
       setWorkflowState(prev => ({
@@ -319,7 +363,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
 
     // Don't show loading state for sync - it should be subtle
     try {
-      const result = await workflowAPI.syncFromSpotify(workflowState.sessionId);
+      const result = await api.syncFromSpotify(workflowState.sessionId);
 
       // Only update if sync was successful
       if (result.synced && result.recommendations) {
@@ -356,7 +400,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
 
     // Don't set loading state - let the component handle optimistic updates
     try {
-      await workflowAPI.applyCompletedPlaylistEdit(workflowState.sessionId, editType, options);
+      await api.applyEdit(workflowState.sessionId, editType, options);
 
       // Use a debounced refresh to prevent race conditions from concurrent edits
       // This ensures only the latest edit triggers a state refresh
@@ -367,7 +411,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
       refreshTimeoutRef.current = setTimeout(async () => {
         try {
           if (!workflowState.sessionId) return;
-          const results = await workflowAPI.getWorkflowResults(workflowState.sessionId);
+          const results = await api.loadWorkflowResults(workflowState.sessionId);
           setWorkflowState(prev => ({
             ...prev,
             recommendations: results.recommendations,
@@ -389,7 +433,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
 
   const searchTracks = async (query: string, limit: number = 20) => {
     try {
-      return await workflowAPI.searchTracks(query, limit);
+      return await api.searchTracks(query, limit);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to search tracks';
       setWorkflowState(prev => ({
@@ -446,112 +490,6 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, workflowState.sessionId, workflowState.status, workflowState.isLoading]);
-
-  // Auto-refresh workflow status when there's an active session
-  useEffect(() => {
-    // Don't poll if no session
-    if (!workflowState.sessionId) {
-      return;
-    }
-
-    // Only poll when on /create/[id] pages
-    const isCreatePage = pathname?.startsWith('/create/') && pathname.split('/').length === 3;
-    if (!isCreatePage) {
-      logger.debug('Not on create page, stopping polling', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
-      pollingManager.stopPolling(workflowState.sessionId);
-      return;
-    }
-
-    // Check if workflow is in a terminal state - if so, stop any polling and don't start new
-    const isTerminalState = workflowState.status === 'completed' || workflowState.status === 'failed';
-    if (isTerminalState) {
-      logger.debug('Workflow in terminal state, stopping polling', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
-      pollingManager.stopPolling(workflowState.sessionId);
-      return;
-    }
-
-    const pollWorkflow = async () => {
-      return await workflowAPI.getWorkflowStatus(workflowState.sessionId!);
-    };
-
-    const handleStatus = async (status: WorkflowStatus) => {
-      // If workflow reached terminal state, stop polling immediately and update state
-      const isTerminal = status.status === 'completed' || status.status === 'failed';
-
-      if (isTerminal) {
-        // Stop polling immediately when terminal state is detected
-        logger.debug('Terminal state detected, stopping polling', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
-        pollingManager.stopPolling(workflowState.sessionId!);
-
-        // Fetch results when workflow completes
-        let results = null;
-        try {
-          logger.debug('Fetching results for completed workflow', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
-          results = await workflowAPI.getWorkflowResults(workflowState.sessionId!);
-        } catch (e) {
-          logger.error('Failed to fetch results for completed workflow', e, { component: 'WorkflowContext', sessionId: workflowState.sessionId });
-        }
-
-        // Update state with terminal status and results
-        setWorkflowState(prev => ({
-          ...prev,
-          status: status.status,
-          currentStep: status.current_step,
-          awaitingInput: status.awaiting_input,
-          error: status.error || null,
-          moodAnalysis: results?.mood_analysis || prev.moodAnalysis,
-          recommendations: results?.recommendations || prev.recommendations,
-          playlist: results?.playlist || prev.playlist,
-        }));
-
-        logger.info('Terminal state set with results, polling stopped', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
-      } else {
-        // For non-terminal states, just update the status
-        setWorkflowState(prev => ({
-          ...prev,
-          status: status.status,
-          currentStep: status.current_step,
-          awaitingInput: status.awaiting_input,
-          error: status.error || null,
-          moodAnalysis: status.mood_analysis || prev.moodAnalysis,
-          metadata: status.metadata || prev.metadata,
-        }));
-      }
-    };
-
-    const handleError = (error: Error) => {
-      logger.error('Workflow polling error', error, { component: 'WorkflowContext', sessionId: workflowState.sessionId });
-      // Set error state for persistent errors
-      setWorkflowState(prev => ({
-        ...prev,
-        error: 'Connection error. Please check your internet connection.',
-      }));
-    };
-
-    const handleAwaitingInput = () => {
-      // Optional: Handle when workflow is waiting for user input
-      logger.debug('Workflow awaiting user input', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
-    };
-
-    logger.debug('Starting polling', { component: 'WorkflowContext', sessionId: workflowState.sessionId, status: workflowState.status });
-    pollingManager.startPolling(
-      workflowState.sessionId,
-      pollWorkflow,
-      {
-        onStatus: handleStatus,
-        onError: handleError,
-        onAwaitingInput: handleAwaitingInput,
-      }
-    );
-
-    // Double-check that polling starts with correct state
-    logger.debug('Polling started', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
-
-    return () => {
-      logger.debug('Cleanup: stopping polling', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
-      pollingManager.stopPolling(workflowState.sessionId!);
-    };
-  }, [workflowState.sessionId, workflowState.status, pathname]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
