@@ -14,7 +14,6 @@ import { logger } from '@/lib/utils/logger';
 import { motion } from 'framer-motion';
 import { Music } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 function PlaylistsPageContent() {
@@ -22,7 +21,6 @@ function PlaylistsPageContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isUnauthorized, setIsUnauthorized] = useState(false);
-  const router = useRouter();
 
   const fetchPlaylists = async () => {
     try {
@@ -62,10 +60,6 @@ function PlaylistsPageContent() {
     }
   };
 
-  const handleCardClick = (playlist: UserPlaylist) => {
-    // Navigate to playlist view page - let the user decide what to do from there
-    // (they can view details, edit, or open in Spotify)
-  };
 
   // Format date for display
   const formatDate = (dateString: string) => {
@@ -181,7 +175,7 @@ function PlaylistsPageContent() {
             }}
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
           >
-            {playlists.map((playlist, index) => (
+            {playlists.map((playlist) => (
               <motion.div
                 key={playlist.id}
                 variants={{
@@ -189,7 +183,6 @@ function PlaylistsPageContent() {
                   visible: { opacity: 1, y: 0 }
                 }}
                 transition={{ duration: 0.4 }}
-                onClick={() => handleCardClick(playlist)}
               >
                 <PlaylistCard
                   mood={playlist.mood_prompt}

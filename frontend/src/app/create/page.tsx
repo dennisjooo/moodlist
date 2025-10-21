@@ -8,10 +8,10 @@ import PlaylistEditor from '@/components/PlaylistEditor';
 import PlaylistResults from '@/components/PlaylistResults';
 import { Badge } from '@/components/ui/badge';
 import { DotPattern } from '@/components/ui/dot-pattern';
-import { useAuth } from '@/lib/authContext';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
-import { useWorkflow } from '@/lib/workflowContext';
+import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { Sparkles } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -44,6 +44,7 @@ function CreatePageContent() {
       logger.debug('Clearing workflow state on /create mount', { component: 'CreatePage' });
       resetWorkflow();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
@@ -171,10 +172,10 @@ function CreatePageContent() {
           </Badge>
 
           <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl mb-4">
-            What's your mood?
+            What&apos;s your mood?
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Describe how you're feeling and our AI will create the perfect Spotify playlist for your moment.
+            Describe how you&apos;re feeling and our AI will create the perfect Spotify playlist for your moment.
           </p>
         </div>
 

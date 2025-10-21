@@ -72,7 +72,7 @@ export interface WorkflowResults {
     spotify_url?: string;
     spotify_uri?: string;
   };
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
 
 export interface PlaylistEditRequest {
@@ -100,7 +100,13 @@ export interface PlaylistDetails {
     reasoning: string;
     source: string;
   }>;
-  mood_analysis: any;
+  mood_analysis: {
+    mood_interpretation?: string;
+    primary_emotion?: string;
+    energy_level?: string;
+    search_keywords?: string[];
+    [key: string]: unknown;
+  } | null;
   total_tracks: number;
   created_at: string;
 }
@@ -203,8 +209,21 @@ class WorkflowAPI {
       tracks_added: number;
       tracks_removed: number;
     };
-    recommendations?: Array<any>;
-    playlist_data?: any;
+    recommendations?: Array<{
+      track_id: string;
+      track_name: string;
+      artists: string[];
+      spotify_uri?: string;
+      confidence_score: number;
+      reasoning: string;
+      source: string;
+    }>;
+    playlist_data?: {
+      id: string;
+      name: string;
+      spotify_url?: string;
+      [key: string]: unknown;
+    };
   }> {
     return this.request(`/api/playlists/${sessionId}/sync-from-spotify`, {
       method: 'POST',

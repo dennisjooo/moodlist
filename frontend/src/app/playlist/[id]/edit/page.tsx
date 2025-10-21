@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { cn } from '@/lib/utils';
-import { useWorkflow } from '@/lib/workflowContext';
+import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { ArrowLeft } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -107,7 +107,7 @@ function EditPlaylistPageContent() {
                     <div className="text-center">
                         <h2 className="text-2xl font-bold mb-4">No Tracks Found</h2>
                         <p className="text-muted-foreground mb-6">
-                            This playlist doesn't have any tracks yet.
+                            This playlist doesn&apos;t have any tracks yet.
                         </p>
                         <Button onClick={() => router.push(`/playlist/${sessionId}`)}>
                             Go Back
