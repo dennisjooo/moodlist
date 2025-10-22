@@ -305,7 +305,8 @@ class CacheManager:
             "top_artists": 1800,   # 30 minutes
             "recommendations": 900,  # 15 minutes
             "mood_analysis": 3600,  # 1 hour
-            "workflow_state": 300   # 5 minutes
+            "workflow_state": 300,  # 5 minutes
+            "track_details": 3600   # 1 hour - track details don't change often
         }
 
     def _make_cache_key(self, category: str, *args) -> str:
@@ -431,6 +432,29 @@ class CacheManager:
         key = self._make_cache_key("workflow_state", session_id)
         ttl = self.default_ttl["workflow_state"]
         await self.cache.set(key, state, ttl)
+
+    async def get_track_details(self, track_id: str) -> Optional[Dict[str, Any]]:
+        """Get cached track details.
+
+        Args:
+            track_id: Spotify track ID
+
+        Returns:
+            Track details or None if not cached
+        """
+        key = self._make_cache_key("track_details", track_id)
+        return await self.cache.get(key)
+
+    async def set_track_details(self, track_id: str, track_data: Dict[str, Any]) -> None:
+        """Cache track details.
+
+        Args:
+            track_id: Spotify track ID
+            track_data: Track details data
+        """
+        key = self._make_cache_key("track_details", track_id)
+        ttl = self.default_ttl["track_details"]
+        await self.cache.set(key, track_data, ttl)
 
     async def invalidate_user_data(self, user_id: str) -> None:
         """Invalidate all cached data for a user.
