@@ -20,22 +20,13 @@ export default function TrackDetailsTooltip({ trackId, className }: TrackDetails
     const [error, setError] = useState<string | null>(null);
     const [hasLoaded, setHasLoaded] = useState(false);
 
-    // Extract actual track ID from Spotify URI if needed
-    const getCleanTrackId = (id: string) => {
-        if (id.startsWith('spotify:track:')) {
-            return id.split(':')[2];
-        }
-        return id;
-    };
-
     const handleOpenChange = async (open: boolean) => {
         if (open && !hasLoaded) {
             setIsLoading(true);
             setError(null);
             try {
-                const cleanId = getCleanTrackId(trackId);
-                const details = await spotifyAPI.getTrackDetails(cleanId);
-                logger.debug('Track details loaded', { component: 'TrackDetailsTooltip', trackId, cleanId, details });
+                const details = await spotifyAPI.getTrackDetails(trackId);
+                logger.debug('Track details loaded', { component: 'TrackDetailsTooltip', trackId, details });
                 setTrackDetails(details);
                 setHasLoaded(true);
             } catch (err) {

@@ -69,8 +69,8 @@ class SpotifyAPI {
         return this.request<SpotifyProfile>('/api/spotify/profile');
     }
 
-    async getTrackDetails(trackId: string): Promise<TrackDetails> {
-        return this.request<TrackDetails>(`/api/spotify/tracks/${trackId}`);
+    async getTrackDetails(trackUri: string): Promise<TrackDetails> {
+        return this.request<TrackDetails>(`/api/spotify/tracks/${encodeURIComponent(trackUri)}`);
     }
 }
 
