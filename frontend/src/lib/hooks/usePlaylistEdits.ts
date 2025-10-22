@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useToast } from '@/lib/hooks/useToast';
 import { logger } from '@/lib/utils/logger';
-import { useWorkflow, type Track, type SearchTrack } from '@/lib/contexts/WorkflowContext';
+import { useWorkflow } from '@/lib/contexts/WorkflowContext';
+import type { Track, SearchTrack } from '@/lib/types/workflow';
 
 interface UsePlaylistEditsOptions {
     sessionId: string;

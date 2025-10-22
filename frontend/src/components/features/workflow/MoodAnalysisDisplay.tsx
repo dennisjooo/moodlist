@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import type { WorkflowState } from '@/lib/contexts/WorkflowContext';
+import type { WorkflowState } from '@/lib/types/workflow';
 
 interface MoodAnalysisDisplayProps {
     moodAnalysis: WorkflowState['moodAnalysis'];

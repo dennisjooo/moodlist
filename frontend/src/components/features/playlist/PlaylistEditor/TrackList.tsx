@@ -1,5 +1,6 @@
 'use client';
 
+import type { Track } from '@/lib/types/workflow';
 import {
     closestCenter,
     DndContext,
@@ -15,9 +16,8 @@ import {
     verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { Music } from 'lucide-react';
-import { TrackItem } from './TrackItem';
-import type { Track } from '@/lib/contexts/WorkflowContext';
 import { useCallback } from 'react';
+import { TrackItem } from './TrackItem';
 
 export interface TrackListProps {
     tracks: Track[];
