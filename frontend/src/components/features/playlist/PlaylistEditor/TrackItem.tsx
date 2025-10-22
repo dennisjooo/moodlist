@@ -6,6 +6,7 @@ import { ExternalLink, GripVertical, Loader2, Star, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 import type { Track } from '@/lib/contexts/WorkflowContext';
 import { memo } from 'react';
 
@@ -17,6 +18,8 @@ export interface TrackItemProps {
 }
 
 export const TrackItem = memo(function TrackItem({ track, index, onRemove, isRemoving }: TrackItemProps) {
+    const prefersReducedMotion = useReducedMotion();
+
     const {
         attributes,
         listeners,
@@ -28,7 +31,7 @@ export const TrackItem = memo(function TrackItem({ track, index, onRemove, isRem
 
     const style = {
         transform: CSS.Transform.toString(transform),
-        transition,
+        transition: prefersReducedMotion ? 'none' : transition,
     };
 
     const getSpotifyUrl = (uri: string) => {
@@ -44,7 +47,8 @@ export const TrackItem = memo(function TrackItem({ track, index, onRemove, isRem
             ref={setNodeRef}
             style={style}
             className={cn(
-                "flex items-center gap-4 p-4 rounded-lg border bg-card transition-all duration-200",
+                "flex items-center gap-4 p-4 rounded-lg border bg-card",
+                prefersReducedMotion ? "transition-none" : "transition-all duration-200",
                 isDragging && "shadow-lg scale-105 z-50 bg-accent",
                 !isDragging && "hover:bg-accent/50"
             )}
