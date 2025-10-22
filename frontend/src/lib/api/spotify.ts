@@ -3,6 +3,15 @@
 import { config } from '@/lib/config';
 import { logger } from '@/lib/utils/logger';
 
+export interface SpotifyProfile {
+    id: string;
+    display_name: string;
+    email?: string;
+    images: Array<{ url: string; height: number; width: number }>;
+    country?: string;
+    followers: number;
+}
+
 export interface TrackDetails {
     track_id: string;
     track_name: string;
@@ -54,6 +63,10 @@ class SpotifyAPI {
         }
 
         return await response.json();
+    }
+
+    async getProfile(): Promise<SpotifyProfile> {
+        return this.request<SpotifyProfile>('/api/spotify/profile');
     }
 
     async getTrackDetails(trackId: string): Promise<TrackDetails> {

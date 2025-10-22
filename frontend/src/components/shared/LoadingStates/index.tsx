@@ -9,4 +9,5 @@ export { PlaylistEditorSkeleton } from './PlaylistEditorSkeleton';
 export { WorkflowProgressSkeleton } from './WorkflowProgressSkeleton';
 export { PlaylistGridSkeleton } from './PlaylistGridSkeleton';
 export { ProfileSkeleton } from './ProfileSkeleton';
+export { RecentActivitySkeleton } from './RecentActivitySkeleton';
 
