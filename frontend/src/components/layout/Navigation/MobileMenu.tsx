@@ -1,16 +1,12 @@
 'use client';
 
 import { ThemeToggle } from '@/components/ThemeToggle';
-import type { User as UserType } from '@/lib/contexts/AuthContext';
 import { initiateSpotifyAuth, isSpotifyAuthConfigured } from '@/lib/spotifyAuth';
+import type { User as UserType } from '@/lib/types/auth';
+import { NavItem } from '@/lib/types/navigation';
 import { Menu, User, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
-
-interface NavItem {
-    name: string;
-    href: string;
-}
 
 interface MobileMenuProps {
     items: NavItem[];

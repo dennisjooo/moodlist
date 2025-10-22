@@ -5,6 +5,7 @@ import { spotifyAPI, TrackDetails } from '@/lib/api/spotify';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
 import { AlertCircle, Calendar, Clock, Disc, Hash, Info, Loader2, Music, TrendingUp } from 'lucide-react';
+import Image from 'next/image';
 import { useState } from 'react';
 
 interface TrackDetailsTooltipProps {
@@ -153,9 +154,11 @@ export default function TrackDetailsTooltip({ trackId, className }: TrackDetails
                         {/* Right side - Album Cover */}
                         {trackDetails.album_image ? (
                             <div className="w-28 h-28 rounded-md overflow-hidden bg-muted flex-shrink-0 shadow-md">
-                                <img
+                                <Image
                                     src={trackDetails.album_image}
                                     alt={trackDetails.album.name}
+                                    width={112}
+                                    height={112}
                                     className="w-full h-full object-cover"
                                 />
                             </div>

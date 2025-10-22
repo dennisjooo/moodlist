@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import type { User as UserType } from '@/lib/types/auth';
+import { logger } from '@/lib/utils/logger';
 import { LogOut, User } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { logger } from '@/lib/utils/logger';
-import type { User as UserType } from '@/lib/contexts/AuthContext';
+import { useState } from 'react';
 
 interface AuthMenuProps {
     user: UserType;

@@ -1,13 +1,13 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
+import type { Track } from '@/lib/types/workflow';
+import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ExternalLink, GripVertical, Loader2, Star, Trash2 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
-import type { Track } from '@/lib/contexts/WorkflowContext';
 import { memo } from 'react';
 
 export interface TrackItemProps {

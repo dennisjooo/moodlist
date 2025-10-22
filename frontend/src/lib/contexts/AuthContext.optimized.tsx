@@ -1,40 +1,12 @@
 'use client';
 
-import { createContext, ReactNode, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { getAuthCookies, getCookie } from '../cookies';
 import { config } from '@/lib/config';
 import { logger } from '@/lib/utils/logger';
-
-export interface User {
-  id: number;
-  spotify_id: string;
-  email?: string;
-  display_name: string;
-  profile_image_url?: string;
-  is_active: boolean;
-  created_at: string;
-}
-
-interface AuthContextType {
-  user: User | null;
-  isLoading: boolean;
-  isAuthenticated: boolean;
-  isValidated: boolean;
-  login: (accessToken: string, refreshToken: string) => Promise<void>;
-  logout: () => Promise<void>;
-  refreshUser: () => Promise<void>;
-}
+import { User, AuthContextType, AuthProviderProps, CachedAuthData } from '../types/auth';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-interface CachedAuthData {
-  user: User;
-  timestamp: number;
-}
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);

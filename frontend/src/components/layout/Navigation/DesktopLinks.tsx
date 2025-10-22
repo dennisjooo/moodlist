@@ -1,9 +1,5 @@
 import Link from 'next/link';
-
-interface NavItem {
-    name: string;
-    href: string;
-}
+import { NavItem } from '@/lib/types/navigation';
 
 interface DesktopLinksProps {
     items: NavItem[];
