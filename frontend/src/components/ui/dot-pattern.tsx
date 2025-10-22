@@ -110,7 +110,7 @@ export function DotPattern({
       ref={containerRef}
       aria-hidden="true"
       className={cn(
-        "pointer-events-none absolute inset-0 h-full w-full text-neutral-400/80",
+        "pointer-events-none absolute inset-0 h-full w-full text-neutral-400/60",
         className,
       )}
       {...props}
@@ -128,12 +128,12 @@ export function DotPattern({
           cy={dot.y}
           r={cr}
           fill={glow ? `url(#${id}-gradient)` : "currentColor"}
-          initial={glow ? { opacity: 0.4, scale: 1 } : {}}
+          initial={glow ? { opacity: 0.2, scale: 1 } : {}}
           animate={
             glow
               ? {
-                opacity: [0.4, 1, 0.4],
-                scale: [1, 1.5, 1],
+                opacity: [0.2, 0.5, 0.2],
+                scale: [1, 1.3, 1],
               }
               : {}
           }
