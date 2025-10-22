@@ -3,18 +3,11 @@
 import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
+import { Track } from '@/lib/types/track';
 import { cn } from '@/lib/utils';
 import { ExternalLink, Star } from 'lucide-react';
 import { memo } from 'react';
 import TrackDetailsTooltip from './TrackDetailsTooltip';
-
-interface Track {
-  track_id: string;
-  track_name: string;
-  artists: string[];
-  confidence_score: number;
-  spotify_uri?: string;
-}
 
 interface TrackRowProps {
   track: Track;
