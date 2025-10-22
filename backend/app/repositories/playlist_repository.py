@@ -1017,3 +1017,164 @@ class PlaylistRepository(BaseRepository[Playlist]):
             )
             await self.session.rollback()
             raise
+
+    async def get_user_recent_playlists(
+        self,
+        user_id: int,
+        limit: int = 10
+    ) -> List[Dict]:
+        """Get recent playlists for a user with mood and metadata.
+
+        Args:
+            user_id: User ID
+            limit: Number of recent playlists to fetch
+
+        Returns:
+            List of recent playlist data dictionaries
+        """
+        try:
+            query = (
+                select(Playlist)
+                .where(
+                    and_(
+                        Playlist.user_id == user_id,
+                        Playlist.deleted_at.is_(None)
+                    )
+                )
+                .order_by(desc(Playlist.created_at))
+                .limit(limit)
+            )
+
+            result = await self.session.execute(query)
+            playlists = result.scalars().all()
+
+            recent_data = []
+            for playlist in playlists:
+                playlist_info = {
+                    "id": playlist.id,
+                    "mood_prompt": playlist.mood_prompt,
+                    "status": playlist.status,
+                    "track_count": playlist.track_count,
+                    "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
+                    "name": playlist.playlist_data.get("name") if playlist.playlist_data else None,
+                    "spotify_url": playlist.playlist_data.get("spotify_url") if playlist.playlist_data else None
+                }
+                
+                # Extract primary emotion if available
+                if playlist.mood_analysis_data:
+                    playlist_info["primary_emotion"] = playlist.mood_analysis_data.get("primary_emotion")
+                    playlist_info["energy_level"] = playlist.mood_analysis_data.get("energy_level")
+                
+                recent_data.append(playlist_info)
+
+            self.logger.debug("Recent playlists retrieved", user_id=user_id, count=len(recent_data))
+            return recent_data
+
+        except Exception as e:
+            self.logger.error(
+                "Database error retrieving recent playlists",
+                user_id=user_id,
+                error=str(e)
+            )
+            raise
+
+    async def get_user_dashboard_analytics(self, user_id: int) -> Dict:
+        """Get comprehensive dashboard analytics for a user.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Dictionary with mood distribution, audio insights, and status breakdown
+        """
+        try:
+            # Get all user playlists with mood analysis
+            query = select(Playlist).where(
+                and_(
+                    Playlist.user_id == user_id,
+                    Playlist.deleted_at.is_(None)
+                )
+            )
+            result = await self.session.execute(query)
+            playlists = result.scalars().all()
+
+            # Analyze mood distribution
+            emotion_counts = {}
+            energy_counts = {"high": 0, "medium": 0, "low": 0}
+            
+            # Audio feature aggregation
+            avg_energy = []
+            avg_valence = []
+            avg_danceability = []
+            
+            # Status breakdown
+            status_counts = {"pending": 0, "completed": 0, "failed": 0}
+            
+            for playlist in playlists:
+                # Count statuses
+                if playlist.status in status_counts:
+                    status_counts[playlist.status] += 1
+                
+                # Process mood analysis
+                if playlist.mood_analysis_data:
+                    # Primary emotions
+                    emotion = playlist.mood_analysis_data.get("primary_emotion", "Unknown")
+                    emotion_counts[emotion] = emotion_counts.get(emotion, 0) + 1
+                    
+                    # Energy levels
+                    energy = playlist.mood_analysis_data.get("energy_level", "").lower()
+                    if "high" in energy or "intense" in energy:
+                        energy_counts["high"] += 1
+                    elif "low" in energy or "calm" in energy or "mellow" in energy:
+                        energy_counts["low"] += 1
+                    else:
+                        energy_counts["medium"] += 1
+                    
+                    # Audio features
+                    target_features = playlist.mood_analysis_data.get("target_features", {})
+                    if "energy" in target_features:
+                        # Take average of [min, max] range
+                        energy_range = target_features["energy"]
+                        if isinstance(energy_range, list) and len(energy_range) == 2:
+                            avg_energy.append(sum(energy_range) / 2)
+                    
+                    if "valence" in target_features:
+                        valence_range = target_features["valence"]
+                        if isinstance(valence_range, list) and len(valence_range) == 2:
+                            avg_valence.append(sum(valence_range) / 2)
+                    
+                    if "danceability" in target_features:
+                        dance_range = target_features["danceability"]
+                        if isinstance(dance_range, list) and len(dance_range) == 2:
+                            avg_danceability.append(sum(dance_range) / 2)
+
+            # Convert emotion counts to distribution list
+            mood_distribution = [
+                {"emotion": emotion, "count": count}
+                for emotion, count in sorted(emotion_counts.items(), key=lambda x: x[1], reverse=True)
+            ]
+
+            # Calculate audio insights
+            audio_insights = {
+                "avg_energy": sum(avg_energy) / len(avg_energy) if avg_energy else 0,
+                "avg_valence": sum(avg_valence) / len(avg_valence) if avg_valence else 0,
+                "avg_danceability": sum(avg_danceability) / len(avg_danceability) if avg_danceability else 0,
+                "energy_distribution": energy_counts
+            }
+
+            analytics = {
+                "mood_distribution": mood_distribution[:5],  # Top 5 emotions
+                "audio_insights": audio_insights,
+                "status_breakdown": status_counts
+            }
+
+            self.logger.debug("Dashboard analytics retrieved", user_id=user_id)
+            return analytics
+
+        except Exception as e:
+            self.logger.error(
+                "Database error retrieving dashboard analytics",
+                user_id=user_id,
+                error=str(e)
+            )
+            raise
