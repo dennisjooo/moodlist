@@ -1,10 +1,11 @@
 'use client';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Skeleton } from '@/components/ui/skeleton';
 import { spotifyAPI, TrackDetails } from '@/lib/api/spotify';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
-import { AlertCircle, Calendar, Clock, Disc, Hash, Info, Loader2, Music, TrendingUp } from 'lucide-react';
+import { AlertCircle, Calendar, Clock, Disc, Hash, Info, Music, TrendingUp } from 'lucide-react';
 import Image from 'next/image';
 import { useState } from 'react';
 
@@ -79,8 +80,30 @@ export default function TrackDetailsTooltip({ trackId, className }: TrackDetails
             </TooltipTrigger>
             <TooltipContent side="top" className="w-[360px] p-0 overflow-hidden" sideOffset={8}>
                 {isLoading && (
-                    <div className="flex items-center justify-center p-8">
-                        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                    <div className="space-y-3 p-4">
+                        {/* Header skeleton */}
+                        <div className="space-y-0.5">
+                            <Skeleton className="h-4 w-3/4" />
+                            <Skeleton className="h-3 w-1/2" />
+                        </div>
+
+                        {/* Divider */}
+                        <div className="border-t border-border/50" />
+
+                        {/* Content skeleton */}
+                        <div className="flex items-start gap-4">
+                            {/* Left side - Details skeleton */}
+                            <div className="flex-1 min-w-0 space-y-2">
+                                <Skeleton className="h-3 w-full" />
+                                <Skeleton className="h-3 w-2/3" />
+                                <Skeleton className="h-3 w-1/2" />
+                                <Skeleton className="h-3 w-3/4" />
+                                <Skeleton className="h-3 w-1/3" />
+                            </div>
+
+                            {/* Right side - Album cover skeleton */}
+                            <Skeleton className="w-28 h-28 rounded-md flex-shrink-0" />
+                        </div>
                     </div>
                 )}
                 {error && (
