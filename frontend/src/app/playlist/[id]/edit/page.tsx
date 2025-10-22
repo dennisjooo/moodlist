@@ -2,31 +2,19 @@
 
 import { AuthGuard } from '@/components/AuthGuard';
 import Navigation from '@/components/Navigation';
-import dynamic from 'next/dynamic';
-const PlaylistEditor = dynamic(() => import('@/components/PlaylistEditor'), {
-  loading: () => <EditorSkeleton />,
-  ssr: false,
-});
+import { PlaylistEditorSkeleton } from '@/components/shared/LoadingStates';
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
-import { LoadingDots } from '@/components/ui/loading-dots';
-import { cn } from '@/lib/utils';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
+import { cn } from '@/lib/utils';
 import { ArrowLeft } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-
-function EditorSkeleton() {
-  return (
-    <div className="flex items-center justify-center min-h-[300px]">
-      <div className="animate-pulse w-full max-w-2xl space-y-4">
-        <div className="h-8 bg-muted rounded" />
-        <div className="h-40 bg-muted rounded" />
-        <div className="h-8 bg-muted rounded" />
-      </div>
-    </div>
-  );
-}
+const PlaylistEditor = dynamic(() => import('@/components/PlaylistEditor'), {
+    loading: () => <PlaylistEditorSkeleton />,
+    ssr: false,
+});
 
 function EditPlaylistPageContent() {
     const params = useParams();
@@ -68,13 +56,8 @@ function EditPlaylistPageContent() {
 
                 <Navigation />
 
-                <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                    <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
-                        <div className="text-center">
-                            <LoadingDots size="sm" />
-                            <p className="mt-4 text-muted-foreground">Loading playlist...</p>
-                        </div>
-                    </div>
+                <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+                    <PlaylistEditorSkeleton />
                 </main>
             </div>
         );

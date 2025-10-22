@@ -4,10 +4,10 @@ import { AuthGuard } from '@/components/AuthGuard';
 import Navigation from '@/components/Navigation';
 import PlaylistCard from '@/components/PlaylistCard';
 import { SpotifyLoginButton } from '@/components/features/auth/SpotifyLoginButton';
+import { PlaylistGridSkeleton } from '@/components/shared/LoadingStates';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
-import { LoadingDots } from '@/components/ui/loading-dots';
 import { playlistAPI, UserPlaylist } from '@/lib/playlistApi';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
@@ -88,12 +88,7 @@ function PlaylistsPageContent() {
       {/* Main Content */}
       <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         {!isUnauthorized && !isLoading && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="text-center mb-12"
-          >
+          <div className="text-center mb-12">
             <Badge variant="outline" className="px-4 py-1 flex items-center gap-2 w-fit mx-auto mb-6">
               <Music className="w-4 h-4" />
               Your Music History
@@ -105,13 +100,11 @@ function PlaylistsPageContent() {
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
               All your mood-based playlists in one place. Relive your musical moments.
             </p>
-          </motion.div>
+          </div>
         )}
 
         {isLoading ? (
-          <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
-            <LoadingDots size="sm" />
-          </div>
+          <PlaylistGridSkeleton />
         ) : isUnauthorized ? (
           <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
             <motion.div
@@ -217,9 +210,10 @@ export default function PlaylistsPage() {
             )}
           />
         </div>
-        <div className="flex items-center justify-center min-h-screen">
-          <LoadingDots size="sm" />
-        </div>
+        <Navigation />
+        <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <PlaylistGridSkeleton />
+        </main>
       </div>
     }>
       <AuthGuard optimistic={true}>
