@@ -40,7 +40,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   // Track if backend verification completed
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isValidated, setIsValidated] = useState(false);
 
   // Get cached auth data from SessionStorage
@@ -285,7 +284,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     user,
     isLoading,
     isAuthenticated: Boolean(user),
-    isValidated: Boolean(user),
+    isValidated,
     login,
     logout,
     refreshUser,
