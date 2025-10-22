@@ -2,34 +2,22 @@
 
 import { AuthGuard } from '@/components/AuthGuard';
 import Navigation from '@/components/Navigation';
-import dynamic from 'next/dynamic';
-const PlaylistEditor = dynamic(() => import('@/components/PlaylistEditor'), {
-  loading: () => <EditorSkeleton />,
-  ssr: false,
-});
+import { PlaylistEditorSkeleton, WorkflowProgressSkeleton } from '@/components/shared/LoadingStates';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
-import { LoadingDots } from '@/components/ui/loading-dots';
 import WorkflowProgress from '@/components/WorkflowProgress';
+import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
-import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { ArrowLeft, Sparkles } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-
-function EditorSkeleton() {
-  return (
-    <div className="flex items-center justify-center min-h-[300px]">
-      <div className="animate-pulse w-full max-w-2xl space-y-4">
-        <div className="h-8 bg-muted rounded" />
-        <div className="h-40 bg-muted rounded" />
-        <div className="h-8 bg-muted rounded" />
-      </div>
-    </div>
-  );
-}
+const PlaylistEditor = dynamic(() => import('@/components/PlaylistEditor'), {
+    loading: () => <PlaylistEditorSkeleton />,
+    ssr: false,
+});
 
 // Main content component for dynamic session route
 function CreateSessionPageContent() {
@@ -170,7 +158,9 @@ function CreateSessionPageContent() {
                     </Button>
 
                     <div className="flex items-center justify-center min-h-[60vh]">
-                        <LoadingDots size="sm" />
+                        <div className="w-full max-w-4xl">
+                            <WorkflowProgressSkeleton />
+                        </div>
                     </div>
                 </main>
             </div>
@@ -249,7 +239,7 @@ function CreateSessionPageContent() {
                                     <p className="text-muted-foreground">{workflowState.error}</p>
                                 </div>
                             ) : (
-                                <LoadingDots size="sm" />
+                                <WorkflowProgressSkeleton />
                             )}
                         </div>
                     </div>
