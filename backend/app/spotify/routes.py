@@ -275,3 +275,65 @@ async def search_tracks(
     except Exception as e:
         logger.error("Unexpected error searching tracks", error=str(e))
         raise InternalServerError("Failed to search tracks")
+
+
+@router.get("/tracks/{track_identifier}")
+async def get_track_details(
+    track_identifier: str,
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get detailed information about a specific track."""
+    logger.info("Getting track details", user_id=current_user.id, track_identifier=track_identifier)
+
+    # Extract track ID from Spotify URI if needed
+    track_id = track_identifier
+    if track_identifier.startswith('spotify:track:'):
+        track_id = track_identifier.split(':')[2]
+    elif track_identifier.startswith('spotify:'):
+        # Handle other Spotify URI formats
+        parts = track_identifier.split(':')
+        track_id = parts[-1]
+
+    # Refresh token if expired
+    current_user = await refresh_spotify_token_if_expired(current_user, db)
+
+    # Use centralized Spotify client
+    spotify_client = SpotifyAPIClient()
+    try:
+        track_data = await spotify_client.get_track(
+            current_user.access_token,
+            track_id
+        )
+        
+        # Format response to match frontend expectations
+        return {
+            "track_id": track_data["id"],
+            "track_name": track_data["name"],
+            "artists": [
+                {"name": artist["name"], "id": artist["id"]}
+                for artist in track_data.get("artists", [])
+            ],
+            "album": {
+                "name": track_data["album"]["name"],
+                "id": track_data["album"]["id"],
+                "release_date": track_data["album"].get("release_date", ""),
+                "total_tracks": track_data["album"].get("total_tracks", 0),
+                "images": track_data["album"].get("images", [])
+            },
+            "album_image": track_data["album"]["images"][0]["url"] if track_data["album"].get("images") else None,
+            "duration_ms": track_data.get("duration_ms", 0),
+            "explicit": track_data.get("explicit", False),
+            "popularity": track_data.get("popularity", 0),
+            "preview_url": track_data.get("preview_url"),
+            "spotify_uri": track_data["uri"],
+            "spotify_url": track_data.get("external_urls", {}).get("spotify"),
+            "track_number": track_data.get("track_number", 0),
+            "disc_number": track_data.get("disc_number", 1)
+        }
+    except SpotifyAuthError as e:
+        logger.error("Failed to get track details", error=str(e), track_id=track_id)
+        raise SpotifyAuthError("Failed to get track details")
+    except Exception as e:
+        logger.error("Unexpected error getting track details", error=str(e), track_id=track_id)
+        raise InternalServerError("Failed to get track details")
