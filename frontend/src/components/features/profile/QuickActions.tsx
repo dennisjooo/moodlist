@@ -1,11 +1,16 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, List, Sparkles, TrendingUp } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { type SpotifyProfile } from '@/lib/api/spotify';
+import { ExternalLink, List, Plus, TrendingUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-export function QuickActions() {
+interface QuickActionsProps {
+    spotifyProfile: SpotifyProfile | null;
+}
+
+export function QuickActions({ spotifyProfile }: QuickActionsProps) {
     const router = useRouter();
 
     const actions = [
@@ -25,21 +30,13 @@ export function QuickActions() {
             variant: 'outline' as const
         },
         {
-            icon: Sparkles,
-            label: 'Surprise Me',
-            description: 'Random mood generator',
+            icon: ExternalLink,
+            label: 'View Spotify Profile',
+            description: 'Open your Spotify profile',
             onClick: () => {
-                const moods = [
-                    'energetic workout vibes',
-                    'chill sunday morning',
-                    'focus and productivity',
-                    'late night jazz',
-                    'nostalgic 90s hits',
-                    'upbeat indie rock',
-                    'melancholic rainy day'
-                ];
-                const randomMood = moods[Math.floor(Math.random() * moods.length)];
-                router.push(`/create?mood=${encodeURIComponent(randomMood)}`);
+                if (spotifyProfile?.id) {
+                    window.open(`https://open.spotify.com/user/${spotifyProfile.id}`, '_blank');
+                }
             },
             variant: 'outline' as const
         }

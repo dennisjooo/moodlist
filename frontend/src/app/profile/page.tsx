@@ -21,7 +21,7 @@ function ProfilePageContent() {
       <div className="h-full max-w-7xl mx-auto flex flex-col">
         <ProfileHeader spotifyProfile={spotifyProfile} />
         <ProfileStats stats={stats} />
-        <ProfileDashboard dashboardData={dashboardData} isDashboardLoading={isDashboardLoading} />
+        <ProfileDashboard dashboardData={dashboardData} isDashboardLoading={isDashboardLoading} spotifyProfile={spotifyProfile} />
       </div>
     </div>
   );

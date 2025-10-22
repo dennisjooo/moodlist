@@ -64,7 +64,7 @@ export function MoodDistributionChart({ distribution }: MoodDistributionChartPro
                     <span>Mood Palette</span>
                 </CardTitle>
             </CardHeader>
-            <CardContent className="lg:flex-1 lg:overflow-y-auto lg:min-h-0 space-y-3">
+            <CardContent className="lg:flex-1 lg:overflow-y-auto lg:min-h-0 space-y-3 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-muted [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/30">
                 {distribution.map((item, index) => {
                     const Icon = getMoodIcon(item.emotion);
                     const percentage = (item.count / total) * 100;
