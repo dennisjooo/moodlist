@@ -17,7 +17,7 @@ function ProfilePageContent() {
   const stats = dashboardData?.stats;
 
   return (
-    <div className="h-screen bg-gradient-to-br from-background to-muted p-2 sm:p-3 overflow-hidden">
+    <div className="h-screen p-2 sm:p-3 overflow-hidden">
       <div className="h-full max-w-7xl mx-auto flex flex-col">
         <ProfileHeader spotifyProfile={spotifyProfile} />
         <ProfileStats stats={stats} />

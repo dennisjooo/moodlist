@@ -35,6 +35,15 @@ const getMoodBgColor = (emotion: string) => {
     return 'bg-pink-500/10';
 };
 
+const getMoodBarColor = (emotion: string) => {
+    const lowerEmotion = emotion.toLowerCase();
+    if (lowerEmotion.includes('happy') || lowerEmotion.includes('joy')) return 'bg-yellow-500';
+    if (lowerEmotion.includes('sad') || lowerEmotion.includes('melancholy')) return 'bg-blue-500';
+    if (lowerEmotion.includes('energetic') || lowerEmotion.includes('excited')) return 'bg-orange-500';
+    if (lowerEmotion.includes('calm') || lowerEmotion.includes('peaceful')) return 'bg-green-500';
+    return 'bg-pink-500';
+};
+
 export function MoodDistributionChart({ distribution }: MoodDistributionChartProps) {
     if (!distribution || distribution.length === 0) {
         return (
@@ -84,7 +93,7 @@ export function MoodDistributionChart({ distribution }: MoodDistributionChartPro
                             </div>
                             <div className="w-full bg-muted rounded-full h-1.5">
                                 <div
-                                    className={`h-1.5 rounded-full transition-all ${getMoodBgColor(item.emotion).replace('/10', '')}`}
+                                    className={`h-1.5 rounded-full transition-all ${getMoodBarColor(item.emotion)}`}
                                     style={{ width: `${percentage}%` }}
                                 />
                             </div>

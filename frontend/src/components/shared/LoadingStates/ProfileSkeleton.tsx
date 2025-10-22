@@ -5,7 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 
 export function ProfileSkeleton() {
     return (
-        <div className="h-screen bg-gradient-to-br from-background to-muted p-2 sm:p-3 overflow-hidden">
+        <div className="h-screen p-2 sm:p-3 overflow-hidden">
             <div className="h-full max-w-7xl mx-auto flex flex-col">
                 {/* Compact Header */}
                 <div className="flex items-center justify-between mb-2 sm:mb-3">
