@@ -8,4 +8,5 @@ export { PlaylistResultsSkeleton } from './PlaylistResultsSkeleton';
 export { PlaylistEditorSkeleton } from './PlaylistEditorSkeleton';
 export { WorkflowProgressSkeleton } from './WorkflowProgressSkeleton';
 export { PlaylistGridSkeleton } from './PlaylistGridSkeleton';
+export { ProfileSkeleton } from './ProfileSkeleton';
 

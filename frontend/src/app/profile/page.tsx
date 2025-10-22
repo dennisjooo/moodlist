@@ -1,10 +1,11 @@
 'use client';
 
 import { AuthGuard } from '@/components/AuthGuard';
+import { ProfileSkeleton } from '@/components/shared/LoadingStates';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/lib/contexts/AuthContext';
 import { config } from '@/lib/config';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { getAuthCookies } from '@/lib/cookies';
 import { logger } from '@/lib/utils/logger';
 import { ArrowLeft, Mail, MapPin, Music, User, Users } from 'lucide-react';
@@ -25,6 +26,7 @@ function ProfilePageContent() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const [spotifyProfile, setSpotifyProfile] = useState<SpotifyProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -37,6 +39,7 @@ function ProfilePageContent() {
     if (!user) return;
 
     try {
+      setIsLoading(true);
       const backendUrl = config.api.baseUrl;
 
       const response = await fetch(`${backendUrl}/api/spotify/profile`, {
@@ -59,12 +62,19 @@ function ProfilePageContent() {
       }
     } catch (error) {
       logger.error('Error fetching Spotify profile', error, { component: 'ProfilePage' });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleBack = () => {
     router.back();
   };
+
+  // Show skeleton while loading
+  if (isLoading) {
+    return <ProfileSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted p-4">
@@ -198,14 +208,7 @@ function ProfilePageContent() {
 
 export default function ProfilePage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    }>
+    <Suspense fallback={<ProfileSkeleton />}>
       <AuthGuard optimistic={false}>
         <ProfilePageContent />
       </AuthGuard>
