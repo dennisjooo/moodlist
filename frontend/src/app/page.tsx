@@ -1,11 +1,18 @@
-import FeaturesSection from '@/components/FeaturesSection';
 import HeroSection from '@/components/HeroSection';
 import Navigation from '@/components/Navigation';
-import PopularMoods from '@/components/PopularMoods';
 import dynamic from 'next/dynamic';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { cookies } from 'next/headers';
 import { cn } from '@/lib/utils';
+
+// Lazy load below-the-fold components for better initial load performance
+const PopularMoods = dynamic(() => import('@/components/PopularMoods'), {
+  loading: () => <div className="h-[300px]" />,
+});
+
+const FeaturesSection = dynamic(() => import('@/components/FeaturesSection'), {
+  loading: () => <div className="h-[400px]" />,
+});
 
 const SocialProof = dynamic(() => import('@/components/SocialProof'), {
   loading: () => <div className="h-[120px]" />,
