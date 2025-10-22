@@ -6,6 +6,7 @@ import httpx
 import structlog
 
 from app.core.config import settings
+from app.agents.core.cache import cache_manager
 from app.core.constants import SpotifyEndpoints, HTTPTimeouts
 from app.core.exceptions import (
     SpotifyAuthError,
@@ -258,15 +259,28 @@ class SpotifyAPIClient:
         track_id: str
     ) -> Dict[str, Any]:
         """Get track details.
-        
+
         Args:
             access_token: Spotify access token
             track_id: Spotify track ID
-            
+
         Returns:
             Track details
         """
-        return await self._get(f"/tracks/{track_id}", access_token)
+        # Try to get from cache first
+        cached_track = await cache_manager.get_track_details(track_id)
+        if cached_track is not None:
+            self.logger.debug(f"Cache hit for track {track_id}")
+            return cached_track
+
+        # Cache miss - fetch from API
+        self.logger.debug(f"Cache miss for track {track_id}, fetching from API")
+        track_data = await self._get(f"/tracks/{track_id}", access_token)
+
+        # Cache the result
+        await cache_manager.set_track_details(track_id, track_data)
+
+        return track_data
     
     async def get_playlist_tracks(
         self,
