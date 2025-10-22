@@ -3,14 +3,7 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { cn } from '@/lib/utils';
-
-interface Track {
-    track_id: string;
-    track_name: string;
-    artists: string[];
-    confidence_score: number;
-    spotify_uri?: string;
-}
+import { Track } from '@/lib/types/track';
 
 interface VirtualTrackListProps {
     tracks: Track[];
