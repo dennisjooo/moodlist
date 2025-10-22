@@ -89,24 +89,24 @@ export default function TrackDetailsTooltip({ trackId, className }: TrackDetails
                     </div>
                 )}
                 {trackDetails && !isLoading && !error && (
-                    <div className="flex items-center gap-4 p-4">
-                        {/* Left side - Track Info */}
-                        <div className="flex-1 min-w-0 space-y-3">
-                            {/* Track name and artist */}
-                            <div className="space-y-0.5">
-                                <h4 className="font-semibold text-sm leading-tight truncate">
-                                    {trackDetails.track_name}
-                                </h4>
-                                <p className="text-xs text-muted-foreground truncate">
-                                    {trackDetails.artists.map(a => a.name).join(', ')}
-                                </p>
-                            </div>
+                    <div className="space-y-3 p-4">
+                        {/* Header - Track name and artist */}
+                        <div className="space-y-0.5">
+                            <h4 className="font-semibold text-sm leading-tight truncate">
+                                {trackDetails.track_name}
+                            </h4>
+                            <p className="text-xs text-muted-foreground truncate">
+                                {trackDetails.artists.map(a => a.name).join(', ')}
+                            </p>
+                        </div>
 
-                            {/* Divider */}
-                            <div className="border-t border-border/50" />
+                        {/* Divider */}
+                        <div className="border-t border-border/50" />
 
-                            {/* Details with icons */}
-                            <div className="space-y-2 text-xs text-foreground/80">
+                        {/* Content - Details and Cover side by side */}
+                        <div className="flex items-start gap-4">
+                            {/* Left side - Details with icons */}
+                            <div className="flex-1 min-w-0 space-y-2 text-xs text-foreground/80">
                                 {trackDetails.album?.name && (
                                     <div className="flex items-start gap-2.5">
                                         <Disc className="w-3.5 h-3.5 text-muted-foreground/70 flex-shrink-0 mt-0.5" />
@@ -149,24 +149,24 @@ export default function TrackDetailsTooltip({ trackId, className }: TrackDetails
                                     </div>
                                 )}
                             </div>
-                        </div>
 
-                        {/* Right side - Album Cover */}
-                        {trackDetails.album_image ? (
-                            <div className="w-28 h-28 rounded-md overflow-hidden bg-muted flex-shrink-0 shadow-md">
-                                <Image
-                                    src={trackDetails.album_image}
-                                    alt={trackDetails.album.name}
-                                    width={112}
-                                    height={112}
-                                    className="w-full h-full object-cover"
-                                />
-                            </div>
-                        ) : (
-                            <div className="w-28 h-28 rounded-md bg-muted flex items-center justify-center flex-shrink-0 shadow-md">
-                                <Music className="w-10 h-10 text-muted-foreground/40" />
-                            </div>
-                        )}
+                            {/* Right side - Album Cover */}
+                            {trackDetails.album_image ? (
+                                <div className="w-28 h-28 rounded-md overflow-hidden bg-muted flex-shrink-0 shadow-md">
+                                    <Image
+                                        src={trackDetails.album_image}
+                                        alt={trackDetails.album.name}
+                                        width={112}
+                                        height={112}
+                                        className="w-full h-full object-cover"
+                                    />
+                                </div>
+                            ) : (
+                                <div className="w-28 h-28 rounded-md bg-muted flex items-center justify-center flex-shrink-0 shadow-md">
+                                    <Music className="w-10 h-10 text-muted-foreground/40" />
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </TooltipContent>

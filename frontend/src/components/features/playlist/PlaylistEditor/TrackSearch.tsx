@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { Check, ChevronDown, ChevronUp, Loader2, Plus, Search } from 'lucide-react';
 import Image from 'next/image';
 import { useState } from 'react';
+import TrackDetailsTooltip from '../PlaylistResults/TrackDetailsTooltip';
 
 export interface TrackSearchProps {
     searchQuery: string;
@@ -104,32 +105,35 @@ export function TrackSearch({
                                                         {track.artists.join(', ')}
                                                     </p>
                                                 </div>
-                                                {isAlreadyAdded ? (
-                                                    <div className="flex items-center gap-1 flex-shrink-0 text-green-600">
-                                                        <Check className="w-4 h-4" />
-                                                    </div>
-                                                ) : (
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={() => onAddTrack(track.spotify_uri, track)}
-                                                        className={cn(
-                                                            "flex items-center gap-1 flex-shrink-0",
-                                                            isAdding ? "bg-green-600 hover:bg-green-700 text-white" : ""
-                                                        )}
-                                                    >
-                                                        {isAdding ? (
-                                                            <>
-                                                                <Loader2 className="w-3 h-3 animate-spin" />
-                                                                Adding
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <Plus className="w-3 h-3" />
-                                                                Add
-                                                            </>
-                                                        )}
-                                                    </Button>
-                                                )}
+                                                <div className="flex items-center gap-2 flex-shrink-0">
+                                                    <TrackDetailsTooltip trackId={track.track_id} />
+                                                    {isAlreadyAdded ? (
+                                                        <div className="flex items-center gap-1 text-green-600">
+                                                            <Check className="w-4 h-4" />
+                                                        </div>
+                                                    ) : (
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() => onAddTrack(track.spotify_uri, track)}
+                                                            className={cn(
+                                                                "flex items-center gap-1",
+                                                                isAdding ? "bg-green-600 hover:bg-green-700 text-white" : ""
+                                                            )}
+                                                        >
+                                                            {isAdding ? (
+                                                                <>
+                                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                                    Adding
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Plus className="w-3 h-3" />
+                                                                    Add
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </div>
                                         );
                                     })}

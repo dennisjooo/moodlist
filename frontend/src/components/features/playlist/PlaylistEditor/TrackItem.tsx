@@ -9,6 +9,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ExternalLink, GripVertical, Loader2, Star, Trash2 } from 'lucide-react';
 import { memo } from 'react';
+import TrackDetailsTooltip from '../PlaylistResults/TrackDetailsTooltip';
 
 export interface TrackItemProps {
     track: Track;
@@ -82,20 +83,21 @@ export const TrackItem = memo(function TrackItem({ track, index, onRemove, isRem
                         </span>
                     </div>
                     <Badge variant="outline" className="text-xs capitalize">
-                        {track.source}
+                        {track.source.replace(/_/g, ' ')}
                     </Badge>
                 </div>
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-1 flex-shrink-0">
+                <TrackDetailsTooltip trackId={track.track_id} />
+
                 {track.spotify_uri && (
-                    <Button size="sm" variant="ghost" asChild>
+                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0" asChild>
                         <a
                             href={getSpotifyUrl(track.spotify_uri)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="p-2"
                         >
                             <ExternalLink className="w-4 h-4" />
                         </a>
@@ -107,7 +109,7 @@ export const TrackItem = memo(function TrackItem({ track, index, onRemove, isRem
                     variant="ghost"
                     onClick={() => onRemove(track.track_id)}
                     disabled={isRemoving}
-                    className="p-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                 >
                     {isRemoving ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
