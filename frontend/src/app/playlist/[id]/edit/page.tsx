@@ -2,7 +2,11 @@
 
 import { AuthGuard } from '@/components/AuthGuard';
 import Navigation from '@/components/Navigation';
-import PlaylistEditor from '@/components/PlaylistEditor';
+import dynamic from 'next/dynamic';
+const PlaylistEditor = dynamic(() => import('@/components/PlaylistEditor'), {
+  loading: () => <EditorSkeleton />,
+  ssr: false,
+});
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { LoadingDots } from '@/components/ui/loading-dots';
@@ -11,6 +15,18 @@ import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { ArrowLeft } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+
+function EditorSkeleton() {
+  return (
+    <div className="flex items-center justify-center min-h-[300px]">
+      <div className="animate-pulse w-full max-w-2xl space-y-4">
+        <div className="h-8 bg-muted rounded" />
+        <div className="h-40 bg-muted rounded" />
+        <div className="h-8 bg-muted rounded" />
+      </div>
+    </div>
+  );
+}
 
 function EditPlaylistPageContent() {
     const params = useParams();
