@@ -1,13 +1,14 @@
 'use client';
 
-import { Check, ChevronDown, ChevronUp, Loader2, Plus, Search } from 'lucide-react';
-import Image from 'next/image';
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import type { Track } from '@/lib/types/track';
+import type { SearchTrack } from '@/lib/types/workflow';
 import { cn } from '@/lib/utils';
-import type { SearchTrack, Track } from '@/lib/contexts/WorkflowContext';
+import { Check, ChevronDown, ChevronUp, Loader2, Plus, Search } from 'lucide-react';
+import Image from 'next/image';
+import { useState } from 'react';
 
 export interface TrackSearchProps {
     searchQuery: string;

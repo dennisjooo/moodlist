@@ -2,7 +2,7 @@
 
 import { Music, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type { WorkflowState } from '@/lib/contexts/WorkflowContext';
+import type { WorkflowState } from '@/lib/types/workflow';
 
 interface WorkflowInsightsProps {
     status: WorkflowState['status'];

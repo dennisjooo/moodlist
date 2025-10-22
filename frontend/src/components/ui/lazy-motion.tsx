@@ -7,64 +7,70 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { ComponentProps } from 'react';
+import React, { HTMLAttributes, ReactNode } from 'react';
 
 // Create a loading placeholder for motion components
-function MotionPlaceholder({ children, ...props }: any) {
-  return <div {...props}>{children}</div>;
+interface MotionPlaceholderProps extends HTMLAttributes<HTMLDivElement> {
+  children?: ReactNode;
+  as?: string;
 }
+
+function MotionPlaceholder({ children, as = 'div', ...props }: MotionPlaceholderProps) {
+  return React.createElement(as, props, children);
+}
+
+// Type definitions for motion components
+// Using generic component types that accept motion props
+type MotionComponentProps = Record<string, unknown>;
+type MotionDivComponent = React.ComponentType<MotionComponentProps>;
+type MotionSpanComponent = React.ComponentType<MotionComponentProps>;
+type MotionUlComponent = React.ComponentType<MotionComponentProps>;
+type MotionLiComponent = React.ComponentType<MotionComponentProps>;
+type MotionButtonComponent = React.ComponentType<MotionComponentProps>;
 
 // Dynamically import motion components with placeholder
 export const motion = {
   div: dynamic(
     () => import('framer-motion').then((mod) => mod.motion.div),
-    { 
+    {
       loading: () => <MotionPlaceholder as="div" />,
-      ssr: false 
+      ssr: false
     }
-  ) as any,
-  
+  ) as MotionDivComponent,
+
   span: dynamic(
     () => import('framer-motion').then((mod) => mod.motion.span),
-    { 
+    {
       loading: () => <MotionPlaceholder as="span" />,
-      ssr: false 
+      ssr: false
     }
-  ) as any,
-  
+  ) as MotionSpanComponent,
+
   ul: dynamic(
     () => import('framer-motion').then((mod) => mod.motion.ul),
-    { 
+    {
       loading: () => <MotionPlaceholder as="ul" />,
-      ssr: false 
+      ssr: false
     }
-  ) as any,
-  
+  ) as MotionUlComponent,
+
   li: dynamic(
     () => import('framer-motion').then((mod) => mod.motion.li),
-    { 
+    {
       loading: () => <MotionPlaceholder as="li" />,
-      ssr: false 
+      ssr: false
     }
-  ) as any,
-  
+  ) as MotionLiComponent,
+
   button: dynamic(
     () => import('framer-motion').then((mod) => mod.motion.button),
-    { 
+    {
       loading: () => <MotionPlaceholder as="button" />,
-      ssr: false 
+      ssr: false
     }
-  ) as any,
+  ) as MotionButtonComponent,
 };
 
 // Export commonly used hooks with lazy loading
 export { useAnimation, useInView } from 'framer-motion';
-
-// For components that need the full motion library, export a dynamic version
-export const LazyMotion = dynamic(
-  () => import('framer-motion').then((mod) => ({
-    default: mod.motion
-  })),
-  { ssr: false }
-);
 

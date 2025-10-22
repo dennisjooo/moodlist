@@ -1,14 +1,15 @@
 'use client';
 
+import { SpotifyLoginButton } from '@/components/features/auth/SpotifyLoginButton';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { NavItem } from '@/lib/types/navigation';
 import { logger } from '@/lib/utils/logger';
 import { useRouter } from 'next/navigation';
+import { AuthMenu } from './AuthMenu';
 import { Brand } from './Brand';
 import { DesktopLinks } from './DesktopLinks';
-import { AuthMenu } from './AuthMenu';
 import { MobileMenu } from './MobileMenu';
-import { SpotifyLoginButton } from '@/components/features/auth/SpotifyLoginButton';
 
 interface NavigationProps {
     /** Optional override for branding link */
@@ -17,11 +18,6 @@ interface NavigationProps {
     extraItems?: NavItem[];
     /** Callback when user initiates logout */
     onLogout?: () => void;
-}
-
-interface NavItem {
-    name: string;
-    href: string;
 }
 
 export default function Navigation({ onLogout, extraItems = [] }: NavigationProps) {

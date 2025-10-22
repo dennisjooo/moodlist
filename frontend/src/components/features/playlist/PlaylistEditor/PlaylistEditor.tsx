@@ -2,8 +2,8 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { Track } from '@/lib/contexts/WorkflowContext';
 import { usePlaylistEdits } from '@/lib/hooks/usePlaylistEdits';
+import type { Track } from '@/lib/types/workflow';
 import { Check, RotateCcw } from 'lucide-react';
 import { TrackList } from './TrackList';
 import { TrackSearch } from './TrackSearch';
