@@ -33,20 +33,40 @@ class SpotifyAPIClient:
         self.max_retries = max_retries
         self.logger = logger
     
-    async def get_user_profile(self, access_token: str) -> Dict[str, Any]:
+    async def get_user_profile(self, access_token: str, user_id: Optional[str] = None) -> Dict[str, Any]:
         """Get user profile from Spotify.
-        
+
         Args:
             access_token: Spotify access token
-            
+            user_id: Optional user ID for caching (Spotify user ID)
+
         Returns:
             User profile data
-            
+
         Raises:
             SpotifyAuthError: If token is invalid or expired
             SpotifyAPIException: For other API errors
         """
-        return await self._get(SpotifyEndpoints.USER_PROFILE, access_token)
+        # Try to get from cache first if user_id is provided
+        if user_id:
+            cached_profile = await cache_manager.get_user_profile(user_id)
+            if cached_profile is not None:
+                self.logger.debug(f"Cache hit for user profile {user_id}")
+                return cached_profile
+
+        # Cache miss or no user_id provided - fetch from API
+        if user_id:
+            self.logger.debug(f"Cache miss for user profile {user_id}, fetching from API")
+        else:
+            self.logger.debug("Fetching user profile from API (no user_id for caching)")
+
+        profile_data = await self._get(SpotifyEndpoints.USER_PROFILE, access_token)
+
+        # Cache the result if user_id is provided
+        if user_id:
+            await cache_manager.set_user_profile(user_id, profile_data)
+
+        return profile_data
     
     async def get_user_top_tracks(
         self,

@@ -95,7 +95,7 @@ async def get_spotify_profile(
     # Use centralized Spotify client
     spotify_client = SpotifyAPIClient()
     try:
-        profile_data = await spotify_client.get_user_profile(current_user.access_token)
+        profile_data = await spotify_client.get_user_profile(current_user.access_token, current_user.spotify_id)
         
         return {
             "id": profile_data["id"],

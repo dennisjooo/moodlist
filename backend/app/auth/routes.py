@@ -29,7 +29,8 @@ from app.auth.schemas import (
 )
 from app.repositories.user_repository import UserRepository
 from app.repositories.session_repository import SessionRepository
-from app.dependencies import get_user_repository, get_session_repository
+from app.repositories.playlist_repository import PlaylistRepository
+from app.dependencies import get_user_repository, get_session_repository, get_playlist_repository
 from app.agents.core.cache import cache_manager
 
 logger = structlog.get_logger(__name__)
@@ -260,3 +261,106 @@ async def verify_auth(
     await cache_manager.cache.set(cache_key, result, ttl=cache_ttl)
 
     return result
+
+
+@router.get("/stats")
+async def get_user_stats(
+    current_user: User = Depends(require_auth),
+    playlist_repo: PlaylistRepository = Depends(get_playlist_repository),
+    session_repo: SessionRepository = Depends(get_session_repository)
+):
+    """Get user statistics including playlists, moods analyzed, and sessions.
+    
+    Args:
+        current_user: Authenticated user
+        playlist_repo: Playlist repository
+        session_repo: Session repository
+    
+    Returns:
+        User statistics
+    """
+    try:
+        # Get playlist stats (includes total playlists, completed playlists, total tracks)
+        playlist_stats = await playlist_repo.get_user_playlist_stats(current_user.id)
+        
+        # Get total session count for the user
+        total_sessions = await session_repo.get_session_count(user_id=current_user.id, active_only=False)
+        
+        # Get active session count
+        active_sessions = await session_repo.get_session_count(user_id=current_user.id, active_only=True)
+        
+        logger.debug(
+            "User stats retrieved",
+            user_id=current_user.id,
+            total_playlists=playlist_stats["total_playlists"],
+            total_sessions=total_sessions
+        )
+        
+        return {
+            "user_id": current_user.id,
+            "playlists_generated": playlist_stats["completed_playlists"],
+            "moods_analyzed": playlist_stats["total_playlists"],
+            "total_sessions": total_sessions,
+            "active_sessions": active_sessions,
+            "total_tracks": playlist_stats["total_tracks"]
+        }
+    
+    except Exception as e:
+        logger.error(f"Error getting user stats: {str(e)}", exc_info=True)
+        raise InternalServerError(f"Failed to get user stats: {str(e)}")
+
+
+@router.get("/dashboard")
+async def get_user_dashboard(
+    current_user: User = Depends(require_auth),
+    playlist_repo: PlaylistRepository = Depends(get_playlist_repository),
+    session_repo: SessionRepository = Depends(get_session_repository)
+):
+    """Get comprehensive dashboard data for user including analytics and insights.
+    
+    Args:
+        current_user: Authenticated user
+        playlist_repo: Playlist repository
+        session_repo: Session repository
+    
+    Returns:
+        Dashboard data with stats, recent activity, mood distribution, and insights
+    """
+    try:
+        # Get basic stats
+        playlist_stats = await playlist_repo.get_user_playlist_stats(current_user.id)
+        total_sessions = await session_repo.get_session_count(user_id=current_user.id, active_only=False)
+        active_sessions = await session_repo.get_session_count(user_id=current_user.id, active_only=True)
+        
+        # Get recent playlists for activity timeline and mood analysis
+        recent_playlists_data = await playlist_repo.get_user_recent_playlists(
+            user_id=current_user.id,
+            limit=10
+        )
+        
+        # Get mood distribution and audio features analysis
+        dashboard_analytics = await playlist_repo.get_user_dashboard_analytics(current_user.id)
+        
+        logger.debug(
+            "Dashboard data retrieved",
+            user_id=current_user.id,
+            total_playlists=playlist_stats["total_playlists"]
+        )
+        
+        return {
+            "stats": {
+                "playlists_generated": playlist_stats["completed_playlists"],
+                "moods_analyzed": playlist_stats["total_playlists"],
+                "total_sessions": total_sessions,
+                "active_sessions": active_sessions,
+                "total_tracks": playlist_stats["total_tracks"]
+            },
+            "recent_activity": recent_playlists_data,
+            "mood_distribution": dashboard_analytics.get("mood_distribution", []),
+            "audio_insights": dashboard_analytics.get("audio_insights", {}),
+            "status_breakdown": dashboard_analytics.get("status_breakdown", {})
+        }
+    
+    except Exception as e:
+        logger.error(f"Error getting dashboard data: {str(e)}", exc_info=True)
+        raise InternalServerError(f"Failed to get dashboard data: {str(e)}")
