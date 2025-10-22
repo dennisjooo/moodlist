@@ -184,6 +184,21 @@
   }
 }
 
+.dot-pattern__glow {
+  opacity: 0.35;
+  animation: dotPatternGlow 6s ease-in-out infinite alternate;
+}
+
+@keyframes dotPatternGlow {
+  0% {
+    opacity: 0.2;
+  }
+
+  100% {
+    opacity: 0.55;
+  }
+}
+
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation: none;
