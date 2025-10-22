@@ -20,7 +20,7 @@ import { logger } from '@/lib/utils/logger';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { Sparkles } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 
 function EditorSkeleton() {
   return (
@@ -264,10 +264,45 @@ function CreatePageContent() {
   );
 }
 
-export default function CreatePage() {
+function CreatePageWithAuth() {
   return (
     <AuthGuard optimistic={true}>
       <CreatePageContent />
     </AuthGuard>
+  );
+}
+
+export default function CreatePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background relative">
+        {/* Fixed Dot Pattern Background */}
+        <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
+          <DotPattern
+            className={cn(
+              "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
+            )}
+          />
+        </div>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="flex flex-col items-center gap-6">
+            <div className="relative w-24 h-24">
+              <div className="absolute inset-0 rounded-full border-4 border-primary/20 animate-pulse"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-primary animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Sparkles className="w-8 h-8 text-primary animate-pulse" />
+              </div>
+            </div>
+            <div className="text-center space-y-2">
+              <p className="text-lg font-semibold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent animate-pulse">
+                Loading...
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    }>
+      <CreatePageWithAuth />
+    </Suspense>
   );
 }

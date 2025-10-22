@@ -11,8 +11,8 @@ const SocialProof = dynamic(() => import('@/components/SocialProof'), {
   loading: () => <div className="h-[120px]" />,
 });
 
-export default function Home() {
-  const cookieStore = cookies();
+export default async function Home() {
+  const cookieStore = await cookies();
   const isLoggedIn = Boolean(cookieStore.get('session_token'));
 
   return (

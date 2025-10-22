@@ -10,7 +10,7 @@ import { logger } from '@/lib/utils/logger';
 import { ArrowLeft, Mail, MapPin, Music, User, Users } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 
 interface SpotifyProfile {
   id: string;
@@ -198,8 +198,17 @@ function ProfilePageContent() {
 
 export default function ProfilePage() {
   return (
-    <AuthGuard optimistic={false}>
-      <ProfilePageContent />
-    </AuthGuard>
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    }>
+      <AuthGuard optimistic={false}>
+        <ProfilePageContent />
+      </AuthGuard>
+    </Suspense>
   );
 }
