@@ -2,15 +2,8 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { VirtualTrackList } from '@/components/shared/VirtualTrackList';
+import { Track } from '@/lib/types/track';
 import TrackRow from './TrackRow';
-
-interface Track {
-  track_id: string;
-  track_name: string;
-  artists: string[];
-  confidence_score: number;
-  spotify_uri?: string;
-}
 
 interface TrackListViewProps {
   tracks: Track[];
