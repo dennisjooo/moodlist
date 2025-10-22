@@ -1,16 +1,19 @@
-'use client';
-
 import FeaturesSection from '@/components/FeaturesSection';
 import HeroSection from '@/components/HeroSection';
 import Navigation from '@/components/Navigation';
 import PopularMoods from '@/components/PopularMoods';
-import SocialProof from '@/components/SocialProof';
+import dynamic from 'next/dynamic';
 import { DotPattern } from '@/components/ui/dot-pattern';
-import { useAuth } from '@/lib/contexts/AuthContext';
+import { cookies } from 'next/headers';
 import { cn } from '@/lib/utils';
 
-export default function Home() {
-  const { isAuthenticated } = useAuth();
+const SocialProof = dynamic(() => import('@/components/SocialProof'), {
+  loading: () => <div className="h-[120px]" />,
+});
+
+export default async function Home() {
+  const cookieStore = await cookies();
+  const isLoggedIn = Boolean(cookieStore.get('session_token'));
 
   return (
     <div className="min-h-screen bg-background relative">
@@ -30,7 +33,7 @@ export default function Home() {
       <main className="relative z-10">
         {/* Hero Section */}
         <HeroSection
-          isLoggedIn={isAuthenticated}
+          isLoggedIn={isLoggedIn}
         />
 
         {/* Popular Moods */}

@@ -14,7 +14,7 @@ import { logger } from '@/lib/utils/logger';
 import { motion } from 'framer-motion';
 import { Music } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 
 function PlaylistsPageContent() {
   const [playlists, setPlaylists] = useState<UserPlaylist[]>([]);
@@ -207,8 +207,24 @@ function PlaylistsPageContent() {
 
 export default function PlaylistsPage() {
   return (
-    <AuthGuard optimistic={true}>
-      <PlaylistsPageContent />
-    </AuthGuard>
+    <Suspense fallback={
+      <div className="min-h-screen bg-background relative">
+        {/* Fixed Dot Pattern Background */}
+        <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
+          <DotPattern
+            className={cn(
+              "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
+            )}
+          />
+        </div>
+        <div className="flex items-center justify-center min-h-screen">
+          <LoadingDots size="sm" />
+        </div>
+      </div>
+    }>
+      <AuthGuard optimistic={true}>
+        <PlaylistsPageContent />
+      </AuthGuard>
+    </Suspense>
   );
 }

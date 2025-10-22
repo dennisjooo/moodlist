@@ -2,7 +2,10 @@
 
 import { AuthGuard } from '@/components/AuthGuard';
 import Navigation from '@/components/Navigation';
-import PlaylistResults from '@/components/PlaylistResults';
+import dynamic from 'next/dynamic';
+const PlaylistResults = dynamic(() => import('@/components/PlaylistResults'), {
+  loading: () => <ResultsSkeleton />,
+});
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { LoadingDots } from '@/components/ui/loading-dots';
@@ -13,6 +16,18 @@ import { ArrowLeft } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
 import { logger } from '@/lib/utils/logger';
+
+function ResultsSkeleton() {
+  return (
+    <div className="flex items-center justify-center min-h-[200px]">
+      <div className="animate-pulse w-full max-w-xl space-y-4">
+        <div className="h-6 bg-muted rounded" />
+        <div className="h-6 bg-muted rounded" />
+        <div className="h-6 bg-muted rounded" />
+      </div>
+    </div>
+  );
+}
 
 function PlaylistPageContent() {
     const params = useParams();
