@@ -4,8 +4,14 @@ import { AuthGuard } from '@/components/AuthGuard';
 import LoginRequiredDialog from '@/components/LoginRequiredDialog';
 import MoodInput from '@/components/MoodInput';
 import Navigation from '@/components/Navigation';
-import PlaylistEditor from '@/components/PlaylistEditor';
-import PlaylistResults from '@/components/PlaylistResults';
+import dynamic from 'next/dynamic';
+const PlaylistEditor = dynamic(() => import('@/components/PlaylistEditor'), {
+  loading: () => <EditorSkeleton />,
+  ssr: false,
+});
+const PlaylistResults = dynamic(() => import('@/components/PlaylistResults'), {
+  loading: () => <ResultsSkeleton />,
+});
 import { Badge } from '@/components/ui/badge';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -14,7 +20,31 @@ import { logger } from '@/lib/utils/logger';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { Sparkles } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+
+function EditorSkeleton() {
+  return (
+    <div className="flex items-center justify-center min-h-[300px]">
+      <div className="animate-pulse w-full max-w-2xl space-y-4">
+        <div className="h-8 bg-muted rounded" />
+        <div className="h-40 bg-muted rounded" />
+        <div className="h-8 bg-muted rounded" />
+      </div>
+    </div>
+  );
+}
+
+function ResultsSkeleton() {
+  return (
+    <div className="flex items-center justify-center min-h-[200px]">
+      <div className="animate-pulse w-full max-w-xl space-y-4">
+        <div className="h-6 bg-muted rounded" />
+        <div className="h-6 bg-muted rounded" />
+        <div className="h-6 bg-muted rounded" />
+      </div>
+    </div>
+  );
+}
 
 // Main content component that uses workflow context
 function CreatePageContent() {
@@ -234,10 +264,45 @@ function CreatePageContent() {
   );
 }
 
-export default function CreatePage() {
+function CreatePageWithAuth() {
   return (
     <AuthGuard optimistic={true}>
       <CreatePageContent />
     </AuthGuard>
+  );
+}
+
+export default function CreatePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background relative">
+        {/* Fixed Dot Pattern Background */}
+        <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
+          <DotPattern
+            className={cn(
+              "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
+            )}
+          />
+        </div>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="flex flex-col items-center gap-6">
+            <div className="relative w-24 h-24">
+              <div className="absolute inset-0 rounded-full border-4 border-primary/20 animate-pulse"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-primary animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Sparkles className="w-8 h-8 text-primary animate-pulse" />
+              </div>
+            </div>
+            <div className="text-center space-y-2">
+              <p className="text-lg font-semibold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent animate-pulse">
+                Loading...
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    }>
+      <CreatePageWithAuth />
+    </Suspense>
   );
 }
