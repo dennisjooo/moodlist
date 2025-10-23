@@ -90,18 +90,19 @@ export const TrackItem = memo(function TrackItem({ track, index, onRemove, isRem
 
             {/* Actions */}
             <div className="flex items-center gap-1 flex-shrink-0">
-                <TrackDetailsTooltip trackId={track.track_id} />
-
                 {track.spotify_uri && (
-                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0" asChild>
-                        <a
-                            href={getSpotifyUrl(track.spotify_uri)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            <ExternalLink className="w-4 h-4" />
-                        </a>
-                    </Button>
+                    <>
+                        <TrackDetailsTooltip spotifyUri={track.spotify_uri} />
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" asChild>
+                            <a
+                                href={getSpotifyUrl(track.spotify_uri)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <ExternalLink className="w-4 h-4" />
+                            </a>
+                        </Button>
+                    </>
                 )}
 
                 <Button

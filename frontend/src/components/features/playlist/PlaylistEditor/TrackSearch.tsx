@@ -106,7 +106,7 @@ export function TrackSearch({
                                                     </p>
                                                 </div>
                                                 <div className="flex items-center gap-2 flex-shrink-0">
-                                                    <TrackDetailsTooltip trackId={track.track_id} />
+                                                    <TrackDetailsTooltip spotifyUri={track.spotify_uri} />
                                                     {isAlreadyAdded ? (
                                                         <div className="flex items-center gap-1 text-green-600">
                                                             <Check className="w-4 h-4" />
