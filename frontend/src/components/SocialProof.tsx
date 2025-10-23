@@ -1,7 +1,7 @@
 "use client";
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { motion } from 'framer-motion';
+import { motion } from '@/components/ui/lazy-motion';
 import { useEffect, useRef, useState } from 'react';
 import { config } from '@/lib/config';
 import { logger } from '@/lib/utils/logger';

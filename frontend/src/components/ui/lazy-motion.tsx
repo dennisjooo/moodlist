@@ -71,6 +71,5 @@ export const motion = {
   ) as MotionButtonComponent,
 };
 
-// Export commonly used hooks with lazy loading
+// Export commonly used hooks - these are lightweight and don't need lazy loading
 export { useAnimation, useInView } from 'framer-motion';
-
