@@ -82,11 +82,17 @@ CRITICAL: Generate a triadic color scheme that visually represents the mood:
   * secondary: Supporting color that complements the primary (120° on color wheel)
   * tertiary: Accent color completing the triad (240° on color wheel)
   * Colors should evoke the emotional tone of the music (warm/cool, bright/dark, saturated/muted)
-  * Examples:
-    - "chill indie": {"primary": "#6B9BD1", "secondary": "#B5D16B", "tertiary": "#D16B9B"} (cool, muted)
-    - "energetic workout": {"primary": "#FF5722", "secondary": "#22FF57", "tertiary": "#5722FF"} (bright, saturated)
-    - "romantic evening": {"primary": "#E91E63", "secondary": "#9C27B0", "tertiary": "#673AB7"} (warm, rich)
-    - "rainy day": {"primary": "#607D8B", "secondary": "#8B6078", "tertiary": "#78608B"} (cool, muted)
+  * NEVER use basic primary colors (red/green/blue) or rainbow schemes
+  * Match colors to the specific mood characteristics from valence, energy, and emotion
+  * Examples by mood type:
+    - "chill indie": {"primary": "#6B9BD1", "secondary": "#B5D16B", "tertiary": "#D16B9B"} (cool, muted blues/greens)
+    - "energetic workout": {"primary": "#FF5722", "secondary": "#22FF57", "tertiary": "#5722FF"} (bright, saturated warm tones)
+    - "romantic evening": {"primary": "#E91E63", "secondary": "#9C27B0", "tertiary": "#673AB7"} (warm, rich purples)
+    - "rainy day": {"primary": "#607D8B", "secondary": "#8B6078", "tertiary": "#78608B"} (cool, muted grays)
+    - "aggressive trap/hype": {"primary": "#8B0000", "secondary": "#2F1B14", "tertiary": "#FF4500"} (dark reds, blacks, fiery accents)
+    - "dark moody": {"primary": "#2C1810", "secondary": "#8B4513", "tertiary": "#DC143C"} (deep browns, dark burgundy)
+    - "electronic/dance": {"primary": "#9932CC", "secondary": "#00CED1", "tertiary": "#FF1493"} (neon purples, cyans, magentas)
+    - "calm acoustic": {"primary": "#556B2F", "secondary": "#8FBC8F", "tertiary": "#DEB887"} (earth tones, sage greens)
 
 Provide your analysis in valid JSON format with this structure:
 {
