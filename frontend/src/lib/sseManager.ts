@@ -149,7 +149,8 @@ export class SSEManager {
                     if (callbacks.onError) {
                         callbacks.onError(error);
                     }
-                } catch (parseError) {
+                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                } catch (_parseError) {
                     // Event might not have data, ignore
                     logger.debug('Error event without parseable data', {
                         component: 'SSEManager',
@@ -159,7 +160,8 @@ export class SSEManager {
             });
 
             // Handle connection errors and reconnection
-            eventSource.onerror = (event) => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            eventSource.onerror = (_event) => {
                 logger.warn('SSE connection error', {
                     component: 'SSEManager',
                     sessionId,

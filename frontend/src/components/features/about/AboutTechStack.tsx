@@ -1,6 +1,6 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
-import { Wrench, Monitor, Server, Globe, Code, Database, Activity, Settings, Palette, Sparkles, Zap, Shield, Key, Lightbulb } from 'lucide-react';
+import { Wrench, Monitor, Server, Globe, Code, Database, Activity, Settings, Palette, Sparkles, Zap, Shield, Key } from 'lucide-react';
 
 export function AboutTechStack() {
     return (
