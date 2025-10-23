@@ -412,6 +412,44 @@ class SpotifyService:
         logger.info(f"Extracted {len(artists)} unique artists from {len(tracks)} tracks for query '{query}'")
         return artists
 
+    async def upload_playlist_cover_image(
+        self,
+        access_token: str,
+        playlist_id: str,
+        image_base64: str
+    ) -> bool:
+        """Upload a custom cover image to a Spotify playlist.
+
+        Args:
+            access_token: Spotify access token
+            playlist_id: Spotify playlist ID
+            image_base64: Base64-encoded JPEG image data
+
+        Returns:
+            Whether the upload was successful
+        """
+        import aiohttp
+        
+        url = f"https://api.spotify.com/v1/playlists/{playlist_id}/images"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "image/jpeg"
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.put(url, headers=headers, data=image_base64) as response:
+                    if response.status == 202:
+                        logger.info(f"Successfully uploaded cover image to playlist {playlist_id}")
+                        return True
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"Failed to upload cover image: {response.status} - {error_text}")
+                        return False
+        except Exception as e:
+            logger.error(f"Error uploading playlist cover image: {str(e)}", exc_info=True)
+            return False
+
     def get_available_tools(self) -> List[str]:
         """Get list of available Spotify tools.
 
