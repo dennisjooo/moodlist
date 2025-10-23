@@ -42,7 +42,7 @@ export default function PlaylistStatusBanner({
 }: PlaylistStatusBannerProps) {
   // Use color scheme if available, otherwise use default colors
   const iconStyle = colorScheme
-    ? { background: `linear-gradient(135deg, ${colorScheme.primary}, ${colorScheme.secondary})` }
+    ? { background: `linear-gradient(135deg, ${colorScheme.primary}99, ${colorScheme.secondary}99)` }
     : undefined;
 
   return (
