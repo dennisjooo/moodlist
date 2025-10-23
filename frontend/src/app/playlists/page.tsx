@@ -88,27 +88,27 @@ function PlaylistsPageContent() {
 
       {/* Main Content */}
       <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        {!isUnauthorized && (
+          <div className="text-center mb-12">
+            <Badge variant="outline" className="px-4 py-1 flex items-center gap-2 w-fit mx-auto mb-6">
+              <Music className="w-4 h-4" />
+              Your Music History
+            </Badge>
+
+            <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl mb-4">
+              My Playlists
+            </h1>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              All your mood-based playlists in one place. Relive your musical moments.
+            </p>
+          </div>
+        )}
+
         <CrossfadeTransition
           isLoading={isLoading}
           skeleton={<PlaylistGridSkeleton />}
         >
           <div className="space-y-12">
-            {!isUnauthorized && (
-              <div className="text-center">
-                <Badge variant="outline" className="px-4 py-1 flex items-center gap-2 w-fit mx-auto mb-6">
-                  <Music className="w-4 h-4" />
-                  Your Music History
-                </Badge>
-
-                <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl mb-4">
-                  My Playlists
-                </h1>
-                <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                  All your mood-based playlists in one place. Relive your musical moments.
-                </p>
-              </div>
-            )}
-
             {isUnauthorized ? (
               <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
                 <motion.div
