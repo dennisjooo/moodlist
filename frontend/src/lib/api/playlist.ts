@@ -13,6 +13,11 @@ export interface MoodAnalysis {
     artist_recommendations?: string[];
     genre_keywords?: string[];
     reasoning?: string;
+    color_scheme?: {
+        primary: string;
+        secondary: string;
+        tertiary: string;
+    };
 }
 
 export interface UserPlaylist {

@@ -3,6 +3,7 @@
 import { AuthGuard } from '@/components/AuthGuard';
 import Navigation from '@/components/Navigation';
 import { PlaylistResultsSkeleton } from '@/components/shared/LoadingStates';
+import MoodBackground from '@/components/shared/MoodBackground';
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -165,8 +166,16 @@ function PlaylistPageContent() {
     }
 
     // Show playlist results
+    const colorScheme = workflowState.moodAnalysis?.color_scheme;
+
     return (
         <div className="min-h-screen bg-background relative">
+            <MoodBackground
+                colorScheme={colorScheme}
+                style="linear-diagonal"
+                opacity={0.25}
+            />
+
             <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
                 <DotPattern
                     className={cn(
