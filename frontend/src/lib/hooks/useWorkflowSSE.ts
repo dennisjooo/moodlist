@@ -33,11 +33,17 @@ export function useWorkflowSSE(
     const { enabled = true, callbacks = {}, useFallback = true } = options;
     const callbacksRef = useRef(callbacks);
     const isUsingSSE = useRef(false);
+    const currentStatusRef = useRef(status);
 
     // Keep callbacks ref up to date
     useEffect(() => {
         callbacksRef.current = callbacks;
     }, [callbacks]);
+
+    // Keep current status ref up to date
+    useEffect(() => {
+        currentStatusRef.current = status;
+    }, [status]);
 
     useEffect(() => {
         // Don't connect if no session or disabled
@@ -51,7 +57,7 @@ export function useWorkflowSSE(
             return;
         }
 
-        // Check if workflow is in a terminal state
+        // Check if workflow is in a terminal state at connection time
         const isTerminalState = status === 'completed' || status === 'failed';
         if (isTerminalState) {
             logger.debug('Workflow in terminal state, not starting SSE', {
@@ -157,11 +163,32 @@ export function useWorkflowSSE(
                 });
             };
 
+            const handleReconnect = async () => {
+                logger.info('SSE reconnected, fetching latest state', {
+                    component: 'useWorkflowSSE',
+                    sessionId
+                });
+
+                // Fetch latest workflow status to ensure we didn't miss updates
+                try {
+                    const latestStatus = await workflowAPI.getWorkflowStatus(sessionId);
+                    if (callbacksRef.current.onStatus) {
+                        await callbacksRef.current.onStatus(latestStatus);
+                    }
+                } catch (e) {
+                    logger.error('Failed to fetch status after reconnection', e, {
+                        component: 'useWorkflowSSE',
+                        sessionId
+                    });
+                }
+            };
+
             // Start SSE streaming
             sseManager.startStreaming(sessionId, {
                 onStatus: handleStatus,
                 onError: handleError,
                 onComplete: handleComplete,
+                onReconnect: handleReconnect,
             });
 
         } else if (useFallback) {
@@ -268,6 +295,6 @@ export function useWorkflowSSE(
                 pollingManager.stopPolling(sessionId);
             }
         };
-    }, [sessionId, status, enabled, useFallback]);
+    }, [sessionId, enabled, useFallback]);
 }
 

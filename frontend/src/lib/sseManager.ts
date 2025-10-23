@@ -9,6 +9,7 @@ export interface SSECallbacks {
     onStatus: (status: WorkflowStatus) => void;
     onError?: (error: Error) => void;
     onComplete?: () => void;
+    onReconnect?: () => void;
 }
 
 interface SSEConnection {
@@ -75,6 +76,24 @@ export class SSEManager {
 
             this.connections.set(sessionId, connection);
 
+            // Handle generic message events (for keep-alive and debugging)
+            eventSource.onmessage = (event: MessageEvent) => {
+                // Keep-alive messages or other generic messages
+                if (event.data && event.data.startsWith(':')) {
+                    logger.debug('Received keep-alive message', {
+                        component: 'SSEManager',
+                        sessionId
+                    });
+                    return;
+                }
+                // Log unexpected message format
+                logger.debug('Received generic SSE message', {
+                    component: 'SSEManager',
+                    sessionId,
+                    data: event.data
+                });
+            };
+
             // Handle status updates
             eventSource.addEventListener('status', (event: MessageEvent) => {
                 try {
@@ -85,6 +104,7 @@ export class SSEManager {
                         status: status.status,
                         currentStep: status.current_step
                     });
+                    // Immediately invoke callback to ensure real-time update
                     callbacks.onStatus(status);
                 } catch (error) {
                     logger.error('Failed to parse status event', error, {
@@ -165,7 +185,17 @@ export class SSEManager {
                     url
                 });
                 // Reset reconnect attempts on successful connection
+                const wasReconnecting = connection.reconnectAttempts > 0;
                 connection.reconnectAttempts = 0;
+
+                // Notify reconnection callback if this was a reconnection
+                if (wasReconnecting && callbacks.onReconnect) {
+                    logger.info('SSE reconnected successfully', {
+                        component: 'SSEManager',
+                        sessionId
+                    });
+                    callbacks.onReconnect();
+                }
             };
 
         } catch (error) {
