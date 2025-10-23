@@ -10,11 +10,11 @@ import Image from 'next/image';
 import { useState } from 'react';
 
 interface TrackDetailsTooltipProps {
-    trackId: string;
+    spotifyUri: string;
     className?: string;
 }
 
-export default function TrackDetailsTooltip({ trackId, className }: TrackDetailsTooltipProps) {
+export default function TrackDetailsTooltip({ spotifyUri, className }: TrackDetailsTooltipProps) {
     const [trackDetails, setTrackDetails] = useState<TrackDetails | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -25,12 +25,12 @@ export default function TrackDetailsTooltip({ trackId, className }: TrackDetails
             setIsLoading(true);
             setError(null);
             try {
-                const details = await spotifyAPI.getTrackDetails(trackId);
-                logger.debug('Track details loaded', { component: 'TrackDetailsTooltip', trackId, details });
+                const details = await spotifyAPI.getTrackDetails(spotifyUri);
+                logger.debug('Track details loaded', { component: 'TrackDetailsTooltip', spotifyUri, details });
                 setTrackDetails(details);
                 setHasLoaded(true);
             } catch (err) {
-                logger.error('Failed to fetch track details', err, { component: 'TrackDetailsTooltip', trackId });
+                logger.error('Failed to fetch track details', err, { component: 'TrackDetailsTooltip', spotifyUri });
                 setError('Failed to load track details');
             } finally {
                 setIsLoading(false);

@@ -62,7 +62,7 @@ function TrackRow({ track, index, isFocused }: TrackRowProps) {
             </span>
           </div>
 
-          <TrackDetailsTooltip trackId={track.track_id} />
+          {track.spotify_uri && <TrackDetailsTooltip spotifyUri={track.spotify_uri} />}
 
           {spotifyUrl && (
             <Button
