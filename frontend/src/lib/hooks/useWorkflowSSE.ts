@@ -58,12 +58,12 @@ export function useWorkflowSSE(
         }
 
         // Check if workflow is in a terminal state at connection time
-        const isTerminalState = status === 'completed' || status === 'failed';
+        const isTerminalState = currentStatusRef.current === 'completed' || currentStatusRef.current === 'failed';
         if (isTerminalState) {
             logger.debug('Workflow in terminal state, not starting SSE', {
                 component: 'useWorkflowSSE',
                 sessionId,
-                status
+                status: currentStatusRef.current
             });
             return;
         }
@@ -71,7 +71,7 @@ export function useWorkflowSSE(
         logger.info('SSE hook effect triggered', {
             component: 'useWorkflowSSE',
             sessionId,
-            status,
+            status: currentStatusRef.current,
             enabled
         });
 
@@ -94,7 +94,7 @@ export function useWorkflowSSE(
             logger.info('Starting SSE streaming', {
                 component: 'useWorkflowSSE',
                 sessionId,
-                status
+                status: currentStatusRef.current
             });
 
             isUsingSSE.current = true;
@@ -196,7 +196,7 @@ export function useWorkflowSSE(
             logger.info('SSE not supported, falling back to polling', {
                 component: 'useWorkflowSSE',
                 sessionId,
-                status
+                status: currentStatusRef.current
             });
 
             isUsingSSE.current = false;
