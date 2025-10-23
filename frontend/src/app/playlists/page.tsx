@@ -8,6 +8,7 @@ import { PlaylistGridSkeleton } from '@/components/shared/LoadingStates';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
+import { CrossfadeTransition } from '@/components/ui/crossfade-transition';
 import { playlistAPI, UserPlaylist } from '@/lib/playlistApi';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
@@ -87,115 +88,120 @@ function PlaylistsPageContent() {
 
       {/* Main Content */}
       <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        {!isUnauthorized && !isLoading && (
-          <div className="text-center mb-12">
-            <Badge variant="outline" className="px-4 py-1 flex items-center gap-2 w-fit mx-auto mb-6">
-              <Music className="w-4 h-4" />
-              Your Music History
-            </Badge>
+        <CrossfadeTransition
+          isLoading={isLoading}
+          skeleton={<PlaylistGridSkeleton />}
+        >
+          <div className="space-y-12">
+            {!isUnauthorized && (
+              <div className="text-center">
+                <Badge variant="outline" className="px-4 py-1 flex items-center gap-2 w-fit mx-auto mb-6">
+                  <Music className="w-4 h-4" />
+                  Your Music History
+                </Badge>
 
-            <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl mb-4">
-              My Playlists
-            </h1>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              All your mood-based playlists in one place. Relive your musical moments.
-            </p>
-          </div>
-        )}
-
-        {isLoading ? (
-          <PlaylistGridSkeleton />
-        ) : isUnauthorized ? (
-          <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.4 }}
-              className="text-center max-w-lg mx-auto"
-            >
-              <Music className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-2xl font-semibold mb-3">Login to View Your Playlists</h3>
-              <p className="text-muted-foreground mb-8">
-                Connect your Spotify account to access your personalized mood-based playlists.
-                All your musical moments, saved in one place.
-              </p>
-              <div className="flex justify-center mb-6">
-                <SpotifyLoginButton />
+                <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl mb-4">
+                  My Playlists
+                </h1>
+                <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                  All your mood-based playlists in one place. Relive your musical moments.
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                New here? Create your first playlist after logging in!
-              </p>
-            </motion.div>
-          </div>
-        ) : error ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="text-center py-12"
-          >
-            <Music className="w-16 h-16 text-destructive mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Failed to load playlists</h3>
-            <p className="text-muted-foreground mb-6">{error}</p>
-            <Button onClick={() => fetchPlaylists()}>Try Again</Button>
-          </motion.div>
-        ) : playlists.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="text-center py-12"
-          >
-            <Music className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No playlists yet</h3>
-            <p className="text-muted-foreground mb-6">
-              Create your first mood-based playlist to get started!
-            </p>
-            <Link href="/create">
-              <Button>Create Playlist</Button>
-            </Link>
-          </motion.div>
-        ) : (
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={{
-              visible: {
-                transition: {
-                  staggerChildren: 0.1
-                }
-              }
-            }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-          >
-            {playlists.map((playlist) => (
+            )}
+
+            {isUnauthorized ? (
+              <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.4 }}
+                  className="text-center max-w-lg mx-auto"
+                >
+                  <Music className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-2xl font-semibold mb-3">Login to View Your Playlists</h3>
+                  <p className="text-muted-foreground mb-8">
+                    Connect your Spotify account to access your personalized mood-based playlists.
+                    All your musical moments, saved in one place.
+                  </p>
+                  <div className="flex justify-center mb-6">
+                    <SpotifyLoginButton />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    New here? Create your first playlist after logging in!
+                  </p>
+                </motion.div>
+              </div>
+            ) : error ? (
               <motion.div
-                key={playlist.id}
-                variants={{
-                  hidden: { opacity: 0, y: 20 },
-                  visible: { opacity: 1, y: 0 }
-                }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
+                className="text-center py-12"
               >
-                <PlaylistCard
-                  mood={playlist.mood_prompt}
-                  title={playlist.name || playlist.mood_prompt}
-                  createdAt={formatDate(playlist.created_at)}
-                  trackCount={playlist.track_count}
-                  spotifyUrl={playlist.spotify_url || '#'}
-                  sessionId={playlist.session_id}
-                  status={playlist.status}
-                  playlistId={playlist.id}
-                  moodAnalysis={playlist.mood_analysis_data}
-                  onDelete={handleDelete}
-                  colorPrimary={playlist.color_primary}
-                  colorSecondary={playlist.color_secondary}
-                  colorTertiary={playlist.color_tertiary}
-                />
+                <Music className="w-16 h-16 text-destructive mx-auto mb-4" />
+                <h3 className="text-xl font-semibold mb-2">Failed to load playlists</h3>
+                <p className="text-muted-foreground mb-6">{error}</p>
+                <Button onClick={() => fetchPlaylists()}>Try Again</Button>
               </motion.div>
-            ))}
-          </motion.div>
-        )}
+            ) : playlists.length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+                className="text-center py-12"
+              >
+                <Music className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-xl font-semibold mb-2">No playlists yet</h3>
+                <p className="text-muted-foreground mb-6">
+                  Create your first mood-based playlist to get started!
+                </p>
+                <Link href="/create">
+                  <Button>Create Playlist</Button>
+                </Link>
+              </motion.div>
+            ) : (
+              <motion.div
+                initial="hidden"
+                animate="visible"
+                variants={{
+                  visible: {
+                    transition: {
+                      staggerChildren: 0.1
+                    }
+                  }
+                }}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              >
+                {playlists.map((playlist) => (
+                  <motion.div
+                    key={playlist.id}
+                    variants={{
+                      hidden: { opacity: 0, y: 20 },
+                      visible: { opacity: 1, y: 0 }
+                    }}
+                    transition={{ duration: 0.4 }}
+                  >
+                    <PlaylistCard
+                      mood={playlist.mood_prompt}
+                      title={playlist.name || playlist.mood_prompt}
+                      createdAt={formatDate(playlist.created_at)}
+                      trackCount={playlist.track_count}
+                      spotifyUrl={playlist.spotify_url || '#'}
+                      sessionId={playlist.session_id}
+                      status={playlist.status}
+                      playlistId={playlist.id}
+                      moodAnalysis={playlist.mood_analysis_data}
+                      onDelete={handleDelete}
+                      colorPrimary={playlist.color_primary}
+                      colorSecondary={playlist.color_secondary}
+                      colorTertiary={playlist.color_tertiary}
+                    />
+                  </motion.div>
+                ))}
+              </motion.div>
+            )}
+          </div>
+        </CrossfadeTransition>
       </main>
     </div>
   );
