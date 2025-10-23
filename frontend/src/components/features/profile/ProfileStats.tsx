@@ -42,13 +42,13 @@ export function ProfileStats({ stats }: ProfileStatsProps) {
                 const Icon = item.icon;
                 return (
                     <Card key={index} className="p-2 sm:p-3">
-                        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-1 sm:gap-2">
-                            <div className={`w-8 h-8 ${item.iconBg} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                                <Icon className="w-4 h-4 sm:w-4 sm:h-4 text-primary" />
+                        <div className="flex items-center gap-2 sm:gap-3">
+                            <div className={`${item.iconBg} rounded-lg flex items-center justify-center flex-shrink-0 p-2 self-stretch`}>
+                                <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${item.iconColor}`} />
                             </div>
-                            <div className="min-w-0 text-center sm:text-left">
+                            <div className="min-w-0 flex-1">
                                 <p className="text-xs text-muted-foreground truncate">{item.label}</p>
-                                <p className={`text-lg sm:text-xl font-bold ${item.valueColor}`}>{item.value}</p>
+                                <p className={`text-lg sm:text-xl font-bold ${item.valueColor} leading-tight`}>{item.value}</p>
                             </div>
                         </div>
                     </Card>
