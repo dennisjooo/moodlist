@@ -42,7 +42,7 @@ export default function PlaylistCard({ mood, title, createdAt, trackCount, spoti
   // Check if LLM colors exist, otherwise use legacy gradient
   const hasLLMColors = colorPrimary && colorSecondary && colorTertiary;
   const customGradientStyle = hasLLMColors
-    ? { background: `linear-gradient(to bottom right, ${colorPrimary}, ${colorSecondary}, ${colorTertiary})` }
+    ? { background: `linear-gradient(to bottom right, ${colorPrimary}99, ${colorSecondary}99, ${colorTertiary}99)` }
     : undefined;
 
   // Get display text from mood analysis or fallback to mood prompt
