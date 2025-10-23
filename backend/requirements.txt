@@ -52,3 +52,6 @@ tenacity
 pytest
 pytest-asyncio
 pytest-mock
+
+# Image processing
+pillow

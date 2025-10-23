@@ -8,6 +8,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 from ...agents.states.agent_state import AgentState, RecommendationStatus
 from ...agents.tools.spotify_service import SpotifyService
 from ...core.exceptions import ValidationException, InternalServerError
+from ...services.cover_image_generator import CoverImageGenerator
 from .playlist_namer import PlaylistNamer
 from .playlist_describer import PlaylistDescriber
 from .track_adder import TrackAdder
@@ -25,7 +26,8 @@ class PlaylistCreationService:
         self,
         spotify_service: SpotifyService,
         llm: Optional[BaseLanguageModel] = None,
-        verbose: bool = False
+        verbose: bool = False,
+        cover_style: str = "modern"
     ):
         """Initialize the playlist creation service.
 
@@ -33,9 +35,11 @@ class PlaylistCreationService:
             spotify_service: Service for Spotify API operations
             llm: Language model for playlist naming
             verbose: Whether to enable verbose logging
+            cover_style: Style for cover image generation (modern, diagonal, radial, mesh, waves, minimal)
         """
         self.spotify_service = spotify_service
         self.verbose = verbose
+        self.cover_style = cover_style
 
         # Initialize component classes
         self.playlist_namer = PlaylistNamer(llm=llm)
@@ -43,6 +47,7 @@ class PlaylistCreationService:
         self.track_adder = TrackAdder(spotify_service)
         self.playlist_validator = PlaylistValidator()
         self.playlist_summarizer = PlaylistSummarizer()
+        self.cover_generator = CoverImageGenerator()
 
     async def create_playlist(self, state: AgentState) -> AgentState:
         """Execute playlist creation.
@@ -91,6 +96,9 @@ class PlaylistCreationService:
             # Add tracks to playlist
             await self.track_adder.add_tracks_to_playlist(state, playlist_data["id"])
 
+            # Upload custom cover image if color scheme is available
+            await self._upload_cover_image(state, playlist_data["id"], access_token)
+
             # Final state updates
             state.current_step = "completed"
             state.status = RecommendationStatus.COMPLETED
@@ -108,6 +116,62 @@ class PlaylistCreationService:
             state.set_error(f"Playlist creation failed: {str(e)}")
 
         return state
+
+    async def _upload_cover_image(
+        self,
+        state: AgentState,
+        playlist_id: str,
+        access_token: str
+    ) -> None:
+        """Upload a custom cover image to the playlist based on mood colors.
+
+        Args:
+            state: Current agent state with mood analysis
+            playlist_id: Spotify playlist ID
+            access_token: Spotify access token
+        """
+        try:
+            # Check if we have a color scheme in the mood analysis
+            if not state.mood_analysis or "color_scheme" not in state.mood_analysis:
+                logger.info("No color scheme available, skipping cover image generation")
+                return
+
+            color_scheme = state.mood_analysis["color_scheme"]
+            
+            # Validate color scheme has all required colors
+            if not all(key in color_scheme for key in ["primary", "secondary", "tertiary"]):
+                logger.warning("Incomplete color scheme, skipping cover image generation")
+                return
+
+            logger.info(f"Generating cover image with colors: {color_scheme}")
+
+            # Generate cover image as base64
+            cover_base64 = self.cover_generator.generate_cover_base64(
+                primary_color=color_scheme["primary"],
+                secondary_color=color_scheme["secondary"],
+                tertiary_color=color_scheme["tertiary"],
+                style=self.cover_style
+            )
+
+            # Upload to Spotify
+            success = await self.spotify_service.upload_playlist_cover_image(
+                access_token=access_token,
+                playlist_id=playlist_id,
+                image_base64=cover_base64
+            )
+
+            if success:
+                logger.info(f"Successfully uploaded custom cover image to playlist {playlist_id}")
+                state.metadata["custom_cover_uploaded"] = True
+            else:
+                logger.warning(f"Failed to upload custom cover image to playlist {playlist_id}")
+                state.metadata["custom_cover_uploaded"] = False
+
+        except Exception as e:
+            # Don't fail the entire playlist creation if cover upload fails
+            logger.error(f"Error uploading cover image: {str(e)}", exc_info=True)
+            state.metadata["custom_cover_uploaded"] = False
+            state.metadata["cover_upload_error"] = str(e)
 
     def get_playlist_summary(self, state: AgentState):
         """Get a summary of the created playlist.
