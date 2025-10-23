@@ -28,8 +28,20 @@ const nextConfig: NextConfig = {
   },
   // Production optimizations
   experimental: {
-    optimizePackageImports: ['lucide-react', '@radix-ui/react-avatar', '@radix-ui/react-alert-dialog'],
+    optimizePackageImports: [
+      'lucide-react',
+      '@radix-ui/react-avatar', 
+      '@radix-ui/react-alert-dialog',
+      '@radix-ui/react-accordion',
+      '@radix-ui/react-slot',
+      '@radix-ui/react-tooltip',
+      '@dnd-kit/core',
+      '@dnd-kit/sortable',
+      '@dnd-kit/utilities',
+      'framer-motion',
+    ],
   },
+
 };
 
 export default bundleAnalyzer(nextConfig);
