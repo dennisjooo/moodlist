@@ -27,6 +27,8 @@ type MotionSpanComponent = React.ComponentType<MotionComponentProps>;
 type MotionUlComponent = React.ComponentType<MotionComponentProps>;
 type MotionLiComponent = React.ComponentType<MotionComponentProps>;
 type MotionButtonComponent = React.ComponentType<MotionComponentProps>;
+type MotionH2Component = React.ComponentType<MotionComponentProps>;
+type MotionPComponent = React.ComponentType<MotionComponentProps>;
 
 // Dynamically import motion components with placeholder
 export const motion = {
@@ -69,8 +71,23 @@ export const motion = {
       ssr: false
     }
   ) as MotionButtonComponent,
+
+  h2: dynamic(
+    () => import('framer-motion').then((mod) => mod.motion.h2),
+    {
+      loading: () => <MotionPlaceholder as="h2" />,
+      ssr: false
+    }
+  ) as MotionH2Component,
+
+  p: dynamic(
+    () => import('framer-motion').then((mod) => mod.motion.p),
+    {
+      loading: () => <MotionPlaceholder as="p" />,
+      ssr: false
+    }
+  ) as MotionPComponent,
 };
 
-// Export commonly used hooks with lazy loading
+// Export commonly used hooks - these are lightweight and don't need lazy loading
 export { useAnimation, useInView } from 'framer-motion';
-

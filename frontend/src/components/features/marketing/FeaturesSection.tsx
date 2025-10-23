@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { motion } from '@/components/ui/lazy-motion';
 import { Brain, MessageCircle, Music } from 'lucide-react';
 import { useRef } from 'react';
 
