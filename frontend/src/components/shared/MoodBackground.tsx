@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 interface ColorScheme {
     primary: string;
     secondary: string;
@@ -17,6 +19,20 @@ export default function MoodBackground({
     style = 'linear-diagonal',
     opacity = 0.25
 }: MoodBackgroundProps) {
+    const [currentOpacity, setCurrentOpacity] = useState(0);
+
+    useEffect(() => {
+        if (colorScheme) {
+            // Small delay to ensure transition applies
+            const timer = setTimeout(() => {
+                setCurrentOpacity(opacity);
+            }, 50);
+            return () => clearTimeout(timer);
+        } else {
+            setCurrentOpacity(0);
+        }
+    }, [colorScheme, opacity]);
+
     if (!colorScheme) return null;
 
     const getGradientStyle = () => {
@@ -51,10 +67,10 @@ export default function MoodBackground({
 
     return (
         <div
-            className="fixed inset-0 z-0"
+            className="fixed inset-0 z-0 transition-opacity duration-1000 ease-in-out"
             style={{
                 background: getGradientStyle(),
-                opacity: opacity,
+                opacity: currentOpacity,
             }}
         />
     );

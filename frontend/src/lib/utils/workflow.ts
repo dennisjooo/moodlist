@@ -1,5 +1,3 @@
-import type { WorkflowStatus } from '../api/workflow';
-
 /**
  * Defines the workflow stage progression order to ensure monotonic progress
  * and prevent backwards status updates
