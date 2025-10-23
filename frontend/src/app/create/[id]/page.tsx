@@ -177,7 +177,7 @@ function CreateSessionPageContent() {
                 <MoodBackground
                     colorScheme={colorScheme}
                     style="linear-diagonal"
-                    opacity={0.25}
+                    opacity={0.2}
                 />
 
                 <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
@@ -224,7 +224,7 @@ function CreateSessionPageContent() {
                 <MoodBackground
                     colorScheme={colorScheme}
                     style="linear-diagonal"
-                    opacity={0.25}
+                    opacity={0.2}
                 />
 
                 <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
@@ -272,7 +272,7 @@ function CreateSessionPageContent() {
             <MoodBackground
                 colorScheme={colorScheme}
                 style="linear-diagonal"
-                opacity={0.25}
+                opacity={0.2}
             />
 
             {/* Fixed Dot Pattern Background */}
