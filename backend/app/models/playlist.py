@@ -21,6 +21,12 @@ class Playlist(Base):
     duration_ms = Column(Integer, default=0)
     status = Column(String(50), default="created", nullable=False)  # created, generating, completed, failed
     error_message = Column(Text, nullable=True)
+    
+    # LLM-generated triadic color scheme
+    color_primary = Column(String(7), nullable=True)  # Hex color code (e.g., #FF5733)
+    color_secondary = Column(String(7), nullable=True)  # Hex color code
+    color_tertiary = Column(String(7), nullable=True)  # Hex color code
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)  # Soft delete timestamp

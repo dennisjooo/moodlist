@@ -36,6 +36,12 @@ class PlaylistResponse(BaseModel):
     duration_ms: int
     status: str
     error_message: Optional[str] = None
+    
+    # LLM-generated triadic color scheme
+    color_primary: Optional[str] = None
+    color_secondary: Optional[str] = None
+    color_tertiary: Optional[str] = None
+    
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime] = None

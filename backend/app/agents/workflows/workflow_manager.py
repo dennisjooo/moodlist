@@ -230,6 +230,13 @@ class WorkflowManager:
                     # Update mood analysis if available
                     if state.mood_analysis:
                         playlist.mood_analysis_data = state.mood_analysis
+                        
+                        # Extract and store color scheme if present
+                        color_scheme = state.mood_analysis.get("color_scheme", {})
+                        if color_scheme:
+                            playlist.color_primary = color_scheme.get("primary")
+                            playlist.color_secondary = color_scheme.get("secondary")
+                            playlist.color_tertiary = color_scheme.get("tertiary")
                     
                     # Update recommendations if available
                     if state.recommendations:

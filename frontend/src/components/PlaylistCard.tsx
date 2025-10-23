@@ -28,13 +28,22 @@ interface PlaylistCardProps {
   playlistId?: number;
   moodAnalysis?: MoodAnalysis;
   onDelete?: (playlistId: number) => void;
+  colorPrimary?: string;
+  colorSecondary?: string;
+  colorTertiary?: string;
 }
 
-export default function PlaylistCard({ mood, title, createdAt, trackCount, spotifyUrl, sessionId, status, playlistId, moodAnalysis, onDelete }: PlaylistCardProps) {
+export default function PlaylistCard({ mood, title, createdAt, trackCount, spotifyUrl, sessionId, status, playlistId, moodAnalysis, onDelete, colorPrimary, colorSecondary, colorTertiary }: PlaylistCardProps) {
   const autoGradient = generateMoodGradient(mood);
   const isCompleted = status === 'completed';
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  // Check if LLM colors exist, otherwise use legacy gradient
+  const hasLLMColors = colorPrimary && colorSecondary && colorTertiary;
+  const customGradientStyle = hasLLMColors
+    ? { background: `linear-gradient(to bottom right, ${colorPrimary}, ${colorSecondary}, ${colorTertiary})` }
+    : undefined;
 
   // Get display text from mood analysis or fallback to mood prompt
   const displayMood = moodAnalysis?.mood_interpretation || mood;
@@ -83,7 +92,10 @@ export default function PlaylistCard({ mood, title, createdAt, trackCount, spoti
 
       <div className="group transition-all duration-300 hover:scale-105 hover:shadow-xl rounded-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
         {/* Full Gradient Background */}
-        <div className={`${autoGradient} h-[320px] flex flex-col justify-between p-6 relative`}>
+        <div
+          className={hasLLMColors ? 'h-[320px] flex flex-col justify-between p-6 relative' : `${autoGradient} h-[320px] flex flex-col justify-between p-6 relative`}
+          style={customGradientStyle}
+        >
           <div className="absolute inset-0 bg-black/10 group-hover:bg-black/5 transition-colors" />
 
           {/* Header */}
