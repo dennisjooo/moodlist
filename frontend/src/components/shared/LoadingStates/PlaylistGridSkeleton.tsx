@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { motion } from 'framer-motion';
+import { motion } from '@/components/ui/lazy-motion';
 import { Music } from 'lucide-react';
 
 export function PlaylistGridSkeleton() {
