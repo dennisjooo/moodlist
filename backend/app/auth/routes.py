@@ -4,14 +4,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.security import HTTPBearer
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import SessionConstants
 from app.core.exceptions import SpotifyAuthError, UnauthorizedException, InternalServerError
-from app.core.database import get_db
 from app.clients import SpotifyAPIClient
 from app.models.user import User
-from app.models.session import Session
 from app.auth.security import (
     create_access_token, 
     create_refresh_token, 
