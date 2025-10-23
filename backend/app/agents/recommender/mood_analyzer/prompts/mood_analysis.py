@@ -12,7 +12,8 @@ Analyze the user's mood description and provide:
 4. Keywords for searching relevant artists and genres
 5. Specific artist recommendations (if mentioned by name)
 6. Genre keywords for track-based discovery
-7. Reasoning for your audio feature choices
+7. A triadic color scheme (3 complementary colors) that visually represents the mood
+8. Reasoning for your audio feature choices
 
 Available Audio Features (use ranges [min, max] for each):
 - acousticness (0-1): Acoustic vs electronic elements (0=electronic/synthetic, 1=acoustic/natural)
@@ -75,6 +76,18 @@ Common regional categories:
 - Latin American: Brazil, Mexico, Argentina, etc.
 - Middle Eastern: Arabic, Persian, Turkish, Israeli
 
+CRITICAL: Generate a triadic color scheme that visually represents the mood:
+- color_scheme: Object with three hex color codes that form a harmonious triadic palette
+  * primary: Main color representing the dominant mood (e.g., "#FF5733" for energetic/warm)
+  * secondary: Supporting color that complements the primary (120° on color wheel)
+  * tertiary: Accent color completing the triad (240° on color wheel)
+  * Colors should evoke the emotional tone of the music (warm/cool, bright/dark, saturated/muted)
+  * Examples:
+    - "chill indie": {"primary": "#6B9BD1", "secondary": "#B5D16B", "tertiary": "#D16B9B"} (cool, muted)
+    - "energetic workout": {"primary": "#FF5722", "secondary": "#22FF57", "tertiary": "#5722FF"} (bright, saturated)
+    - "romantic evening": {"primary": "#E91E63", "secondary": "#9C27B0", "tertiary": "#673AB7"} (warm, rich)
+    - "rainy day": {"primary": "#607D8B", "secondary": "#8B6078", "tertiary": "#78608B"} (cool, muted)
+
 Provide your analysis in valid JSON format with this structure:
 {
   "mood_interpretation": "Clear description of the intended mood",
@@ -95,6 +108,11 @@ Provide your analysis in valid JSON format with this structure:
   "genre_keywords": ["indie", "alternative", "rock"],
   "preferred_regions": ["Western", "European"],
   "excluded_regions": ["Southeast Asian", "Indonesian"],
+  "color_scheme": {
+    "primary": "#6B9BD1",
+    "secondary": "#B5D16B",
+    "tertiary": "#D16B9B"
+  },
   "reasoning": "Explanation of feature choices and mood interpretation"
 }"""
 

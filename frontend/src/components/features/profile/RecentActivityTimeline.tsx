@@ -114,6 +114,13 @@ export function RecentActivityTimeline({ recentActivity, enablePagination = fals
         }
     }, [enablePagination, isInitialLoad, loadMoreActivities]);
 
+    // Mark as loaded once when pagination initial load completes
+    useEffect(() => {
+        if (enablePagination && !isInitialLoad && !isLoading && !hasLoadedOnce) {
+            setHasLoadedOnce(true);
+        }
+    }, [enablePagination, isInitialLoad, isLoading, hasLoadedOnce]);
+
     // Update activities when recentActivity prop changes (for non-paginated mode)
     useEffect(() => {
         if (!enablePagination) {

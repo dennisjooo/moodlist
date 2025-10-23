@@ -106,6 +106,14 @@ async def get_user_playlists(
             if playlist.mood_analysis_data:
                 playlist_info["mood_analysis_data"] = playlist.mood_analysis_data
 
+            # Add LLM-generated color scheme if available
+            if playlist.color_primary:
+                playlist_info["color_primary"] = playlist.color_primary
+            if playlist.color_secondary:
+                playlist_info["color_secondary"] = playlist.color_secondary
+            if playlist.color_tertiary:
+                playlist_info["color_tertiary"] = playlist.color_tertiary
+
             playlists_data.append(playlist_info)
 
         # Get total count for pagination
@@ -188,6 +196,9 @@ async def get_playlist_by_session(
             "mood_analysis_data": playlist.mood_analysis_data,
             "spotify_playlist_id": playlist.spotify_playlist_id,
             "error_message": playlist.error_message,
+            "color_primary": playlist.color_primary,
+            "color_secondary": playlist.color_secondary,
+            "color_tertiary": playlist.color_tertiary,
             "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
             "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
         }

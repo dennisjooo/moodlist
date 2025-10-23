@@ -26,6 +26,12 @@ export interface UserPlaylist {
     spotify_uri?: string;
     spotify_playlist_id?: string;
     mood_analysis_data?: MoodAnalysis;
+
+    // LLM-generated triadic color scheme
+    color_primary?: string;
+    color_secondary?: string;
+    color_tertiary?: string;
+
     created_at: string;
     updated_at: string;
 }
