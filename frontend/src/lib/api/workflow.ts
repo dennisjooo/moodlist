@@ -176,6 +176,14 @@ class WorkflowAPI {
         return this.request<WorkflowStatus>(`/api/agents/recommendations/${sessionId}/status`);
     }
 
+    /**
+     * Get the SSE stream URL for a workflow session
+     * Use this with EventSource for real-time updates
+     */
+    getStreamUrl(sessionId: string): string {
+        return `${config.api.baseUrl}/api/agents/recommendations/${sessionId}/stream`;
+    }
+
     async getWorkflowResults(sessionId: string): Promise<WorkflowResults> {
         return this.request<WorkflowResults>(`/api/agents/recommendations/${sessionId}/results`);
     }

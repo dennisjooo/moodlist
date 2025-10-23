@@ -1,8 +1,11 @@
 """FastAPI routes for the agentic recommendation system."""
 
+import asyncio
+import json
 import structlog
 
-from fastapi import APIRouter, Depends, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, BackgroundTasks, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.llm_factory import create_logged_llm
@@ -233,6 +236,162 @@ async def get_workflow_status(session_id: str, db: AsyncSession = Depends(get_db
     except Exception as e:
         logger.error(f"Error getting workflow status: {str(e)}", exc_info=True)
         raise InternalServerError(f"Failed to get workflow status: {str(e)}")
+
+
+@router.get("/recommendations/{session_id}/stream")
+async def stream_workflow_status(
+    session_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """Stream workflow status updates via Server-Sent Events (SSE).
+    
+    Args:
+        session_id: Workflow session ID
+        request: FastAPI request object (for disconnect detection)
+        db: Database session
+        
+    Returns:
+        StreamingResponse with text/event-stream content type
+    """
+    async def event_generator():
+        """Generate SSE events for workflow status updates."""
+        queue = asyncio.Queue()
+        
+        async def state_change_callback(sid: str, state):
+            """Callback to enqueue state changes."""
+            await queue.put(state)
+        
+        # Subscribe to state changes
+        workflow_manager.subscribe_to_state_changes(session_id, state_change_callback)
+        
+        try:
+            # Send initial status immediately
+            state = workflow_manager.get_workflow_state(session_id)
+            
+            if state:
+                # Convert state to status format
+                status_data = {
+                    "session_id": session_id,
+                    "status": state.status.value,
+                    "current_step": state.current_step,
+                    "mood_prompt": state.mood_prompt,
+                    "mood_analysis": state.mood_analysis,
+                    "recommendation_count": len(state.recommendations),
+                    "seed_track_count": len(state.seed_tracks),
+                    "user_top_tracks_count": len(state.user_top_tracks),
+                    "user_top_artists_count": len(state.user_top_artists),
+                    "has_playlist": state.playlist_id is not None,
+                    "awaiting_input": state.awaiting_user_input,
+                    "error": state.error_message,
+                    "created_at": state.created_at.isoformat(),
+                    "updated_at": state.updated_at.isoformat(),
+                    "metadata": {
+                        "iteration": state.metadata.get("iteration"),
+                        "cohesion_score": state.metadata.get("cohesion_score"),
+                    }
+                }
+                
+                yield f"event: status\ndata: {json.dumps(status_data)}\n\n"
+                
+                # If workflow is already complete, send complete event and exit
+                if state.status.value in ["completed", "failed"]:
+                    yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
+                    return
+            else:
+                # Try to get from database
+                from ...repositories.playlist_repository import PlaylistRepository
+                playlist_repo = PlaylistRepository(db)
+                playlist = await playlist_repo.get_by_session_id(session_id)
+                
+                if not playlist:
+                    error_data = {"message": f"Workflow {session_id} not found"}
+                    yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
+                    return
+                
+                # Send database status
+                status_data = {
+                    "session_id": session_id,
+                    "status": playlist.status,
+                    "current_step": "completed" if playlist.status == PlaylistStatus.COMPLETED else playlist.status,
+                    "mood_prompt": playlist.mood_prompt,
+                    "mood_analysis": playlist.mood_analysis_data,
+                    "recommendation_count": len(playlist.recommendations_data) if playlist.recommendations_data else 0,
+                    "has_playlist": playlist.spotify_playlist_id is not None,
+                    "awaiting_input": False,
+                    "error": playlist.error_message,
+                    "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
+                    "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None
+                }
+                
+                yield f"event: status\ndata: {json.dumps(status_data)}\n\n"
+                
+                # Workflow already complete in database
+                yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
+                return
+            
+            # Keep connection alive and send updates
+            while True:
+                # Check if client disconnected
+                if await request.is_disconnected():
+                    logger.debug(f"Client disconnected from SSE stream for session {session_id}")
+                    break
+                
+                try:
+                    # Wait for state change with timeout for keep-alive
+                    updated_state = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    
+                    # Send updated status
+                    status_data = {
+                        "session_id": session_id,
+                        "status": updated_state.status.value,
+                        "current_step": updated_state.current_step,
+                        "mood_prompt": updated_state.mood_prompt,
+                        "mood_analysis": updated_state.mood_analysis,
+                        "recommendation_count": len(updated_state.recommendations),
+                        "seed_track_count": len(updated_state.seed_tracks),
+                        "user_top_tracks_count": len(updated_state.user_top_tracks),
+                        "user_top_artists_count": len(updated_state.user_top_artists),
+                        "has_playlist": updated_state.playlist_id is not None,
+                        "awaiting_input": updated_state.awaiting_user_input,
+                        "error": updated_state.error_message,
+                        "created_at": updated_state.created_at.isoformat(),
+                        "updated_at": updated_state.updated_at.isoformat(),
+                        "metadata": {
+                            "iteration": updated_state.metadata.get("iteration"),
+                            "cohesion_score": updated_state.metadata.get("cohesion_score"),
+                        }
+                    }
+                    
+                    yield f"event: status\ndata: {json.dumps(status_data)}\n\n"
+                    
+                    # Send complete event if workflow finished
+                    if updated_state.status.value in ["completed", "failed"]:
+                        yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
+                        break
+                        
+                except asyncio.TimeoutError:
+                    # Send keep-alive comment
+                    yield ": keep-alive\n\n"
+                    
+        except Exception as e:
+            logger.error(f"Error in SSE stream for session {session_id}: {str(e)}", exc_info=True)
+            error_data = {"message": str(e)}
+            yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
+        finally:
+            # Unsubscribe when connection closes
+            workflow_manager.unsubscribe_from_state_changes(session_id, state_change_callback)
+            logger.debug(f"Unsubscribed from state changes for session {session_id}")
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
 
 
 @router.delete("/recommendations/{session_id}")

@@ -52,6 +52,21 @@ class BaseAgent(ABC):
 
         logger.info(f"Initialized agent: {name}")
 
+    async def _notify_progress(self, state: AgentState):
+        """Notify workflow manager of progress if callback is set.
+        
+        This method should be called by agents when they want to notify
+        the workflow manager of intermediate progress during execution.
+        
+        Args:
+            state: Current agent state to notify about
+        """
+        if hasattr(self, '_progress_callback') and callable(self._progress_callback):
+            try:
+                await self._progress_callback(state)
+            except Exception as e:
+                logger.warning(f"Failed to notify progress in {self.name}: {e}")
+
     @abstractmethod
     async def execute(self, state: AgentState) -> AgentState:
         """Execute the agent's primary function.
