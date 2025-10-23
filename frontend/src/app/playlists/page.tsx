@@ -188,6 +188,9 @@ function PlaylistsPageContent() {
                   playlistId={playlist.id}
                   moodAnalysis={playlist.mood_analysis_data}
                   onDelete={handleDelete}
+                  colorPrimary={playlist.color_primary}
+                  colorSecondary={playlist.color_secondary}
+                  colorTertiary={playlist.color_tertiary}
                 />
               </motion.div>
             ))}
