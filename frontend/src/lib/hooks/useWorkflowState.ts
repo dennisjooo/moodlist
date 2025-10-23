@@ -20,14 +20,16 @@ export function useWorkflowState() {
     const [workflowState, setWorkflowState] = useState<WorkflowState>(initialWorkflowState);
 
     const handleStatusUpdate = useCallback(async (status: WorkflowStatus) => {
-        logger.debug('Status update', {
-            to: status.status,
+        logger.info('Status update received', {
+            component: 'useWorkflowState',
+            newStatus: status.status,
             currentStep: status.current_step,
             hasMoodAnalysis: !!status.mood_analysis
         });
 
         setWorkflowState(prev => {
-            logger.debug('Previous state', {
+            logger.debug('Evaluating status update', {
+                component: 'useWorkflowState',
                 from: prev.status,
                 to: status.status,
             });
@@ -36,7 +38,8 @@ export function useWorkflowState() {
             const shouldUpdate = shouldAcceptStatusUpdate(prev.status, status.status, !!status.error);
 
             if (!shouldUpdate) {
-                logger.debug('Ignoring backwards status update', {
+                logger.warn('Rejecting backwards status update', {
+                    component: 'useWorkflowState',
                     from: prev.status,
                     to: status.status
                 });
@@ -47,6 +50,13 @@ export function useWorkflowState() {
                     moodAnalysis: status.mood_analysis || prev.moodAnalysis,
                 };
             }
+
+            logger.info('Applying status update', {
+                component: 'useWorkflowState',
+                from: prev.status,
+                to: status.status,
+                currentStep: status.current_step
+            });
 
             return {
                 ...prev,
@@ -77,16 +87,16 @@ export function useWorkflowState() {
     }, []);
 
     const handleError = useCallback((error: Error) => {
-        logger.error('Workflow streaming error', error, { component: 'useWorkflowState', sessionId: workflowState.sessionId });
+        logger.error('Workflow streaming error', error, { component: 'useWorkflowState' });
         setWorkflowState(prev => ({
             ...prev,
             error: 'Connection error. Please check your internet connection.',
         }));
-    }, [workflowState.sessionId]);
+    }, []);
 
     const handleAwaitingInput = useCallback(() => {
-        logger.debug('Workflow awaiting user input', { component: 'useWorkflowState', sessionId: workflowState.sessionId });
-    }, [workflowState.sessionId]);
+        logger.debug('Workflow awaiting user input', { component: 'useWorkflowState' });
+    }, []);
 
     const setLoading = useCallback((isLoading: boolean, error: string | null = null) => {
         setWorkflowState(prev => ({ ...prev, isLoading, error: error || prev.error }));
