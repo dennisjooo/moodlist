@@ -90,6 +90,8 @@ export default function PlaylistResults() {
     }
   };
 
+  const colorScheme = workflowState.moodAnalysis?.color_scheme;
+
   return (
     <div className="space-y-6">
       {/* Status Banner */}
@@ -106,6 +108,7 @@ export default function PlaylistResults() {
         onSyncFromSpotify={handleSyncFromSpotify}
         onEdit={handleEditClick}
         onDelete={() => setShowDeleteDialog(true)}
+        colorScheme={colorScheme}
       />
 
       {/* Delete Confirmation Dialog */}

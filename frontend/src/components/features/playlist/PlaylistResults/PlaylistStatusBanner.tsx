@@ -18,6 +18,11 @@ interface PlaylistStatusBannerProps {
   onSyncFromSpotify: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  colorScheme?: {
+    primary: string;
+    secondary: string;
+    tertiary: string;
+  };
 }
 
 export default function PlaylistStatusBanner({
@@ -33,7 +38,13 @@ export default function PlaylistStatusBanner({
   onSyncFromSpotify,
   onEdit,
   onDelete,
+  colorScheme,
 }: PlaylistStatusBannerProps) {
+  // Use color scheme if available, otherwise use default colors
+  const iconStyle = colorScheme
+    ? { background: `linear-gradient(135deg, ${colorScheme.primary}, ${colorScheme.secondary})` }
+    : undefined;
+
   return (
     <Card className={cn(
       "border-2",
@@ -42,10 +53,13 @@ export default function PlaylistStatusBanner({
       <CardContent>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4 pr-3">
-            <div className={cn(
-              "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0",
-              hasSavedToSpotify ? "bg-green-500" : "bg-yellow-500"
-            )}>
+            <div
+              className={cn(
+                "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0",
+                !colorScheme && (hasSavedToSpotify ? "bg-green-500" : "bg-yellow-500")
+              )}
+              style={iconStyle}
+            >
               <Music className="w-6 h-6 text-white" />
             </div>
             <div>
