@@ -476,7 +476,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
             user_id: User ID
 
         Returns:
-            Dictionary with total_playlists, completed_playlists, and total_tracks
+            Dictionary with total_playlists, playlists saved to Spotify, and total_tracks
         """
         try:
             # Total playlists - exclude soft-deleted
@@ -487,14 +487,14 @@ class PlaylistRepository(BaseRepository[Playlist]):
             total_result = await self.session.execute(total_query)
             total = total_result.scalar() or 0
 
-            # Completed playlists - exclude soft-deleted
+            # Saved to Spotify playlists - exclude soft-deleted
             completed_query = select(func.count(Playlist.id)).where(
                 Playlist.user_id == user_id,
-                Playlist.status == "completed",
+                Playlist.spotify_playlist_id.is_not(None),
                 Playlist.deleted_at.is_(None)
             )
             completed_result = await self.session.execute(completed_query)
-            completed = completed_result.scalar() or 0
+            saved_to_spotify = completed_result.scalar() or 0
 
             # Total tracks - exclude soft-deleted
             tracks_query = select(func.sum(Playlist.track_count)).where(
@@ -506,7 +506,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
 
             stats = {
                 "total_playlists": total,
-                "completed_playlists": completed,
+                "saved_playlists": saved_to_spotify,
                 "total_tracks": total_tracks
             }
 

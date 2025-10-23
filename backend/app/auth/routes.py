@@ -263,53 +263,6 @@ async def verify_auth(
     return result
 
 
-@router.get("/stats")
-async def get_user_stats(
-    current_user: User = Depends(require_auth),
-    playlist_repo: PlaylistRepository = Depends(get_playlist_repository),
-    session_repo: SessionRepository = Depends(get_session_repository)
-):
-    """Get user statistics including playlists, moods analyzed, and sessions.
-    
-    Args:
-        current_user: Authenticated user
-        playlist_repo: Playlist repository
-        session_repo: Session repository
-    
-    Returns:
-        User statistics
-    """
-    try:
-        # Get playlist stats (includes total playlists, completed playlists, total tracks)
-        playlist_stats = await playlist_repo.get_user_playlist_stats(current_user.id)
-        
-        # Get total session count for the user
-        total_sessions = await session_repo.get_session_count(user_id=current_user.id, active_only=False)
-        
-        # Get active session count
-        active_sessions = await session_repo.get_session_count(user_id=current_user.id, active_only=True)
-        
-        logger.debug(
-            "User stats retrieved",
-            user_id=current_user.id,
-            total_playlists=playlist_stats["total_playlists"],
-            total_sessions=total_sessions
-        )
-        
-        return {
-            "user_id": current_user.id,
-            "playlists_generated": playlist_stats["completed_playlists"],
-            "moods_analyzed": playlist_stats["total_playlists"],
-            "total_sessions": total_sessions,
-            "active_sessions": active_sessions,
-            "total_tracks": playlist_stats["total_tracks"]
-        }
-    
-    except Exception as e:
-        logger.error(f"Error getting user stats: {str(e)}", exc_info=True)
-        raise InternalServerError(f"Failed to get user stats: {str(e)}")
-
-
 @router.get("/dashboard")
 async def get_user_dashboard(
     current_user: User = Depends(require_auth),
@@ -349,7 +302,7 @@ async def get_user_dashboard(
         
         return {
             "stats": {
-                "playlists_generated": playlist_stats["completed_playlists"],
+                "saved_playlists": playlist_stats["saved_playlists"],
                 "moods_analyzed": playlist_stats["total_playlists"],
                 "total_sessions": total_sessions,
                 "active_sessions": active_sessions,

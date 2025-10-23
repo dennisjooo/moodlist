@@ -11,24 +11,24 @@ interface ProfileStatsProps {
 export function ProfileStats({ stats }: ProfileStatsProps) {
     const statItems = [
         {
-            icon: Music,
-            label: 'Playlists',
-            value: stats?.playlists_generated || 0,
-            iconBg: 'bg-primary/10',
-            iconColor: 'text-primary',
-            valueColor: 'text-primary'
-        },
-        {
             icon: User,
-            label: 'Moods',
+            label: 'Moods Analyzed',
             value: stats?.moods_analyzed || 0,
             iconBg: 'bg-green-500/10',
             iconColor: 'text-green-600',
             valueColor: 'text-green-600'
         },
         {
+            icon: Music,
+            label: 'Saved to Spotify',
+            value: stats?.saved_playlists || 0,
+            iconBg: 'bg-primary/10',
+            iconColor: 'text-primary',
+            valueColor: 'text-primary'
+        },
+        {
             icon: TrendingUp,
-            label: 'Sessions',
+            label: 'Active Sessions',
             value: stats?.total_sessions || 0,
             iconBg: 'bg-blue-500/10',
             iconColor: 'text-blue-600',
