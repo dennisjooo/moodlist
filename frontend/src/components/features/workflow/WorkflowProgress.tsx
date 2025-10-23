@@ -12,10 +12,19 @@ import { StatusMessage } from './StatusMessage';
 import { ProgressTimeline } from './ProgressTimeline';
 import { MoodAnalysisDisplay } from './MoodAnalysisDisplay';
 import { WorkflowInsights } from './WorkflowInsights';
+import { useEffect } from 'react';
 
 export function WorkflowProgress() {
     const router = useRouter();
     const { workflowState, stopWorkflow, clearError } = useWorkflow();
+
+    // Debug: Log when workflowState changes
+    useEffect(() => {
+        logger.debug('WorkflowProgress render', {
+            status: workflowState.status,
+            step: workflowState.currentStep,
+        });
+    }, [workflowState.status, workflowState.currentStep]);
 
     const handleRetry = () => {
         clearError();

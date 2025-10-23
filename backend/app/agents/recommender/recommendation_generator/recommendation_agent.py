@@ -72,12 +72,24 @@ class RecommendationGeneratorAgent(BaseAgent):
         try:
             logger.info(f"Generating recommendations for mood: {state.mood_prompt}")
 
+            # Update: Fetching recommendations
+            state.current_step = "generating_recommendations_fetching"
+            await self._notify_progress(state)
+            
             # Get raw recommendations
             recommendations = await self._get_recommendations(state)
 
+            # Update: Processing and ranking
+            state.current_step = "generating_recommendations_processing"
+            await self._notify_progress(state)
+            
             # Process recommendations (filter, rank, diversify)
             processed_recommendations = await self._process_recommendations(recommendations, state)
 
+            # Update: Applying diversity
+            state.current_step = "generating_recommendations_diversifying"
+            await self._notify_progress(state)
+            
             # Apply ratio limits and get final recommendations
             final_recommendations = self._apply_ratio_limits(processed_recommendations, state)
 

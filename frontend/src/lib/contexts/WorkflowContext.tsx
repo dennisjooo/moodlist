@@ -2,11 +2,11 @@
 
 import { logger } from '@/lib/utils/logger';
 import { usePathname } from 'next/navigation';
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { WorkflowResults, WorkflowStatus } from '../api/workflow';
 import { useWorkflowApi } from '../hooks/useWorkflowApi';
-import { useWorkflowPolling } from '../hooks/useWorkflowPolling';
-import { WorkflowState, WorkflowContextType, WorkflowProviderProps } from '../types/workflow';
+import { useWorkflowSSE } from '../hooks/useWorkflowSSE';
+import { WorkflowContextType, WorkflowProviderProps, WorkflowState } from '../types/workflow';
 
 const WorkflowContext = createContext<WorkflowContextType | undefined>(undefined);
 
@@ -27,53 +27,77 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     awaitingInput: false,
   });
 
-  // Only poll when on /create/[id] pages
+  // Only stream when on /create/[id] pages
   const isCreatePage = pathname?.startsWith('/create/') && pathname.split('/').length === 3;
-  const shouldPoll = Boolean(workflowState.sessionId && isCreatePage);
+  const shouldStream = Boolean(workflowState.sessionId && isCreatePage);
 
-  // Use the polling hook with callbacks
+  // Create stable callback refs to avoid stale closures
+  const handleStatusUpdate = useCallback(async (status: WorkflowStatus) => {
+    // For non-terminal states, just update the status
+    logger.debug('Status update', {
+      to: status.status,
+      currentStep: status.current_step,
+      hasMoodAnalysis: !!status.mood_analysis
+    });
+
+    setWorkflowState(prev => {
+      logger.debug('Previous state', {
+        from: prev.status,
+        to: status.status,
+      });
+      return {
+        ...prev,
+        status: status.status,
+        currentStep: status.current_step,
+        awaitingInput: status.awaiting_input,
+        error: status.error || null,
+        moodAnalysis: status.mood_analysis || prev.moodAnalysis,
+        metadata: status.metadata || prev.metadata,
+      };
+    });
+  }, []);
+
+  const handleTerminalUpdate = useCallback(async (status: WorkflowStatus, results: WorkflowResults | null) => {
+    // Update state with terminal status and results
+    logger.debug('Terminal state reached', {
+      to: status.status,
+    });
+    setWorkflowState(prev => ({
+      ...prev,
+      status: status.status,
+      currentStep: status.current_step,
+      awaitingInput: status.awaiting_input,
+      error: status.error || null,
+      moodAnalysis: results?.mood_analysis || prev.moodAnalysis,
+      recommendations: results?.recommendations || prev.recommendations,
+      playlist: results?.playlist || prev.playlist,
+    }));
+  }, []);
+
+  const handleError = useCallback((error: Error) => {
+    logger.error('Workflow streaming error', error, { component: 'WorkflowContext', sessionId: workflowState.sessionId });
+    setWorkflowState(prev => ({
+      ...prev,
+      error: 'Connection error. Please check your internet connection.',
+    }));
+  }, [workflowState.sessionId]);
+
+  const handleAwaitingInput = useCallback(() => {
+    logger.debug('Workflow awaiting user input', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
+  }, [workflowState.sessionId]);
+
+  // Use the SSE hook with callbacks (falls back to polling if SSE not supported)
   // Cast to satisfy type - 'started' is a valid transient status
-  useWorkflowPolling(
+  useWorkflowSSE(
     workflowState.sessionId,
     workflowState.status === 'started' ? 'pending' : workflowState.status,
     {
-      enabled: shouldPoll,
+      enabled: shouldStream,
       callbacks: {
-        onStatus: async (status: WorkflowStatus) => {
-          // For non-terminal states, just update the status
-          setWorkflowState(prev => ({
-            ...prev,
-            status: status.status,
-            currentStep: status.current_step,
-            awaitingInput: status.awaiting_input,
-            error: status.error || null,
-            moodAnalysis: status.mood_analysis || prev.moodAnalysis,
-            metadata: status.metadata || prev.metadata,
-          }));
-        },
-        onTerminal: async (status: WorkflowStatus, results: WorkflowResults | null) => {
-          // Update state with terminal status and results
-          setWorkflowState(prev => ({
-            ...prev,
-            status: status.status,
-            currentStep: status.current_step,
-            awaitingInput: status.awaiting_input,
-            error: status.error || null,
-            moodAnalysis: results?.mood_analysis || prev.moodAnalysis,
-            recommendations: results?.recommendations || prev.recommendations,
-            playlist: results?.playlist || prev.playlist,
-          }));
-        },
-        onError: (error: Error) => {
-          logger.error('Workflow polling error', error, { component: 'WorkflowContext', sessionId: workflowState.sessionId });
-          setWorkflowState(prev => ({
-            ...prev,
-            error: 'Connection error. Please check your internet connection.',
-          }));
-        },
-        onAwaitingInput: () => {
-          logger.debug('Workflow awaiting user input', { component: 'WorkflowContext', sessionId: workflowState.sessionId });
-        },
+        onStatus: handleStatusUpdate,
+        onTerminal: handleTerminalUpdate,
+        onError: handleError,
+        onAwaitingInput: handleAwaitingInput,
       },
     });
 
@@ -164,11 +188,12 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
         status: status.status,
         currentStep: status.current_step,
         moodPrompt: status.mood_prompt,
-        moodAnalysis: results?.mood_analysis,
+        moodAnalysis: results?.mood_analysis || status.mood_analysis,
         recommendations: results?.recommendations || [],
         playlist: results?.playlist,
         awaitingInput: status.awaiting_input,
         error: status.error || null,
+        metadata: status.metadata || prev.metadata,
         isLoading: false,
       }));
 
@@ -186,7 +211,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
   };
 
   const stopWorkflow = () => {
-    // Polling is handled by the hook, just reset state
+    // SSE/Polling is handled by the hook, just reset state
     setWorkflowState({
       sessionId: null,
       status: null,

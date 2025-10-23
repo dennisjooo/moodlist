@@ -3,10 +3,9 @@
 import asyncio
 import structlog
 import uuid
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Callable, Awaitable
 from datetime import datetime, timezone, timedelta
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from ...clients.spotify_client import SpotifyAPIClient
@@ -16,6 +15,9 @@ from ..tools.agent_tools import AgentTools
 
 
 logger = structlog.get_logger(__name__)
+
+# Type alias for state change callback
+StateChangeCallback = Callable[[str, AgentState], Awaitable[None]]
 
 
 class WorkflowConfig:
@@ -70,12 +72,69 @@ class WorkflowManager:
         self.completed_workflows: Dict[str, AgentState] = {}
         self.active_tasks: Dict[str, asyncio.Task] = {}  # Track running tasks
 
+        # State change notifications for SSE
+        self.state_change_callbacks: Dict[str, List[StateChangeCallback]] = {}
+
         # Performance tracking
         self.workflow_count = 0
         self.success_count = 0
         self.failure_count = 0
 
         logger.info("Initialized WorkflowManager with {} agents".format(len(agents)))
+
+    def subscribe_to_state_changes(self, session_id: str, callback: StateChangeCallback):
+        """Subscribe to state changes for a specific workflow session.
+        
+        Args:
+            session_id: Workflow session ID to subscribe to
+            callback: Async callback function to call when state changes
+        """
+        if session_id not in self.state_change_callbacks:
+            self.state_change_callbacks[session_id] = []
+        self.state_change_callbacks[session_id].append(callback)
+        logger.debug(f"Added state change callback for session {session_id}")
+
+    def unsubscribe_from_state_changes(self, session_id: str, callback: StateChangeCallback):
+        """Unsubscribe from state changes for a specific workflow session.
+        
+        Args:
+            session_id: Workflow session ID to unsubscribe from
+            callback: Callback function to remove
+        """
+        if session_id in self.state_change_callbacks:
+            try:
+                self.state_change_callbacks[session_id].remove(callback)
+                if not self.state_change_callbacks[session_id]:
+                    del self.state_change_callbacks[session_id]
+                logger.debug(f"Removed state change callback for session {session_id}")
+            except ValueError:
+                pass
+
+    async def _notify_state_change(self, session_id: str, state: AgentState):
+        """Notify all subscribers of a state change.
+        
+        Args:
+            session_id: Workflow session ID
+            state: Updated workflow state
+        """
+        if session_id in self.state_change_callbacks:
+            callbacks = self.state_change_callbacks[session_id].copy()
+            for callback in callbacks:
+                try:
+                    await callback(session_id, state)
+                except Exception as e:
+                    logger.error(f"Error in state change callback: {str(e)}", exc_info=True)
+
+    async def _update_state(self, session_id: str, state: AgentState):
+        """Update workflow state and notify subscribers.
+        
+        Args:
+            session_id: Workflow session ID
+            state: Updated workflow state
+        """
+        self.active_workflows[session_id] = state
+        await self._update_playlist_db(session_id, state)
+        await self._notify_state_change(session_id, state)
 
     async def _refresh_spotify_token_if_needed(self, state: AgentState) -> AgentState:
         """Refresh the Spotify access token if needed during workflow execution.
@@ -300,20 +359,17 @@ class WorkflowManager:
 
             # Execute workflow steps
             state = await self._execute_mood_analysis(state)
-            self.active_workflows[session_id] = state  # Update in-memory state
-            await self._update_playlist_db(session_id, state)
+            await self._update_state(session_id, state)
             
             # Execute orchestration (handles seed gathering, recommendations, and quality improvement)
             state = await self._execute_orchestration(state)
-            self.active_workflows[session_id] = state  # Update in-memory state
-            await self._update_playlist_db(session_id, state)
+            await self._update_state(session_id, state)
             
             # Mark as completed after recommendations are ready
             state.status = RecommendationStatus.COMPLETED
             state.current_step = "recommendations_ready"
             state.metadata["playlist_saved_to_spotify"] = False
-            self.active_workflows[session_id] = state  # Update in-memory state
-            await self._update_playlist_db(session_id, state)
+            await self._update_state(session_id, state)
             self.success_count += 1
             
             # Dump the state to a file
@@ -440,6 +496,12 @@ class WorkflowManager:
             logger.warning("Orchestrator agent not available, skipping quality optimization")
             return state
 
+        # Set progress callback for real-time SSE updates during orchestration
+        async def notify_progress(updated_state: AgentState):
+            """Callback to notify SSE clients of state changes."""
+            await self._notify_state_change(state.session_id, updated_state)
+        
+        orchestrator._progress_callback = notify_progress
         return await orchestrator.run_with_error_handling(state)
 
     async def _execute_human_loop(self, state: AgentState) -> AgentState:

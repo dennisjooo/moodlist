@@ -113,11 +113,21 @@ class OrchestratorAgent(BaseAgent):
         logger.info("Initial seed gathering...")
         state.current_step = "gathering_seeds"
         state.status = RecommendationStatus.GATHERING_SEEDS
+        await self._notify_progress(state)
+        
+        # Pass progress callback to seed gatherer
+        if hasattr(self, '_progress_callback'):
+            self.seed_gatherer._progress_callback = self._progress_callback
         state = await self.seed_gatherer.run_with_error_handling(state)
 
         logger.info("Initial recommendation generation...")
         state.current_step = "generating_recommendations"
         state.status = RecommendationStatus.GENERATING_RECOMMENDATIONS
+        await self._notify_progress(state)
+        
+        # Pass progress callback to recommendation generator
+        if hasattr(self, '_progress_callback'):
+            self.recommendation_generator._progress_callback = self._progress_callback
         state = await self.recommendation_generator.run_with_error_handling(state)
 
         return state
@@ -130,6 +140,7 @@ class OrchestratorAgent(BaseAgent):
             state.metadata["orchestration_iterations"] = iteration + 1
             state.current_step = f"evaluating_quality_iteration_{iteration + 1}"
             state.status = RecommendationStatus.EVALUATING_QUALITY
+            await self._notify_progress(state)
 
             # Evaluate current playlist quality
             quality_evaluation = await self.quality_evaluator.evaluate_playlist_quality(state)
@@ -150,6 +161,7 @@ class OrchestratorAgent(BaseAgent):
             # Apply improvement strategies
             state.current_step = f"optimizing_recommendations_iteration_{iteration + 1}"
             state.status = RecommendationStatus.OPTIMIZING_RECOMMENDATIONS
+            await self._notify_progress(state)
 
             improvement_strategies = await self.improvement_strategy.decide_improvement_strategy(
                 quality_evaluation, state
