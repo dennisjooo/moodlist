@@ -45,8 +45,18 @@ export function shouldAcceptStatusUpdate(
     const prevIndex = getWorkflowStageIndex(prevStatus);
     const newIndex = getWorkflowStageIndex(newStatus);
 
+    // Accept if status is unknown (not in our defined stages)
+    // This handles sub-steps and detailed status updates
+    if (newIndex === -1) return true;
+
     // Accept if moving forward in the workflow
-    return newIndex > prevIndex;
+    if (newIndex > prevIndex) return true;
+
+    // Accept if we're at the same stage (sub-steps within a stage)
+    if (newIndex === prevIndex) return true;
+
+    // Reject only if moving backwards
+    return false;
 }
 
 /**
