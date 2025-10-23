@@ -7,14 +7,19 @@ import { Button } from '@/components/ui/button';
 import { Music, ArrowDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 export interface HeroSectionProps {
-    isLoggedIn: boolean;
+    isLoggedIn?: boolean;
 }
 
-export function HeroSection({ isLoggedIn }: HeroSectionProps) {
+export function HeroSection({ isLoggedIn: serverIsLoggedIn }: HeroSectionProps) {
     const router = useRouter();
     const [isClient, setIsClient] = useState(false);
+    const { isAuthenticated } = useAuth();
+
+    // Use client-side auth state when available, fall back to server prop
+    const isLoggedIn = isClient ? isAuthenticated : serverIsLoggedIn;
 
     useEffect(() => {
         setIsClient(true);
