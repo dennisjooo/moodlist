@@ -3,6 +3,7 @@
 import { AuthGuard } from '@/components/AuthGuard';
 import Navigation from '@/components/Navigation';
 import { PlaylistEditorSkeleton, WorkflowProgressSkeleton } from '@/components/shared/LoadingStates';
+import MoodBackground from '@/components/shared/MoodBackground';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
@@ -169,8 +170,16 @@ function CreateSessionPageContent() {
 
     // Show editor if workflow is awaiting user input
     if (workflowState.awaitingInput && workflowState.recommendations.length > 0 && workflowState.sessionId) {
+        const colorScheme = workflowState.moodAnalysis?.color_scheme;
+
         return (
             <div className="min-h-screen bg-background relative">
+                <MoodBackground
+                    colorScheme={colorScheme}
+                    style="linear-diagonal"
+                    opacity={0.25}
+                />
+
                 <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
                     <DotPattern
                         className={cn(
@@ -208,8 +217,16 @@ function CreateSessionPageContent() {
 
     // If workflow is in terminal state but no recommendations, show error or loading state
     if (isTerminalStatus && workflowState.recommendations.length === 0) {
+        const colorScheme = workflowState.moodAnalysis?.color_scheme;
+
         return (
             <div className="min-h-screen bg-background relative">
+                <MoodBackground
+                    colorScheme={colorScheme}
+                    style="linear-diagonal"
+                    opacity={0.25}
+                />
+
                 <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
                     <DotPattern
                         className={cn(
@@ -248,8 +265,16 @@ function CreateSessionPageContent() {
         );
     }
 
+    const colorScheme = workflowState.moodAnalysis?.color_scheme;
+
     return (
         <div className="min-h-screen bg-background relative flex flex-col">
+            <MoodBackground
+                colorScheme={colorScheme}
+                style="linear-diagonal"
+                opacity={0.25}
+            />
+
             {/* Fixed Dot Pattern Background */}
             <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
                 <DotPattern
