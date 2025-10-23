@@ -7,30 +7,24 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useAuth } from '@/lib/contexts/AuthContext';
 
 interface AuthMenuProps {
     user: UserType;
-    onLogout?: () => void;
 }
 
-export function AuthMenu({ user, onLogout }: AuthMenuProps) {
+export function AuthMenu({ user }: AuthMenuProps) {
     const [isOpen, setIsOpen] = useState(false);
     const router = useRouter();
+    const { logout } = useAuth();
 
     const handleLogout = async () => {
         try {
-            if (onLogout) {
-                await onLogout();
-            }
+            await logout();
             setIsOpen(false);
-            // Navigate to home and refresh to clear any cached state
-            router.push('/');
-            router.refresh();
+            // Navigation is handled by the logout function immediately
         } catch (error) {
             logger.error('Logout failed', error, { component: 'AuthMenu' });
-            // Even if backend logout fails, redirect to clear frontend state
-            router.push('/');
-            router.refresh();
         }
     };
 

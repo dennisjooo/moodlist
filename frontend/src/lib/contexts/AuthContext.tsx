@@ -179,37 +179,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const logout = async () => {
+    // Immediately clear local state for optimistic UX
+    setUser(null);
+    setIsValidated(false);
+    clearCachedAuth();
+
+    // Dispatch logout event to notify other contexts (like workflow context)
+    window.dispatchEvent(new Event('auth-logout'));
+
+    // Make backend logout call in background (fire and forget)
     try {
       const backendUrl = config.api.baseUrl;
 
-      // Call backend logout to clear session
-      const response = await fetch(`${backendUrl}/api/auth/logout`, {
+      fetch(`${backendUrl}/api/auth/logout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...getAuthCookies(),
         },
         credentials: 'include',
+      }).then(async (response) => {
+        if (!response.ok) {
+          const errorText = await response.text();
+          logger.error('Backend logout failed', undefined, { component: 'AuthContext', status: response.status, errorText });
+        } else {
+          logger.info('Backend logout successful', { component: 'AuthContext' });
+        }
+      }).catch((error) => {
+        logger.error('Logout error', error, { component: 'AuthContext' });
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        logger.error('Backend logout failed', undefined, { component: 'AuthContext', status: response.status, errorText });
-        // Don't throw error - still clear local state for better UX
-      } else {
-        logger.info('Backend logout successful', { component: 'AuthContext' });
-      }
     } catch (error) {
-      logger.error('Logout error', error, { component: 'AuthContext' });
-      // Don't throw error - still clear local state for better UX
-    } finally {
-      // Always clear local state after attempting backend logout
-      setUser(null);
-      setIsValidated(false);
-      clearCachedAuth();
-
-      // Dispatch logout event to notify other contexts (like workflow context)
-      window.dispatchEvent(new Event('auth-logout'));
+      logger.error('Logout setup error', error, { component: 'AuthContext' });
     }
   };
 

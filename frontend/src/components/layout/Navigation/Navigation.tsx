@@ -16,12 +16,10 @@ interface NavigationProps {
     logoHref?: string;
     /** Extra nav items beyond defaults */
     extraItems?: NavItem[];
-    /** Callback when user initiates logout */
-    onLogout?: () => void;
 }
 
-export default function Navigation({ onLogout, extraItems = [] }: NavigationProps) {
-    const { user, isAuthenticated } = useAuth();
+export default function Navigation({ extraItems = [] }: NavigationProps) {
+    const { user, isAuthenticated, logout } = useAuth();
     const router = useRouter();
 
     const defaultNavItems: NavItem[] = [
@@ -35,17 +33,10 @@ export default function Navigation({ onLogout, extraItems = [] }: NavigationProp
 
     const handleLogout = async () => {
         try {
-            if (onLogout) {
-                await onLogout();
-            }
-            // Navigate to home and refresh to clear any cached state
-            router.push('/');
-            router.refresh();
+            await logout();
+            // Navigation is handled by the logout function immediately
         } catch (error) {
             logger.error('Logout failed', error, { component: 'Navigation' });
-            // Even if backend logout fails, redirect to clear frontend state
-            router.push('/');
-            router.refresh();
         }
     };
 
@@ -64,7 +55,7 @@ export default function Navigation({ onLogout, extraItems = [] }: NavigationProp
                     {/* Right Side - Profile & Mobile Menu Button */}
                     <div className="flex items-center space-x-4 lg:absolute lg:right-0">
                         {isAuthenticated && user ? (
-                            <AuthMenu user={user} onLogout={handleLogout} />
+                            <AuthMenu user={user} />
                         ) : (
                             <SpotifyLoginButton />
                         )}
