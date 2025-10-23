@@ -5,7 +5,7 @@ import { logger } from '@/lib/utils/logger';
 
 export interface UserStats {
     user_id: number;
-    playlists_generated: number;
+    saved_playlists: number;
     moods_analyzed: number;
     total_sessions: number;
     active_sessions: number;
@@ -83,10 +83,6 @@ class UserAPI {
         }
 
         return await response.json();
-    }
-
-    async getUserStats(): Promise<UserStats> {
-        return this.request<UserStats>('/api/auth/stats');
     }
 
     async getDashboard(): Promise<DashboardData> {
