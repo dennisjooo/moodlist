@@ -432,7 +432,7 @@ class RecommendationEngine:
 
         # Process all artists
         all_recommendations, successful_artists, failed_artists = await self._process_all_artists(
-            mood_matched_artists, access_token, target_features, tracks_per_artist
+            mood_matched_artists, access_token, target_features, tracks_per_artist, state
         )
 
         # Handle error cases
@@ -473,7 +473,19 @@ class RecommendationEngine:
 
         # MAXIMIZE DIVERSITY: Use MORE artists with MORE tracks each to account for filtering
         artist_count = min(len(state.metadata.get("mood_matched_artists", [])), 20)
+        
+        # Default tracks per artist for diversity
         tracks_per_artist = max(3, min(int((target_artist_recs * 2.5) // artist_count) + 2, 5))
+        
+        # Detect if user explicitly requested specific artists
+        user_requested_artists = self._detect_user_requested_artists(state)
+        if user_requested_artists:
+            # Store for use in processing
+            state.metadata["user_requested_artists"] = user_requested_artists
+            logger.info(
+                f"User explicitly requested {len(user_requested_artists)} artist(s): {', '.join(user_requested_artists[:3])}"
+                f" - will provide MORE tracks from these artists"
+            )
 
         logger.info(
             f"MAXIMIZING DIVERSITY: Fetching {tracks_per_artist} tracks from up to {artist_count} artists "
@@ -482,13 +494,81 @@ class RecommendationEngine:
         )
 
         return access_token, target_features, tracks_per_artist
+    
+    def _detect_user_requested_artists(self, state: AgentState) -> List[str]:
+        """Detect if user explicitly requested specific artists in their prompt.
+        
+        Args:
+            state: Current agent state
+            
+        Returns:
+            List of artist names that were explicitly requested by user
+        """
+        if not state.mood_analysis:
+            return []
+        
+        mood_prompt_lower = state.mood_prompt.lower()
+        artist_recommendations = state.mood_analysis.get("artist_recommendations", [])
+        
+        user_requested = []
+        
+        # Check anchor tracks for user-mentioned artists
+        anchor_tracks = state.metadata.get("anchor_tracks", [])
+        for anchor in anchor_tracks:
+            if anchor.get("user_mentioned", False):
+                # Extract artist names from this anchor
+                for artist_obj in anchor.get("artists", []):
+                    artist_name = artist_obj.get("name") if isinstance(artist_obj, dict) else artist_obj
+                    if artist_name and artist_name not in user_requested:
+                        user_requested.append(artist_name)
+        
+        # Check if artist names appear prominently in the prompt
+        # Patterns like "songs by [artist]", "[artist] vibes", "[artist] type", etc.
+        for artist_name in artist_recommendations[:10]:  # Check top 10 recommended artists
+            artist_lower = artist_name.lower()
+            
+            # Strong indicators that artist was explicitly requested
+            strong_patterns = [
+                f"songs by {artist_lower}",
+                f"tracks by {artist_lower}",
+                f"music by {artist_lower}",
+                f"{artist_lower} vibes",
+                f"{artist_lower} type",
+                f"{artist_lower} style",
+                f"like {artist_lower}",
+                f"similar to {artist_lower}",
+            ]
+            
+            # Check if artist name appears at start/end of prompt (strong signal)
+            words = mood_prompt_lower.split()
+            artist_words = artist_lower.split()
+            
+            # Check if artist is mentioned with strong indicators
+            for pattern in strong_patterns:
+                if pattern in mood_prompt_lower:
+                    if artist_name not in user_requested:
+                        user_requested.append(artist_name)
+                        logger.info(f"Detected user-requested artist via pattern '{pattern}': {artist_name}")
+                    break
+            
+            # Check if artist appears in first 5 words (likely emphasis)
+            if len(words) >= len(artist_words):
+                for i in range(min(5, len(words) - len(artist_words) + 1)):
+                    if " ".join(words[i:i+len(artist_words)]) == artist_lower:
+                        if artist_name not in user_requested:
+                            user_requested.append(artist_name)
+                            logger.info(f"Detected user-requested artist in opening words: {artist_name}")
+                        break
+        
+        return user_requested
 
     async def _process_all_artists(
         self,
         mood_matched_artists: List[str],
         access_token: str,
         target_features: Dict[str, Any],
-        tracks_per_artist: int
+        tracks_per_artist: int,
+        state: Optional[AgentState] = None
     ) -> tuple[List[TrackRecommendation], int, int]:
         """Process all artists to get recommendations.
 
@@ -497,6 +577,7 @@ class RecommendationEngine:
             access_token: Spotify access token
             target_features: Target mood features
             tracks_per_artist: Number of tracks to fetch per artist
+            state: Agent state (for user-requested artist detection)
 
         Returns:
             Tuple of (recommendations, successful_artists, failed_artists)
@@ -504,12 +585,33 @@ class RecommendationEngine:
         all_recommendations = []
         successful_artists = 0
         failed_artists = 0
+        
+        # Get user-requested artists
+        user_requested_artists = state.metadata.get("user_requested_artists", []) if state else []
+        user_requested_lower = [name.lower() for name in user_requested_artists]
+        
+        # Get discovered artists info for name matching
+        discovered_artists = state.metadata.get("discovered_artists", []) if state else []
+        artist_id_to_name = {a.get("id"): a.get("name", "") for a in discovered_artists}
 
         # Fetch tracks from each artist (use up to 20 artists for maximum coverage and variety)
         for idx, artist_id in enumerate(mood_matched_artists[:20]):
             try:
+                # Check if this artist was explicitly requested by user
+                artist_name = artist_id_to_name.get(artist_id, "")
+                is_user_requested = artist_name.lower() in user_requested_lower
+                
+                # User-requested artists get MORE tracks (2-3x more)
+                artist_track_count = tracks_per_artist
+                if is_user_requested:
+                    artist_track_count = min(tracks_per_artist * 3, 10)  # 3x tracks, max 10
+                    logger.info(
+                        f"Artist '{artist_name}' was user-requested - fetching {artist_track_count} tracks "
+                        f"(vs {tracks_per_artist} for other artists)"
+                    )
+                
                 artist_recommendations = await self._fetch_tracks_from_artist(
-                    artist_id, idx, len(mood_matched_artists), access_token, target_features, tracks_per_artist
+                    artist_id, idx, len(mood_matched_artists), access_token, target_features, artist_track_count
                 )
                 all_recommendations.extend(artist_recommendations)
 
