@@ -4,8 +4,6 @@ import { SpotifyLoginButton } from '@/components/features/auth/SpotifyLoginButto
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { NavItem } from '@/lib/types/navigation';
-import { logger } from '@/lib/utils/logger';
-import { useRouter } from 'next/navigation';
 import { AuthMenu } from './AuthMenu';
 import { Brand } from './Brand';
 import { DesktopLinks } from './DesktopLinks';
@@ -19,8 +17,7 @@ interface NavigationProps {
 }
 
 export default function Navigation({ extraItems = [] }: NavigationProps) {
-    const { user, isAuthenticated, logout } = useAuth();
-    const router = useRouter();
+    const { user, isAuthenticated } = useAuth();
 
     const defaultNavItems: NavItem[] = [
         { name: 'Home', href: '/' },
@@ -30,15 +27,6 @@ export default function Navigation({ extraItems = [] }: NavigationProps) {
     ];
 
     const navItems = [...defaultNavItems, ...extraItems];
-
-    const handleLogout = async () => {
-        try {
-            await logout();
-            // Navigation is handled by the logout function immediately
-        } catch (error) {
-            logger.error('Logout failed', error, { component: 'Navigation' });
-        }
-    };
 
     return (
         <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">

@@ -5,7 +5,6 @@ import { logger } from '@/lib/utils/logger';
 import { LogOut, User } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -15,7 +14,6 @@ interface AuthMenuProps {
 
 export function AuthMenu({ user }: AuthMenuProps) {
     const [isOpen, setIsOpen] = useState(false);
-    const router = useRouter();
     const { logout } = useAuth();
 
     const handleLogout = async () => {

@@ -2,7 +2,6 @@ import { useCallback, useRef } from 'react';
 import { logger } from '../utils/logger';
 import { useWorkflowApi } from './useWorkflowApi';
 import type { WorkflowState } from '../types/workflow';
-import type { SearchTrack } from '../types/workflow';
 
 interface UseWorkflowActionsProps {
     workflowState: WorkflowState;
