@@ -11,7 +11,7 @@ import { DotPattern } from '@/components/ui/dot-pattern';
 import { playlistAPI, UserPlaylist } from '@/lib/playlistApi';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
-import { motion } from 'framer-motion';
+import { motion } from '@/components/ui/lazy-motion';
 import { Music } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense, useEffect, useState } from 'react';

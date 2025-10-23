@@ -4,7 +4,7 @@ import LoginRequiredDialog from '@/components/LoginRequiredDialog';
 import MoodCard from '@/components/features/mood/MoodCard';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { getMoodGenre } from '@/lib/moodColors';
-import { motion } from 'framer-motion';
+import { motion } from '@/components/ui/lazy-motion';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 
