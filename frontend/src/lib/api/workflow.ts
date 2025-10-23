@@ -30,6 +30,11 @@ export interface WorkflowStatus {
         energy_level: string;
         target_features: Record<string, number>;
         search_keywords: string[];
+        color_scheme?: {
+            primary: string;
+            secondary: string;
+            tertiary: string;
+        };
     };
     recommendation_count: number;
     seed_track_count?: number;
@@ -56,6 +61,11 @@ export interface WorkflowResults {
         energy_level: string;
         target_features: Record<string, number>;
         search_keywords: string[];
+        color_scheme?: {
+            primary: string;
+            secondary: string;
+            tertiary: string;
+        };
     };
     recommendations: Array<{
         track_id: string;
