@@ -1,6 +1,7 @@
 /**
  * Performance monitoring utilities for tracking component metrics
  */
+import { logger } from '@/lib/utils/logger';
 
 export interface PerformanceMetric {
     component: string;
@@ -29,7 +30,7 @@ export function trackPerformanceMetric(
 
     // Log to console in development
     if (process.env.NODE_ENV === 'development') {
-        console.log(`[Performance] ${component}.${action}: ${duration.toFixed(2)}ms`, metadata);
+        logger.debug(`[Performance] ${component}.${action}: ${duration.toFixed(2)}ms`, metadata);
     }
 
     // In production, you could send to analytics service

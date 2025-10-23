@@ -1,6 +1,8 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { logger } from '@/lib/utils/logger';
+import { useEffect } from 'react';
 
 interface ProgressTimelineProps {
     status: string | null;
@@ -17,6 +19,13 @@ const WORKFLOW_STAGES = [
 ];
 
 export function ProgressTimeline({ status }: ProgressTimelineProps) {
+    // Debug: Log when status prop changes
+    useEffect(() => {
+        logger.debug('ProgressTimeline status prop changed', {
+            to: status,
+        });
+    }, [status]);
+
     const getCurrentStageIndex = (status: string | null): number => {
         if (!status) return 0;
         const index = WORKFLOW_STAGES.findIndex(stage => status.includes(stage.key));

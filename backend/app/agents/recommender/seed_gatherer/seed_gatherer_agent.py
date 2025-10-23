@@ -1,8 +1,6 @@
 """Seed gatherer agent for collecting user preference data."""
 
 import structlog
-from typing import Any, Dict, List, Optional
-
 from ...core.base_agent import BaseAgent
 from ...states.agent_state import AgentState, RecommendationStatus
 from ...tools.spotify_service import SpotifyService
@@ -65,6 +63,10 @@ class SeedGathererAgent(BaseAgent):
                 if not access_token:
                     raise ValueError("No Spotify access token available for seed gathering")
 
+            # Update: Fetching user top tracks
+            state.current_step = "gathering_seeds_fetching_top_tracks"
+            await self._notify_progress(state)
+            
             # Get user's top tracks for seeds
             top_tracks = await self.spotify_service.get_user_top_tracks(
                 access_token=access_token,
@@ -72,6 +74,10 @@ class SeedGathererAgent(BaseAgent):
                 time_range="medium_term"
             )
 
+            # Update: Fetching user top artists
+            state.current_step = "gathering_seeds_fetching_top_artists"
+            await self._notify_progress(state)
+            
             # Get user's top artists for additional context
             top_artists = await self.spotify_service.get_user_top_artists(
                 access_token=access_token,
@@ -88,9 +94,17 @@ class SeedGathererAgent(BaseAgent):
             if feature_weights:
                 target_features["_weights"] = feature_weights
 
+            # Update: Analyzing audio features
+            state.current_step = "gathering_seeds_analyzing_features"
+            await self._notify_progress(state)
+            
             # Fetch audio features for top tracks if RecoBeat service available
             top_tracks = await self.audio_enricher.enrich_tracks_with_features(top_tracks)
 
+            # Update: Selecting best seeds
+            state.current_step = "gathering_seeds_selecting_seeds"
+            await self._notify_progress(state)
+            
             # Select seed tracks using audio feature scoring
             scored_tracks = self.seed_selector.select_seed_tracks(top_tracks, target_features)
 
