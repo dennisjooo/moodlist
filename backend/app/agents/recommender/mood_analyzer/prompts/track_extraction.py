@@ -19,12 +19,19 @@ User's request: "{mood_prompt}"
 
 Context - Artists detected in the request: {artists_context}
 
-Task: Identify any specific song/track titles the user mentioned. Look for patterns like:
+Task: Identify any specific song/track titles the user mentioned. Look CAREFULLY for patterns like:
+- "things like [track name] by [artist]"
+- "stuff like [track name] by [artist]"
+- "songs like [track name]"
 - "especially [track name]"
 - "like [track name]"
-- "songs like [track name]"
 - "[track name] by [artist]"
 - Any other mentions of specific songs
+
+IMPORTANT: 
+- When you see "Things like [Track] by [Artist]", extract "[Track]" as the track name and "[Artist]" as the artist
+- Look for track names even if they appear in casual phrases
+- The user might casually reference a track as an example of the mood they want
 
 Respond in JSON format:
 {{
@@ -32,7 +39,7 @@ Respond in JSON format:
     {{"track_name": "Track Title", "artist_name": "Artist Name"}},
     {{"track_name": "Another Track", "artist_name": "Artist Name"}}
   ],
-  "reasoning": "Brief explanation of what tracks you found"
+  "reasoning": "Brief explanation of what tracks you found and how you identified them"
 }}
 
 If no specific tracks are mentioned, return an empty array for mentioned_tracks.

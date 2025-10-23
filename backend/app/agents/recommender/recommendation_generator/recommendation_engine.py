@@ -252,13 +252,41 @@ class RecommendationEngine:
             logger.warning("Skipping recommendation without track ID")
             return None
 
-        # Get audio features from pre-fetched batch
+        # Validate track has proper audio features from Reccobeat
         complete_audio_features = audio_features_map.get(track_id, {})
+        
+        # Reccobeat tracks MUST have core audio features to be reliable
+        required_features = {"energy", "danceability", "tempo"}
+        missing_required = required_features - set(complete_audio_features.keys())
+        
+        if missing_required:
+            logger.info(
+                f"Filtering Reccobeat track without core audio features: "
+                f"{rec_data.get('track_name', 'Unknown')} (missing: {missing_required})"
+            )
+            return None
+        
+        # Warn (but allow) if secondary features are missing
+        secondary_features = {"acousticness", "valence"}
+        missing_secondary = secondary_features - set(complete_audio_features.keys())
+        if missing_secondary:
+            logger.debug(
+                f"RecoBeat track missing secondary features {missing_secondary}: "
+                f"{rec_data.get('track_name', 'Unknown')}"
+            )
 
         # Use confidence score from RecoBeat if available, otherwise calculate
         confidence = rec_data.get("confidence_score")
         if confidence is None:
             confidence = self.scoring_engine.calculate_confidence_score(rec_data, state)
+        
+        # Apply minimum confidence threshold for Reccobeat tracks (0.5 = 50%)
+        if confidence < 0.5:
+            logger.info(
+                f"Filtering low-confidence Reccobeat track: "
+                f"{rec_data.get('track_name', 'Unknown')} (confidence: {confidence:.2f} < 0.5)"
+            )
+            return None
 
         return TrackRecommendation(
             track_id=track_id,
@@ -267,7 +295,7 @@ class RecommendationEngine:
             spotify_uri=rec_data.get("spotify_uri"),
             confidence_score=confidence,
             audio_features=complete_audio_features,
-            reasoning=rec_data.get("reasoning", f"Mood-based recommendation using seeds: {', '.join(chunk)}"),
+            reasoning=rec_data.get("reasoning", f"Recommended based on {len(chunk)} seed tracks (relevance: {confidence*100:.0f}%)"),
             source=rec_data.get("source", "reccobeat")
         )
 

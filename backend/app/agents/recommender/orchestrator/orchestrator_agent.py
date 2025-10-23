@@ -24,8 +24,8 @@ class OrchestratorAgent(BaseAgent):
         recommendation_generator: BaseAgent,
         seed_gatherer: BaseAgent,
         llm: Optional[BaseLanguageModel] = None,
-        max_iterations: int = 3,
-        cohesion_threshold: float = 0.65,
+        max_iterations: int = 2,
+        cohesion_threshold: float = 0.60,
         verbose: bool = False
     ):
         """Initialize the orchestrator agent.
@@ -35,8 +35,8 @@ class OrchestratorAgent(BaseAgent):
             recommendation_generator: RecommendationGeneratorAgent for generating more tracks
             seed_gatherer: SeedGathererAgent for re-seeding if needed
             llm: Language model for decision making
-            max_iterations: Maximum improvement iterations before accepting results
-            cohesion_threshold: Minimum cohesion score (0-1) to accept playlist (default 0.65)
+            max_iterations: Maximum improvement iterations before accepting results (default: 2, reduced for speed)
+            cohesion_threshold: Minimum cohesion score (0-1) to accept playlist (default 0.60, relaxed for speed)
             verbose: Whether to enable verbose logging
         """
         super().__init__(

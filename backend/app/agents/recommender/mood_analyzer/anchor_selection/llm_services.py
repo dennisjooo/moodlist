@@ -1,5 +1,6 @@
 """LLM services for anchor track selection."""
 
+import re
 import structlog
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -82,27 +83,59 @@ class LLMServices:
         Returns:
             List of (track_name, artist_name) tuples
         """
-        track_hints = []
+        track_hints: List[Tuple[str, str]] = []
+        primary_artist = artist_recommendations[0] if artist_recommendations else ""
+        seen: set[Tuple[str, str]] = set()
 
-        # Look for "especially" followed by track names
-        if "especially" in mood_prompt.lower():
-            parts = mood_prompt.split("especially")
-            if len(parts) > 1:
-                after_especially = parts[1].strip()
-                # Split by "and" or ","
-                if "," in after_especially:
-                    tracks = after_especially.split(",")
-                elif " and " in after_especially.lower():
-                    tracks = after_especially.split(" and ")
-                else:
-                    tracks = [after_especially]
+        def _add_hint(track: str, artist: str) -> None:
+            track_clean = track.strip().strip('\'"')
+            artist_clean = artist.strip().strip('\'"')
+            if not track_clean or len(track_clean) < 2:
+                return
+            key = (track_clean.lower(), artist_clean.lower())
+            if key in seen:
+                return
+            seen.add(key)
+            track_hints.append((track_clean, artist_clean))
+            logger.info(f"Extracted track reference: '{track_clean}' by '{artist_clean}'")
 
-                # Clean up track names
-                primary_artist = artist_recommendations[0] if artist_recommendations else ""
-                for track in tracks[:3]:
-                    track_name = track.split(".")[0].split("?")[0].strip().rstrip(",;:")
-                    if track_name and len(track_name) > 2:
-                        track_hints.append((track_name, primary_artist))
+        # Normalize whitespace for consistent matching
+        normalized_prompt = "\n".join(line.strip() for line in mood_prompt.splitlines() if line.strip())
+
+        # Pattern 1: "things like/stuff like/songs like <track> by <artist>"
+        pattern_like_by = re.compile(
+            r"(?:things|stuff|songs)\s+like\s+\"?([^\n\"']+?)\"?\s+by\s+([^\n,;:.!?]+)",
+            re.IGNORECASE
+        )
+        for match in pattern_like_by.finditer(normalized_prompt):
+            track_name = match.group(1)
+            artist_name = match.group(2)
+            _add_hint(track_name, artist_name)
+
+        # Pattern 2: General "[track] by [artist]" on standalone lines
+        pattern_track_by = re.compile(r"^['\"]?([^\n\"']+?)['\"]?\s+by\s+([^\n,;:.!?]+)$", re.IGNORECASE)
+        for line in normalized_prompt.split("\n"):
+            match = pattern_track_by.search(line)
+            if match:
+                track_name = match.group(1)
+                artist_name = match.group(2)
+                _add_hint(track_name, artist_name)
+
+        # Pattern 3: "especially [track]" (assume primary artist)
+        pattern_especially = re.compile(r"especially\s+['\"]?([^\n,;:.!?]+)", re.IGNORECASE)
+        for match in pattern_especially.finditer(normalized_prompt):
+            track_name = match.group(1)
+            _add_hint(track_name, primary_artist)
+
+        # Pattern 4: "like [track]" (without explicit artist)
+        pattern_plain_like = re.compile(r"like\s+['\"]?([^\n,;:.!?]+)", re.IGNORECASE)
+        for match in pattern_plain_like.finditer(normalized_prompt):
+            track_segment = match.group(1)
+            if " by " in track_segment.lower():
+                track_part, artist_part = track_segment.split(" by ", 1)
+                _add_hint(track_part, artist_part)
+            else:
+                _add_hint(track_segment, primary_artist)
 
         return track_hints
 
