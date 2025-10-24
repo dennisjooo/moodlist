@@ -8,22 +8,9 @@ export interface PlaylistFormattingOptions {
 
 /**
  * Hook for playlist card formatting utilities
- * Provides gradient generation and text cleaning functions
+ * Provides gradient generation functions
  */
 export function usePlaylistFormatting() {
-    // Clean text by removing special characters and unwanted content
-    const cleanText = useMemo(() => {
-        return (text: string): string => {
-            return text
-                .replace(/\n/g, ' ') // Remove newlines
-                .replace(/\r/g, ' ') // Remove carriage returns
-                .replace(/\t/g, ' ') // Remove tabs
-                .replace(/\s+/g, ' ') // Normalize multiple spaces
-                .replace(/[^\w\s\-.,!?']/g, '') // Remove special characters but keep basic punctuation
-                .trim();
-        };
-    }, []);
-
     // Generate modern blend gradient exactly matching cover_image_generator.py's algorithm
     const generateModernGradient = useMemo(() => {
         return (primary: string, secondary: string, tertiary: string) => {
@@ -48,7 +35,6 @@ export function usePlaylistFormatting() {
     }, []);
 
     return {
-        cleanText,
         generateModernGradient,
     };
 }

@@ -30,7 +30,7 @@ export function AuthMenu({ user }: AuthMenuProps) {
         <div className="relative">
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center space-x-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+                className="hidden lg:flex items-center space-x-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
             >
                 {user.profile_image_url ? (
                     <Image
@@ -49,6 +49,23 @@ export function AuthMenu({ user }: AuthMenuProps) {
                     {user.display_name}
                 </span>
             </button>
+
+            {/* Mobile - Non-clickable profile picture */}
+            <div className="lg:hidden flex items-center">
+                {user.profile_image_url ? (
+                    <Image
+                        src={user.profile_image_url}
+                        alt={user.display_name}
+                        width={32}
+                        height={32}
+                        className="w-8 h-8 rounded-full"
+                    />
+                ) : (
+                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                        <User className="w-4 h-4 text-primary" />
+                    </div>
+                )}
+            </div>
 
             {/* Dropdown Menu */}
             {isOpen && (
