@@ -14,6 +14,8 @@ def create_logged_llm(
     temperature: float = 0.25,
     enable_logging: bool = True,
     log_full_response: bool = True,
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
     **kwargs
 ) -> LoggingChatModel:
     """Create a logged LLM instance.
@@ -24,6 +26,8 @@ def create_logged_llm(
         temperature: Temperature setting
         enable_logging: Whether to enable logging
         log_full_response: Whether to log full response or just metadata
+        base_url: Base URL for the LLM provider
+        api_key: API key for the LLM provider
         **kwargs: Additional arguments to pass to ChatOpenAI
     
     Returns:
@@ -33,8 +37,8 @@ def create_logged_llm(
     base_llm = ChatOpenAI(
         model=model or "google/gemini-2.5-flash-lite-preview-09-2025",
         temperature=temperature,
-        base_url="https://openrouter.ai/api/v1",
-        api_key=settings.OPENROUTER_API_KEY,
+        base_url=base_url or "https://openrouter.ai/api/v1",
+        api_key=api_key or settings.OPENROUTER_API_KEY,
         **kwargs
     )
     
