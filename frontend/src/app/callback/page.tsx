@@ -89,10 +89,20 @@ function CallbackContent() {
 
         setStatus('success');
 
-        // Redirect to home page after a short delay
-        setTimeout(() => {
-          router.push('/');
-        }, 2000);
+        // Check if there's a stored redirect URL from the auth flow
+        const redirectUrl = sessionStorage.getItem('auth_redirect');
+        if (redirectUrl) {
+          sessionStorage.removeItem('auth_redirect'); // Clean up
+          // Redirect to the intended destination after a short delay
+          setTimeout(() => {
+            router.push(redirectUrl);
+          }, 2000);
+        } else {
+          // Default redirect to home page after a short delay
+          setTimeout(() => {
+            router.push('/');
+          }, 2000);
+        }
 
       } catch (error) {
         logger.error('Token exchange failed', error, { component: 'CallbackPage' });
