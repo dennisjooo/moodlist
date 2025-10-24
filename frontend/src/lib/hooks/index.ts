@@ -2,6 +2,7 @@
 export * from './useAccessibility';
 export { useAuthGuard } from './useAuthGuard';
 export { useCreatePageLogic } from './useCreatePageLogic';
+export { useMoodAnalysisStyling } from './useMoodAnalysisStyling';
 export { useNavigationHelpers } from './useNavigationHelpers';
 export { usePlaylistEdits } from './usePlaylistEdits';
 export { usePlaylistFormatting } from './usePlaylistFormatting';
