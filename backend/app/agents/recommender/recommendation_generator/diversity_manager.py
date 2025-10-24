@@ -16,6 +16,8 @@ class DiversityManager:
         recommendations: List[TrackRecommendation]
     ) -> List[TrackRecommendation]:
         """Ensure diversity in recommendations to avoid repetition.
+        
+        EXEMPTIONS: User-mentioned and protected tracks are NOT penalized.
 
         Args:
             recommendations: List of recommendations to diversify
@@ -26,16 +28,42 @@ class DiversityManager:
         if not recommendations:
             return recommendations
 
-        # Simple diversity approach: reduce weight of artists that appear multiple times
+        # Count artist occurrences across ALL tracks first
         artist_counts = {}
-        diversified_recommendations = []
-
         for rec in recommendations:
-            # Count artist occurrences
             for artist in rec.artists:
                 artist_counts[artist] = artist_counts.get(artist, 0) + 1
 
-            # Reduce confidence score for artists that appear multiple times
+        diversified_recommendations = []
+        protected_count = 0
+        penalized_count = 0
+
+        for rec in recommendations:
+            # CRITICAL: Skip diversity penalty for protected tracks
+            if rec.user_mentioned or rec.protected:
+                # Keep original confidence for user-mentioned/protected tracks
+                diversified_rec = TrackRecommendation(
+                    track_id=rec.track_id,
+                    track_name=rec.track_name,
+                    artists=rec.artists,
+                    spotify_uri=rec.spotify_uri,
+                    confidence_score=rec.confidence_score,  # NO PENALTY
+                    audio_features=rec.audio_features,
+                    reasoning=rec.reasoning,
+                    source=rec.source,
+                    user_mentioned=rec.user_mentioned,
+                    anchor_type=rec.anchor_type,
+                    protected=rec.protected
+                )
+                diversified_recommendations.append(diversified_rec)
+                protected_count += 1
+                logger.debug(
+                    f"Diversity: EXEMPT '{rec.track_name}' "
+                    f"(user_mentioned={rec.user_mentioned}, protected={rec.protected})"
+                )
+                continue
+
+            # Apply diversity penalty to non-protected tracks
             diversity_penalty = 0
             for artist in rec.artists:
                 if artist_counts[artist] > 1:
@@ -53,13 +81,23 @@ class DiversityManager:
                 spotify_uri=rec.spotify_uri,
                 confidence_score=adjusted_confidence,
                 audio_features=rec.audio_features,
-                reasoning=rec.reasoning,  # Keep original reasoning, adjustment is in confidence score
-                source=rec.source
+                reasoning=rec.reasoning,
+                source=rec.source,
+                user_mentioned=rec.user_mentioned,
+                anchor_type=rec.anchor_type,
+                protected=rec.protected
             )
 
             diversified_recommendations.append(diversified_rec)
+            if diversity_penalty > 0:
+                penalized_count += 1
 
         # Re-sort by adjusted confidence
         diversified_recommendations.sort(key=lambda x: x.confidence_score, reverse=True)
+
+        logger.info(
+            f"Diversity applied: {protected_count} tracks exempted (protected/user-mentioned), "
+            f"{penalized_count} tracks penalized"
+        )
 
         return diversified_recommendations

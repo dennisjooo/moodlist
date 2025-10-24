@@ -58,14 +58,19 @@ class LLMServices:
             reasoning = result.get("reasoning", "")
 
             if mentioned_tracks:
-                logger.info(f"LLM extracted {len(mentioned_tracks)} mentioned tracks: {reasoning}")
-                return [(t.get("track_name", ""), t.get("artist_name", "")) for t in mentioned_tracks]
+                track_list = [(t.get("track_name", ""), t.get("artist_name", "")) for t in mentioned_tracks]
+                logger.info(
+                    f"✓ LLM extracted {len(mentioned_tracks)} user-mentioned tracks: {reasoning}"
+                )
+                for track_name, artist_name in track_list:
+                    logger.info(f"  - '{track_name}' by {artist_name}")
+                return track_list
             else:
                 logger.info("LLM found no specific tracks mentioned in prompt")
                 return []
 
         except Exception as e:
-            logger.error(f"LLM track extraction failed: {e}")
+            logger.error(f"LLM track extraction failed: {e}", exc_info=True)
             return []
 
     def simple_extract_mentioned_tracks(
@@ -244,6 +249,9 @@ class LLMServices:
         mood_analysis: Dict[str, Any]
     ) -> Tuple[List[Dict[str, Any]], List[str]]:
         """Use LLM to finalize the selection of anchor tracks.
+        
+        User-mentioned tracks (anchor_type="user") are ALWAYS included.
+        LLM only selects additional tracks to fill remaining slots.
 
         Args:
             scored_candidates: Candidates with LLM scores
@@ -253,19 +261,73 @@ class LLMServices:
         Returns:
             Tuple of (selected_tracks, selected_track_ids)
         """
+        # STEP 1: Extract user-mentioned tracks (GUARANTEED inclusion)
+        user_mentioned = []
+        other_candidates = []
+        
+        for candidate in scored_candidates:
+            if candidate.get('anchor_type') == 'user' or candidate.get('user_mentioned'):
+                user_mentioned.append(candidate)
+            else:
+                other_candidates.append(candidate)
+        
+        # Preserve user-mentioned metadata
+        selected_tracks = []
+        selected_ids = []
+        
+        for candidate in user_mentioned:
+            track = candidate.get('track', {})
+            # CRITICAL: Preserve user-mentioned metadata
+            track['user_mentioned'] = True
+            track['anchor_type'] = 'user'
+            track['protected'] = True
+            track['confidence'] = candidate.get('confidence', 1.0)
+            track['llm_score'] = candidate.get('llm_score', 1.0)
+            track['llm_reasoning'] = candidate.get('llm_reasoning', 'User explicitly mentioned this track')
+            
+            selected_tracks.append(track)
+            if track.get('id'):
+                selected_ids.append(track['id'])
+        
+        logger.info(
+            f"✓ Guaranteed inclusion of {len(user_mentioned)} user-mentioned tracks"
+        )
+        
+        # STEP 2: Fill remaining slots with LLM selection
+        remaining_slots = max(0, target_count - len(user_mentioned))
+        
+        if remaining_slots == 0:
+            logger.info(f"Target count ({target_count}) reached with user-mentioned tracks only")
+            return selected_tracks, selected_ids
+        
+        if not other_candidates:
+            logger.info(f"No additional candidates to fill remaining {remaining_slots} slots")
+            return selected_tracks, selected_ids
+        
+        # Use LLM or fallback to select additional tracks
         if not self.llm:
             # Fallback: sort by score and take top N
-            scored_candidates.sort(key=lambda x: x.get('llm_score', 0), reverse=True)
-            top_candidates = scored_candidates[:target_count]
-
-            selected_tracks = [c.get('track', {}) for c in top_candidates]
-            selected_ids = [t.get('id') for t in selected_tracks if t.get('id')]
-
+            other_candidates.sort(key=lambda x: x.get('llm_score', 0), reverse=True)
+            additional = other_candidates[:remaining_slots]
+            
+            for candidate in additional:
+                track = candidate.get('track', {})
+                track['llm_score'] = candidate.get('llm_score', 0.5)
+                track['llm_reasoning'] = candidate.get('llm_reasoning', '')
+                track['anchor_type'] = candidate.get('anchor_type', 'genre')
+                track['protected'] = candidate.get('protected', False)
+                track['user_mentioned'] = False
+                
+                selected_tracks.append(track)
+                if track.get('id'):
+                    selected_ids.append(track['id'])
+            
+            logger.info(f"Added {len(additional)} additional tracks (no LLM, score-based)")
             return selected_tracks, selected_ids
 
         try:
             prompt = get_anchor_finalization_prompt(
-                scored_candidates, target_count, mood_analysis
+                other_candidates, remaining_slots, mood_analysis
             )
 
             response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
@@ -275,12 +337,9 @@ class LLMServices:
             selection_reasoning = result.get('selection_reasoning', '')
 
             # Extract selected tracks and IDs
-            selected_tracks = []
-            selected_ids = []
-
-            for idx in selected_indices:
-                if 0 <= idx < len(scored_candidates):
-                    candidate = scored_candidates[idx]
+            for idx in selected_indices[:remaining_slots]:
+                if 0 <= idx < len(other_candidates):
+                    candidate = other_candidates[idx]
                     track = candidate.get('track', {})
 
                     # Add LLM metadata
@@ -288,13 +347,18 @@ class LLMServices:
                     track['llm_reasoning'] = candidate.get('llm_reasoning', '')
                     track['anchor_type'] = candidate.get('anchor_type', 'llm_selected')
                     track['protected'] = candidate.get('protected', False)
+                    track['user_mentioned'] = False
 
                     selected_tracks.append(track)
                     if track.get('id'):
                         selected_ids.append(track['id'])
 
             logger.info(
-                f"LLM finalized selection of {len(selected_tracks)} anchor tracks: {selection_reasoning}"
+                f"✓ LLM selected {len(selected_indices)} additional anchor tracks: {selection_reasoning}"
+            )
+            logger.info(
+                f"Final anchor selection: {len(user_mentioned)} user-mentioned + "
+                f"{len(selected_tracks) - len(user_mentioned)} LLM-selected = {len(selected_tracks)} total"
             )
 
             return selected_tracks, selected_ids
@@ -302,12 +366,22 @@ class LLMServices:
         except Exception as e:
             logger.warning(f"Failed to finalize LLM selection: {e}")
             # Fallback: sort by LLM score and take top N
-            scored_candidates.sort(key=lambda x: x.get('llm_score', 0), reverse=True)
-            top_candidates = scored_candidates[:target_count]
+            other_candidates.sort(key=lambda x: x.get('llm_score', 0), reverse=True)
+            additional = other_candidates[:remaining_slots]
 
-            selected_tracks = [c.get('track', {}) for c in top_candidates]
-            selected_ids = [t.get('id') for t in selected_tracks if t.get('id')]
+            for candidate in additional:
+                track = candidate.get('track', {})
+                track['llm_score'] = candidate.get('llm_score', 0.5)
+                track['llm_reasoning'] = candidate.get('llm_reasoning', '')
+                track['anchor_type'] = candidate.get('anchor_type', 'genre')
+                track['protected'] = candidate.get('protected', False)
+                track['user_mentioned'] = False
+                
+                selected_tracks.append(track)
+                if track.get('id'):
+                    selected_ids.append(track['id'])
 
+            logger.info(f"Added {len(additional)} additional tracks (LLM failed, score-based fallback)")
             return selected_tracks, selected_ids
 
     async def batch_validate_artists(
