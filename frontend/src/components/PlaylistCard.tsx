@@ -10,13 +10,14 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { usePlaylistFormatting } from '@/lib/hooks/usePlaylistFormatting';
 import { generateMoodGradient } from '@/lib/moodColors';
 import { MoodAnalysis } from '@/lib/playlistApi';
+import { logger } from '@/lib/utils/logger';
+import { cleanText } from '@/lib/utils/text';
 import { Calendar, ExternalLink, Music, Play, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
-import { logger } from '@/lib/utils/logger';
-import { usePlaylistFormatting } from '@/lib/hooks/usePlaylistFormatting';
 
 interface PlaylistCardProps {
   mood: string;
@@ -41,7 +42,7 @@ export default function PlaylistCard({ mood, title, createdAt, trackCount, spoti
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   // Use formatting utilities hook
-  const { cleanText, generateModernGradient } = usePlaylistFormatting();
+  const { generateModernGradient } = usePlaylistFormatting();
 
   // Check if LLM colors exist, otherwise use legacy gradient
   const hasLLMColors = colorPrimary && colorSecondary && colorTertiary;

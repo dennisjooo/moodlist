@@ -41,20 +41,25 @@ export default function Navigation({ extraItems = [] }: NavigationProps) {
                     <DesktopLinks items={navItems} />
 
                     {/* Right Side - Profile & Mobile Menu Button */}
-                    <div className="flex items-center space-x-4 lg:absolute lg:right-0">
-                        {isAuthenticated && user ? (
-                            <AuthMenu user={user} />
-                        ) : (
-                            <SpotifyLoginButton />
-                        )}
+                    <div className="flex items-center space-x-2 sm:space-x-4 lg:absolute lg:right-0">
+                        {/* Auth/Profile - Shows before burger on mobile */}
+                        <div className="order-1 lg:order-none">
+                            {isAuthenticated && user ? (
+                                <AuthMenu user={user} />
+                            ) : (
+                                <SpotifyLoginButton />
+                            )}
+                        </div>
 
                         {/* Theme Toggle - Hidden on mobile */}
                         <div className="hidden lg:block">
                             <ThemeToggle />
                         </div>
 
-                        {/* Mobile Menu */}
-                        <MobileMenu items={navItems} user={user} />
+                        {/* Mobile Menu Button - Shows last on mobile (right side) */}
+                        <div className="lg:hidden order-2">
+                            <MobileMenu items={navItems} user={user} />
+                        </div>
                     </div>
                 </div>
             </div>

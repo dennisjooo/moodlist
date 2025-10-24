@@ -1,10 +1,11 @@
 'use client';
 
+import { RecentActivitySkeleton } from '@/components/shared/LoadingStates';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { RecentActivitySkeleton } from '@/components/shared/LoadingStates';
 import type { RecentPlaylist } from '@/lib/api/user';
 import { userAPI } from '@/lib/api/user';
+import { cleanText } from '@/lib/utils/text';
 import { CheckCircle, Clock, ExternalLink, Loader, Music, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -199,11 +200,11 @@ export function RecentActivityTimeline({ recentActivity, enablePagination = fals
                                 </div>
 
                                 <div className="flex-1 space-y-2 min-w-0">
-                                    <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-start justify-between gap-2 sm:gap-3">
                                         <div className="flex-1 min-w-0 space-y-1.5">
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 {playlist.name && (
-                                                    <h4 className="font-semibold text-sm truncate">{playlist.name}</h4>
+                                                    <h4 className="font-semibold text-sm break-words">{cleanText(playlist.name)}</h4>
                                                 )}
                                                 <Badge
                                                     variant="outline"
@@ -212,8 +213,8 @@ export function RecentActivityTimeline({ recentActivity, enablePagination = fals
                                                     {playlist.status}
                                                 </Badge>
                                             </div>
-                                            <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
-                                                {playlist.mood_prompt}
+                                            <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed break-words">
+                                                {cleanText(playlist.mood_prompt)}
                                             </p>
                                         </div>
                                         {playlist.spotify_url && (
@@ -221,27 +222,27 @@ export function RecentActivityTimeline({ recentActivity, enablePagination = fals
                                                 href={playlist.spotify_url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="p-2 hover:bg-accent rounded-md transition-colors flex-shrink-0"
+                                                className="p-2 hover:bg-accent rounded-md transition-colors flex-shrink-0 self-start"
                                                 aria-label="Open in Spotify"
                                             >
                                                 <ExternalLink className="w-4 h-4" />
                                             </Link>
                                         )}
                                     </div>
-                                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                        <span className="flex items-center gap-1">
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                        <span className="flex items-center gap-1 flex-shrink-0">
                                             <Music className="w-3.5 h-3.5" />
                                             {playlist.track_count} tracks
                                         </span>
                                         {playlist.primary_emotion && (
                                             <>
-                                                <span>·</span>
-                                                <span className="capitalize">
+                                                <span className="hidden sm:inline">·</span>
+                                                <span className="capitalize break-words">
                                                     {playlist.primary_emotion}
                                                 </span>
                                             </>
                                         )}
-                                        <span className="ml-auto">{formatTimeAgo(playlist.created_at)}</span>
+                                        <span className="sm:ml-auto flex-shrink-0">{formatTimeAgo(playlist.created_at)}</span>
                                     </div>
                                 </div>
                             </div>
