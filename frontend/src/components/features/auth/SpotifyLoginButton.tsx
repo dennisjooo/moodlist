@@ -8,6 +8,7 @@ interface SpotifyLoginButtonProps {
 export function SpotifyLoginButton({ className, children }: SpotifyLoginButtonProps) {
     return (
         <button
+            data-spotify-login
             onClick={() => {
                 if (!isSpotifyAuthConfigured()) {
                     return;
