@@ -47,7 +47,7 @@ export function ProfileStats({ stats }: ProfileStatsProps) {
                                 <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${item.iconColor}`} />
                             </div>
                             <div className="min-w-0 flex-1">
-                                <p className="text-xs text-muted-foreground truncate">{item.label}</p>
+                                <p className="hidden sm:block text-xs text-muted-foreground truncate">{item.label}</p>
                                 <p className={`text-lg sm:text-xl font-bold ${item.valueColor} leading-tight`}>{item.value}</p>
                             </div>
                         </div>

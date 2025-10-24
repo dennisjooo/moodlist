@@ -1,10 +1,12 @@
 'use client';
 
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { initiateSpotifyAuth, isSpotifyAuthConfigured } from '@/lib/spotifyAuth';
 import type { User as UserType } from '@/lib/types/auth';
 import { NavItem } from '@/lib/types/navigation';
-import { Menu, User, X } from 'lucide-react';
+import { logger } from '@/lib/utils/logger';
+import { LogOut, Menu, User, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -16,9 +18,19 @@ interface MobileMenuProps {
 
 export function MobileMenu({ items, user, onProfileClick }: MobileMenuProps) {
     const [isOpen, setIsOpen] = useState(false);
+    const { logout } = useAuth();
+
+    const handleLogout = async () => {
+        try {
+            await logout();
+            setIsOpen(false);
+        } catch (error) {
+            logger.error('Logout failed', error, { component: 'MobileMenu' });
+        }
+    };
 
     return (
-        <>
+        <div className="relative">
             {/* Mobile Menu Button */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
@@ -32,8 +44,8 @@ export function MobileMenu({ items, user, onProfileClick }: MobileMenuProps) {
                 )}
             </button>
 
-            {/* Mobile Menu */}
-            <div className={`lg:hidden border-t bg-background/95 backdrop-blur overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? 'max-h-64 opacity-100' : 'max-h-0 opacity-0'}`}>
+            {/* Mobile Menu Dropdown */}
+            <div className={`lg:hidden absolute right-0 top-full mt-2 w-64 border rounded-lg shadow-lg bg-background/95 backdrop-blur overflow-hidden transition-all duration-300 ease-in-out z-50 ${isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
                 <div className="px-2 pt-2 pb-3 space-y-1">
                     {items.map((item, index) => (
                         <Link
@@ -54,25 +66,44 @@ export function MobileMenu({ items, user, onProfileClick }: MobileMenuProps) {
 
                     {/* Profile Link in Mobile Menu */}
                     {user ? (
-                        <Link
-                            href="/profile"
-                            className={`block px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-accent transition-all duration-200 transform ${isOpen
-                                ? 'translate-x-0 opacity-100'
-                                : '-translate-x-4 opacity-0'
-                                }`}
-                            style={{
-                                transitionDelay: isOpen ? `${(items.length - 1) * 50}ms` : '0ms'
-                            }}
-                            onClick={() => {
-                                setIsOpen(false);
-                                onProfileClick?.();
-                            }}
-                        >
-                            <div className="flex items-center space-x-2">
-                                <User className="w-4 h-4" />
-                                <span>View Profile</span>
-                            </div>
-                        </Link>
+                        <>
+                            <Link
+                                href="/profile"
+                                className={`block px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-accent transition-all duration-200 transform ${isOpen
+                                    ? 'translate-x-0 opacity-100'
+                                    : '-translate-x-4 opacity-0'
+                                    }`}
+                                style={{
+                                    transitionDelay: isOpen ? `${items.length * 50}ms` : '0ms'
+                                }}
+                                onClick={() => {
+                                    setIsOpen(false);
+                                    onProfileClick?.();
+                                }}
+                            >
+                                <div className="flex items-center space-x-2">
+                                    <User className="w-4 h-4" />
+                                    <span>View Profile</span>
+                                </div>
+                            </Link>
+
+                            {/* Logout Button */}
+                            <button
+                                onClick={handleLogout}
+                                className={`w-full text-left block px-3 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all duration-200 transform ${isOpen
+                                    ? 'translate-x-0 opacity-100'
+                                    : '-translate-x-4 opacity-0'
+                                    }`}
+                                style={{
+                                    transitionDelay: isOpen ? `${(items.length + 1) * 50}ms` : '0ms'
+                                }}
+                            >
+                                <div className="flex items-center space-x-2">
+                                    <LogOut className="w-4 h-4" />
+                                    <span>Sign Out</span>
+                                </div>
+                            </button>
+                        </>
                     ) : (
                         <button
                             onClick={() => {
@@ -118,6 +149,14 @@ export function MobileMenu({ items, user, onProfileClick }: MobileMenuProps) {
                     </div>
                 </div>
             </div>
-        </>
+
+            {/* Click outside to close */}
+            {isOpen && (
+                <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setIsOpen(false)}
+                />
+            )}
+        </div>
     );
 }

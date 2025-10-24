@@ -31,11 +31,11 @@ export function ProfileSkeleton() {
                 <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-2 sm:mb-3 flex-shrink-0">
                     {Array.from({ length: 3 }).map((_, i) => (
                         <Card key={i} className="p-2 sm:p-3">
-                            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-1 sm:gap-2">
-                                <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
-                                <div className="min-w-0 text-center sm:text-left">
-                                    <Skeleton className="h-3 w-12 sm:w-16 mb-1 mx-auto sm:mx-0" />
-                                    <Skeleton className="h-5 sm:h-6 w-8 sm:w-12 mx-auto sm:mx-0" />
+                            <div className="flex items-center gap-2 sm:gap-3">
+                                <Skeleton className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex-shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                    <Skeleton className="hidden sm:block h-3 w-12 sm:w-16 mb-1" />
+                                    <Skeleton className="h-5 sm:h-6 w-6 sm:w-10" />
                                 </div>
                             </div>
                         </Card>
