@@ -276,22 +276,56 @@ class AnchorSelectionEngine:
             try:
                 # Search for track with artist context
                 search_query = f"{track_name} {artist_name}" if artist_name else track_name
-                logger.info(f"Searching for user-mentioned track: '{search_query}'")
+                logger.info(f"🔍 Searching Spotify for user-mentioned track: '{search_query}'")
 
                 tracks = await self.spotify_service.search_spotify_tracks(
                     access_token=access_token,
                     query=search_query,
-                    limit=3
+                    limit=5  # Get more results to validate artist match
                 )
 
                 if tracks:
-                    # Take the first result (most relevant)
-                    best_match = tracks[0]
-                    logger.info(
-                        f"Found user-mentioned track: '{best_match.get('name')}' by "
-                        f"{', '.join([a.get('name', '') for a in best_match.get('artists', [])])}"
-                    )
+                    # Log all search results
+                    logger.info(f"  Found {len(tracks)} results from Spotify:")
+                    for i, track in enumerate(tracks[:3]):
+                        track_artists = ', '.join([a.get('name', '') for a in track.get('artists', [])])
+                        logger.info(f"    {i+1}. '{track.get('name')}' by {track_artists}")
+                    
+                    # Try to find best match by artist validation
+                    best_match = None
+                    
+                    # If artist was specified, try to match it
+                    if artist_name:
+                        artist_name_lower = artist_name.lower()
+                        for track in tracks:
+                            track_artists = [a.get('name', '').lower() for a in track.get('artists', [])]
+                            if any(artist_name_lower in ta or ta in artist_name_lower for ta in track_artists):
+                                best_match = track
+                                logger.info(
+                                    f"✓ Found validated match: '{track.get('name')}' by "
+                                    f"{', '.join([a.get('name', '') for a in track.get('artists', [])])} "
+                                    f"(matched artist: {artist_name})"
+                                )
+                                break
+                    
+                    # Fallback to first result if no artist match
+                    if not best_match:
+                        best_match = tracks[0]
+                        if artist_name:
+                            logger.warning(
+                                f"⚠ No artist match found for '{artist_name}', using top result: "
+                                f"'{best_match.get('name')}' by "
+                                f"{', '.join([a.get('name', '') for a in best_match.get('artists', [])])}"
+                            )
+                        else:
+                            logger.info(
+                                f"✓ Using top result: '{best_match.get('name')}' by "
+                                f"{', '.join([a.get('name', '') for a in best_match.get('artists', [])])}"
+                            )
+                    
                     user_tracks.append(best_match)
+                else:
+                    logger.warning(f"✗ No Spotify results found for '{search_query}'")
 
             except Exception as e:
                 logger.warning(f"Failed to search for user-mentioned track '{track_name}': {e}")
