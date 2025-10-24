@@ -79,8 +79,8 @@ orchestrator = OrchestratorAgent(
 
 # Create workflow manager
 workflow_config = WorkflowConfig(
-    max_retries=3,
-    timeout_per_agent=120,
+    max_retries=config.max_retries,
+    timeout_per_agent=config.agent_timeout,
     max_recommendations=config.max_recommendations,
     enable_human_loop=True,
     require_approval=True

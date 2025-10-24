@@ -6,10 +6,10 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 from app.core.exceptions import NotFoundException
-from langchain_openai import ChatOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
+from ..core.llm_factory import create_logged_llm
 from ..core.exceptions import (
     NotFoundException,
     ForbiddenException,
@@ -20,14 +20,12 @@ from ..dependencies import get_playlist_service
 from ..services.playlist_service import PlaylistService
 from ..auth.dependencies import require_auth, refresh_spotify_token_if_expired
 from ..models.user import User
-from ..models.playlist import Playlist
-from .services.playlist_creation_service import PlaylistCreationService
 from ..agents.workflows.workflow_manager import WorkflowManager
 from ..agents.states.agent_state import AgentState, RecommendationStatus, TrackRecommendation
 from ..agents.tools.reccobeat_service import RecoBeatService
 from ..agents.tools.spotify_service import SpotifyService
 from ..core.config import settings
-from .services import CompletedPlaylistEditor
+from .services import CompletedPlaylistEditor, PlaylistCreationService
 
 
 logger = structlog.get_logger(__name__)
@@ -38,16 +36,20 @@ router = APIRouter()
 reccobeat_service = RecoBeatService()
 spotify_service = SpotifyService()
 
-groq_llm = ChatOpenAI(
+# Create logged LLM instance
+llm = create_logged_llm(
+    db_session=None,  # Will be set per request
     model="openai/gpt-oss-120b",
     temperature=1,
     base_url="https://api.groq.com/openai/v1",
-    api_key=settings.GROQ_API_KEY
+    api_key=settings.GROQ_API_KEY,
+    enable_logging=True,
+    log_full_response=True
 )
 
 # Initialize playlist services
 completed_playlist_editor = CompletedPlaylistEditor()
-playlist_creation_service = PlaylistCreationService(spotify_service, groq_llm, verbose=False)
+playlist_creation_service = PlaylistCreationService(spotify_service, llm, verbose=False)
 
 
 @router.get("/playlists")
@@ -363,7 +365,8 @@ async def edit_playlist(
 async def save_playlist_to_spotify(
     session_id: str,
     current_user: User = Depends(require_auth),
-    playlist_service: PlaylistService = Depends(get_playlist_service)
+    playlist_service: PlaylistService = Depends(get_playlist_service),
+    db: AsyncSession = Depends(get_db)
 ):
     """Save the draft playlist to Spotify.
 
@@ -371,20 +374,17 @@ async def save_playlist_to_spotify(
         session_id: Playlist session ID
         current_user: Authenticated user
         playlist_service: Playlist service
+        db: Database session
 
     Returns:
         Playlist creation result
     """
     try:
         # Refresh Spotify token if expired before saving to Spotify
-        # TODO: Move this to a service layer method
-        from app.core.database import get_db
-        from sqlalchemy.ext.asyncio import AsyncSession
-        db = await anext(get_db())
-        try:
-            current_user = await refresh_spotify_token_if_expired(current_user, db)
-        finally:
-            await db.close()
+        current_user = await refresh_spotify_token_if_expired(current_user, db)
+
+        # Set database session for LLM logging
+        llm.set_db_session(db)
 
         # For now, we need to create a workflow manager to get workflow state
         # This is a temporary solution - ideally this logic should be moved to a service
@@ -465,6 +465,17 @@ async def save_playlist_to_spotify(
 
             # Add access token to metadata for playlist creation
             state.metadata["spotify_access_token"] = current_user.access_token
+
+        # Get playlist for LLM context (should exist since we're saving to Spotify)
+        context_playlist = await playlist_service.playlist_repository.get_by_session_id_for_user(session_id, current_user.id)
+        playlist_id = context_playlist.id if context_playlist else None
+
+        # Set LLM context for logging
+        llm.set_context(
+            user_id=current_user.id,
+            playlist_id=playlist_id,
+            session_id=session_id
+        )
 
         # Create playlist on Spotify using the playlist creation service
         state = await playlist_creation_service.create_playlist(state)

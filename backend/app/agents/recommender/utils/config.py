@@ -9,7 +9,7 @@ class RecommenderConfig:
     """Centralized configuration for the recommender system."""
 
     # Orchestration settings
-    max_iterations: int = 2  # Reduced from 3 for faster generation
+    max_iterations: int = 3  # Reduced from 3 for faster generation
     cohesion_threshold: float = 0.60  # Relaxed from 0.65 for speed while maintaining quality
     quality_threshold: float = 0.75
 
@@ -19,6 +19,10 @@ class RecommenderConfig:
     artist_recommendation_ratio: float = 0.95  # 95% artist, 5% RecoBeat
     min_playlist_count: int = 15
     max_playlist_count: int = 30
+    
+    # Agent settings
+    agent_timeout: int = 120
+    max_retries: int = 3
 
     # Feature weights for mood matching
     default_feature_weights: Dict[str, float] = field(default_factory=lambda: {
