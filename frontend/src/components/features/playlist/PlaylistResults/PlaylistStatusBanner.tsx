@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { cleanText } from '@/lib/utils/text';
 import { Download, Edit, ExternalLink, Loader2, Music, RefreshCw, Trash2 } from 'lucide-react';
 
 interface PlaylistStatusBannerProps {
@@ -65,7 +66,7 @@ export default function PlaylistStatusBanner({
             <div>
               <h3 className="font-semibold text-xl">{hasSavedToSpotify ? (playlistName || 'Saved Playlist') : 'Your Draft Playlist'}</h3>
               <p className="text-sm text-muted-foreground mt-0.5">
-                {hasSavedToSpotify ? '✅ Saved to Spotify' : '📝 Based on'} &quot;{moodPrompt}&quot; • {trackCount} tracks
+                {hasSavedToSpotify ? '✅ Saved to Spotify' : '📝 Based on'} &quot;{cleanText(moodPrompt)}&quot; • {trackCount} tracks
               </p>
             </div>
           </div>
