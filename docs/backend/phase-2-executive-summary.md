@@ -240,29 +240,42 @@ if intent.intent_type == "genre_exploration":
 
 ### **Phase 2.9: Validation Logging** 🟢 Medium Priority
 
-**Understand why tracks are accepted/rejected**
+**Goal**: Make every acceptance/rejection decision observable in real time.
 
-**Logs for each track**:
+**What we ship**:
 
-```python
-logger.info(
-    "Track: 'Escape Plan' by Travis Scott",
-    confidence=0.95,
-    genre_match=0.92,
-    decision="ACCEPTED",
-    source="user_anchor_strategy"
-)
+- ✅ A dedicated `RecommendationLogger` (structured `structlog` adapter) that binds `session_id`, `workflow_id`, and component metadata so logs can be grouped per run
+- ✅ Consistent event taxonomy (`track_evaluation`, `genre_filter`, `diversity_penalty`, `quality_evaluation`, `source_mix`, etc.) with normalized fields (`confidence`, `genre_match_score`, `decision`, `rejection_reason`)
+- ✅ Coverage across the pipeline: intent analysis → seed gatherer → strategy execution → filters/diversity → quality evaluator
+- ✅ Human-friendly summaries at `INFO` and high-volume diagnostics at `DEBUG` so production log volume stays manageable
 
-logger.info(
-    "Track: 'Seandainya' by Vierra",
-    confidence=0.45,
-    genre_match=0.12,
-    decision="REJECTED",
-    rejection_reason="language_mismatch_indonesian"
-)
+**Sample structured log (JSON mode)**:
+
+```json
+{
+  "event": "track_evaluation",
+  "component": "recommendation_logger",
+  "session_id": "workflow_62475038-94db-4e8e-ae22-c6ea7a2d0108",
+  "track_name": "Escape Plan",
+  "artist": "Travis Scott",
+  "source": "user_anchor_strategy",
+  "confidence": 0.95,
+  "genre_match_score": 0.92,
+  "feature_match_score": 0.88,
+  "decision": "ACCEPTED",
+  "timestamp": "2024-10-24T07:15:00Z"
+}
 ```
 
-**Why this helps**: Easy debugging, understand system decisions
+See [Phase 2 Logs Implementation Guide](./phase-2-logs-implementation.md) for the full instrumentation matrix, field glossary, and query recipes.
+
+**Roll-out checklist**:
+
+1. Instrument each agent/strategy/filter to emit the standardized events
+2. Export JSON logs to log aggregation (CloudWatch, Datadog, etc.) for querying
+3. Add QA dashboards/alerts around rejection spikes or genre mismatch reasons
+
+**Why this helps**: One-click root cause analysis for “why did this track show up (or not)?” and faster signal when quality gates regress.
 
 ---
 

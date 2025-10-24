@@ -5,6 +5,7 @@ from .token_service import TokenService
 from .config import RecommenderConfig, config
 from .track_recommendation_factory import TrackRecommendationFactory
 from .recommendation_validator import RecommendationValidator, ValidationResult
+from .recommendation_logger import RecommendationLogger, create_recommendation_logger
 
 __all__ = [
     "LLMResponseParser",
@@ -13,5 +14,7 @@ __all__ = [
     "config",
     "TrackRecommendationFactory",
     "RecommendationValidator",
-    "ValidationResult"
+    "ValidationResult",
+    "RecommendationLogger",
+    "create_recommendation_logger"
 ]
