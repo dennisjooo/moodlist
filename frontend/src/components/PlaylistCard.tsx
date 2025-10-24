@@ -16,6 +16,7 @@ import { Calendar, ExternalLink, Music, Play, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { logger } from '@/lib/utils/logger';
+import { usePlaylistFormatting } from '@/lib/hooks/usePlaylistFormatting';
 
 interface PlaylistCardProps {
   mood: string;
@@ -39,14 +40,19 @@ export default function PlaylistCard({ mood, title, createdAt, trackCount, spoti
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
+  // Use formatting utilities hook
+  const { cleanText, generateModernGradient } = usePlaylistFormatting();
+
   // Check if LLM colors exist, otherwise use legacy gradient
   const hasLLMColors = colorPrimary && colorSecondary && colorTertiary;
+
   const customGradientStyle = hasLLMColors
-    ? { background: `linear-gradient(to bottom right, ${colorPrimary}99, ${colorSecondary}99, ${colorTertiary}99)` }
+    ? generateModernGradient(colorPrimary, colorSecondary, colorTertiary)
     : undefined;
 
   // Get display text from mood analysis or fallback to mood prompt
-  const displayMood = moodAnalysis?.mood_interpretation || mood;
+  const displayMood = cleanText(moodAnalysis?.mood_interpretation || mood);
+  const displayTitle = cleanText(title);
 
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -74,7 +80,7 @@ export default function PlaylistCard({ mood, title, createdAt, trackCount, spoti
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Playlist</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete &quot;{title}&quot;? This action cannot be undone.
+              Are you sure you want to delete &quot;{displayTitle}&quot;? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -125,7 +131,7 @@ export default function PlaylistCard({ mood, title, createdAt, trackCount, spoti
           <div className="relative z-10 flex flex-col h-full">
             {/* Title section - fixed height */}
             <div className="my-3">
-              <h3 className="font-bold text-white text-lg leading-tight mb-2 drop-shadow-sm line-clamp-2">{title}</h3>
+              <h3 className="font-bold text-white text-lg leading-tight mb-2 drop-shadow-sm line-clamp-2">{displayTitle}</h3>
             </div>
 
             {/* Description section - fixed height */}

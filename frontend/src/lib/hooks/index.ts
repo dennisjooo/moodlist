@@ -4,6 +4,7 @@ export { useAuthGuard } from './useAuthGuard';
 export { useCreatePageLogic } from './useCreatePageLogic';
 export { useNavigationHelpers } from './useNavigationHelpers';
 export { usePlaylistEdits } from './usePlaylistEdits';
+export { usePlaylistFormatting } from './usePlaylistFormatting';
 export { useProfile } from './useProfile';
 export { useToast } from './useToast';
 export { useWorkflowApi } from './useWorkflowApi';
