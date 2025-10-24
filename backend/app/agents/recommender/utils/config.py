@@ -19,6 +19,10 @@ class RecommenderConfig:
     artist_recommendation_ratio: float = 0.95  # 95% artist, 5% RecoBeat
     min_playlist_count: int = 15
     max_playlist_count: int = 30
+    
+    # Agent settings
+    timeout_per_agent: int = 120
+    max_retries: int = 3
 
     # Feature weights for mood matching
     default_feature_weights: Dict[str, float] = field(default_factory=lambda: {

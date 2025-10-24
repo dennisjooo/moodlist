@@ -26,6 +26,7 @@ from ..recommender import (
     RecommendationGeneratorAgent,
     OrchestratorAgent
 )
+from ..recommender.utils.config import config
 
 
 logger = structlog.get_logger(__name__)
@@ -60,7 +61,7 @@ seed_gatherer = SeedGathererAgent(
 recommendation_generator = RecommendationGeneratorAgent(
     reccobeat_service,
     spotify_service,
-    max_recommendations=25,  # Limit to 25 tracks for focused playlists
+    max_recommendations=config.max_recommendations,
     verbose=True
 )
 
@@ -70,16 +71,16 @@ orchestrator = OrchestratorAgent(
     recommendation_generator=recommendation_generator,
     seed_gatherer=seed_gatherer,
     llm=llm,
-    max_iterations=5,
-    cohesion_threshold=0.75,
+    max_iterations=config.max_iterations,
+    cohesion_threshold=config.cohesion_threshold,
     verbose=True
 )
 
 # Create workflow manager
 workflow_config = WorkflowConfig(
-    max_retries=3,
-    timeout_per_agent=120,
-    max_recommendations=25,  # Cap at 25 tracks for manageable playlists
+    max_retries=config.max_retries,
+    timeout_per_agent=config.timeout_per_agent,
+    max_recommendations=config.max_recommendations,
     enable_human_loop=True,
     require_approval=True
 )
