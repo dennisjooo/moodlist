@@ -9,7 +9,7 @@ class RecommenderConfig:
     """Centralized configuration for the recommender system."""
 
     # Orchestration settings
-    max_iterations: int = 3  # Reduced from 3 for faster generation
+    max_iterations: int = 2  # Reduced from 3 for faster generation
     cohesion_threshold: float = 0.60  # Relaxed from 0.65 for speed while maintaining quality
     quality_threshold: float = 0.75
 

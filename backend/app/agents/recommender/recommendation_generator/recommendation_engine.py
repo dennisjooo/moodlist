@@ -496,69 +496,42 @@ class RecommendationEngine:
         return access_token, target_features, tracks_per_artist
     
     def _detect_user_requested_artists(self, state: AgentState) -> List[str]:
-        """Detect if user explicitly requested specific artists in their prompt.
+        """Detect user-requested artists from anchor tracks and discovered artists.
+        
+        Uses existing anchor track metadata that's already been processed by MoodAnalyzer.
+        Anchor tracks with user_mentioned=True or anchor_type='artist_mentioned' indicate
+        that the user explicitly requested those artists.
         
         Args:
-            state: Current agent state
+            state: Current agent state with anchor tracks and discovered artists
             
         Returns:
             List of artist names that were explicitly requested by user
         """
-        if not state.mood_analysis:
-            return []
-        
-        mood_prompt_lower = state.mood_prompt.lower()
-        artist_recommendations = state.mood_analysis.get("artist_recommendations", [])
-        
         user_requested = []
         
-        # Check anchor tracks for user-mentioned artists
+        # Get anchor tracks - these have already been marked by MoodAnalyzer
         anchor_tracks = state.metadata.get("anchor_tracks", [])
         for anchor in anchor_tracks:
-            if anchor.get("user_mentioned", False):
+            # Check if this anchor indicates user mentioned the artist
+            is_user_mentioned = anchor.get("user_mentioned", False)
+            is_artist_anchor = anchor.get("anchor_type") in ["artist_mentioned", "user"]
+            
+            if is_user_mentioned or is_artist_anchor:
                 # Extract artist names from this anchor
-                for artist_obj in anchor.get("artists", []):
-                    artist_name = artist_obj.get("name") if isinstance(artist_obj, dict) else artist_obj
+                artists = anchor.get("artists", [])
+                for artist_obj in artists:
+                    if isinstance(artist_obj, dict):
+                        artist_name = artist_obj.get("name")
+                    else:
+                        artist_name = str(artist_obj)
+                    
                     if artist_name and artist_name not in user_requested:
                         user_requested.append(artist_name)
-        
-        # Check if artist names appear prominently in the prompt
-        # Patterns like "songs by [artist]", "[artist] vibes", "[artist] type", etc.
-        for artist_name in artist_recommendations[:10]:  # Check top 10 recommended artists
-            artist_lower = artist_name.lower()
-            
-            # Strong indicators that artist was explicitly requested
-            strong_patterns = [
-                f"songs by {artist_lower}",
-                f"tracks by {artist_lower}",
-                f"music by {artist_lower}",
-                f"{artist_lower} vibes",
-                f"{artist_lower} type",
-                f"{artist_lower} style",
-                f"like {artist_lower}",
-                f"similar to {artist_lower}",
-            ]
-            
-            # Check if artist name appears at start/end of prompt (strong signal)
-            words = mood_prompt_lower.split()
-            artist_words = artist_lower.split()
-            
-            # Check if artist is mentioned with strong indicators
-            for pattern in strong_patterns:
-                if pattern in mood_prompt_lower:
-                    if artist_name not in user_requested:
-                        user_requested.append(artist_name)
-                        logger.info(f"Detected user-requested artist via pattern '{pattern}': {artist_name}")
-                    break
-            
-            # Check if artist appears in first 5 words (likely emphasis)
-            if len(words) >= len(artist_words):
-                for i in range(min(5, len(words) - len(artist_words) + 1)):
-                    if " ".join(words[i:i+len(artist_words)]) == artist_lower:
-                        if artist_name not in user_requested:
-                            user_requested.append(artist_name)
-                            logger.info(f"Detected user-requested artist in opening words: {artist_name}")
-                        break
+                        logger.info(
+                            f"Detected user-requested artist from anchor track: '{artist_name}' "
+                            f"(anchor_type: {anchor.get('anchor_type')})"
+                        )
         
         return user_requested
 
