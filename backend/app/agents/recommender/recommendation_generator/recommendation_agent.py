@@ -171,8 +171,19 @@ class RecommendationGeneratorAgent(BaseAgent):
         max_artist = int(max_recommendations * 0.98)  # 98% (increased from 95%)
         max_reccobeat = max(1, max_recommendations - max_artist)  # Minimum 1 for edge cases
 
-        # Anchor tracks get priority (up to 5)
-        capped_anchor = anchor_recs[:5]
+        # CRITICAL: User-mentioned anchors don't count toward the anchor limit
+        # Separate user-mentioned from other anchors
+        user_mentioned_anchors = [r for r in anchor_recs if r.user_mentioned]
+        other_anchors = [r for r in anchor_recs if not r.user_mentioned]
+        
+        # Cap non-user-mentioned anchors to 5, but ALWAYS include all user-mentioned
+        capped_other_anchors = other_anchors[:5]
+        capped_anchor = user_mentioned_anchors + capped_other_anchors
+        
+        logger.info(
+            f"Anchor breakdown: {len(user_mentioned_anchors)} user-mentioned (unlimited), "
+            f"{len(capped_other_anchors)} other anchors (capped at 5)"
+        )
         
         # Adjust caps to account for anchor tracks
         remaining_slots = max_recommendations - len(capped_anchor)
@@ -188,9 +199,14 @@ class RecommendationGeneratorAgent(BaseAgent):
             f"{len(capped_reccobeat)} RecoBeat tracks (cap: {max_reccobeat}) - RecoBeat minimal fallback only"
         )
 
-        # Combine (anchor first for priority, then artist and reccobeat)
+        # CRITICAL: Sort each group independently but maintain priority order
+        # Anchor tracks (especially user-mentioned) MUST stay at the top
+        capped_anchor.sort(key=lambda x: x.confidence_score, reverse=True)
+        capped_artist.sort(key=lambda x: x.confidence_score, reverse=True)
+        capped_reccobeat.sort(key=lambda x: x.confidence_score, reverse=True)
+        
+        # Combine with anchors first (NEVER re-sort after this!)
         final_recommendations = capped_anchor + capped_artist + capped_reccobeat
-        final_recommendations.sort(key=lambda x: x.confidence_score, reverse=True)
 
         return final_recommendations
 
