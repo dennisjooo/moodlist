@@ -5,7 +5,7 @@ import TypewriterText from '@/components/TypewriterText';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Music, ArrowDown } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 
@@ -15,6 +15,7 @@ export interface HeroSectionProps {
 
 export function HeroSection({ isLoggedIn: serverIsLoggedIn }: HeroSectionProps) {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [isClient, setIsClient] = useState(false);
     const { isAuthenticated } = useAuth();
 
@@ -23,7 +24,32 @@ export function HeroSection({ isLoggedIn: serverIsLoggedIn }: HeroSectionProps) 
 
     useEffect(() => {
         setIsClient(true);
-    }, []);
+
+        // Handle auth=required query parameter
+        const authRequired = searchParams.get('auth') === 'required';
+        const redirectPath = searchParams.get('redirect');
+
+        if (authRequired && !isAuthenticated && isClient) {
+            // Store redirect URL for after authentication
+            if (redirectPath) {
+                sessionStorage.setItem('auth_redirect', decodeURIComponent(redirectPath));
+            }
+
+            // Clear the auth query params from URL without triggering a navigation
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.delete('auth');
+            newUrl.searchParams.delete('redirect');
+            window.history.replaceState({}, '', newUrl.toString());
+
+            // Auto-trigger login after a brief delay to allow UI to render
+            setTimeout(() => {
+                const loginButton = document.querySelector('[data-spotify-login]') as HTMLButtonElement;
+                if (loginButton) {
+                    loginButton.click();
+                }
+            }, 100);
+        }
+    }, [searchParams, isAuthenticated, isClient]);
 
     return (
         <div className="relative h-screen flex items-center justify-center px-6 lg:px-8">
