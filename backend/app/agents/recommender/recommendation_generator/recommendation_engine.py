@@ -37,8 +37,11 @@ class RecommendationEngine:
     async def _generate_mood_based_recommendations(self, state: AgentState) -> List[Dict[str, Any]]:
         """Generate recommendations based on mood analysis, seeds, and discovered artists.
 
-        Target ratio: 95:5 (95% from artist discovery, 5% from seed-based recommendations).
-        Artist discovery is overwhelmingly prioritized as RecoBeat recommendations tend to be lower quality.
+        Phase 2: New recommendation mix with User Anchor Strategy:
+        - 40% User Anchor Strategy (if user mentioned tracks/artists)
+        - 40% Artist Discovery
+        - 15% Seed-Based
+        - 5%  RecoBeat fallback
 
         RecoBeat API calls use ONLY seeds, negative_seeds, and size parameters.
         Audio feature parameters are NOT used as they cause RecoBeat to return irrelevant tracks.
@@ -47,7 +50,7 @@ class RecommendationEngine:
             state: Current agent state
 
         Returns:
-            List of raw recommendations (mostly from artist discovery)
+            List of raw recommendations
         """
         all_recommendations = []
 
@@ -55,24 +58,50 @@ class RecommendationEngine:
         playlist_target = state.metadata.get("playlist_target", {})
         target_count = playlist_target.get("target_count", 20)
 
-        # Calculate target split: 98:2 ratio (98% artists, 2% seeds as minimal fallback)
-        target_artist_recs = int(target_count * 0.98)  # 98% from artists (increased from 95%)
-        target_seed_recs = max(1, target_count - target_artist_recs)  # Minimum 1, max 2
+        # Check if user mentioned tracks/artists (from intent analyzer)
+        user_mentioned_track_ids = state.metadata.get("user_mentioned_track_ids", [])
+        intent_analysis = state.metadata.get("intent_analysis", {})
+        user_mentioned_artists = intent_analysis.get("user_mentioned_artists", [])
+        has_user_mentions = bool(user_mentioned_track_ids or user_mentioned_artists)
+
+        # Phase 2: Calculate new target split based on user mentions
+        if has_user_mentions:
+            # WITH user mentions: 40% user anchor, 40% artists, 15% seeds, 5% fallback
+            target_user_anchor_recs = int(target_count * 0.40)
+            target_artist_recs = int(target_count * 0.40)
+            target_seed_recs = int(target_count * 0.15)
+            
+            logger.info(
+                f"Phase 2 split WITH user mentions: {target_user_anchor_recs} user anchor, "
+                f"{target_artist_recs} artists, {target_seed_recs} seeds (total: {target_count})"
+            )
+        else:
+            # WITHOUT user mentions: 55% artists, 35% seeds, 10% fallback (more balanced)
+            target_user_anchor_recs = 0
+            target_artist_recs = int(target_count * 0.55)
+            target_seed_recs = int(target_count * 0.35)
+            
+            logger.info(
+                f"Phase 2 split WITHOUT user mentions: {target_artist_recs} artists, "
+                f"{target_seed_recs} seeds (total: {target_count})"
+            )
 
         # Store targets in state for use by generation methods
         state.metadata["_temp_seed_target"] = target_seed_recs
         state.metadata["_temp_artist_target"] = target_artist_recs
+        state.metadata["_temp_user_anchor_target"] = target_user_anchor_recs
 
-        logger.info(
-            f"Target generation split (98:2 ratio): {target_artist_recs} from artists, "
-            f"{target_seed_recs} from seeds (total: {target_count}) - RecoBeat minimal fallback only"
-        )
+        # Phase 2: Generate from user anchor strategy FIRST (highest priority)
+        if has_user_mentions and target_user_anchor_recs > 0:
+            user_anchor_recommendations = await self._generate_from_user_anchors(state, target_user_anchor_recs)
+            all_recommendations.extend(user_anchor_recommendations)
+            logger.info(f"Generated {len(user_anchor_recommendations)} from user anchor strategy")
 
-        # Generate from discovered artists FIRST (aiming for 2/3 of target - higher priority)
+        # Generate from discovered artists
         artist_recommendations = await self._generate_from_discovered_artists(state)
         all_recommendations.extend(artist_recommendations)
 
-        # Generate from seed tracks (aiming for 1/3 of target - supplement only)
+        # Generate from seed tracks
         seed_recommendations = await self._generate_from_seeds(state)
         all_recommendations.extend(seed_recommendations)
 
@@ -82,14 +111,47 @@ class RecommendationEngine:
         # Clean up temp metadata
         state.metadata.pop("_temp_seed_target", None)
         state.metadata.pop("_temp_artist_target", None)
+        state.metadata.pop("_temp_user_anchor_target", None)
 
         logger.info(
             f"Generated {len(all_recommendations)} total recommendations "
-            f"({len(artist_recommendations)} from artists [{target_artist_recs} target], "
-            f"{len(seed_recommendations)} from seeds [{target_seed_recs} target])"
+            f"(Phase 2: {len(user_anchor_recommendations) if has_user_mentions else 0} user anchor, "
+            f"{len(artist_recommendations)} artists, {len(seed_recommendations)} seeds)"
         )
 
         return all_recommendations
+
+    async def _generate_from_user_anchors(self, state: AgentState, target_count: int) -> List[Dict[str, Any]]:
+        """Generate recommendations using the user anchor strategy.
+        
+        Phase 2: New method for user-mentioned tracks/artists.
+
+        Args:
+            state: Current agent state
+            target_count: Target number of recommendations
+
+        Returns:
+            List of recommendations from user anchor strategy
+        """
+        from .strategies import UserAnchorStrategy
+        
+        try:
+            # Initialize user anchor strategy
+            user_anchor_strategy = UserAnchorStrategy(
+                spotify_service=self.spotify_service,
+                reccobeat_service=self.reccobeat_service
+            )
+            
+            # Generate recommendations
+            recommendations = await user_anchor_strategy.generate_recommendations(state, target_count)
+            
+            logger.info(f"User anchor strategy generated {len(recommendations)} recommendations")
+            
+            return recommendations
+            
+        except Exception as e:
+            logger.error(f"Error in user anchor strategy: {e}", exc_info=True)
+            return []
 
     async def _generate_from_seeds(self, state: AgentState) -> List[Dict[str, Any]]:
         """Generate recommendations from seed tracks.
