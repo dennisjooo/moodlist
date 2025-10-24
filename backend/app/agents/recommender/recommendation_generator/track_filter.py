@@ -262,7 +262,10 @@ class TrackFilter:
                     confidence_score=rec_data.get("confidence_score", 0.5),
                     audio_features=rec_data.get("audio_features"),
                     reasoning=rec_data.get("reasoning", "Mood-based recommendation"),
-                    source=rec_data.get("source", "reccobeat")
+                    source=rec_data.get("source", "reccobeat"),
+                    user_mentioned=rec_data.get("user_mentioned", False),
+                    anchor_type=rec_data.get("anchor_type"),
+                    protected=rec_data.get("protected", False)
                 )
                 rec_objects.append(rec_obj)
 
