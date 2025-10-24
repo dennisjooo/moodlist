@@ -362,13 +362,18 @@ class WorkflowManager:
         start_time = datetime.now(timezone.utc)
 
         try:
-            logger.info(f"Executing workflow {session_id}")
+            logger.info(f"Executing workflow {session_id} (Phase 2)")
 
-            # Execute workflow steps
+            # Phase 2: Execute workflow steps in new order
+            # STEP 1: Analyze user intent FIRST
+            state = await self._execute_intent_analysis(state)
+            await self._update_state(session_id, state)
+            
+            # STEP 2: Analyze mood (now focused on audio features only)
             state = await self._execute_mood_analysis(state)
             await self._update_state(session_id, state)
             
-            # Execute orchestration (handles seed gathering, recommendations, and quality improvement)
+            # STEP 3-5: Execute orchestration (handles seed gathering, recommendations, and quality improvement)
             state = await self._execute_orchestration(state)
             await self._update_state(session_id, state)
             
@@ -428,6 +433,40 @@ class WorkflowManager:
                 self.completed_workflows[session_id] = self.active_workflows.pop(session_id)
 
                 logger.info(f"Workflow {session_id} completed in {state.metadata['total_duration']:.2f}s")
+
+    async def _execute_intent_analysis(self, state: AgentState) -> AgentState:
+        """Execute intent analysis step.
+        
+        Phase 2: New step to analyze user intent before mood analysis.
+
+        Args:
+            state: Current workflow state
+
+        Returns:
+            Updated state
+        """
+        state.current_step = "analyzing_intent"
+        state.status = RecommendationStatus.ANALYZING_MOOD  # Reuse mood status for now
+
+        intent_agent = self.agents.get("intent_analyzer")
+        if not intent_agent:
+            logger.warning("Intent analyzer agent not available, skipping intent analysis")
+            # Set empty intent analysis so downstream agents don't break
+            state.metadata["intent_analysis"] = {
+                "intent_type": "mood_variety",
+                "user_mentioned_tracks": [],
+                "user_mentioned_artists": [],
+                "primary_genre": None,
+                "genre_strictness": 0.6,
+                "language_preferences": ["english"],
+                "exclude_regions": [],
+                "allow_obscure_artists": False,
+                "quality_threshold": 0.6,
+                "reasoning": "Intent analyzer not available"
+            }
+            return state
+
+        return await intent_agent.run_with_error_handling(state)
 
     async def _execute_mood_analysis(self, state: AgentState) -> AgentState:
         """Execute mood analysis step.
