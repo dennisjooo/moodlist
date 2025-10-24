@@ -1,7 +1,7 @@
 """Intent analyzer agent for understanding user intent."""
 
 import structlog
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from langchain_core.language_models.base import BaseLanguageModel
 
@@ -11,6 +11,85 @@ from ..utils.llm_response_parser import LLMResponseParser
 from .prompts import get_intent_analysis_prompt
 
 logger = structlog.get_logger(__name__)
+
+INTENT_PATTERNS = {
+    "specific_track_similar": ["like ", "similar to", "things like"],
+    "artist_focus": ["playlist", "give me", "only"],
+    "genre_exploration": ["explore", "discover", "variety", "mix"],
+}
+
+GENRE_KEYWORDS = {
+    "trap": ["trap", "travis scott", "future", "migos"],
+    "hip hop": ["hip hop", "rap", "rapper"],
+    "pop": ["pop", "taylor swift", "ariana"],
+    "rock": ["rock", "indie", "alternative"],
+    "electronic": ["electronic", "edm", "techno", "house"],
+    "jazz": ["jazz", "bebop", "swing"],
+    "classical": ["classical", "orchestra", "symphony"],
+    "country": ["country", "nashville"],
+    "funk": ["funk", "funky"],
+    "soul": ["soul", "r&b", "rnb"],
+}
+
+GENRE_STRICTNESS = {
+    "artist_focus": 0.85,
+    "specific_track_similar": 0.85,
+    "genre_exploration": 0.7,
+    "mood_variety": 0.6,
+}
+
+VALID_INTENT_TYPES = set(GENRE_STRICTNESS)
+
+
+def _default_intent_data() -> Dict[str, Any]:
+    return {
+        "intent_type": "mood_variety",
+        "user_mentioned_tracks": [],
+        "user_mentioned_artists": [],
+        "primary_genre": None,
+        "genre_strictness": GENRE_STRICTNESS["mood_variety"],
+        "language_preferences": ["english"],
+        "exclude_regions": [],
+        "allow_obscure_artists": False,
+        "quality_threshold": 0.6,
+        "reasoning": "Fallback rule-based analysis",
+    }
+
+
+def _coerce_list(value: Any, default: List[Any]) -> List[Any]:
+    if isinstance(value, list):
+        return list(value)
+    return list(default)
+
+
+def _coerce_float(value: Any, default: float) -> float:
+    try:
+        return max(0.0, min(1.0, float(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_bool(value: Any, default: bool) -> bool:
+    return value if isinstance(value, bool) else default
+
+
+def _sanitize_tracks(tracks: Any) -> List[Dict[str, Any]]:
+    if not isinstance(tracks, list):
+        return []
+
+    sanitized = []
+    for track in tracks:
+        if isinstance(track, dict) and track.get("track_name") and track.get("artist_name"):
+            sanitized.append(
+                {
+                    "track_name": str(track["track_name"]),
+                    "artist_name": str(track["artist_name"]),
+                    "priority": track.get("priority", "medium")
+                    if track.get("priority") in {"high", "medium"}
+                    else "medium",
+                }
+            )
+    return sanitized
 
 
 class IntentAnalyzerAgent(BaseAgent):
@@ -101,27 +180,10 @@ class IntentAnalyzerAgent(BaseAgent):
         try:
             prompt = get_intent_analysis_prompt(mood_prompt)
 
-            # Call LLM
             response = await self.llm.ainvoke(prompt)
-
-            # Parse response
             intent_data = self.response_parser.extract_json_from_response(
-                response,
-                fallback={
-                    "intent_type": "mood_variety",
-                    "user_mentioned_tracks": [],
-                    "user_mentioned_artists": [],
-                    "primary_genre": None,
-                    "genre_strictness": 0.6,
-                    "language_preferences": ["english"],
-                    "exclude_regions": [],
-                    "allow_obscure_artists": False,
-                    "quality_threshold": 0.6,
-                    "reasoning": "Failed to parse LLM response"
-                }
+                response, fallback=_default_intent_data()
             )
-
-            # Validate and sanitize the parsed data
             intent_data = self._validate_intent_data(intent_data)
 
             logger.info(f"LLM intent analysis: {intent_data.get('reasoning', 'No reasoning provided')}")
@@ -144,59 +206,31 @@ class IntentAnalyzerAgent(BaseAgent):
         """
         mood_lower = mood_prompt.lower()
 
-        # Determine intent type based on keywords
-        intent_type = "mood_variety"  # Default
-
-        if any(phrase in mood_lower for phrase in ["like ", "similar to", "things like"]):
-            intent_type = "specific_track_similar"
-        elif any(phrase in mood_lower for phrase in ["playlist", "give me", "only"]):
-            intent_type = "artist_focus"
-        elif any(word in mood_lower for word in ["explore", "discover", "variety", "mix"]):
-            intent_type = "genre_exploration"
-
-        # Basic genre detection
-        primary_genre = None
-        genre_keywords = {
-            "trap": ["trap", "travis scott", "future", "migos"],
-            "hip hop": ["hip hop", "rap", "rapper"],
-            "pop": ["pop", "taylor swift", "ariana"],
-            "rock": ["rock", "indie", "alternative"],
-            "electronic": ["electronic", "edm", "techno", "house"],
-            "jazz": ["jazz", "bebop", "swing"],
-            "classical": ["classical", "orchestra", "symphony"],
-            "country": ["country", "nashville"],
-            "funk": ["funk", "funky"],
-            "soul": ["soul", "r&b", "rnb"]
-        }
-
-        for genre, keywords in genre_keywords.items():
-            if any(keyword in mood_lower for keyword in keywords):
-                primary_genre = genre
+        intent_type = "mood_variety"
+        for candidate, patterns in INTENT_PATTERNS.items():
+            if any(p in mood_lower for p in patterns):
+                intent_type = candidate
                 break
 
-        # Set genre strictness
-        genre_strictness = 0.6  # Default moderate
-        if intent_type in ["artist_focus", "specific_track_similar"]:
-            genre_strictness = 0.85  # Stricter for specific requests
-        elif intent_type == "genre_exploration":
-            genre_strictness = 0.7
+        primary_genre = next(
+            (
+                genre
+                for genre, keywords in GENRE_KEYWORDS.items()
+                if any(keyword in mood_lower for keyword in keywords)
+            ),
+            None,
+        )
 
-        # Default values
-        intent_data = {
-            "intent_type": intent_type,
-            "user_mentioned_tracks": [],
-            "user_mentioned_artists": [],
-            "primary_genre": primary_genre,
-            "genre_strictness": genre_strictness,
-            "language_preferences": ["english"],
-            "exclude_regions": [],
-            "allow_obscure_artists": False,
-            "quality_threshold": 0.6,
-            "reasoning": "Fallback rule-based analysis"
-        }
+        intent_data = _default_intent_data()
+        intent_data.update(
+            {
+                "intent_type": intent_type,
+                "primary_genre": primary_genre,
+                "genre_strictness": GENRE_STRICTNESS[intent_type],
+            }
+        )
 
         logger.info(f"Fallback intent analysis: {intent_type}, genre: {primary_genre}")
-
         return intent_data
 
     def _validate_intent_data(self, intent_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -208,47 +242,19 @@ class IntentAnalyzerAgent(BaseAgent):
         Returns:
             Validated intent data
         """
-        # Ensure intent_type is valid
-        valid_intent_types = ["artist_focus", "genre_exploration", "mood_variety", "specific_track_similar"]
-        if intent_data.get("intent_type") not in valid_intent_types:
+        if intent_data.get("intent_type") not in VALID_INTENT_TYPES:
             logger.warning(f"Invalid intent_type '{intent_data.get('intent_type')}', defaulting to 'mood_variety'")
             intent_data["intent_type"] = "mood_variety"
 
-        # Ensure arrays exist
-        if not isinstance(intent_data.get("user_mentioned_tracks"), list):
-            intent_data["user_mentioned_tracks"] = []
-        if not isinstance(intent_data.get("user_mentioned_artists"), list):
-            intent_data["user_mentioned_artists"] = []
-        if not isinstance(intent_data.get("language_preferences"), list):
-            intent_data["language_preferences"] = ["english"]
-        if not isinstance(intent_data.get("exclude_regions"), list):
-            intent_data["exclude_regions"] = []
-
-        # Validate numeric ranges
-        if not isinstance(intent_data.get("genre_strictness"), (int, float)):
-            intent_data["genre_strictness"] = 0.6
-        else:
-            intent_data["genre_strictness"] = max(0.0, min(1.0, float(intent_data["genre_strictness"])))
-
-        if not isinstance(intent_data.get("quality_threshold"), (int, float)):
-            intent_data["quality_threshold"] = 0.6
-        else:
-            intent_data["quality_threshold"] = max(0.0, min(1.0, float(intent_data["quality_threshold"])))
-
-        # Ensure boolean
-        if not isinstance(intent_data.get("allow_obscure_artists"), bool):
-            intent_data["allow_obscure_artists"] = False
-
-        # Validate track mentions structure
-        validated_tracks = []
-        for track in intent_data.get("user_mentioned_tracks", []):
-            if isinstance(track, dict) and track.get("track_name") and track.get("artist_name"):
-                validated_tracks.append({
-                    "track_name": str(track["track_name"]),
-                    "artist_name": str(track["artist_name"]),
-                    "priority": track.get("priority", "medium") if track.get("priority") in ["high", "medium"] else "medium"
-                })
-        intent_data["user_mentioned_tracks"] = validated_tracks
+        intent_data["user_mentioned_tracks"] = _sanitize_tracks(intent_data.get("user_mentioned_tracks"))
+        intent_data["user_mentioned_artists"] = _coerce_list(intent_data.get("user_mentioned_artists"), [])
+        intent_data["language_preferences"] = _coerce_list(
+            intent_data.get("language_preferences"), ["english"]
+        )
+        intent_data["exclude_regions"] = _coerce_list(intent_data.get("exclude_regions"), [])
+        intent_data["genre_strictness"] = _coerce_float(intent_data.get("genre_strictness"), 0.6)
+        intent_data["quality_threshold"] = _coerce_float(intent_data.get("quality_threshold"), 0.6)
+        intent_data["allow_obscure_artists"] = _coerce_bool(intent_data.get("allow_obscure_artists"), False)
 
         return intent_data
 

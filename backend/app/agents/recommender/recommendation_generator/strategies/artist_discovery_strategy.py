@@ -113,19 +113,20 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
         # Get target features for filtering
         target_features = state.metadata.get("target_features", {})
 
-        # Get artist target (95% of total playlist target - DOMINANT source, 95:5 ratio)
-        target_artist_recs = state.metadata.get("_temp_artist_target", 19)  # Default 95% of 20
+        targets = state.metadata.get("_recommendation_targets", {})
+        target_artist_recs = targets.get("artist_target", 19)
 
-        # Get access token for Spotify API (after refresh)
         access_token = state.metadata.get("spotify_access_token")
         if not access_token:
-            logger.error("CRITICAL: No Spotify access token available for artist top tracks (even after refresh attempt)")
+            logger.error("CRITICAL: No Spotify access token available for artist top tracks")
             return None, {}, 0
 
         logger.info(f"Using Spotify access token (length: {len(access_token)}, first 20 chars: {access_token[:20]}...)")
 
-        # MAXIMIZE DIVERSITY: Use MORE artists with MORE tracks each to account for filtering
         artist_count = min(len(state.metadata.get("mood_matched_artists", [])), 20)
+        if not artist_count:
+            return access_token, target_features, 0
+
         tracks_per_artist = max(3, min(int((target_artist_recs * 2.5) // artist_count) + 2, 5))
 
         logger.info(

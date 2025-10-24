@@ -57,31 +57,23 @@ class RecommendationProcessor:
         Returns:
             List with enforced source ratio, sorted by confidence
         """
-        # Remove duplicates from the original list
         recommendations = self.remove_duplicates(recommendations)
-        
-        # Separate recommendations by source
         source_groups = self.separate_by_source(recommendations)
-
-        # Calculate limits for each source
         source_limits = self.calculate_source_limits(max_count, artist_ratio)
-
-        # Cap and sort each source
         capped_sources = self.cap_and_sort_by_source(source_groups, source_limits)
-
-        # Combine and sort final list
-        final_recommendations = self.combine_and_sort_final(capped_sources, len(recommendations))
-        
-        return final_recommendations
+        return self.combine_and_sort_final(capped_sources, len(recommendations))
 
     def separate_by_source(self, recommendations: List[TrackRecommendation]) -> Dict[str, List[TrackRecommendation]]:
         """Separate recommendations by source."""
-        source_groups = {
-            "artist_discovery": [r for r in recommendations if r.source == "artist_discovery"],
-            "anchor_track": [r for r in recommendations if r.source == "anchor_track"],
-            "reccobeat": [r for r in recommendations if r.source == "reccobeat"]
+        grouped: Dict[str, List[TrackRecommendation]] = {
+            "anchor_track": [],
+            "artist_discovery": [],
+            "reccobeat": [],
         }
-        return source_groups
+        for recommendation in recommendations:
+            if recommendation.source in grouped:
+                grouped[recommendation.source].append(recommendation)
+        return grouped
 
     def calculate_source_limits(self, max_count: int, artist_ratio: float) -> Dict[str, int]:
         """Calculate maximum counts for each source.
@@ -108,23 +100,20 @@ class RecommendationProcessor:
     ) -> Dict[str, List[TrackRecommendation]]:
         """Cap each source to its limit and sort by confidence.
         
-        CRITICAL: User-mentioned anchor tracks don't count toward the anchor limit.
+        User-mentioned anchor tracks don't count toward the anchor limit.
         """
         capped_sources = {}
 
         for source, recommendations in source_groups.items():
             limit = source_limits.get(source, 0)
             
-            # Special handling for anchor tracks: user-mentioned tracks are unlimited
             if source == "anchor_track":
                 user_mentioned = [r for r in recommendations if r.user_mentioned]
                 other_anchors = [r for r in recommendations if not r.user_mentioned]
                 
-                # Sort each group independently
                 user_mentioned.sort(key=lambda r: r.confidence_score, reverse=True)
                 other_anchors.sort(key=lambda r: r.confidence_score, reverse=True)
                 
-                # Cap other anchors, but keep all user-mentioned
                 capped_sources[source] = user_mentioned + other_anchors[:limit]
                 
                 logger.info(
@@ -132,7 +121,6 @@ class RecommendationProcessor:
                     f"{len(other_anchors[:limit])} other anchors (capped at {limit})"
                 )
             else:
-                # Normal capping for other sources
                 sorted_recs = sorted(recommendations, key=lambda r: r.confidence_score, reverse=True)
                 capped_sources[source] = sorted_recs[:limit]
 

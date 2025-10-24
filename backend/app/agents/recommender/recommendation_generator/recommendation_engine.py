@@ -54,42 +54,37 @@ class RecommendationEngine:
         """
         all_recommendations = []
 
-        # Get target to calculate desired split
         playlist_target = state.metadata.get("playlist_target", {})
         target_count = playlist_target.get("target_count", 20)
 
-        # Check if user mentioned tracks/artists (from intent analyzer)
         user_mentioned_track_ids = state.metadata.get("user_mentioned_track_ids", [])
         intent_analysis = state.metadata.get("intent_analysis", {})
         user_mentioned_artists = intent_analysis.get("user_mentioned_artists", [])
         has_user_mentions = bool(user_mentioned_track_ids or user_mentioned_artists)
 
-        # Phase 2: Calculate new target split based on user mentions
         if has_user_mentions:
-            # WITH user mentions: 40% user anchor, 40% artists, 15% seeds, 5% fallback
             target_user_anchor_recs = int(target_count * 0.40)
             target_artist_recs = int(target_count * 0.40)
             target_seed_recs = int(target_count * 0.15)
-            
             logger.info(
                 f"Phase 2 split WITH user mentions: {target_user_anchor_recs} user anchor, "
                 f"{target_artist_recs} artists, {target_seed_recs} seeds (total: {target_count})"
             )
         else:
-            # WITHOUT user mentions: 55% artists, 35% seeds, 10% fallback (more balanced)
             target_user_anchor_recs = 0
             target_artist_recs = int(target_count * 0.55)
             target_seed_recs = int(target_count * 0.35)
-            
             logger.info(
                 f"Phase 2 split WITHOUT user mentions: {target_artist_recs} artists, "
                 f"{target_seed_recs} seeds (total: {target_count})"
             )
 
-        # Store targets in state for use by generation methods
-        state.metadata["_temp_seed_target"] = target_seed_recs
-        state.metadata["_temp_artist_target"] = target_artist_recs
-        state.metadata["_temp_user_anchor_target"] = target_user_anchor_recs
+        recommendation_targets = {
+            "seed_target": target_seed_recs,
+            "artist_target": target_artist_recs,
+            "user_anchor_target": target_user_anchor_recs,
+        }
+        state.metadata["_recommendation_targets"] = recommendation_targets
 
         # Phase 2: Generate from user anchor strategy FIRST (highest priority)
         if has_user_mentions and target_user_anchor_recs > 0:
@@ -105,13 +100,9 @@ class RecommendationEngine:
         seed_recommendations = await self._generate_from_seeds(state)
         all_recommendations.extend(seed_recommendations)
 
-        # Include anchor tracks from genre search
         all_recommendations = await self._include_anchor_tracks(state, all_recommendations)
 
-        # Clean up temp metadata
-        state.metadata.pop("_temp_seed_target", None)
-        state.metadata.pop("_temp_artist_target", None)
-        state.metadata.pop("_temp_user_anchor_target", None)
+        state.metadata.pop("_recommendation_targets", None)
 
         logger.info(
             f"Generated {len(all_recommendations)} total recommendations "
@@ -136,19 +127,13 @@ class RecommendationEngine:
         from .strategies import UserAnchorStrategy
         
         try:
-            # Initialize user anchor strategy
             user_anchor_strategy = UserAnchorStrategy(
                 spotify_service=self.spotify_service,
                 reccobeat_service=self.reccobeat_service
             )
-            
-            # Generate recommendations
             recommendations = await user_anchor_strategy.generate_recommendations(state, target_count)
-            
             logger.info(f"User anchor strategy generated {len(recommendations)} recommendations")
-            
             return recommendations
-            
         except Exception as e:
             logger.error(f"Error in user anchor strategy: {e}", exc_info=True)
             return []
@@ -189,19 +174,18 @@ class RecommendationEngine:
         if len(unique_seeds) < len(state.seed_tracks):
             logger.info(f"Deduplicated seeds: {len(state.seed_tracks)} -> {len(unique_seeds)}")
 
-        # Split seeds into smaller chunks for multiple API calls
         seed_chunks = self._chunk_seeds(unique_seeds, chunk_size=3)
+        if not seed_chunks:
+            logger.info("No seed chunks available for seed-based recommendations")
+            self._per_chunk_size = 0
+            return [], {}
 
-        # Get seed target (5% of total playlist target - very minimal supplementary)
-        target_seed_recs = state.metadata.get("_temp_seed_target", 1)  # Default ~5% of 20
+        targets = state.metadata.get("_recommendation_targets", {})
+        target_seed_recs = targets.get("seed_target", 1)
 
-        # Request more per chunk to account for filtering (aim for 2x target due to low count)
         per_chunk_size = min(10, max(int((target_seed_recs * 2) // len(seed_chunks)) + 2, 3))
-
-        # Store per_chunk_size for use in processing
         self._per_chunk_size = per_chunk_size
 
-        # Prepare minimal RecoBeat params (NO audio features - they cause issues)
         reccobeat_params = {}
 
         # Add negative seeds if available (limit to 5 as per RecoBeat API)
@@ -494,10 +478,9 @@ class RecommendationEngine:
         # Get target features for filtering
         target_features = state.metadata.get("target_features", {})
 
-        # Get artist target (95% of total playlist target - DOMINANT source, 95:5 ratio)
-        target_artist_recs = state.metadata.get("_temp_artist_target", 19)  # Default 95% of 20
+        targets = state.metadata.get("_recommendation_targets", {})
+        target_artist_recs = targets.get("artist_target", 19)
 
-        # Get access token for Spotify API (after refresh)
         access_token = state.metadata.get("spotify_access_token")
         if not access_token:
             logger.error("CRITICAL: No Spotify access token available for artist top tracks (even after refresh attempt)")
@@ -505,8 +488,11 @@ class RecommendationEngine:
 
         logger.info(f"Using Spotify access token (length: {len(access_token)}, first 20 chars: {access_token[:20]}...)")
 
-        # MAXIMIZE DIVERSITY: Use MORE artists with MORE tracks each to account for filtering
         artist_count = min(len(state.metadata.get("mood_matched_artists", [])), 20)
+        if not artist_count:
+            logger.info("No mood-matched artists available after filtering")
+            return access_token, target_features, 0
+
         tracks_per_artist = max(3, min(int((target_artist_recs * 2.5) // artist_count) + 2, 5))
 
         logger.info(

@@ -12,6 +12,71 @@ from ....states.agent_state import AgentState
 logger = structlog.get_logger(__name__)
 
 
+def _build_track_recommendation(
+    track: Dict[str, Any],
+    source: str = "artist_discovery",
+    confidence: float = 0.85,
+    user_mentioned: bool = False,
+    reasoning: str = "",
+) -> Dict[str, Any]:
+    """Build a track recommendation dictionary with standardized fields.
+
+    Args:
+        track: Track dictionary with Spotify data
+        source: Source of the recommendation
+        confidence: Confidence score
+        user_mentioned: Whether this was explicitly mentioned by user
+        reasoning: Reasoning for the recommendation
+
+    Returns:
+        Standardized recommendation dictionary
+    """
+    track_id = track.get("id")
+    track_name = track.get("name", "Unknown")
+    artists = track.get("artists")
+    if isinstance(artists, list) and artists:
+        artist_names = [a.get("name", "") for a in artists]
+    else:
+        fallback_artist = track.get("artist") or track.get("artist_name") or "Unknown Artist"
+        artist_names = [fallback_artist]
+
+    spotify_uri = track.get("uri")
+    if not spotify_uri and track_id:
+        spotify_uri = f"spotify:track:{track_id}"
+
+    rec = {
+        "track_id": track_id,
+        "track_name": track_name,
+        "artists": artist_names,
+        "spotify_uri": spotify_uri,
+        "confidence": confidence,
+        "confidence_score": confidence,
+        "audio_features": track.get("audio_features", {}),
+        "source": source,
+        "reasoning": reasoning or f"Recommendation from {source}",
+        "popularity": track.get("popularity", 50),
+    }
+
+    if user_mentioned:
+        rec["user_mentioned"] = True
+        rec["protected"] = True
+        rec["anchor_type"] = "user"
+
+    return rec
+
+
+def _dedupe_recommendations(recommendations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen_ids = set()
+    deduped = []
+    for rec in recommendations:
+        track_id = rec.get("track_id")
+        if not track_id or track_id in seen_ids:
+            continue
+        deduped.append(rec)
+        seen_ids.add(track_id)
+    return deduped
+
+
 class UserAnchorStrategy(RecommendationStrategy):
     """Strategy that generates recommendations based on user-mentioned tracks and artists.
     
@@ -72,47 +137,28 @@ class UserAnchorStrategy(RecommendationStrategy):
             logger.warning("No access token for user anchor strategy")
             return []
 
-        # PART 0: ALWAYS include the actual user-mentioned tracks themselves!
         if user_mentioned_tracks_full:
             for track in user_mentioned_tracks_full:
                 track_id = track.get("id")
                 track_name = track.get("name", "Unknown")
-                artist_name = track.get("artist", "Unknown Artist")
-                
-                # Build Spotify URI if missing
-                spotify_uri = track.get("uri")
-                if not spotify_uri and track_id:
-                    spotify_uri = f"spotify:track:{track_id}"
-                
-                # Try to get audio features if available
-                audio_features = track.get("audio_features", {})
-                
-                # Build the recommendation with all required fields
-                user_track_rec = {
-                    "track_id": track_id,
-                    "track_name": track_name,
-                    "artists": [artist_name],
-                    "spotify_uri": spotify_uri,
-                    "confidence": 1.0,  # Maximum confidence - user explicitly requested this
-                    "confidence_score": 1.0,  # Also set confidence_score for compatibility
-                    "audio_features": audio_features,
-                    "source": "anchor_track",  # CRITICAL: Must be anchor_track so it's recognized by the processor
-                    "reasoning": f"User explicitly mentioned this track: '{track_name}' by {artist_name}",
-                    "user_mentioned": True,
-                    "protected": True,
-                    "anchor_type": "user"
-                }
-                
-                recommendations.append(user_track_rec)
-                logger.info(
-                    f"✓ Added user-mentioned track: '{track_name}' by {artist_name} "
-                    f"(ID: {track_id}, URI: {spotify_uri}, source: anchor_track)"
-                )
-            logger.info(f"✓ Total {len(user_mentioned_tracks_full)} user-mentioned tracks added with full metadata")
 
-        # PART 1: Get artists from user-mentioned tracks and fetch their top tracks
+                user_track_rec = _build_track_recommendation(
+                    track=track,
+                    source="anchor_track",
+                    confidence=1.0,
+                    user_mentioned=True,
+                    reasoning=f"User explicitly mentioned this track: '{track_name}'",
+                )
+
+                recommendations.append(user_track_rec)
+                artist_names = ", ".join(user_track_rec.get("artists", []))
+                logger.info(
+                    f"✓ Added user-mentioned track: '{track_name}' by {artist_names} "
+                    f"(ID: {track_id}, source: anchor_track)"
+                )
+            logger.info(f"✓ Total {len(user_mentioned_tracks_full)} user-mentioned tracks added")
+
         if user_mentioned_track_ids:
-            # Get full track info to extract artists
             track_based_recs = await self._get_tracks_from_same_artists(
                 user_mentioned_tracks_full,
                 access_token,
@@ -121,7 +167,6 @@ class UserAnchorStrategy(RecommendationStrategy):
             recommendations.extend(track_based_recs)
             logger.info(f"Got {len(track_based_recs)} tracks from user-mentioned track artists")
 
-        # PART 2: Get top tracks from user-mentioned artists
         if user_mentioned_artists:
             artist_based_recs = await self._get_top_tracks_from_artists(
                 user_mentioned_artists,
@@ -131,22 +176,17 @@ class UserAnchorStrategy(RecommendationStrategy):
             recommendations.extend(artist_based_recs)
             logger.info(f"Got {len(artist_based_recs)} top tracks from user-mentioned artists")
 
-        # Mark all recommendations with high confidence
-        # CRITICAL: Use "artist_discovery" as source so they're recognized by the processor
         for rec in recommendations:
-            # If this is the actual user-mentioned track, it already has source="anchor_track"
-            # Otherwise, set to artist_discovery so it's properly categorized
             if not rec.get("user_mentioned"):
                 rec["source"] = "artist_discovery"
-                rec["confidence_boost"] = 0.3  # Boost confidence for user mentions
+                rec["confidence_boost"] = 0.3
                 rec["user_mentioned_related"] = True
-                # Set base confidence high since these are directly related to user intent
-                if "confidence" not in rec:
-                    rec["confidence"] = 0.85
+                rec.setdefault("confidence", 0.85)
 
-        logger.info(f"User anchor strategy generated {len(recommendations)} recommendations")
+        deduped_recommendations = _dedupe_recommendations(recommendations)
+        logger.info(f"User anchor strategy generated {len(deduped_recommendations)} recommendations")
 
-        return recommendations[:target_count]
+        return deduped_recommendations[:target_count]
 
     async def _get_tracks_from_same_artists(
         self,
@@ -195,21 +235,15 @@ class UserAnchorStrategy(RecommendationStrategy):
                     
                     for track in top_tracks[:tracks_per_artist]:
                         if track.get("id"):
-                            # Build proper artist list
-                            artists = [a.get("name", "") for a in track.get("artists", [])]
-                            
-                            recommendations.append({
-                                "track_id": track["id"],
-                                "track_name": track.get("name", ""),
-                                "artists": artists,  # Use artists list, not artist_name
-                                "spotify_uri": track.get("uri"),
-                                "popularity": track.get("popularity", 50),
-                                "audio_features": {},
-                                "confidence": 0.85  # High confidence - same artist as user mentioned
-                            })
-                            
+                            rec = _build_track_recommendation(
+                                track=track,
+                                source="artist_discovery",
+                                confidence=0.85,
+                                reasoning="Track from user-mentioned artist"
+                            )
+                            recommendations.append(rec)
                             logger.debug(
-                                f"Added track from user-mentioned artist: '{track.get('name')}' by {', '.join(artists)}"
+                                f"Added track from user-mentioned artist: '{track.get('name')}' by {', '.join(rec['artists'])}"
                             )
                 except Exception as e:
                     logger.error(f"Error getting tracks for artist {artist_id}: {e}")
@@ -265,16 +299,13 @@ class UserAnchorStrategy(RecommendationStrategy):
                             # Add top tracks (limited per artist)
                             for track in top_tracks[:tracks_per_artist]:
                                 if track.get("id"):
-                                    recommendations.append({
-                                        "track_id": track["id"],
-                                        "track_name": track.get("name", ""),
-                                        "artist_name": track.get("artists", [{}])[0].get("name", ""),
-                                        "artist_id": track.get("artists", [{}])[0].get("id"),
-                                        "spotify_uri": track.get("uri"),
-                                        "popularity": track.get("popularity", 50),
-                                        "audio_features": {},
-                                        "confidence": 0.85  # Very high confidence for top tracks from mentioned artists
-                                    })
+                                    rec = _build_track_recommendation(
+                                        track=track,
+                                        source="artist_discovery",
+                                        confidence=0.85,
+                                        reasoning=f"Top track for user-mentioned artist {artist_name}",
+                                    )
+                                    recommendations.append(rec)
 
                             logger.info(f"Got {len(top_tracks[:tracks_per_artist])} top tracks from {artist_name}")
 
