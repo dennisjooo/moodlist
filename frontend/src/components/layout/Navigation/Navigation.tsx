@@ -2,6 +2,7 @@
 
 import { SpotifyLoginButton } from '@/components/features/auth/SpotifyLoginButton';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { WorkflowNotificationIndicator } from '@/components/features/workflow/WorkflowNotificationIndicator';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { NavItem } from '@/lib/types/navigation';
 import { AuthMenu } from './AuthMenu';
@@ -42,6 +43,9 @@ export default function Navigation({ extraItems = [] }: NavigationProps) {
 
                     {/* Right Side - Profile & Mobile Menu Button */}
                     <div className="flex items-center space-x-2 sm:space-x-4 lg:absolute lg:right-0">
+                        {/* Workflow Notification Indicator */}
+                        <WorkflowNotificationIndicator />
+
                         {/* Auth/Profile - Shows before burger on mobile */}
                         <div className="order-1 lg:order-none">
                             {isAuthenticated && user ? (

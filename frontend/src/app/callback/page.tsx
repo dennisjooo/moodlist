@@ -148,7 +148,7 @@ function CallbackContent() {
                 <CheckCircle className="w-12 h-12 text-green-500" />
                 <h1 className="text-2xl font-semibold text-green-600">Connected Successfully!</h1>
                 <p className="text-muted-foreground">
-                  Your Spotify account has been connected. Redirecting to create your playlist...
+                  Your Spotify account has been connected. Redirecting back to Home...
                 </p>
               </>
             )}
