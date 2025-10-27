@@ -29,8 +29,10 @@ export function CreatePageLayout({ children }: CreatePageLayoutProps) {
       <Navigation />
 
       {/* Main Content */}
-      <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        {children}
+      <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center min-h-[calc(100vh-4rem)]">
+        <div className="w-full">
+          {children}
+        </div>
       </main>
     </div>
   );

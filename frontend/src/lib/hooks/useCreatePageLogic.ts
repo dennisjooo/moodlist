@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { logger } from '@/lib/utils/logger';
+import { useToast } from '@/lib/hooks/useToast';
 
 /**
  * Custom hook to manage create page logic and state
@@ -15,7 +16,8 @@ export function useCreatePageLogic() {
   const searchParams = useSearchParams();
   const { isAuthenticated } = useAuth();
   const { workflowState, startWorkflow, resetWorkflow } = useWorkflow();
-  
+  const toast = useToast();
+
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [showLoginDialog, setShowLoginDialog] = useState(false);
 
@@ -74,6 +76,9 @@ export function useCreatePageLogic() {
       // Note: Redirect happens in useEffect above when sessionId is set
     } catch (error) {
       logger.error('Failed to start workflow', error, { component: 'CreatePage' });
+      // Show error toast
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start workflow';
+      toast.error(errorMessage);
     }
   };
 
@@ -97,7 +102,7 @@ export function useCreatePageLogic() {
     showLoginDialog,
     setShowLoginDialog,
     workflowState,
-    
+
     // Handlers
     handleMoodSubmit,
     handleEditComplete,

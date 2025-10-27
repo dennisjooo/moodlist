@@ -16,7 +16,7 @@ from ...auth.dependencies import require_auth, refresh_spotify_token_if_expired
 from ...models.user import User
 from ...models.playlist import Playlist
 from ...dependencies import get_playlist_repository
-from ...repositories.playlist_repository import PlaylistRepository
+from ...auth.dependencies import check_playlist_creation_rate_limit
 from ..workflows.workflow_manager import WorkflowManager, WorkflowConfig
 from ..tools.reccobeat_service import RecoBeatService
 from ..tools.spotify_service import SpotifyService
@@ -109,7 +109,8 @@ async def start_recommendation(
     current_user: User = Depends(require_auth),
     background_tasks: BackgroundTasks = None,
     db: AsyncSession = Depends(get_db),
-    playlist_repo=Depends(get_playlist_repository)
+    playlist_repo=Depends(get_playlist_repository),
+    _rate_limit_check: None = Depends(check_playlist_creation_rate_limit)
 ):
     """Start a new mood-based recommendation workflow.
 
@@ -119,6 +120,7 @@ async def start_recommendation(
         background_tasks: FastAPI background tasks
         db: Database session
         playlist_repo: Playlist repository
+        _rate_limit_check: Rate limit check (injected dependency)
 
     Returns:
         Workflow session information
