@@ -8,6 +8,8 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from ...core.base_agent import BaseAgent
 from ...states.agent_state import AgentState, RecommendationStatus
+from ...tools.spotify_service import SpotifyService
+from ..recommendation_generator.track_enrichment_service import TrackEnrichmentService
 from .quality_evaluator import QualityEvaluator
 from .improvement_strategy import ImprovementStrategy
 from .recommendation_processor import RecommendationProcessor
@@ -63,6 +65,10 @@ class OrchestratorAgent(BaseAgent):
             cohesion_threshold=cohesion_threshold
         )
         self.recommendation_processor = RecommendationProcessor()
+        
+        # Initialize track enrichment service
+        spotify_service = SpotifyService()
+        self.track_enrichment_service = TrackEnrichmentService(spotify_service)
 
     async def execute(self, state: AgentState) -> AgentState:
         """Execute orchestration with seed gathering, recommendations, and iterative improvement.
@@ -187,6 +193,9 @@ class OrchestratorAgent(BaseAgent):
         # Remove duplicates
         state.recommendations = self.recommendation_processor.remove_duplicates(state.recommendations)
         
+        # Enrich tracks with missing Spotify URIs
+        state = await self.enrich_tracks_with_spotify_data(state)
+        
         # Run final quality evaluation to get fresh outlier list
         final_evaluation = await self.quality_evaluator.evaluate_playlist_quality(state)
         state.metadata["final_quality_evaluation"] = final_evaluation
@@ -277,5 +286,77 @@ class OrchestratorAgent(BaseAgent):
             f"(cohesion: {final_evaluation['cohesion_score']:.2f}, "
             f"overall: {final_evaluation['overall_score']:.2f})"
         )
+
+        return state
+
+    async def enrich_tracks_with_spotify_data(self, state: AgentState) -> AgentState:
+        """Enrich recommendations with missing Spotify URIs and artist data.
+
+        Args:
+            state: Current workflow state
+
+        Returns:
+            Updated state with enriched recommendations
+        """
+        if not state.recommendations:
+            return state
+
+        try:
+            logger.info("Enriching tracks with missing Spotify data...")
+
+            # Get Spotify access token
+            access_token = state.metadata.get("spotify_access_token")
+            if not access_token:
+                logger.warning("No Spotify access token available for enrichment")
+                return state
+
+            # Count tracks that need enrichment
+            tracks_needing_enrichment = sum(
+                1 for rec in state.recommendations
+                if not rec.spotify_uri or
+                   rec.spotify_uri == "null" or
+                   "Unknown Artist" in rec.artists
+            )
+
+            if tracks_needing_enrichment == 0:
+                logger.info("No tracks need enrichment - all have valid Spotify URIs")
+                return state
+
+            logger.info(
+                f"Found {tracks_needing_enrichment}/{len(state.recommendations)} tracks "
+                f"that need enrichment"
+            )
+
+            # Enrich recommendations
+            state.current_step = "enriching_tracks"
+            await self._notify_progress(state)
+
+            enriched_recommendations = await self.track_enrichment_service.enrich_recommendations(
+                recommendations=state.recommendations,
+                access_token=access_token
+            )
+
+            # Update state with enriched recommendations
+            original_count = len(state.recommendations)
+            state.recommendations = enriched_recommendations
+
+            logger.info(
+                f"Track enrichment complete: "
+                f"{original_count} -> {len(enriched_recommendations)} tracks "
+                f"({original_count - len(enriched_recommendations)} removed)"
+            )
+
+            # Store enrichment metadata
+            state.metadata["track_enrichment"] = {
+                "original_count": original_count,
+                "enriched_count": len(enriched_recommendations),
+                "removed_count": original_count - len(enriched_recommendations),
+                "tracks_needing_enrichment": tracks_needing_enrichment
+            }
+
+        except Exception as e:
+            logger.error(f"Error enriching tracks: {e}", exc_info=True)
+            # Don't fail the workflow if enrichment fails
+            state.metadata["track_enrichment_error"] = str(e)
 
         return state
