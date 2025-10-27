@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = Field(env="GROQ_API_KEY")
     CEREBRAS_API_KEY: str = Field(env="CEREBRAS_API_KEY")
     
+    # Rate Limiting
+    DAILY_PLAYLIST_CREATION_LIMIT: int = Field(default=5, env="DAILY_PLAYLIST_CREATION_LIMIT")
+    
     @property
     def ALLOWED_HOSTS(self) -> List[str]:
         """Get allowed hosts based on environment."""

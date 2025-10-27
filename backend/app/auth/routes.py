@@ -314,3 +314,46 @@ async def get_user_dashboard(
     except Exception as e:
         logger.error(f"Error getting dashboard data: {str(e)}", exc_info=True)
         raise InternalServerError(f"Failed to get dashboard data: {str(e)}")
+
+
+@router.get("/quota")
+async def get_user_quota(
+    current_user: User = Depends(require_auth),
+    playlist_repo: PlaylistRepository = Depends(get_playlist_repository),
+):
+    """Get user's daily playlist creation quota status.
+    
+    Args:
+        current_user: Authenticated user
+        playlist_repo: Playlist repository
+    
+    Returns:
+        Quota information with usage and limit
+    """
+    try:
+        from app.core.config import settings
+        
+        # Get count of playlists created today
+        used = await playlist_repo.count_user_playlists_created_today(current_user.id)
+        limit = settings.DAILY_PLAYLIST_CREATION_LIMIT
+        remaining = max(0, limit - used)
+        
+        logger.debug(
+            "Quota status retrieved",
+            user_id=current_user.id,
+            used=used,
+            limit=limit,
+            remaining=remaining
+        )
+        
+        return {
+            "used": used,
+            "limit": limit,
+            "remaining": remaining,
+            "can_create": remaining > 0,
+            "development": settings.APP_ENV == "development"
+        }
+    
+    except Exception as e:
+        logger.error(f"Error getting quota status: {str(e)}", exc_info=True)
+        raise InternalServerError(f"Failed to get quota status: {str(e)}")

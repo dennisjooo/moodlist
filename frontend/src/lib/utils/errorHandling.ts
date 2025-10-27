@@ -19,21 +19,21 @@ export const ErrorCodes = {
   AUTH_REQUIRED: 'AUTH_REQUIRED',
   AUTH_EXPIRED: 'AUTH_EXPIRED',
   AUTH_FAILED: 'AUTH_FAILED',
-  
+
   // API errors
   NETWORK_ERROR: 'NETWORK_ERROR',
   API_ERROR: 'API_ERROR',
   TIMEOUT: 'TIMEOUT',
-  
+
   // Workflow errors
   WORKFLOW_START_FAILED: 'WORKFLOW_START_FAILED',
   WORKFLOW_NOT_FOUND: 'WORKFLOW_NOT_FOUND',
   WORKFLOW_EDIT_FAILED: 'WORKFLOW_EDIT_FAILED',
-  
+
   // Validation errors
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   INVALID_INPUT: 'INVALID_INPUT',
-  
+
   // Generic errors
   UNKNOWN_ERROR: 'UNKNOWN_ERROR',
 } as const;
@@ -162,7 +162,7 @@ export function handleError(
   }
 ): AppError {
   const appError = parseError(error);
-  
+
   // Log the error
   logger.error(
     `Error in ${context.component}${context.action ? ` - ${context.action}` : ''}`,

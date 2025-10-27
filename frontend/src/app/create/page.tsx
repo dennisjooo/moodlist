@@ -7,10 +7,11 @@ import { AILoadingSpinner } from '@/components/shared/LoadingStates';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
-import { Suspense } from 'react';
+import { Suspense, useState } from 'react';
 import { useCreatePageLogic } from '@/lib/hooks/useCreatePageLogic';
 import { CreatePageLayout } from '@/components/features/create/CreatePageLayout';
 import { CreatePageHeader } from '@/components/features/create/CreatePageHeader';
+import { QuotaDisplay } from '@/components/features/create/QuotaDisplay';
 
 const PlaylistEditor = dynamic(() => import('@/components/PlaylistEditor'), {
   loading: () => <EditorSkeleton />,
@@ -57,6 +58,8 @@ function CreatePageContent() {
     handleEditCancel,
   } = useCreatePageLogic();
 
+  const [quotaLoading, setQuotaLoading] = useState(true);
+
   // Show editor if workflow is awaiting user input
   if (workflowState.awaitingInput && workflowState.recommendations.length > 0 && workflowState.sessionId) {
     return (
@@ -94,10 +97,19 @@ function CreatePageContent() {
       )}
 
       {/* Mood Input - only show if no active workflow */}
-      {!workflowState.sessionId && !workflowState.isLoading && (
+      {!workflowState.sessionId && (
         <div className="flex justify-center">
-          <div className="w-full max-w-md">
-            <MoodInput onSubmit={handleMoodSubmit} initialMood={selectedMood || undefined} />
+          <div className="w-full max-w-md space-y-3">
+            <div className={workflowState.isLoading ? 'hidden' : ''}>
+              <QuotaDisplay onLoadingChange={setQuotaLoading} />
+            </div>
+            {!workflowState.isLoading && (
+              <MoodInput
+                onSubmit={handleMoodSubmit}
+                initialMood={selectedMood || undefined}
+                disabled={quotaLoading}
+              />
+            )}
           </div>
         </div>
       )}
