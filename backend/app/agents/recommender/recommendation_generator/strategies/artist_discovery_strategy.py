@@ -8,7 +8,7 @@ from ....tools.spotify_service import SpotifyService
 from ....states.agent_state import AgentState
 from ....core.cache import cache_manager
 from ...utils import TokenService, TrackRecommendationFactory
-from ..audio_features import AudioFeaturesHandler
+from ..handlers.audio_features import AudioFeaturesHandler
 from .base_strategy import RecommendationStrategy
 
 logger = structlog.get_logger(__name__)

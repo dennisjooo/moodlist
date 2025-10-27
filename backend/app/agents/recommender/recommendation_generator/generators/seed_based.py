@@ -1,88 +1,75 @@
-"""Strategy for generating recommendations from seed tracks."""
+"""Seed-based recommendation generator."""
 
 import asyncio
 import structlog
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
+from ....states.agent_state import AgentState, TrackRecommendation
 from ....tools.reccobeat_service import RecoBeatService
-from ....states.agent_state import AgentState
-from ...utils import TrackRecommendationFactory
 from ..handlers.audio_features import AudioFeaturesHandler
 from ..handlers.track_filter import TrackFilter
 from ..handlers.scoring import ScoringEngine
-from .base_strategy import RecommendationStrategy
 
 logger = structlog.get_logger(__name__)
 
 
-class SeedBasedStrategy(RecommendationStrategy):
-    """Strategy for generating recommendations from seed tracks using RecoBeat API."""
+class SeedBasedGenerator:
+    """Generates recommendations from seed tracks using RecoBeat API."""
 
     def __init__(self, reccobeat_service: RecoBeatService):
-        """Initialize the seed-based strategy.
+        """Initialize the seed-based generator.
 
         Args:
             reccobeat_service: Service for RecoBeat API operations
         """
-        super().__init__("seed_based")
         self.reccobeat_service = reccobeat_service
         self.audio_features_handler = AudioFeaturesHandler(reccobeat_service)
         self.track_filter = TrackFilter()
         self.scoring_engine = ScoringEngine()
 
-    async def generate_recommendations(
-        self,
-        state: AgentState,
-        target_count: int
-    ) -> List[Dict[str, Any]]:
+    async def generate_recommendations(self, state: AgentState) -> List[Dict[str, Any]]:
         """Generate recommendations from seed tracks.
 
         Args:
             state: Current agent state
-            target_count: Target number of recommendations to generate
 
         Returns:
-            List of recommendation data dictionaries
+            List of recommendations from seed tracks
         """
         # Prepare seed generation parameters
-        seed_chunks, reccobeat_params = self._prepare_seed_generation_params(state, target_count)
+        seed_chunks, reccobeat_params = self._prepare_params(state)
 
         # Process all seed chunks
         all_recommendations = await self._process_seed_chunks(seed_chunks, reccobeat_params, state)
 
         # Apply validation pass to filter out irrelevant tracks
-        validated_recommendations = self._validate_seed_recommendations(all_recommendations, state)
+        validated_recommendations = self._validate_recommendations(all_recommendations, state)
 
         logger.info(f"Generated {len(validated_recommendations)} validated recommendations from seeds")
 
         return [rec.dict() for rec in validated_recommendations]
 
-    def _prepare_seed_generation_params(
-        self,
-        state: AgentState,
-        target_count: int
-    ) -> tuple[List[List[str]], Dict[str, Any]]:
+    def _prepare_params(self, state: AgentState) -> tuple[List[List[str]], Dict[str, Any]]:
         """Prepare parameters for seed-based generation.
 
         Args:
             state: Current agent state
-            target_count: Target number of recommendations
 
         Returns:
             Tuple of (seed_chunks, reccobeat_params)
         """
         # Deduplicate seeds before processing
-        unique_seeds = list(dict.fromkeys(state.seed_tracks))  # Preserves order
+        unique_seeds = list(dict.fromkeys(state.seed_tracks))
         if len(unique_seeds) < len(state.seed_tracks):
             logger.info(f"Deduplicated seeds: {len(state.seed_tracks)} -> {len(unique_seeds)}")
 
         # Split seeds into smaller chunks for multiple API calls
         seed_chunks = self._chunk_seeds(unique_seeds, chunk_size=3)
 
-        # Get seed target (5% of total playlist target - very minimal supplementary)
-        target_seed_recs = state.metadata.get("_temp_seed_target", 1)  # Default ~5% of 20
+        # Get seed target (15% of total playlist target)
+        target_seed_recs = state.metadata.get("_temp_seed_target", 1)
 
-        # Request more per chunk to account for filtering (aim for 2x target due to low count)
+        # Request more per chunk to account for filtering
         per_chunk_size = min(10, max(int((target_seed_recs * 2) // len(seed_chunks)) + 2, 3))
 
         # Store per_chunk_size for use in processing
@@ -103,7 +90,7 @@ class SeedBasedStrategy(RecommendationStrategy):
         seed_chunks: List[List[str]],
         reccobeat_params: Dict[str, Any],
         state: AgentState
-    ) -> List[Any]:
+    ) -> List[TrackRecommendation]:
         """Process all seed chunks to get recommendations.
 
         Args:
@@ -118,7 +105,7 @@ class SeedBasedStrategy(RecommendationStrategy):
 
         for chunk in seed_chunks:
             try:
-                chunk_recommendations = await self._process_seed_chunk(chunk, reccobeat_params, state)
+                chunk_recommendations = await self._process_chunk(chunk, reccobeat_params, state)
                 all_recommendations.extend(chunk_recommendations)
 
                 # Add some delay between API calls to respect rate limits
@@ -131,12 +118,12 @@ class SeedBasedStrategy(RecommendationStrategy):
         logger.info(f"Generated {len(all_recommendations)} raw recommendations from {len(seed_chunks)} seed chunks")
         return all_recommendations
 
-    async def _process_seed_chunk(
+    async def _process_chunk(
         self,
         chunk: List[str],
         reccobeat_params: Dict[str, Any],
         state: AgentState
-    ) -> List[Any]:
+    ) -> List[TrackRecommendation]:
         """Process a single seed chunk.
 
         Args:
@@ -147,8 +134,7 @@ class SeedBasedStrategy(RecommendationStrategy):
         Returns:
             List of TrackRecommendation objects from this chunk
         """
-        # Get recommendations for this seed chunk
-        # ONLY use seeds, negative_seeds, and size - NO audio feature params
+        # Get recommendations for this seed chunk (ONLY use seeds, negative_seeds, and size)
         chunk_recommendations = await self.reccobeat_service.get_track_recommendations(
             seeds=chunk,
             size=self._per_chunk_size,
@@ -161,14 +147,14 @@ class SeedBasedStrategy(RecommendationStrategy):
             track_id = rec_data.get("track_id", "")
             if track_id:
                 track_data.append((track_id, rec_data.get("audio_features")))
-        
+
         audio_features_map = await self.audio_features_handler.get_batch_complete_audio_features(track_data)
-        
+
         # Convert to TrackRecommendation objects
         recommendations = []
         for rec_data in chunk_recommendations:
             try:
-                recommendation = await self._create_seed_recommendation(rec_data, chunk, state, audio_features_map)
+                recommendation = await self._create_recommendation(rec_data, chunk, state, audio_features_map)
                 if recommendation:
                     recommendations.append(recommendation)
 
@@ -178,13 +164,13 @@ class SeedBasedStrategy(RecommendationStrategy):
 
         return recommendations
 
-    async def _create_seed_recommendation(
+    async def _create_recommendation(
         self,
         rec_data: Dict[str, Any],
         chunk: List[str],
         state: AgentState,
         audio_features_map: Dict[str, Dict[str, Any]]
-    ) -> Any:
+    ) -> Optional[TrackRecommendation]:
         """Create a recommendation from seed-based RecoBeat data.
 
         Args:
@@ -209,22 +195,22 @@ class SeedBasedStrategy(RecommendationStrategy):
         if confidence is None:
             confidence = self.scoring_engine.calculate_confidence_score(rec_data, state)
 
-        # Enhance the data with complete audio features
-        enhanced_data = rec_data.copy()
-        enhanced_data["audio_features"] = complete_audio_features
-        enhanced_data["confidence_score"] = confidence
-
-        return TrackRecommendationFactory.from_seed_based_generation(
-            response_data=enhanced_data,
-            seed_tracks=chunk,
-            reasoning=rec_data.get("reasoning", f"Mood-based recommendation using seeds: {', '.join(chunk)}")
+        return TrackRecommendation(
+            track_id=track_id,
+            track_name=rec_data.get("track_name", "Unknown Track"),
+            artists=rec_data.get("artists", ["Unknown Artist"]),
+            spotify_uri=rec_data.get("spotify_uri"),
+            confidence_score=confidence,
+            audio_features=complete_audio_features,
+            reasoning=rec_data.get("reasoning", f"Mood-based recommendation using seeds: {', '.join(chunk)}"),
+            source=rec_data.get("source", "reccobeat")
         )
 
-    def _validate_seed_recommendations(
+    def _validate_recommendations(
         self,
-        recommendations: List[Any],
+        recommendations: List[TrackRecommendation],
         state: AgentState
-    ) -> List[Any]:
+    ) -> List[TrackRecommendation]:
         """Validate seed-based recommendations.
 
         Args:
@@ -243,9 +229,15 @@ class SeedBasedStrategy(RecommendationStrategy):
             if is_valid:
                 validated_recommendations.append(rec)
             else:
-                logger.info(f"Filtered out invalid track from seeds: {rec.track_name} by {', '.join(rec.artists)} - {reason}")
+                logger.info(
+                    f"Filtered out invalid track from seeds: {rec.track_name} "
+                    f"by {', '.join(rec.artists)} - {reason}"
+                )
 
-        logger.info(f"Validation pass: {len(recommendations)} -> {len(validated_recommendations)} tracks (filtered {len(recommendations) - len(validated_recommendations)})")
+        logger.info(
+            f"Validation pass: {len(recommendations)} -> {len(validated_recommendations)} tracks "
+            f"(filtered {len(recommendations) - len(validated_recommendations)})"
+        )
 
         return validated_recommendations
 
@@ -262,6 +254,7 @@ class SeedBasedStrategy(RecommendationStrategy):
         chunks = []
         for i in range(0, len(seeds), chunk_size):
             chunk = seeds[i:i + chunk_size]
-            if len(chunk) > 0:  # Only add non-empty chunks
+            if len(chunk) > 0:
                 chunks.append(chunk)
         return chunks
+
