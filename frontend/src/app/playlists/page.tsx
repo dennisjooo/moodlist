@@ -7,12 +7,12 @@ import { SpotifyLoginButton } from '@/components/features/auth/SpotifyLoginButto
 import { PlaylistGridSkeleton } from '@/components/shared/LoadingStates';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { DotPattern } from '@/components/ui/dot-pattern';
 import { CrossfadeTransition } from '@/components/ui/crossfade-transition';
+import { DotPattern } from '@/components/ui/dot-pattern';
+import { motion } from '@/components/ui/lazy-motion';
 import { playlistAPI, UserPlaylist } from '@/lib/playlistApi';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
-import { motion } from '@/components/ui/lazy-motion';
 import { Music } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense, useEffect, useState } from 'react';
@@ -28,7 +28,11 @@ function PlaylistsPageContent() {
       setIsLoading(true);
       setIsUnauthorized(false);
       const response = await playlistAPI.getUserPlaylists();
-      setPlaylists(response.playlists);
+      // Filter out failed and cancelled playlists
+      const filteredPlaylists = response.playlists.filter(
+        playlist => playlist.status !== 'failed' && playlist.status !== 'cancelled'
+      );
+      setPlaylists(filteredPlaylists);
     } catch (err) {
       logger.error('Failed to fetch playlists', err, { component: 'PlaylistsPage' });
       const errorMessage = err instanceof Error ? err.message : 'Failed to load playlists';
