@@ -231,19 +231,22 @@ class AnchorSelectionEngine:
                     logger.warning(f"Failed to get features for user-mentioned track: {e}")
 
             # Mark track metadata for protection
-            track['user_mentioned'] = True  # CRITICAL: Never filter this track
-            track['anchor_type'] = 'user'  # User anchor (guaranteed inclusion)
-            track['protected'] = True  # Protected from quality filtering
+            # NOTE: Phase 2 change - these are anchor candidates from LLM extraction,
+            # NOT user-mentioned tracks from explicit intent analysis
+            # Only the IntentAnalyzer + SeedGatherer should mark tracks as user_mentioned
+            track['user_mentioned'] = False  # These are LLM-discovered anchors, not explicit user mentions
+            track['anchor_type'] = 'artist_recommended'  # LLM recommended anchor
+            track['protected'] = False  # Not protected (only true user mentions are protected)
 
             candidates.append({
                 'track': track,
-                'score': 1.0,  # Highest priority for user-mentioned tracks
-                'confidence': 1.0,  # Maximum confidence
+                'score': 1.0,  # High priority for LLM-discovered tracks
+                'confidence': 0.95,  # High but not maximum confidence
                 'features': features,
-                'source': 'user_mentioned',
-                'anchor_type': 'user',
-                'user_mentioned': True,
-                'protected': True
+                'source': 'llm_anchor',
+                'anchor_type': 'artist_recommended',
+                'user_mentioned': False,
+                'protected': False
             })
 
         return candidates

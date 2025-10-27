@@ -21,6 +21,7 @@ from ..workflows.workflow_manager import WorkflowManager, WorkflowConfig
 from ..tools.reccobeat_service import RecoBeatService
 from ..tools.spotify_service import SpotifyService
 from ..recommender import (
+    IntentAnalyzerAgent,
     MoodAnalyzerAgent,
     SeedGathererAgent,
     RecommendationGeneratorAgent,
@@ -45,7 +46,11 @@ llm = create_logged_llm(
     log_full_response=True
 )
 
-# Create agents with updated dependencies
+# Phase 2: Create agents with new IntentAnalyzerAgent
+intent_analyzer = IntentAnalyzerAgent(
+    llm=llm,
+    verbose=True
+)
 mood_analyzer = MoodAnalyzerAgent(
     llm=llm,
     spotify_service=spotify_service,
@@ -86,6 +91,7 @@ workflow_config = WorkflowConfig(
 )
 
 agents = {
+    "intent_analyzer": intent_analyzer,
     "mood_analyzer": mood_analyzer,
     "seed_gatherer": seed_gatherer,
     "recommendation_generator": recommendation_generator,

@@ -3,7 +3,7 @@
 import structlog
 from typing import Any, Dict, List, Optional
 
-from ...states.agent_state import TrackRecommendation
+from ....states.agent_state import TrackRecommendation
 
 logger = structlog.get_logger(__name__)
 
@@ -262,7 +262,11 @@ class TrackFilter:
                     confidence_score=rec_data.get("confidence_score", 0.5),
                     audio_features=rec_data.get("audio_features"),
                     reasoning=rec_data.get("reasoning", "Mood-based recommendation"),
-                    source=rec_data.get("source", "reccobeat")
+                    source=rec_data.get("source", "reccobeat"),
+                    # CRITICAL: Preserve user-mentioned metadata
+                    user_mentioned=rec_data.get("user_mentioned", False),
+                    anchor_type=rec_data.get("anchor_type"),
+                    protected=rec_data.get("protected", False)
                 )
                 rec_objects.append(rec_obj)
 
