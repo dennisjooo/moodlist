@@ -1,6 +1,7 @@
 """Playlist repository for playlist-specific database operations."""
 
 from typing import List, Optional, Dict
+from datetime import datetime, timezone
 
 import structlog
 from sqlalchemy import select, and_, desc, func
@@ -718,6 +719,49 @@ class PlaylistRepository(BaseRepository[Playlist]):
         except Exception as e:
             self.logger.error(
                 "Database error counting user playlists",
+                user_id=user_id,
+                error=str(e)
+            )
+            raise
+
+    async def count_user_playlists_created_today(self, user_id: int) -> int:
+        """Count playlists created by user today (UTC).
+        
+        Args:
+            user_id: User ID
+            
+        Returns:
+            Number of playlists created today
+        """
+        try:
+            # Get start of today in UTC
+            now_utc = datetime.now(timezone.utc)
+            start_of_today = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            query = select(func.count(Playlist.id)).where(
+                and_(
+                    Playlist.user_id == user_id,
+                    Playlist.created_at >= start_of_today,
+                    Playlist.deleted_at.is_(None),
+                    Playlist.status != "cancelled"
+                )
+            )
+            
+            result = await self.session.execute(query)
+            count = result.scalar() or 0
+            
+            self.logger.debug(
+                "User playlists created today counted",
+                user_id=user_id,
+                count=count,
+                start_of_today=start_of_today.isoformat()
+            )
+            
+            return count
+            
+        except Exception as e:
+            self.logger.error(
+                "Database error counting user playlists created today",
                 user_id=user_id,
                 error=str(e)
             )

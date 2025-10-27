@@ -150,11 +150,24 @@ class WorkflowAPI {
             logger.info('API response', { component: 'WorkflowAPI', status: response.status, endpoint });
 
             if (!response.ok) {
-                logger.error('API request failed', undefined, { component: 'WorkflowAPI', status: response.status, statusText: response.statusText, endpoint });
-                throw new WorkflowAPIError(
-                    response.status,
-                    `API request failed: ${response.status} ${response.statusText}`
-                );
+                // Try to extract detailed error message from response body
+                let errorMessage = `API request failed: ${response.status} ${response.statusText}`;
+                try {
+                    const errorData = await response.json();
+                    // Backend returns error in detail.message for rate limits
+                    if (errorData.detail?.message) {
+                        errorMessage = errorData.detail.message;
+                    } else if (errorData.detail && typeof errorData.detail === 'string') {
+                        errorMessage = errorData.detail;
+                    } else if (errorData.message) {
+                        errorMessage = errorData.message;
+                    }
+                } catch {
+                    // If parsing fails, use default message
+                }
+
+                logger.error('API request failed', undefined, { component: 'WorkflowAPI', status: response.status, statusText: response.statusText, endpoint, errorMessage });
+                throw new WorkflowAPIError(response.status, errorMessage);
             }
 
             return await response.json();

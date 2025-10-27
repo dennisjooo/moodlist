@@ -9,17 +9,17 @@ import { Sparkles } from 'lucide-react';
  */
 export function CreatePageHeader() {
   return (
-    <div className="text-center mb-12">
-      <Badge 
-        variant="outline" 
-        className="px-4 py-1 flex items-center gap-2 w-fit mx-auto mb-6"
+    <div className="text-center mb-6">
+      <Badge
+        variant="outline"
+        className="px-4 py-1 flex items-center gap-2 w-fit mx-auto mb-4"
         aria-label="Feature badge"
       >
         <Sparkles className="w-4 h-4" aria-hidden="true" />
         AI-Powered Playlist Creation
       </Badge>
 
-      <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl mb-4">
+      <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl mb-3">
         What&apos;s your mood?
       </h1>
       <p className="text-lg text-muted-foreground max-w-2xl mx-auto">

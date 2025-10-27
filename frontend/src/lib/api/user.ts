@@ -54,6 +54,13 @@ export interface DashboardData {
     status_breakdown: StatusBreakdown;
 }
 
+export interface QuotaStatus {
+    used: number;
+    limit: number;
+    remaining: number;
+    can_create: boolean;
+}
+
 class UserAPI {
     private async request<T>(
         endpoint: string,
@@ -99,6 +106,10 @@ class UserAPI {
         }
         const response = await this.request<{ playlists: RecentPlaylist[], total: number, limit: number, offset: number }>(`/api/playlists?${params.toString()}`);
         return response.playlists;
+    }
+
+    async getQuotaStatus(): Promise<QuotaStatus> {
+        return this.request<QuotaStatus>('/api/auth/quota');
     }
 }
 

@@ -8,14 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.security import verify_token
 from app.core.database import get_db
-from app.core.exceptions import UnauthorizedException, InternalServerError, SpotifyAuthError
+from app.core.exceptions import UnauthorizedException, InternalServerError, SpotifyAuthError, RateLimitException
 from app.clients import SpotifyAPIClient
 from app.models.session import Session
 from app.models.user import User
 from app.core.config import settings
 from app.repositories.user_repository import UserRepository
 from app.repositories.session_repository import SessionRepository
-from app.dependencies import get_user_repository, get_session_repository
+from app.repositories.playlist_repository import PlaylistRepository
+from app.dependencies import get_user_repository, get_session_repository, get_playlist_repository
 
 logger = structlog.get_logger(__name__)
 security = HTTPBearer(auto_error=False)
@@ -164,7 +165,29 @@ async def refresh_spotify_token_if_expired(user: User, db: AsyncSession) -> User
                     error=str(e))
         raise SpotifyAuthError("Failed to refresh Spotify token. Please log in again.")
     except Exception as e:
-        logger.error("Unexpected error refreshing Spotify token", 
-                    user_id=user.id, 
+        logger.error("Unexpected error refreshing Spotify token",
+                    user_id=user.id,
                     error=str(e))
         raise InternalServerError(f"Failed to refresh token: {str(e)}")
+
+
+async def check_playlist_creation_rate_limit(
+    current_user: User = Depends(require_auth),
+    playlist_repo: PlaylistRepository = Depends(get_playlist_repository)
+) -> None:
+    """Check if user has exceeded daily playlist creation limit.
+
+    Args:
+        current_user: Authenticated user (injected via dependency)
+        playlist_repo: Playlist repository
+
+    Raises:
+        RateLimitException: If user has exceeded daily limit
+    """
+    count = await playlist_repo.count_user_playlists_created_today(current_user.id)
+    
+    if count >= settings.DAILY_PLAYLIST_CREATION_LIMIT:
+        raise RateLimitException(
+            detail=f"You've created {settings.DAILY_PLAYLIST_CREATION_LIMIT} playlists today! Come back tomorrow for more musical adventures.",
+            retry_after=86400  # 24 hours in seconds
+        )
