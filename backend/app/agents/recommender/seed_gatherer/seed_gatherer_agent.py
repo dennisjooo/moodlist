@@ -5,6 +5,8 @@ Phase 2 Refactor: This agent now handles:
 - Selecting anchor tracks (moved from MoodAnalyzerAgent)
 - Discovering and validating artists (moved from MoodAnalyzerAgent)
 - Building optimized seed pool
+
+Refactored for better separation of concerns.
 """
 
 import structlog
@@ -16,6 +18,7 @@ from ...tools.spotify_service import SpotifyService
 from .seed_selector import SeedSelector
 from .audio_enricher import AudioEnricher
 from .llm_seed_selector import LLMSeedSelector
+from .user_track_searcher import UserTrackSearcher
 
 # Import components moved from MoodAnalyzerAgent
 from ..mood_analyzer.anchor_selection import AnchorTrackSelector
@@ -59,7 +62,8 @@ class SeedGathererAgent(BaseAgent):
         self.seed_selector = SeedSelector()
         self.audio_enricher = AudioEnricher(reccobeat_service)
         self.llm_seed_selector = LLMSeedSelector(llm)
-        
+        self.user_track_searcher = UserTrackSearcher(spotify_service)
+
         # Phase 2: Components moved from MoodAnalyzerAgent
         self.anchor_track_selector = AnchorTrackSelector(
             spotify_service=spotify_service,
@@ -144,78 +148,31 @@ class SeedGathererAgent(BaseAgent):
         access_token: str
     ) -> None:
         """Search for tracks explicitly mentioned by the user.
-        
+
         Phase 2: New functionality to find user-mentioned tracks.
-        
+
         Args:
             state: Current agent state
             intent_analysis: Intent analysis from IntentAnalyzerAgent
             access_token: Spotify access token
         """
         user_mentioned_tracks = intent_analysis.get("user_mentioned_tracks", [])
-        
+
         if not user_mentioned_tracks:
-            logger.info("No user-mentioned tracks to search for")
             state.metadata["user_mentioned_track_ids"] = []
             state.metadata["user_mentioned_tracks_full"] = []
             return
 
-        logger.info(f"Searching for {len(user_mentioned_tracks)} user-mentioned tracks")
         state.current_step = "gathering_seeds_searching_user_tracks"
         await self._notify_progress(state)
 
-        found_tracks = []
-        found_track_ids = []
-
-        for track_info in user_mentioned_tracks:
-            track_name = track_info.get("track_name")
-            artist_name = track_info.get("artist_name")
-            priority = track_info.get("priority", "medium")
-
-            try:
-                # Search Spotify for the track
-                search_query = f"track:{track_name} artist:{artist_name}"
-                search_results = await self.spotify_service.search_spotify_tracks(
-                    access_token=access_token,
-                    query=search_query,
-                    limit=3
-                )
-
-                if search_results and len(search_results) > 0:
-                    # Take the first result (best match)
-                    track = search_results[0]
-                    track_id = track.get("id")
-                    
-                    if track_id:
-                        found_tracks.append({
-                            "id": track_id,
-                            "name": track.get("name"),
-                            "artist": track.get("artists", [{}])[0].get("name"),
-                            "artist_id": track.get("artists", [{}])[0].get("id"),
-                            "uri": track.get("uri"),
-                            "popularity": track.get("popularity", 50),
-                            "user_mentioned": True,
-                            "priority": priority,
-                            "anchor_type": "user",
-                            "protected": True  # User-mentioned tracks are protected
-                        })
-                        found_track_ids.append(track_id)
-                        
-                        logger.info(
-                            f"✓ Found user-mentioned track: '{track.get('name')}' "
-                            f"by {track.get('artists', [{}])[0].get('name')} (priority: {priority})"
-                        )
-                else:
-                    logger.warning(f"Could not find track: '{track_name}' by {artist_name}")
-
-            except Exception as e:
-                logger.error(f"Error searching for track '{track_name}': {e}")
+        found_track_ids, found_tracks = await self.user_track_searcher.search_user_mentioned_tracks(
+            user_mentioned_tracks, access_token
+        )
 
         # Store in state metadata
         state.metadata["user_mentioned_track_ids"] = found_track_ids
         state.metadata["user_mentioned_tracks_full"] = found_tracks
-        
-        logger.info(f"Found {len(found_tracks)}/{len(user_mentioned_tracks)} user-mentioned tracks")
 
     async def _select_anchor_tracks(
         self,
