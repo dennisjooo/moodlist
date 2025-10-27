@@ -6,8 +6,8 @@ Phase 2: New strategy that prioritizes tracks/artists explicitly mentioned by th
 import structlog
 from typing import Any, Dict, List
 
-from .base_strategy import RecommendationStrategy
 from ....states.agent_state import AgentState
+from .base_strategy import RecommendationStrategy
 
 logger = structlog.get_logger(__name__)
 

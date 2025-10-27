@@ -4,11 +4,11 @@ import asyncio
 import structlog
 from typing import Any, Dict, List, Optional
 
-from ...states.agent_state import AgentState, TrackRecommendation
-from ...tools.reccobeat_service import RecoBeatService
-from .audio_features import AudioFeaturesHandler
-from .track_filter import TrackFilter
-from .scoring_engine import ScoringEngine
+from ....states.agent_state import AgentState, TrackRecommendation
+from ....tools.reccobeat_service import RecoBeatService
+from ..handlers.audio_features import AudioFeaturesHandler
+from ..handlers.track_filter import TrackFilter
+from ..handlers.scoring import ScoringEngine
 
 logger = structlog.get_logger(__name__)
 

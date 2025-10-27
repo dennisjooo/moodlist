@@ -10,19 +10,17 @@ Refactored for better separation of concerns.
 """
 
 import structlog
-from typing import Optional
 
 from ...core.base_agent import BaseAgent
 from ...states.agent_state import AgentState, RecommendationStatus
 from ...tools.spotify_service import SpotifyService
+from ..mood_analyzer.anchor_selection import AnchorTrackSelector
+from ..mood_analyzer.discovery import ArtistDiscovery
 from .seed_selector import SeedSelector
 from .audio_enricher import AudioEnricher
 from .llm_seed_selector import LLMSeedSelector
 from .user_track_searcher import UserTrackSearcher
 
-# Import components moved from MoodAnalyzerAgent
-from ..mood_analyzer.anchor_selection import AnchorTrackSelector
-from ..mood_analyzer.discovery import ArtistDiscovery
 
 logger = structlog.get_logger(__name__)
 

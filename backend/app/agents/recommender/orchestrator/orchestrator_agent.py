@@ -9,7 +9,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 from ...core.base_agent import BaseAgent
 from ...states.agent_state import AgentState, RecommendationStatus
 from ...tools.spotify_service import SpotifyService
-from ..recommendation_generator.track_enrichment_service import TrackEnrichmentService
+from ..recommendation_generator.handlers.track_enrichment import TrackEnrichmentService
 from .quality_evaluator import QualityEvaluator
 from .improvement_strategy import ImprovementStrategy
 from .recommendation_processor import RecommendationProcessor
