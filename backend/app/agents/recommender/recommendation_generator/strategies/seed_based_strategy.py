@@ -7,9 +7,9 @@ from typing import Any, Dict, List
 from ....tools.reccobeat_service import RecoBeatService
 from ....states.agent_state import AgentState
 from ...utils import TrackRecommendationFactory
-from ..audio_features import AudioFeaturesHandler
-from ..track_filter import TrackFilter
-from ..scoring_engine import ScoringEngine
+from ..handlers.audio_features import AudioFeaturesHandler
+from ..handlers.track_filter import TrackFilter
+from ..handlers.scoring import ScoringEngine
 from .base_strategy import RecommendationStrategy
 
 logger = structlog.get_logger(__name__)
