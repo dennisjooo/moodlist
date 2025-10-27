@@ -141,6 +141,13 @@ export function useWorkflowActions({
     }, [api, workflowState, setLoading, setWorkflowData]);
 
     const stopWorkflow = useCallback(() => {
+        // Dispatch workflow-removed event to clean up active workflows tracking
+        if (workflowState.sessionId) {
+            setTimeout(() => {
+                workflowEvents.removed(workflowState.sessionId!);
+            }, 0);
+        }
+
         // SSE/Polling is handled by the hook, just reset state
         setWorkflowData({
             sessionId: null,
@@ -153,7 +160,7 @@ export function useWorkflowActions({
             isLoading: false,
             awaitingInput: false,
         });
-    }, [setWorkflowData]);
+    }, [workflowState.sessionId, setWorkflowData]);
 
     const refreshResults = useCallback(async () => {
         if (!workflowState.sessionId) return;

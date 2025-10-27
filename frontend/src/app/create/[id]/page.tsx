@@ -1,24 +1,25 @@
 'use client';
 
 import { AuthGuard } from '@/components/AuthGuard';
-import Navigation from '@/components/Navigation';
-import { PlaylistEditorSkeleton, WorkflowProgressSkeleton } from '@/components/shared/LoadingStates';
-import MoodBackground from '@/components/shared/MoodBackground';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { DotPattern } from '@/components/ui/dot-pattern';
-import WorkflowProgress from '@/components/WorkflowProgress';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
-import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
-import { ArrowLeft, Sparkles } from 'lucide-react';
-import dynamic from 'next/dynamic';
+import { usePageCancellation } from '@/lib/hooks/usePageCancellation';
+import { CreateSessionLoading } from '@/components/features/create/CreateSessionLoading';
+import { CreateSessionEditor } from '@/components/features/create/CreateSessionEditor';
+import { CreateSessionProgress } from '@/components/features/create/CreateSessionProgress';
+import { CreateSessionError } from '@/components/features/create/CreateSessionError';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-const PlaylistEditor = dynamic(() => import('@/components/PlaylistEditor'), {
-    loading: () => <PlaylistEditorSkeleton />,
-    ssr: false,
-});
 
 // Main content component for dynamic session route
 function CreateSessionPageContent() {
@@ -26,13 +27,31 @@ function CreateSessionPageContent() {
     const router = useRouter();
     const sessionId = params.id as string;
     const [isLoadingSession, setIsLoadingSession] = useState(true);
-    const { workflowState, loadWorkflow } = useWorkflow();
+    const { workflowState, loadWorkflow, stopWorkflow, clearError } = useWorkflow();
+
+    const {
+        showCancelDialog,
+        setShowCancelDialog,
+        isCancelling,
+        handleConfirmCancel,
+    } = usePageCancellation({
+        sessionId: workflowState.sessionId,
+        stopWorkflow,
+        clearError,
+    });
 
     const handleBack = () => {
         // Check if we're currently on an edit page - if so, go back to the parent create page
         if (window.location.pathname.includes('/edit')) {
             const parentPath = window.location.pathname.replace('/edit', '');
             router.push(parentPath);
+            return;
+        }
+
+        // If workflow is active (not terminal), show confirmation dialog
+        const isActive = workflowState.status !== 'completed' && workflowState.status !== 'failed';
+        if (isActive && workflowState.sessionId) {
+            setShowCancelDialog(true);
             return;
         }
 
@@ -57,6 +76,7 @@ function CreateSessionPageContent() {
             router.push('/playlists');
         }
     };
+
 
 
     const loadSessionCallback = useCallback(async () => {
@@ -132,205 +152,83 @@ function CreateSessionPageContent() {
         router.push(`/playlist/${sessionId}`);
     };
 
+    // Determine which component to render based on workflow state
+    const renderContent = () => {
+        // Loading state - only show minimal loading indicator during initial auth/status check
+        if (isLoadingSession) {
+            return <CreateSessionLoading onBack={handleBack} />;
+        }
 
-    // Loading state - only show minimal loading indicator during initial auth/status check
-    if (isLoadingSession) {
-        return (
-            <div className="min-h-screen bg-background relative">
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
-                    <DotPattern
-                        className={cn(
-                            "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-                        )}
-                    />
-                </div>
-
-                <Navigation />
-
-                <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                    {/* Back Button */}
-                    <Button
-                        variant="ghost"
-                        onClick={handleBack}
-                        className="mb-6 gap-2"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back
-                    </Button>
-
-                    <div className="flex items-center justify-center min-h-[60vh]">
-                        <div className="w-full max-w-4xl">
-                            <WorkflowProgressSkeleton />
-                        </div>
-                    </div>
-                </main>
-            </div>
-        );
-    }
-
-    // Show editor if workflow is awaiting user input
-    if (workflowState.awaitingInput && workflowState.recommendations.length > 0 && workflowState.sessionId) {
-        const colorScheme = workflowState.moodAnalysis?.color_scheme;
-
-        return (
-            <div className="min-h-screen bg-background relative">
-                <MoodBackground
+        // Show editor if workflow is awaiting user input
+        if (workflowState.awaitingInput && workflowState.recommendations.length > 0 && workflowState.sessionId) {
+            const colorScheme = workflowState.moodAnalysis?.color_scheme;
+            return (
+                <CreateSessionEditor
+                    sessionId={workflowState.sessionId}
+                    recommendations={workflowState.recommendations}
                     colorScheme={colorScheme}
-                    style="linear-diagonal"
-                    opacity={0.2}
+                    onBack={handleBack}
+                    onSave={handleEditComplete}
+                    onCancel={handleEditCancel}
                 />
+            );
+        }
 
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
-                    <DotPattern
-                        className={cn(
-                            "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-                        )}
-                    />
-                </div>
+        // Determine if workflow is in a terminal state
+        const isTerminalStatus = workflowState.status === 'completed' || workflowState.status === 'failed';
 
-                <Navigation />
-
-                <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                    {/* Back Button */}
-                    <Button
-                        variant="ghost"
-                        onClick={handleBack}
-                        className="mb-6 gap-2"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back
-                    </Button>
-
-                    <PlaylistEditor
-                        sessionId={workflowState.sessionId}
-                        recommendations={workflowState.recommendations}
-                        onSave={handleEditComplete}
-                        onCancel={handleEditCancel}
-                    />
-                </main>
-            </div>
-        );
-    }
-
-    // Determine if workflow is in a terminal state
-    const isTerminalStatus = workflowState.status === 'completed' || workflowState.status === 'failed';
-
-    // If workflow is in terminal state but no recommendations, show error or loading state
-    if (isTerminalStatus && workflowState.recommendations.length === 0) {
-        const colorScheme = workflowState.moodAnalysis?.color_scheme;
-
-        return (
-            <div className="min-h-screen bg-background relative">
-                <MoodBackground
+        // If workflow is in terminal state but no recommendations, show error or loading state
+        if (isTerminalStatus && workflowState.recommendations.length === 0) {
+            const colorScheme = workflowState.moodAnalysis?.color_scheme;
+            return (
+                <CreateSessionError
                     colorScheme={colorScheme}
-                    style="linear-diagonal"
-                    opacity={0.2}
+                    error={workflowState.error}
+                    onBack={handleBack}
                 />
+            );
+        }
 
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
-                    <DotPattern
-                        className={cn(
-                            "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-                        )}
-                    />
-                </div>
-
-                <Navigation />
-
-                <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                    {/* Back Button */}
-                    <Button
-                        variant="ghost"
-                        onClick={handleBack}
-                        className="mb-6 gap-2"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back
-                    </Button>
-
-                    <div className="flex items-center justify-center min-h-[60vh]">
-                        <div className="text-center">
-                            {workflowState.error ? (
-                                <div className="text-destructive">
-                                    <p className="text-lg font-semibold mb-2">Error</p>
-                                    <p className="text-muted-foreground">{workflowState.error}</p>
-                                </div>
-                            ) : (
-                                <WorkflowProgressSkeleton />
-                            )}
-                        </div>
-                    </div>
-                </main>
-            </div>
+        // Default progress view
+        const colorScheme = workflowState.moodAnalysis?.color_scheme;
+        return (
+            <CreateSessionProgress
+                sessionId={workflowState.sessionId || ''}
+                status={workflowState.status}
+                moodAnalysis={workflowState.moodAnalysis}
+                recommendations={workflowState.recommendations}
+                colorScheme={colorScheme}
+                isCancelling={isCancelling}
+                onBack={handleBack}
+            />
         );
-    }
-
-    const colorScheme = workflowState.moodAnalysis?.color_scheme;
+    };
 
     return (
-        <div className="min-h-screen bg-background relative flex flex-col">
-            <MoodBackground
-                colorScheme={colorScheme}
-                style="linear-diagonal"
-                opacity={0.2}
-            />
+        <>
+            {renderContent()}
 
-            {/* Fixed Dot Pattern Background */}
-            <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
-                <DotPattern
-                    className={cn(
-                        "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-                    )}
-                />
-            </div>
-
-            {/* Navigation */}
-            <Navigation />
-
-            {/* Main Content - Centered */}
-            <main className="relative z-10 flex-1 flex flex-col">
-                <div className="max-w-4xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                    {/* Back Button - Positioned at top */}
-                    <Button
-                        variant="ghost"
-                        onClick={handleBack}
-                        className="mb-8 gap-2"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back
-                    </Button>
-                </div>
-
-                {/* Centered content area */}
-                <div className="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8 -mt-16">
-                    <div className="max-w-4xl w-full">
-                        {/* Only show "Creating your playlist" if we have a status AND it's not terminal */}
-                        {workflowState.status && !isTerminalStatus && (
-                            <div className="text-center mb-12">
-                                <Badge variant="outline" className="px-4 py-1 flex items-center gap-2 w-fit mx-auto mb-6">
-                                    <Sparkles className="w-4 h-4" />
-                                    AI-Powered Playlist Creation
-                                </Badge>
-
-                                <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl mb-4">
-                                    Creating your playlist
-                                </h1>
-                                <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                                    Our AI is working on creating the perfect Spotify playlist for your mood.
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Workflow Progress */}
-                        {workflowState.sessionId && workflowState.status !== 'completed' && (
-                            <div className="mb-8">
-                                <WorkflowProgress />
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </main>
-        </div>
+            <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Cancel Playlist Creation?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to cancel this workflow? Your progress will be lost and you'll need to start over.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isCancelling}>Keep Working</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleConfirmCancel}
+                            disabled={isCancelling}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {isCancelling ? 'Cancelling...' : 'Cancel Workflow'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 }
 
