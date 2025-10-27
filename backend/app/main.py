@@ -1,12 +1,14 @@
 from contextlib import asynccontextmanager
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.middleware import LoggingMiddleware, InvocationStatusMiddleware
+from app.core.limiter import limiter
 from app.agents.core.cache import cache_manager
 from app.auth.routes import router as auth_router
 from app.spotify.routes import router as spotify_router
@@ -48,7 +50,16 @@ def create_application() -> FastAPI:
         description="Mood-based playlist generation API",
         lifespan=lifespan,
     )
-    
+
+    if settings.ENABLE_RATE_LIMITING:
+        from slowapi.middleware import SlowAPIMiddleware
+        app.state.limiter = limiter
+        app.add_middleware(SlowAPIMiddleware)
+
+        @app.exception_handler(RateLimitExceeded)
+        async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+            return settings.rate_limit_response(exc)
+
     # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,

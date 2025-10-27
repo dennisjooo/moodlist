@@ -7,11 +7,12 @@ import structlog
 from fastapi import APIRouter, Depends, BackgroundTasks, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from ...core.llm_factory import create_logged_llm
+from ...core.limiter import limiter
 from ...core.constants import PlaylistStatus
 from ...core.database import get_db
 from ...core.exceptions import NotFoundException, InternalServerError, ValidationException
+from ...core.config import settings
 from ...auth.dependencies import require_auth, refresh_spotify_token_if_expired
 from ...models.user import User
 from ...models.playlist import Playlist
@@ -104,7 +105,9 @@ router = APIRouter()
 
 
 @router.post("/recommendations/start")
+@limiter.limit(settings.RATE_LIMITS.get("workflow_start", "10/minute"))
 async def start_recommendation(
+    request: Request,
     mood_prompt: str = Query(..., description="Mood description for playlist generation"),
     current_user: User = Depends(require_auth),
     background_tasks: BackgroundTasks = None,
@@ -176,7 +179,8 @@ async def start_recommendation(
 
 
 @router.get("/recommendations/{session_id}/status")
-async def get_workflow_status(session_id: str, db: AsyncSession = Depends(get_db)):
+@limiter.limit(settings.RATE_LIMITS.get("workflow_poll", "60/minute"))
+async def get_workflow_status(request: Request, session_id: str, db: AsyncSession = Depends(get_db)):
     """Get the current status of a recommendation workflow.
 
     Args:

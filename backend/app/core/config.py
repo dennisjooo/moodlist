@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 from pydantic_settings import BaseSettings
 from pydantic import Field
 
@@ -62,6 +62,30 @@ class Settings(BaseSettings):
     
     # Rate Limiting
     DAILY_PLAYLIST_CREATION_LIMIT: int = Field(default=5, env="DAILY_PLAYLIST_CREATION_LIMIT")
+    ENABLE_RATE_LIMITING: bool = Field(default=True, env="ENABLE_RATE_LIMITING")
+    RATE_LIMITS: Dict[str, str] = Field(default_factory=lambda: {
+        "general": "100/minute",
+        "workflow_start": "10/minute",
+        "workflow_poll": "60/minute",
+        "playlist_edit": "30/minute",
+        "auth": "20/minute"
+    })
+
+    def rate_limit_response(self, exc):
+        """Generate rate limit error response."""
+        from fastapi.responses import JSONResponse
+        retry_after = int(exc.retry_after) if hasattr(exc, 'retry_after') and exc.retry_after else None
+        headers = {"Retry-After": str(retry_after)} if retry_after else {}
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": "Too many requests, please slow down.",
+                "error": "rate_limit_exceeded",
+                "limit": getattr(exc, 'detail', 'Rate limit exceeded'),
+                "retry_after": retry_after,
+            },
+            headers=headers,
+        )
     
     @property
     def ALLOWED_HOSTS(self) -> List[str]:
