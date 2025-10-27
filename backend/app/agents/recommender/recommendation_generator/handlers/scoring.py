@@ -3,7 +3,7 @@
 import structlog
 from typing import Any, Dict, Optional
 
-from ...states.agent_state import AgentState
+from ....states.agent_state import AgentState
 
 logger = structlog.get_logger(__name__)
 

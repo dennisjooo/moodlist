@@ -3,7 +3,7 @@
 import structlog
 from typing import List
 
-from ...states.agent_state import TrackRecommendation
+from ....states.agent_state import TrackRecommendation
 
 logger = structlog.get_logger(__name__)
 
@@ -92,8 +92,17 @@ class DiversityManager:
             if diversity_penalty > 0:
                 penalized_count += 1
 
-        # Re-sort by adjusted confidence
-        diversified_recommendations.sort(key=lambda x: x.confidence_score, reverse=True)
+        # CRITICAL: Separate protected and non-protected tracks before sorting
+        # Protected tracks (user-mentioned) must maintain priority
+        protected_tracks = [r for r in diversified_recommendations if r.protected or r.user_mentioned]
+        non_protected_tracks = [r for r in diversified_recommendations if not (r.protected or r.user_mentioned)]
+        
+        # Sort each group independently
+        protected_tracks.sort(key=lambda x: x.confidence_score, reverse=True)
+        non_protected_tracks.sort(key=lambda x: x.confidence_score, reverse=True)
+        
+        # Recombine with protected tracks first
+        diversified_recommendations = protected_tracks + non_protected_tracks
 
         logger.info(
             f"Diversity applied: {protected_count} tracks exempted (protected/user-mentioned), "
