@@ -2,8 +2,8 @@
 
 import structlog
 from typing import List, Dict, Any, Optional
-from ...states.agent_state import TrackRecommendation
-from ...tools.spotify_service import SpotifyService
+from ....states.agent_state import TrackRecommendation
+from ....tools.spotify_service import SpotifyService
 
 logger = structlog.get_logger(__name__)
 

@@ -3,12 +3,12 @@
 import structlog
 from typing import Any, Dict, List
 
-from ...tools.reccobeat_service import RecoBeatService
-from ...tools.spotify_service import SpotifyService
-from ...states.agent_state import AgentState
-from .seed_based_generator import SeedBasedGenerator
-from .artist_based_generator import ArtistBasedGenerator
-from .anchor_track_handler import AnchorTrackHandler
+from ....tools.reccobeat_service import RecoBeatService
+from ....tools.spotify_service import SpotifyService
+from ....states.agent_state import AgentState
+from ..generators.seed_based import SeedBasedGenerator
+from ..generators.artist_based import ArtistBasedGenerator
+from ..handlers.anchor_track import AnchorTrackHandler
 
 logger = structlog.get_logger(__name__)
 
@@ -133,7 +133,7 @@ class RecommendationEngine:
         Returns:
             List of recommendations from user anchor strategy
         """
-        from .strategies import UserAnchorStrategy
+        from ..strategies import UserAnchorStrategy
 
         target_count = state.metadata.get("_temp_user_anchor_target", 0)
         if target_count == 0:

@@ -5,11 +5,10 @@ from datetime import datetime, timezone, timedelta
 
 from sqlalchemy import select
 
-from ....core.config import settings
-from ....core.database import async_session_factory
-from ....models.user import User
-from ....clients.spotify_client import SpotifyAPIClient
-from ...states.agent_state import AgentState
+from .....core.database import async_session_factory
+from .....models.user import User
+from .....clients.spotify_client import SpotifyAPIClient
+from ....states.agent_state import AgentState
 
 logger = structlog.get_logger(__name__)
 
