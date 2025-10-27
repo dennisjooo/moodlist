@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { logger } from '../utils/logger';
 import { shouldAcceptStatusUpdate } from '../utils/workflow';
+import { workflowEvents } from './useActiveWorkflows';
 import type { WorkflowResults, WorkflowStatus } from '../api/workflow';
 import type { WorkflowState } from '../types/workflow';
 
@@ -57,6 +58,16 @@ export function useWorkflowState() {
                 to: status.status,
                 currentStep: status.current_step
             });
+
+            // Dispatch workflow update event asynchronously to avoid setState during render
+            setTimeout(() => {
+                workflowEvents.updated({
+                    sessionId: status.session_id,
+                    status: status.status,
+                    moodPrompt: status.mood_prompt,
+                    startedAt: status.created_at,
+                });
+            }, 0);
 
             return {
                 ...prev,

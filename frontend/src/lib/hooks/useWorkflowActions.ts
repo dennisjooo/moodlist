@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { logger } from '../utils/logger';
+import { workflowEvents } from './useActiveWorkflows';
 import { useWorkflowApi } from './useWorkflowApi';
 import type { WorkflowState } from '../types/workflow';
 
@@ -32,6 +33,16 @@ export function useWorkflowActions({
                 status: response.status,
                 isLoading: true, // Keep loading true so redirect happens
             });
+
+            // Dispatch workflow started event asynchronously to avoid setState during render
+            setTimeout(() => {
+                workflowEvents.started({
+                    sessionId: response.session_id,
+                    status: response.status,
+                    moodPrompt,
+                    startedAt: new Date().toISOString(),
+                });
+            }, 0);
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to start workflow';
@@ -106,6 +117,18 @@ export function useWorkflowActions({
             });
 
             logger.info('Workflow loaded', { component: 'useWorkflowActions', sessionId, status: status.status });
+
+            // If workflow is active (not terminal), register it for global tracking asynchronously
+            if (!isTerminal) {
+                setTimeout(() => {
+                    workflowEvents.started({
+                        sessionId: status.session_id,
+                        status: status.status,
+                        moodPrompt: status.mood_prompt,
+                        startedAt: status.created_at,
+                    });
+                }, 0);
+            }
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to load workflow';
