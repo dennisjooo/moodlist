@@ -4,6 +4,7 @@ import LoginRequiredDialog from '@/components/LoginRequiredDialog';
 import MoodCard from '@/components/features/mood/MoodCard';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { getMoodGenre } from '@/lib/moodColors';
+import { MOOD_TEMPLATES } from '@/lib/constants/moodTemplates';
 import { motion } from '@/components/ui/lazy-motion';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
@@ -15,30 +16,15 @@ export default function PopularMoods() {
   const { isAuthenticated } = useAuth();
   const [showLoginDialog, setShowLoginDialog] = useState(false);
 
-  // Now we just need mood names - colors and genres are auto-generated!
-  const allMoodExamples = [
-    'Chill Evening',
-    'Workout Energy',
-    'Study Focus',
-    'Road Trip',
-    'Romantic Night',
-    'Morning Coffee',
-    'Rainy Day',
-    'Party Vibes',
-  ];
+  const moodExamples = MOOD_TEMPLATES.slice(0, 8);
 
-  // Show only first 4 moods on mobile, all on desktop
-  const moodExamples = allMoodExamples;
-
-  const handleMoodClick = (mood: string) => {
+  const handleMoodClick = (prompt: string, label: string) => {
     if (!isAuthenticated) {
-      // User is not logged in - show login dialog
       setShowLoginDialog(true);
       return;
     }
 
-    // User is logged in - navigate to create page with the mood
-    router.push(`/create?mood=${encodeURIComponent(`${mood} in the genre of ${getMoodGenre(mood)}`)}`);
+    router.push(`/create?mood=${encodeURIComponent(prompt || `${label} in the genre of ${getMoodGenre(label)}`)}`);
   };
 
   return (
@@ -65,20 +51,19 @@ export default function PopularMoods() {
             viewport={{ once: true, margin: "-50px" }}
             transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
           >
-            {moodExamples.map((mood, index) => {
-              // Hide cards beyond index 3 on mobile
+            {moodExamples.map((template, index) => {
               const hiddenOnMobile = index > 3;
               return (
                 <motion.div
-                  key={mood}
+                  key={template.name}
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, margin: "-50px" }}
                   transition={{ duration: 0.5, delay: index * 0.1, ease: "easeOut" }}
                 >
                   <MoodCard
-                    mood={mood}
-                    onClick={() => handleMoodClick(mood)}
+                    mood={`${template.emoji} ${template.name}`}
+                    onClick={() => handleMoodClick(template.prompt, template.name)}
                     className={hiddenOnMobile ? 'hidden md:flex' : ''}
                   />
                 </motion.div>
