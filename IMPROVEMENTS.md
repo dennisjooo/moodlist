@@ -53,41 +53,6 @@ This document outlines potential improvements to make MoodList better across fea
   - `/backend/app/main.py` (middleware setup)
   - `/backend/app/agents/routes/agent_routes.py` (applied to endpoints)
 
-### 6. Workflow Timeline Transparency
-- **Enhanced**: Progress timeline component
-- **Impact**: Users see which agent phase is active, improving trust and clarity
-- **Features**:
-  - Five-stage pipeline mapped to agent phases with icons
-  - Real-time current step descriptions pulled from workflow updates
-  - Animated progress indicators and status logging
-- **Files**:
-  - `/frontend/src/components/features/workflow/ProgressTimeline.tsx`
-  - `/frontend/src/components/features/workflow/WorkflowProgress.tsx`
-
-### 7. Playlist Insight Explanations
-- **Enhanced**: Mood analysis card with strategy insights
-- **Impact**: Users understand why tracks were chosen
-- **Features**:
-  - Cohesion score surfaced when available
-  - Audio target profile panel with reveal toggle
-  - Narrative explanation of playlist construction
-- **Files**:
-  - `/frontend/src/components/features/playlist/PlaylistResults/MoodAnalysisCard.tsx`
-  - `/frontend/src/components/features/playlist/PlaylistResults/PlaylistResults.tsx`
-
-### 8. Track Audio Preview
-- **Added**: In-app playback for 30-second Spotify previews
-- **Impact**: Users can audition tracks without leaving editing flow
-- **Features**:
-  - Reusable `AudioPreviewPlayer` component
-  - Compact play/pause controls integrated in playlist editor rows
-  - Progress visualization and playback state handling
-- **Files**:
-  - `/frontend/src/components/features/playlist/AudioPreviewPlayer.tsx`
-  - `/frontend/src/components/features/playlist/PlaylistEditor/TrackItem.tsx`
-  - `/frontend/src/lib/types/workflow.ts`
-  - `/frontend/src/lib/api/workflow.ts`
-
 ---
 
 ## 🎯 High-Priority Opportunities (Not Yet Implemented)
@@ -130,6 +95,58 @@ Quality Evaluator (EARLIER) - Validate & iterate
 - Higher user satisfaction and trust
 
 ---
+
+### 2. Workflow Progress Transparency
+**Problem**: Progress timeline shows generic steps, users don't know which agent is running
+
+**Solution**:
+- Map actual pipeline phases to UI steps:
+  - Intent Analysis → "Understanding your request..."
+  - Mood Analysis → "Analyzing musical mood..."
+  - Seed Gathering → "Finding anchor tracks..."
+  - Generation → "Generating recommendations..."
+  - Quality Check → "Ensuring quality..."
+- Show current agent status in real-time
+- Display which tracks are being analyzed
+
+**Files to Update**:
+- `/frontend/src/components/features/workflow/ProgressTimeline.tsx`
+- `/frontend/src/components/features/workflow/WorkflowProgress.tsx`
+
+---
+
+### 3. Playlist Explanations ("Why These Songs?")
+**Problem**: Users don't understand why tracks were chosen
+
+**Solution**:
+- Create explanation card using existing metadata:
+  - Mood analysis insights
+  - Audio feature matches
+  - Similarity scores
+  - Anchor track connections
+  - Genre/style reasoning
+- Show track-by-track reasoning in tooltip
+
+**Implementation**:
+- Enhance `MoodAnalysisCard` component
+- Add `TrackExplanationTooltip` component
+- Use `workflowState.metadata` for insights
+
+**Expected Impact**: Trust and engagement increase
+
+---
+
+### 4. Audio Preview in Editor
+**Problem**: Users can't preview tracks without leaving the app
+
+**Solution**:
+- Add play button to each track in `PlaylistEditor`
+- Use Spotify's 30-second preview URLs (already fetched)
+- Simple audio player with play/pause controls
+
+**Files to Update**:
+- `/frontend/src/components/features/playlist/PlaylistEditor/TrackItem.tsx`
+- Create `/frontend/src/components/features/playlist/AudioPreviewPlayer.tsx`
 
 ---
 

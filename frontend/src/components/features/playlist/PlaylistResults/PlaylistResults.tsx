@@ -122,10 +122,7 @@ export default function PlaylistResults() {
 
       {/* Mood Analysis */}
       {workflowState.moodAnalysis && (
-        <MoodAnalysisCard 
-          moodAnalysis={workflowState.moodAnalysis} 
-          metadata={workflowState.metadata}
-        />
+        <MoodAnalysisCard moodAnalysis={workflowState.moodAnalysis} />
       )}
 
       {/* Track List */}
