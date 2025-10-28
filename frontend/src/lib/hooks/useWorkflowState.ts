@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { logger } from '../utils/logger';
 import { shouldAcceptStatusUpdate } from '../utils/workflow';
 import { workflowEvents } from './useActiveWorkflows';
+import { useToast } from './useToast';
 import type { WorkflowResults, WorkflowStatus } from '../api/workflow';
 import type { WorkflowState } from '../types/workflow';
 
@@ -19,6 +20,7 @@ const initialWorkflowState: WorkflowState = {
 
 export function useWorkflowState() {
     const [workflowState, setWorkflowState] = useState<WorkflowState>(initialWorkflowState);
+    const { success, error: showErrorToast } = useToast();
 
     const handleStatusUpdate = useCallback(async (status: WorkflowStatus) => {
         logger.info('Status update received', {
@@ -85,6 +87,23 @@ export function useWorkflowState() {
         logger.debug('Terminal state reached', {
             to: status.status,
         });
+
+        // Show toast notification based on final status
+        if (status.status === 'completed') {
+            const trackCount = results?.recommendations?.length || 0;
+            success('Playlist created!', {
+                description: trackCount > 0
+                    ? `${trackCount} tracks ready for you`
+                    : 'Your playlist is ready',
+                duration: 5000
+            });
+        } else if (status.status === 'failed') {
+            showErrorToast('Workflow failed', {
+                description: status.error || 'Something went wrong creating your playlist',
+                duration: 5000
+            });
+        }
+
         setWorkflowState(prev => ({
             ...prev,
             status: status.status,
@@ -95,7 +114,7 @@ export function useWorkflowState() {
             recommendations: results?.recommendations || prev.recommendations,
             playlist: results?.playlist || prev.playlist,
         }));
-    }, []);
+    }, [success, showErrorToast]);
 
     const handleError = useCallback((error: Error) => {
         logger.error('Workflow streaming error', error, { component: 'useWorkflowState' });
