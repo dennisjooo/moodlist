@@ -107,7 +107,7 @@ function CreatePageContent() {
               <MoodInput
                 onSubmit={handleMoodSubmit}
                 initialMood={selectedMood || undefined}
-                disabled={quotaLoading}
+                loading={quotaLoading}
               />
             )}
           </div>
