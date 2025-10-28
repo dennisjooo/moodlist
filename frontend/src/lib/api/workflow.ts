@@ -68,16 +68,15 @@ export interface WorkflowResults {
         };
     };
     recommendations: Array<{
-         track_id: string;
-         track_name: string;
-         artists: string[];
-         spotify_uri?: string;
-         preview_url?: string;
-         confidence_score: number;
-         reasoning: string;
-         source: string;
-     }>;
-
+        track_id: string;
+        track_name: string;
+        artists: string[];
+        spotify_uri?: string;
+        confidence_score: number;
+        reasoning: string;
+        source: string;
+    }>;
+    playlist?: {
         id: string;
         name: string;
         spotify_url?: string;
