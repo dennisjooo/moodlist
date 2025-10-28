@@ -14,7 +14,7 @@ import {
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { logger } from '@/lib/utils/logger';
 import { usePageCancellation } from '@/lib/hooks/usePageCancellation';
-import { CreateSessionLoading } from '@/components/features/create/CreateSessionLoading';
+import { CreateSessionSkeleton } from '@/components/shared/LoadingStates/CreateSessionSkeleton';
 import { CreateSessionEditor } from '@/components/features/create/CreateSessionEditor';
 import { CreateSessionProgress } from '@/components/features/create/CreateSessionProgress';
 import { CreateSessionError } from '@/components/features/create/CreateSessionError';
@@ -156,7 +156,7 @@ function CreateSessionPageContent() {
     const renderContent = () => {
         // Loading state - only show minimal loading indicator during initial auth/status check
         if (isLoadingSession) {
-            return <CreateSessionLoading onBack={handleBack} />;
+            return <CreateSessionSkeleton onBack={handleBack} />;
         }
 
         // Show editor if workflow is awaiting user input
