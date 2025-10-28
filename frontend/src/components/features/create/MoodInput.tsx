@@ -3,15 +3,17 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { MoodInputSkeleton } from '@/components/shared/LoadingStates';
 import { useEffect, useState } from 'react';
 
 interface MoodInputProps {
   onSubmit?: (mood: string) => void;
   initialMood?: string;
   disabled?: boolean;
+  loading?: boolean;
 }
 
-export default function MoodInput({ onSubmit, initialMood, disabled = false }: MoodInputProps) {
+export default function MoodInput({ onSubmit, initialMood, disabled = false, loading = false }: MoodInputProps) {
   const [mood, setMood] = useState(initialMood || '');
 
   // Update mood when initialMood changes
@@ -37,6 +39,11 @@ export default function MoodInput({ onSubmit, initialMood, disabled = false }: M
     'morning commute',
   ];
 
+  // Show skeleton while loading
+  if (loading) {
+    return <MoodInputSkeleton />;
+  }
+
   return (
     <Card className="w-full border-0 shadow-lg">
       <CardContent className="p-6">
@@ -46,6 +53,7 @@ export default function MoodInput({ onSubmit, initialMood, disabled = false }: M
               placeholder="Describe your mood..."
               value={mood}
               onChange={(e) => setMood(e.target.value)}
+              disabled={disabled}
               className="min-h-[120px] resize-none border-0 bg-muted/50 text-base placeholder:text-muted-foreground/60 focus-visible:ring-1"
             />
           </div>
@@ -56,7 +64,8 @@ export default function MoodInput({ onSubmit, initialMood, disabled = false }: M
                 key={example}
                 type="button"
                 onClick={() => setMood(example)}
-                className="px-2.5 py-1 text-xs bg-muted hover:bg-muted/80 rounded-md transition-colors text-muted-foreground hover:text-foreground"
+                disabled={disabled}
+                className="px-2.5 py-1 text-xs bg-muted hover:bg-muted/80 rounded-md transition-colors text-muted-foreground hover:text-foreground disabled:cursor-not-allowed"
               >
                 {example}
               </button>
