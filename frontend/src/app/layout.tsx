@@ -2,7 +2,7 @@ import { ThemeProvider } from '@/components/ThemeProvider';
 import { Toaster } from '@/components/ui/sonner';
 import { AuthProvider } from '@/lib/contexts/AuthContext';
 import { WorkflowProvider } from '@/lib/contexts/WorkflowContext';
-import { ErrorBoundary } from '@/components/shared';
+import ErrorBoundary from '@/components/shared/ErrorBoundary';
 import { SkipLink } from '@/components/shared/SkipLink';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
