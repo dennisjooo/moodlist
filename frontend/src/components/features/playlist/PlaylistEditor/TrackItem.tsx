@@ -10,6 +10,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { ExternalLink, GripVertical, Loader2, Star, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import TrackDetailsTooltip from '../PlaylistResults/TrackDetailsTooltip';
+import { AudioPreviewPlayer } from '../AudioPreviewPlayer';
 
 export interface TrackItemProps {
     track: Track;
@@ -89,7 +90,15 @@ export const TrackItem = memo(function TrackItem({ track, index, onRemove, isRem
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-1 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-shrink-0">
+                {track.preview_url && (
+                    <AudioPreviewPlayer
+                        previewUrl={track.preview_url}
+                        trackName={track.track_name}
+                        compact
+                    />
+                )}
+
                 {track.spotify_uri && (
                     <>
                         <TrackDetailsTooltip spotifyUri={track.spotify_uri} />

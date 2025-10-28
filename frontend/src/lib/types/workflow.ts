@@ -10,6 +10,7 @@ export type Track = {
     confidence_score: number;
     reasoning: string;
     source: string;
+    preview_url?: string;
 };
 
 // Search result track type (from Spotify search API)

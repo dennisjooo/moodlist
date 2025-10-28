@@ -86,7 +86,10 @@ export function WorkflowProgress() {
                             <StatusMessage status={workflowState.status} />
                         </div>
 
-                        <ProgressTimeline status={workflowState.status} />
+                        <ProgressTimeline 
+                            status={workflowState.status} 
+                            currentStep={workflowState.currentStep}
+                        />
                     </div>
 
                     {/* Mood Analysis Display */}
