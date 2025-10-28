@@ -7,7 +7,7 @@ import type { Track } from '@/lib/types/workflow';
 import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ExternalLink, GripVertical, Loader2, Star, Trash2 } from 'lucide-react';
+import { GripVertical, Loader2, Star, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import TrackDetailsTooltip from '../PlaylistResults/TrackDetailsTooltip';
 
@@ -33,14 +33,6 @@ export const TrackItem = memo(function TrackItem({ track, index, onRemove, isRem
     const style = {
         transform: CSS.Transform.toString(transform),
         transition: prefersReducedMotion ? 'none' : transition,
-    };
-
-    const getSpotifyUrl = (uri: string) => {
-        if (uri.startsWith('http')) return uri;
-        if (uri.startsWith('spotify:track:')) {
-            return `https://open.spotify.com/track/${uri.split(':')[2]}`;
-        }
-        return `https://open.spotify.com/track/${uri}`;
     };
 
     return (
@@ -90,20 +82,7 @@ export const TrackItem = memo(function TrackItem({ track, index, onRemove, isRem
 
             {/* Actions */}
             <div className="flex items-center gap-1 flex-shrink-0">
-                {track.spotify_uri && (
-                    <>
-                        <TrackDetailsTooltip spotifyUri={track.spotify_uri} />
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" asChild>
-                            <a
-                                href={getSpotifyUrl(track.spotify_uri)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                <ExternalLink className="w-4 h-4" />
-                            </a>
-                        </Button>
-                    </>
-                )}
+                {track.spotify_uri && <TrackDetailsTooltip spotifyUri={track.spotify_uri} />}
 
                 <Button
                     size="sm"

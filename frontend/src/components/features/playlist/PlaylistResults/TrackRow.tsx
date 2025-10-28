@@ -1,11 +1,10 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 import { Track } from '@/lib/types/track';
 import { cn } from '@/lib/utils';
-import { ExternalLink, Star } from 'lucide-react';
+import { Star } from 'lucide-react';
 import { memo } from 'react';
 import TrackDetailsTooltip from './TrackDetailsTooltip';
 
@@ -17,17 +16,6 @@ interface TrackRowProps {
 
 function TrackRow({ track, index, isFocused }: TrackRowProps) {
   const prefersReducedMotion = useReducedMotion();
-
-  const getSpotifyUrl = (uri?: string) => {
-    if (!uri) return null;
-    if (uri.startsWith('http')) return uri;
-    if (uri.startsWith('spotify:track:')) {
-      return `https://open.spotify.com/track/${uri.split(':')[2]}`;
-    }
-    return `https://open.spotify.com/track/${uri}`;
-  };
-
-  const spotifyUrl = getSpotifyUrl(track.spotify_uri);
 
   return (
     <TooltipProvider>
@@ -63,28 +51,6 @@ function TrackRow({ track, index, isFocused }: TrackRowProps) {
           </div>
 
           {track.spotify_uri && <TrackDetailsTooltip spotifyUri={track.spotify_uri} />}
-
-          {spotifyUrl && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className={cn(
-                "h-7 w-7 p-0",
-                isFocused ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-                prefersReducedMotion ? "transition-none" : "transition-opacity"
-              )}
-              asChild
-              aria-label={`Open ${track.track_name} in Spotify`}
-            >
-              <a
-                href={spotifyUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
-              </a>
-            </Button>
-          )}
         </div>
       </div>
     </TooltipProvider>
