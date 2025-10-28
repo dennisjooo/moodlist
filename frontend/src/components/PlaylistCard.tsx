@@ -111,9 +111,11 @@ export default function PlaylistCard({ mood, title, createdAt, trackCount, spoti
               <Music className="w-5 h-5 text-white" />
             </div>
             <div className="flex items-center gap-2">
-              <Badge className="h-6 bg-white/20 backdrop-blur-sm text-white border-white/30 hover:bg-white/30">
-                {trackCount} tracks
-              </Badge>
+              {trackCount > 0 && (
+                <Badge className="h-6 bg-white/20 backdrop-blur-sm text-white border-white/30 hover:bg-white/30">
+                  {trackCount} tracks
+                </Badge>
+              )}
               {playlistId && onDelete && (
                 <Button
                   size="sm"
