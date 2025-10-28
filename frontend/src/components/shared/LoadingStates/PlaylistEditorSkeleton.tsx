@@ -59,8 +59,8 @@ export function PlaylistEditorSkeleton() {
             </div>
 
             {/* Actions Skeleton */}
-            <div className="flex gap-3">
-                <Skeleton className="h-10 w-24" />
+            <div className="flex grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Skeleton className="h-10 flex-1" />
                 <Skeleton className="h-10 flex-1" />
             </div>
         </div>

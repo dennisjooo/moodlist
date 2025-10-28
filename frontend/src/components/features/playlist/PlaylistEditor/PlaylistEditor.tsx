@@ -98,11 +98,10 @@ export function PlaylistEditor({
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-3">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <Button
                         variant="outline"
                         onClick={onCancel}
-                        className="flex-1"
                     >
                         {isCompleted ? 'Done Editing' : 'Cancel'}
                     </Button>
@@ -110,7 +109,7 @@ export function PlaylistEditor({
                         <Button
                             onClick={onSave}
                             disabled={tracks.length === 0}
-                            className="flex-1 flex items-center gap-2"
+                            className="flex items-center gap-2"
                         >
                             <Check className="w-4 h-4" />
                             Finalize Playlist ({tracks.length} tracks)
