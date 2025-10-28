@@ -200,7 +200,7 @@ function PlaylistsPageContent() {
                         className="w-full h-auto py-3 px-4 text-left justify-start hover:bg-accent transition-colors"
                       >
                         <span className="font-medium">
-                          {template.emoji} {template.name}
+                          {template.name}
                         </span>
                       </Button>
                     </Link>
