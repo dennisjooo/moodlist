@@ -2,8 +2,8 @@
 
 import { AuthGuard } from '@/components/AuthGuard';
 import Navigation from '@/components/Navigation';
-import PlaylistCard from '@/components/PlaylistCard';
 import { SpotifyLoginButton } from '@/components/features/auth/SpotifyLoginButton';
+import PlaylistCard from '@/components/features/playlist/PlaylistCard';
 import { PlaylistGridSkeleton } from '@/components/shared/LoadingStates';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
