@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
+import { workflowEvents } from '@/lib/hooks/useActiveWorkflows';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
 import { ArrowLeft } from 'lucide-react';
@@ -61,6 +62,14 @@ function PlaylistPageContent() {
     useEffect(() => {
         if (workflowState.sessionId === sessionId && workflowState.status === 'completed') {
             setIsLoadingSession(false);
+
+            // Remove this workflow from active workflows tracking since it's completed
+            // and we're now viewing the final playlist
+            logger.info('Removing completed workflow from active tracking', {
+                component: 'PlaylistPage',
+                sessionId
+            });
+            workflowEvents.removed(sessionId);
         }
         // If there's an error in workflow state, also stop loading
         else if (workflowState.error) {
