@@ -5,11 +5,11 @@ import { DotPattern } from '@/components/ui/dot-pattern';
 import { cn } from '@/lib/utils';
 import { ArrowLeft } from 'lucide-react';
 
-interface CreateSessionLoadingProps {
+interface CreateSessionSkeletonProps {
     onBack: () => void;
 }
 
-export function CreateSessionLoading({ onBack }: CreateSessionLoadingProps) {
+export function CreateSessionSkeleton({ onBack }: CreateSessionSkeletonProps) {
     return (
         <div className="min-h-screen bg-background relative">
             <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
