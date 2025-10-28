@@ -6,7 +6,7 @@ import { cookies } from 'next/headers';
 import { cn } from '@/lib/utils';
 
 // Lazy load below-the-fold components for better initial load performance
-const PopularMoods = dynamic(() => import('@/components/PopularMoods'), {
+const SampleMoods = dynamic(() => import('@/components/SampleMoods'), {
   loading: () => <div className="h-[300px]" />,
 });
 
@@ -43,8 +43,8 @@ export default async function Home() {
           isLoggedIn={isLoggedIn}
         />
 
-        {/* Popular Moods */}
-        <PopularMoods />
+        {/* Sample Moods */}
+        <SampleMoods />
 
         {/* Features */}
         <FeaturesSection />
