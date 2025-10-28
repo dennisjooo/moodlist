@@ -67,7 +67,7 @@ function QuotaDisplayComponent({ className = '', onRefresh, onLoadingChange }: Q
     return (
         <div className={`${className}`}>
             <div
-                className={`rounded-lg border p-3 transition-colors ${isAtLimit
+                className={`rounded-lg border p-3 transition-colors animate-in fade-in duration-300 ${isAtLimit
                     ? 'border-destructive/50 bg-destructive/5'
                     : isNearLimit
                         ? 'border-warning/50 bg-warning/5'
