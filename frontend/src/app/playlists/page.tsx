@@ -11,12 +11,13 @@ import { CrossfadeTransition } from '@/components/ui/crossfade-transition';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { motion } from '@/components/ui/lazy-motion';
 import { MOOD_TEMPLATES } from '@/lib/constants/moodTemplates';
+import { ActiveWorkflow } from '@/lib/hooks/useActiveWorkflows';
 import { playlistAPI, UserPlaylist } from '@/lib/playlistApi';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
 import { Music } from 'lucide-react';
 import Link from 'next/link';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 
 function PlaylistsPageContent() {
   const [playlists, setPlaylists] = useState<UserPlaylist[]>([]);
@@ -52,6 +53,33 @@ function PlaylistsPageContent() {
   useEffect(() => {
     fetchPlaylists();
   }, []);
+
+  // Listen for workflow completion events to auto-refresh playlists
+  const handleWorkflowUpdate = useCallback((event: CustomEvent<ActiveWorkflow>) => {
+    const { status } = event.detail;
+
+    // When a workflow completes, refresh the playlists
+    if (status === 'completed') {
+      logger.info('Workflow completed, refreshing playlists', {
+        component: 'PlaylistsPage',
+        sessionId: event.detail.sessionId
+      });
+
+      // Small delay to ensure backend has processed everything
+      setTimeout(() => {
+        fetchPlaylists();
+      }, 1000);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Listen for workflow updates
+    window.addEventListener('workflow-updated', handleWorkflowUpdate as EventListener);
+
+    return () => {
+      window.removeEventListener('workflow-updated', handleWorkflowUpdate as EventListener);
+    };
+  }, [handleWorkflowUpdate]);
 
   const handleDelete = async (playlistId: number) => {
     try {

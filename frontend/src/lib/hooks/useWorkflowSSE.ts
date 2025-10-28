@@ -156,11 +156,49 @@ export function useWorkflowSSE(
                 }
             };
 
-            const handleComplete = () => {
-                logger.debug('SSE stream completed', {
+            const handleComplete = async () => {
+                logger.info('SSE stream completed, fetching final status', {
                     component: 'useWorkflowSSE',
                     sessionId
                 });
+
+                // When stream ends, fetch final status to ensure we have the complete state
+                try {
+                    const finalStatus = await workflowAPI.getWorkflowStatus(sessionId);
+                    logger.info('Fetched final status after SSE completion', {
+                        component: 'useWorkflowSSE',
+                        sessionId,
+                        status: finalStatus.status
+                    });
+
+                    // Update with final status
+                    if (callbacksRef.current.onStatus) {
+                        await callbacksRef.current.onStatus(finalStatus);
+                    }
+
+                    // If it's a terminal state, fetch results
+                    const isTerminal = finalStatus.status === 'completed' || finalStatus.status === 'failed';
+                    if (isTerminal) {
+                        let results = null;
+                        try {
+                            results = await workflowAPI.getWorkflowResults(sessionId);
+                        } catch (e) {
+                            logger.error('Failed to fetch results after SSE completion', e, {
+                                component: 'useWorkflowSSE',
+                                sessionId
+                            });
+                        }
+
+                        if (callbacksRef.current.onTerminal) {
+                            await callbacksRef.current.onTerminal(finalStatus, results);
+                        }
+                    }
+                } catch (e) {
+                    logger.error('Failed to fetch final status after SSE completion', e, {
+                        component: 'useWorkflowSSE',
+                        sessionId
+                    });
+                }
             };
 
             const handleReconnect = async () => {

@@ -8,10 +8,10 @@ export const config = {
     cacheTTL: 24 * 60 * 60 * 1000, // 24 hours - matches session expiration
   },
   polling: {
-    baseInterval: 2000,
+    baseInterval: 3000,          // Reduced frequency: 3s (was 2s)
     maxBackoff: 30000,
     maxRetries: 3,
-    awaitingInputInterval: 5000,
-    pendingInterval: 3000,
+    awaitingInputInterval: 10000, // Reduced frequency: 10s (was 5s)
+    pendingInterval: 5000,        // Reduced frequency: 5s (was 3s)
   },
 } as const;
