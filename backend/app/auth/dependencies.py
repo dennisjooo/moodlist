@@ -184,6 +184,9 @@ async def check_playlist_creation_rate_limit(
     Raises:
         RateLimitException: If user has exceeded daily limit
     """
+    if settings.APP_ENV == "development":
+        return
+    
     count = await playlist_repo.count_user_playlists_created_today(current_user.id)
     
     if count >= settings.DAILY_PLAYLIST_CREATION_LIMIT:
