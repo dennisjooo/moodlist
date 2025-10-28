@@ -17,7 +17,7 @@ const EXCLUDED_ROUTES = [
     '/favicon.ico',
 ];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     // Skip middleware for excluded routes
@@ -59,4 +59,3 @@ export const config = {
         '/((?!api|_next/static|_next/image|favicon.ico).*)',
     ],
 };
-
