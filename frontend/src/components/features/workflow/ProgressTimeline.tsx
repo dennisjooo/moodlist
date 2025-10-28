@@ -34,8 +34,8 @@ export function ProgressTimeline({ status }: ProgressTimelineProps) {
 
     const getVisibleStages = () => {
         const currentIndex = getCurrentStageIndex(status);
-        const startIndex = Math.max(0, currentIndex - 2);
-        const endIndex = currentIndex + 1;
+        const startIndex = Math.max(0, currentIndex - 1);
+        const endIndex = Math.min(WORKFLOW_STAGES.length, startIndex + 4);
         return WORKFLOW_STAGES.slice(startIndex, endIndex);
     };
 
