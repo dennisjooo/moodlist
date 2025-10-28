@@ -317,21 +317,164 @@ export const MOOD_TEMPLATES: MoodTemplate[] = [
     gradient: 'bg-gradient-to-br from-yellow-400 via-orange-500 to-red-500',
     category: 'relax',
   },
+  {
+    name: 'Deep Concentration',
+    prompt: 'Minimalist ambient, binaural beats, and subtle soundscapes engineered to maximize focus and mental clarity',
+    icon: CircleDot,
+    genre: 'Ambient',
+    gradient: 'bg-gradient-to-br from-indigo-400 via-blue-500 to-cyan-600',
+    category: 'focus',
+  },
+  {
+    name: 'Confidence Boost',
+    prompt: 'Empowering hip-hop, bold pop anthems, and motivational rock with confident lyrics to boost self-esteem',
+    icon: Zap,
+    genre: 'Hip-Hop',
+    gradient: 'bg-gradient-to-br from-amber-400 via-red-500 to-purple-600',
+    category: 'energy',
+  },
+  {
+    name: 'Nostalgia Trip',
+    prompt: 'Classic hits from the 80s, 90s, and 2000s that bring back memories and celebrate the golden eras of music',
+    icon: Music,
+    genre: 'Pop',
+    gradient: 'bg-gradient-to-br from-violet-400 via-purple-500 to-pink-600',
+    category: 'social',
+  },
+  {
+    name: 'Cooking & Grooving',
+    prompt: 'Funky soul, Latin grooves, and upbeat jazz that make cooking feel like a dance party in the kitchen',
+    icon: Music,
+    genre: 'Funk',
+    gradient: 'bg-gradient-to-br from-orange-400 via-pink-500 to-red-600',
+    category: 'activity',
+  },
+  {
+    name: 'Midnight Thoughts',
+    prompt: 'Contemplative indie, late-night R&B, and introspective electronic for deep thinking in the quiet hours',
+    icon: Moon,
+    genre: 'Indie',
+    gradient: 'bg-gradient-to-br from-slate-600 via-blue-700 to-indigo-800',
+    category: 'relax',
+  },
+  {
+    name: 'Power Through',
+    prompt: 'Aggressive rock, heavy metal, and intense electronic with raw energy for conquering challenges',
+    icon: Zap,
+    genre: 'Rock',
+    gradient: 'bg-gradient-to-br from-red-600 via-orange-700 to-black',
+    category: 'energy',
+  },
+  {
+    name: 'Brunch Hangout',
+    prompt: 'Light jazz, breezy pop, and acoustic favorites creating a relaxed atmosphere for weekend brunch with friends',
+    icon: Coffee,
+    genre: 'Jazz',
+    gradient: 'bg-gradient-to-br from-yellow-300 via-amber-400 to-orange-500',
+    category: 'social',
+  },
+  {
+    name: 'Yoga Flow',
+    prompt: 'Gentle world music, meditative drones, and rhythmic breathing sounds to enhance yoga practice and flexibility',
+    icon: Sparkles,
+    genre: 'Ambient',
+    gradient: 'bg-gradient-to-br from-teal-300 via-green-400 to-emerald-500',
+    category: 'activity',
+  },
+  {
+    name: 'Creative Writing',
+    prompt: 'Atmospheric post-rock, ambient soundscapes, and cinematic scores to inspire imagination and creativity',
+    icon: BookOpen,
+    genre: 'Post-Rock',
+    gradient: 'bg-gradient-to-br from-purple-400 via-blue-500 to-cyan-600',
+    category: 'focus',
+  },
+  {
+    name: 'Heartbreak Healing',
+    prompt: 'Cathartic ballads, emotional indie, and soul-baring singer-songwriter tracks for processing loss and moving on',
+    icon: Heart,
+    genre: 'Indie',
+    gradient: 'bg-gradient-to-br from-gray-500 via-blue-600 to-indigo-700',
+    category: 'relax',
+  },
+  {
+    name: 'Festival Vibes',
+    prompt: 'High-energy EDM, progressive house, and bass-heavy drops that recreate the electric atmosphere of music festivals',
+    icon: PartyPopper,
+    genre: 'EDM',
+    gradient: 'bg-gradient-to-br from-cyan-400 via-purple-500 to-pink-600',
+    category: 'social',
+  },
+  {
+    name: 'Strength Training',
+    prompt: 'Aggressive trap, hard rock, and heavy dubstep with powerful drops perfect for lifting heavy weights',
+    icon: Zap,
+    genre: 'Trap',
+    gradient: 'bg-gradient-to-br from-red-500 via-black to-purple-600',
+    category: 'energy',
+  },
+  {
+    name: 'Sunday Morning',
+    prompt: 'Gentle folk, easy-listening classics, and soft pop perfect for slow, peaceful Sunday mornings in bed',
+    icon: Sun,
+    genre: 'Folk',
+    gradient: 'bg-gradient-to-br from-orange-200 via-yellow-300 to-amber-400',
+    category: 'relax',
+  },
+  {
+    name: 'Retro Gaming',
+    prompt: 'Chiptune, 8-bit remixes, and nostalgic video game soundtracks that celebrate classic gaming culture',
+    icon: Gamepad2,
+    genre: 'Electronic',
+    gradient: 'bg-gradient-to-br from-green-400 via-blue-500 to-purple-600',
+    category: 'focus',
+  },
+  {
+    name: 'Spa Relaxation',
+    prompt: 'Tranquil water sounds, soft harp, and peaceful new age music designed for massage and spa treatments',
+    icon: Waves,
+    genre: 'New Age',
+    gradient: 'bg-gradient-to-br from-blue-200 via-teal-300 to-cyan-400',
+    category: 'relax',
+  },
+  {
+    name: 'Late Night Coding',
+    prompt: 'Downtempo electronic, lo-fi beats, and minimal techno that helps maintain focus during late-night programming',
+    icon: Moon,
+    genre: 'Electronic',
+    gradient: 'bg-gradient-to-br from-purple-700 via-indigo-800 to-blue-900',
+    category: 'focus',
+  },
+  {
+    name: 'Summer Memories',
+    prompt: 'Nostalgic indie, sunshine pop, and feel-good throwbacks that capture the essence of perfect summer days',
+    icon: Sun,
+    genre: 'Indie',
+    gradient: 'bg-gradient-to-br from-yellow-400 via-orange-400 to-pink-500',
+    category: 'relax',
+  },
+  {
+    name: 'Autumn Cozy',
+    prompt: 'Warm folk, acoustic indie, and mellow alternative perfect for sweater weather and falling leaves',
+    icon: Coffee,
+    genre: 'Folk',
+    gradient: 'bg-gradient-to-br from-orange-600 via-red-700 to-amber-800',
+    category: 'relax',
+  },
+  {
+    name: 'Motivational Pump',
+    prompt: 'Inspirational speeches mixed with epic orchestral and intense electronic to push past your limits',
+    icon: Zap,
+    genre: 'Electronic',
+    gradient: 'bg-gradient-to-br from-orange-500 via-red-600 to-pink-700',
+    category: 'energy',
+  },
+  {
+    name: 'Jazz Club Night',
+    prompt: 'Live jazz recordings, intimate vocals, and smooth saxophone solos that recreate an authentic jazz club experience',
+    icon: Music,
+    genre: 'Jazz',
+    gradient: 'bg-gradient-to-br from-purple-800 via-red-900 to-black',
+    category: 'social',
+  },
 ];
-
-/**
- * Get mood templates filtered by category
- */
-export function getMoodTemplatesByCategory(
-  category: MoodTemplate['category']
-): MoodTemplate[] {
-  return MOOD_TEMPLATES.filter((template) => template.category === category);
-}
-
-/**
- * Get a random selection of mood templates
- */
-export function getRandomMoodTemplates(count: number = 6): MoodTemplate[] {
-  const shuffled = [...MOOD_TEMPLATES].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, count);
-}

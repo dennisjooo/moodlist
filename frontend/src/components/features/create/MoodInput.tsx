@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { MoodInputSkeleton } from '@/components/shared/LoadingStates';
-import { useEffect, useState } from 'react';
+import { MOOD_TEMPLATES } from '@/lib/constants/moodTemplates';
+import { shuffleArray } from '@/lib/utils/array';
+import { useEffect, useState, useMemo } from 'react';
 
 interface MoodInputProps {
   onSubmit?: (mood: string) => void;
@@ -30,14 +32,7 @@ export default function MoodInput({ onSubmit, initialMood, disabled = false, loa
     }
   };
 
-  const moodExamples = [
-    'chill rainy evening',
-    'energetic workout',
-    'nostalgic summer',
-    'focused work',
-    'romantic dinner',
-    'morning commute',
-  ];
+  const moodExamples = useMemo(() => shuffleArray(MOOD_TEMPLATES).slice(0, 6), []);
 
   // Show skeleton while loading
   if (loading) {
@@ -59,15 +54,15 @@ export default function MoodInput({ onSubmit, initialMood, disabled = false, loa
           </div>
 
           <div className="flex flex-wrap gap-1.5 justify-center sm:justify-start">
-            {moodExamples.map((example) => (
+            {moodExamples.map((template) => (
               <button
-                key={example}
+                key={template.name}
                 type="button"
-                onClick={() => setMood(example)}
+                onClick={() => setMood(template.prompt)}
                 disabled={disabled}
                 className="px-2.5 py-1 text-xs bg-muted hover:bg-muted/80 rounded-md transition-colors text-muted-foreground hover:text-foreground disabled:cursor-not-allowed"
               >
-                {example}
+                {template.name}
               </button>
             ))}
           </div>
