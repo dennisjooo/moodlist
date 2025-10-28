@@ -2,7 +2,9 @@
 
 import React, { Component, ReactNode } from 'react';
 import { logger } from '@/lib/utils/logger';
-import ErrorState from './LoadingStates/ErrorState';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { RefreshCcw, Home } from 'lucide-react';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -52,6 +54,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     window.location.reload();
   };
 
+  handleGoHome = (): void => {
+    this.setState({ hasError: false, error: null });
+    window.location.href = '/';
+  };
+
   render(): ReactNode {
     if (this.state.hasError) {
       if (this.props.fallback) {
@@ -59,16 +66,52 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       }
 
       return (
-        <ErrorState
-          title="Something went wrong"
-          message={
-            process.env.NODE_ENV === 'development'
-              ? this.state.error?.message || 'An unexpected error occurred'
-              : 'An unexpected error occurred. Please try refreshing the page.'
-          }
-          actionLabel="Refresh Page"
-          onAction={this.handleReset}
-        />
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <Card className="max-w-2xl w-full border-destructive/50">
+            <CardHeader>
+              <CardTitle className="text-destructive flex items-center gap-2">
+                <span className="text-2xl">⚠️</span>
+                Something went wrong
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-muted-foreground">
+                {process.env.NODE_ENV === 'development'
+                  ? 'An unexpected error occurred. Check the console for more details.'
+                  : 'An unexpected error occurred. Please try refreshing the page or returning to the home page.'}
+              </p>
+
+              {process.env.NODE_ENV === 'development' && this.state.error && (
+                <div className="bg-muted p-4 rounded-lg border border-border">
+                  <p className="font-mono text-xs text-destructive break-all">
+                    {this.state.error.message}
+                  </p>
+                  {this.state.error.stack && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                        View stack trace
+                      </summary>
+                      <pre className="mt-2 text-xs overflow-auto max-h-64 text-muted-foreground">
+                        {this.state.error.stack}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <Button onClick={this.handleReset} className="flex-1">
+                  <RefreshCcw className="w-4 h-4 mr-2" />
+                  Refresh Page
+                </Button>
+                <Button onClick={this.handleGoHome} variant="outline" className="flex-1">
+                  <Home className="w-4 h-4 mr-2" />
+                  Go Home
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       );
     }
 
