@@ -38,6 +38,11 @@ export interface WorkflowState {
     metadata?: {
         iteration?: number;
         cohesion_score?: number;
+        ordering_strategy?: {
+            strategy?: string;
+            reasoning?: string;
+            phase_distribution?: Record<string, number>;
+        };
     };
 }
 

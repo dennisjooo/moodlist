@@ -13,6 +13,7 @@ export function StatusIcon({ status }: StatusIconProps) {
         case 'generating_recommendations':
         case 'evaluating_quality':
         case 'optimizing_recommendations':
+        case 'ordering_playlist':
         case 'processing_edits':
         case 'creating_playlist':
             return <Loader2 className="w-4 h-4 animate-spin" />;
