@@ -4,15 +4,27 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import WorkflowProgress from '@/components/WorkflowProgress';
+import type { Track } from '@/lib/types/workflow';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Sparkles } from 'lucide-react';
+
+interface ColorScheme {
+    primary: string;
+    secondary: string;
+    tertiary: string;
+}
+
+interface MoodAnalysis {
+    color_scheme: ColorScheme;
+    [key: string]: unknown;
+}
 
 interface CreateSessionProgressProps {
     sessionId: string;
     status: string | null;
-    moodAnalysis?: any;
-    recommendations: any[];
-    colorScheme?: any;
+    moodAnalysis?: MoodAnalysis;
+    recommendations: Track[];
+    colorScheme?: ColorScheme;
     isCancelling: boolean;
     onBack: () => void;
 }
@@ -20,8 +32,6 @@ interface CreateSessionProgressProps {
 export function CreateSessionProgress({
     sessionId,
     status,
-    moodAnalysis,
-    recommendations,
     colorScheme,
     isCancelling,
     onBack,
