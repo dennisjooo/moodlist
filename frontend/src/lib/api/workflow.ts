@@ -19,7 +19,7 @@ export interface WorkflowStatus {
     session_id: string;
     status: "pending" | "analyzing_mood" | "gathering_seeds" |
     "generating_recommendations" | "evaluating_quality" |
-    "optimizing_recommendations" | "awaiting_user_input" |
+    "optimizing_recommendations" | "ordering_playlist" | "awaiting_user_input" |
     "processing_edits" | "creating_playlist" |
     "completed" | "failed";
     current_step: string;
