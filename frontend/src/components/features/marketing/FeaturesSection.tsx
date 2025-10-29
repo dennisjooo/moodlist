@@ -1,39 +1,14 @@
 'use client';
 
 import { motion } from '@/components/ui/lazy-motion';
-import { Brain, MessageCircle, Music } from 'lucide-react';
 import { useRef } from 'react';
-
-interface TimelineStep {
-    icon: React.ComponentType<{ className?: string }>;
-    title: string;
-    description: string;
-    color: string;
-}
+import { HOW_IT_WORKS_STEPS } from '@/lib/constants/marketing';
+import type { HowItWorksStep } from '@/lib/constants/marketing';
 
 export function FeaturesSection() {
     const containerRef = useRef(null);
 
-    const steps: TimelineStep[] = [
-        {
-            icon: MessageCircle,
-            title: 'Describe Your Mood',
-            description: 'Tell us how you\'re feeling in your own words - happy, melancholic, energetic, or anything in between',
-            color: 'from-blue-500 to-purple-600',
-        },
-        {
-            icon: Brain,
-            title: 'AI Analyzes & Understands',
-            description: 'Our advanced AI processes your mood and matches it with musical characteristics and genres',
-            color: 'from-purple-600 to-pink-600',
-        },
-        {
-            icon: Music,
-            title: 'Spotify Creates Your Playlist',
-            description: 'A personalized playlist is generated and saved directly to your Spotify account, ready to play',
-            color: 'from-pink-600 to-green-500',
-        },
-    ];
+    const steps: HowItWorksStep[] = HOW_IT_WORKS_STEPS;
 
     return (
         <div ref={containerRef} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-16">
