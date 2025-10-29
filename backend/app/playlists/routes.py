@@ -37,7 +37,6 @@ reccobeat_service = RecoBeatService()
 spotify_service = SpotifyService()
 
 llm = create_logged_llm(
-    db_session=None,  # Will be set per request
     model="openai/gpt-oss-120b",
     temperature=1,
     base_url="https://api.groq.com/openai/v1",
@@ -464,9 +463,6 @@ async def save_playlist_to_spotify(
 
             # Add access token to metadata for playlist creation
             state.metadata["spotify_access_token"] = current_user.access_token
-
-            # Set LLM context for logging
-            llm.set_db_session(db)
 
             # Get playlist record for context
             playlist = await playlist_service.playlist_repository.get_by_session_id(session_id)

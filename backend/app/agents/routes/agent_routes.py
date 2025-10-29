@@ -39,9 +39,9 @@ reccobeat_service = RecoBeatService()
 spotify_service = SpotifyService()
 
 # Create logged LLM instance
-# Note: DB session will be injected in route handlers for proper request context
+# The LLM creates its own database session for each logging operation,
+# making it safe to share across concurrent workflows
 llm = create_logged_llm(
-    db_session=None,  # Will be set per request
     model="google/gemini-2.5-flash-lite-preview-09-2025",
     temperature=0.25,
     enable_logging=True,
@@ -141,9 +141,6 @@ async def start_recommendation(
 
         # Refresh Spotify token if expired before starting workflow
         current_user = await refresh_spotify_token_if_expired(current_user, db)
-
-        # Set database session for LLM logging
-        llm.set_db_session(db)
         
         # Start the workflow with authenticated user's information
         session_id = await workflow_manager.start_workflow(

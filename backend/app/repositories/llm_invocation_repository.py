@@ -133,7 +133,13 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
                 agent=agent_name,
                 error=str(e)
             )
-            await self.session.rollback()
+            try:
+                await self.session.rollback()
+            except Exception as rollback_error:
+                self.logger.warning(
+                    "Failed to rollback session after LLM invocation log error",
+                    error=str(rollback_error)
+                )
             raise InternalServerError("Failed to create LLM invocation log")
 
     async def get_by_user_id(
