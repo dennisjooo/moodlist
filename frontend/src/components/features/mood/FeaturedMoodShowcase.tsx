@@ -1,11 +1,12 @@
 'use client';
 
-import { motion } from '@/components/ui/lazy-motion';
+import { AnimatePresence, motion } from '@/components/ui/lazy-motion';
 import {
   FEATURED_MOOD_FEATURES,
   FEATURED_MOOD_SHOWCASE,
   FEATURED_MOOD_TRACKS,
 } from '@/lib/constants/sampleMoodShowcase';
+import { useEffect, useState } from 'react';
 
 const SHOWCASE_GRADIENT = {
   background: `linear-gradient(135deg, ${FEATURED_MOOD_SHOWCASE.colorScheme.primary}, ${FEATURED_MOOD_SHOWCASE.colorScheme.secondary})`,
@@ -29,9 +30,19 @@ const formatMetricRange = (range: [number, number], unit?: string) => {
 const asPercent = (value: number) => `${Math.round(value * 100)}%`;
 
 export default function FeaturedMoodShowcase() {
+  const [currentFeatureIndex, setCurrentFeatureIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentFeatureIndex((prev) => (prev + 1) % FEATURED_MOOD_FEATURES.length);
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <section className="relative overflow-hidden">
-      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-background via-background/95 to-background/80" />
+      <div className="absolute inset-0 -z-10" />
       <div className="relative mx-auto max-w-7xl px-4 pb-20 pt-16 sm:px-6 lg:px-8">
         <motion.div
           className="mx-auto max-w-3xl text-center"
@@ -51,7 +62,7 @@ export default function FeaturedMoodShowcase() {
 
         <div className="mt-14 grid gap-6 lg:grid-cols-12">
           <motion.article
-            className="relative overflow-hidden rounded-3xl border border-white/5 p-8 text-left text-white shadow-xl lg:col-span-5"
+            className="relative overflow-hidden rounded-3xl border border-white/5 p-8 text-left text-white shadow-xl lg:col-span-4"
             style={SHOWCASE_GRADIENT}
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -65,7 +76,7 @@ export default function FeaturedMoodShowcase() {
               </div>
               <div className="h-14 w-14 rounded-full border border-white/40 bg-white/10" aria-hidden />
             </div>
-            <p className="mt-6 text-base leading-relaxed">“{FEATURED_MOOD_SHOWCASE.prompt}”</p>
+            <p className="mt-6 text-base leading-relaxed">"{FEATURED_MOOD_SHOWCASE.prompt}"</p>
             <div className="mt-6 space-y-3">
               {FEATURED_MOOD_SHOWCASE.summaryHighlights.map((highlight) => (
                 <div key={highlight} className="flex items-start gap-3 text-sm">
@@ -87,7 +98,7 @@ export default function FeaturedMoodShowcase() {
           </motion.article>
 
           <motion.div
-            className="rounded-3xl border border-border/60 bg-background/70 p-8 backdrop-blur lg:col-span-3"
+            className="rounded-3xl border border-border/60 bg-background/70 p-8 backdrop-blur lg:col-span-4"
             initial={{ opacity: 0, y: 28 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-60px' }}
@@ -105,23 +116,50 @@ export default function FeaturedMoodShowcase() {
                 <dd className="text-sm font-medium text-foreground">{FEATURED_MOOD_SHOWCASE.energyLevel}</dd>
               </div>
             </dl>
-            <div className="mt-6 grid gap-4">
-              {FEATURED_MOOD_FEATURES.map((feature) => (
-                <motion.div
-                  key={feature.label}
-                  className="rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-4"
-                  initial={{ opacity: 0, y: 16 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-60px' }}
-                  transition={{ duration: 0.45, ease: 'easeOut' }}
-                >
-                  <p className="text-xs font-semibold uppercase tracking-widest text-primary">{feature.label}</p>
-                  <p className="mt-1 text-sm font-medium text-foreground">
-                    {formatMetricRange(feature.range, feature.unit)}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">{feature.description}</p>
-                </motion.div>
-              ))}
+            <div className="mt-6 relative">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Audio features {currentFeatureIndex + 1}/{FEATURED_MOOD_FEATURES.length}
+                </span>
+                <div className="flex gap-1">
+                  {FEATURED_MOOD_FEATURES.map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentFeatureIndex(index)}
+                      className={`h-1.5 rounded-full transition-all ${index === currentFeatureIndex
+                        ? 'w-6 bg-primary'
+                        : 'w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50'
+                        }`}
+                      aria-label={`Go to feature ${index + 1}`}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="relative h-32 overflow-hidden">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={currentFeatureIndex}
+                    className="absolute inset-0 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-4"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.4, ease: 'easeInOut' }}
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-widest text-primary">
+                      {FEATURED_MOOD_FEATURES[currentFeatureIndex].label}
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-foreground">
+                      {formatMetricRange(
+                        FEATURED_MOOD_FEATURES[currentFeatureIndex].range,
+                        FEATURED_MOOD_FEATURES[currentFeatureIndex].unit
+                      )}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {FEATURED_MOOD_FEATURES[currentFeatureIndex].description}
+                    </p>
+                  </motion.div>
+                </AnimatePresence>
+              </div>
             </div>
           </motion.div>
 
