@@ -139,8 +139,12 @@ class OrchestratorAgent(BaseAgent):
         return state
 
     async def perform_iterative_improvement(self, state: AgentState) -> Dict[str, Any]:
-        """Perform iterative improvement loop."""
+        """Perform iterative improvement loop with convergence detection."""
         quality_evaluation = None
+        previous_score = 0.0
+        convergence_threshold = 0.02  # Must improve by at least 2% to continue
+        stalled_iterations = 0
+        max_stalled = 2  # Stop after 2 iterations with no meaningful improvement
 
         for iteration in range(self.max_iterations):
             state.metadata["orchestration_iterations"] = iteration + 1
@@ -152,15 +156,42 @@ class OrchestratorAgent(BaseAgent):
             quality_evaluation = await self.quality_evaluator.evaluate_playlist_quality(state)
             state.metadata["quality_scores"].append(quality_evaluation)
 
+            current_score = quality_evaluation['overall_score']
+            
             logger.info(
-                f"Iteration {iteration + 1}: Overall score={quality_evaluation['overall_score']:.2f}, "
+                f"Iteration {iteration + 1}: Overall score={current_score:.2f}, "
                 f"Cohesion={quality_evaluation['cohesion_score']:.2f}, "
                 f"Count={quality_evaluation['recommendations_count']}"
             )
 
+            # Check for convergence (after first iteration)
+            if iteration > 0:
+                improvement = current_score - previous_score
+                if improvement < convergence_threshold:
+                    stalled_iterations += 1
+                    logger.info(
+                        f"⚠ Iteration {iteration + 1} stalled: "
+                        f"improvement {improvement:.3f} < threshold {convergence_threshold} "
+                        f"({stalled_iterations}/{max_stalled} stalled iterations)"
+                    )
+                else:
+                    stalled_iterations = 0  # Reset if improvement is significant
+                    logger.info(f"✓ Meaningful improvement: +{improvement:.3f}")
+            
+            previous_score = current_score
+
+            # Stop if converged (no improvement for multiple iterations)
+            if stalled_iterations >= max_stalled:
+                logger.info(
+                    f"✓ Convergence detected after {iteration + 1} iterations "
+                    f"(score stalled at {current_score:.2f}). Stopping early."
+                )
+                state.current_step = "recommendations_converged"
+                break
+
             # Check if quality meets threshold
             if quality_evaluation["meets_threshold"]:
-                logger.info(f"Quality threshold met after {iteration + 1} iteration(s)")
+                logger.info(f"✓ Quality threshold met after {iteration + 1} iteration(s)")
                 state.current_step = "recommendations_ready"
                 break
 

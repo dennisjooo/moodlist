@@ -230,19 +230,33 @@ class TrackFilter:
     def _filter_and_rank_recommendations(
         self,
         recommendations: List[Dict[str, Any]],
-        mood_analysis: Optional[Dict[str, Any]] = None
+        mood_analysis: Optional[Dict[str, Any]] = None,
+        negative_seeds: Optional[List[str]] = None
     ) -> List[TrackRecommendation]:
         """Filter and rank recommendations based on mood analysis.
 
         Args:
             recommendations: Raw recommendations
             mood_analysis: Mood analysis results
+            negative_seeds: Track IDs to explicitly exclude (outliers from previous iterations)
 
         Returns:
             Filtered and ranked TrackRecommendation objects
         """
         if not recommendations:
             return []
+
+        # CRITICAL: Filter out negative seeds FIRST (before any processing)
+        if negative_seeds:
+            negative_seeds_set = set(negative_seeds)
+            original_count = len(recommendations)
+            recommendations = [
+                rec for rec in recommendations 
+                if rec.get("track_id") not in negative_seeds_set and rec.get("id") not in negative_seeds_set
+            ]
+            filtered_count = original_count - len(recommendations)
+            if filtered_count > 0:
+                logger.info(f"✓ Excluded {filtered_count} tracks matching negative seeds")
 
         # Convert to TrackRecommendation objects
         rec_objects = []
