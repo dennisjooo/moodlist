@@ -37,6 +37,9 @@ class TrackRecommendation(BaseModel):
     user_mentioned: bool = Field(default=False, description="Whether track was explicitly mentioned by user")
     anchor_type: Optional[str] = Field(None, description="Type of anchor: 'user' or 'genre'")
     protected: bool = Field(default=False, description="Whether track is protected from quality filtering")
+    
+    # Energy flow analysis (for playlist ordering)
+    energy_analysis: Optional[Dict[str, Any]] = Field(None, description="Energy flow characteristics for ordering")
 
     class Config:
         """Pydantic configuration."""

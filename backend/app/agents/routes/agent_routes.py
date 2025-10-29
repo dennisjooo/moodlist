@@ -28,6 +28,7 @@ from ..recommender import (
     RecommendationGeneratorAgent,
     OrchestratorAgent
 )
+from ..recommender.playlist_orderer import PlaylistOrderingAgent
 from ..recommender.utils.config import config
 
 
@@ -82,6 +83,12 @@ orchestrator = OrchestratorAgent(
     verbose=True
 )
 
+# Create playlist ordering agent
+playlist_orderer = PlaylistOrderingAgent(
+    llm=llm,
+    verbose=True
+)
+
 # Create workflow manager
 workflow_config = WorkflowConfig(
     max_retries=config.max_retries,
@@ -96,7 +103,8 @@ agents = {
     "mood_analyzer": mood_analyzer,
     "seed_gatherer": seed_gatherer,
     "recommendation_generator": recommendation_generator,
-    "orchestrator": orchestrator
+    "orchestrator": orchestrator,
+    "playlist_orderer": playlist_orderer
 }
 
 workflow_manager = WorkflowManager(workflow_config, agents, reccobeat_service.tools)

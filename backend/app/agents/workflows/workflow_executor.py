@@ -104,6 +104,26 @@ class WorkflowExecutor:
 
         return await orchestrator.run_with_error_handling(state)
 
+    async def execute_playlist_ordering(self, state: AgentState) -> AgentState:
+        """Execute playlist ordering to create optimal energy flow.
+
+        Args:
+            state: Current workflow state
+
+        Returns:
+            Updated state with ordered recommendations
+        """
+        state.current_step = "ordering_playlist"
+        state.status = RecommendationStatus.OPTIMIZING_RECOMMENDATIONS
+
+        ordering_agent = self.agents.get("playlist_orderer")
+        if not ordering_agent:
+            logger.warning("Playlist ordering agent not available, skipping ordering")
+            state.metadata["ordering_applied"] = False
+            return state
+
+        return await ordering_agent.execute(state)
+
     async def _refresh_spotify_token_if_needed(self, state: AgentState) -> AgentState:
         """Refresh the Spotify access token if needed during workflow execution.
 
