@@ -2,16 +2,17 @@
 
 import { AnimatePresence, motion } from '@/components/ui/lazy-motion';
 import {
-  FEATURED_MOOD_FEATURES,
-  FEATURED_MOOD_SHOWCASE,
-  FEATURED_MOOD_TRACKS,
+  FEATURED_MOOD_FEATURES_ARRAYS,
+  FEATURED_MOOD_SHOWCASES,
+  FEATURED_MOOD_TRACKS_ARRAYS,
 } from '@/lib/constants/sampleMoodShowcase';
-import { useEffect, useState } from 'react';
+import { getRandomIndex } from '@/lib/utils/array';
+import { useEffect, useMemo, useState } from 'react';
 
-const SHOWCASE_GRADIENT = {
-  background: `linear-gradient(135deg, ${FEATURED_MOOD_SHOWCASE.colorScheme.primary}, ${FEATURED_MOOD_SHOWCASE.colorScheme.secondary})`,
-  boxShadow: `0 32px 60px -32px ${FEATURED_MOOD_SHOWCASE.colorScheme.primary}AA`,
-};
+const getShowcaseGradient = (showcase: typeof FEATURED_MOOD_SHOWCASES[0]) => ({
+  background: `linear-gradient(135deg, ${showcase.colorScheme.primary}, ${showcase.colorScheme.secondary})`,
+  boxShadow: `0 32px 60px -32px ${showcase.colorScheme.primary}AA`,
+});
 
 const formatMetricRange = (range: [number, number], unit?: string) => {
   const [min, max] = range;
@@ -31,14 +32,27 @@ const asPercent = (value: number) => `${Math.round(value * 100)}%`;
 
 export default function FeaturedMoodShowcase() {
   const [currentFeatureIndex, setCurrentFeatureIndex] = useState(0);
+  const [selectedShowcaseIndex, setSelectedShowcaseIndex] = useState(0);
+
+  useEffect(() => {
+    // Randomly select a showcase on component mount
+    setSelectedShowcaseIndex(getRandomIndex(FEATURED_MOOD_SHOWCASES));
+  }, []);
+
+  const selectedShowcaseData = useMemo(() => {
+    const showcase = FEATURED_MOOD_SHOWCASES[selectedShowcaseIndex];
+    const features = FEATURED_MOOD_FEATURES_ARRAYS[selectedShowcaseIndex];
+    const tracks = FEATURED_MOOD_TRACKS_ARRAYS[selectedShowcaseIndex];
+    return { showcase, features, tracks };
+  }, [selectedShowcaseIndex]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentFeatureIndex((prev) => (prev + 1) % FEATURED_MOOD_FEATURES.length);
+      setCurrentFeatureIndex((prev) => (prev + 1) % selectedShowcaseData.features.length);
     }, 3500);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedShowcaseData.features.length]);
 
   return (
     <section className="relative overflow-hidden">
@@ -63,7 +77,7 @@ export default function FeaturedMoodShowcase() {
         <div className="mt-14 grid gap-6 lg:grid-cols-12">
           <motion.article
             className="relative overflow-hidden rounded-3xl border border-white/5 p-8 text-left text-white shadow-xl lg:col-span-4"
-            style={SHOWCASE_GRADIENT}
+            style={getShowcaseGradient(selectedShowcaseData.showcase)}
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-60px' }}
@@ -72,13 +86,13 @@ export default function FeaturedMoodShowcase() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm uppercase tracking-widest opacity-90">Featured prompt</p>
-                <h3 className="mt-2 text-2xl font-semibold">{FEATURED_MOOD_SHOWCASE.name}</h3>
+                <h3 className="mt-2 text-2xl font-semibold">{selectedShowcaseData.showcase.name}</h3>
               </div>
               <div className="h-14 w-14 rounded-full border border-white/40 bg-white/10" aria-hidden />
             </div>
-            <p className="mt-6 text-base leading-relaxed">"{FEATURED_MOOD_SHOWCASE.prompt}"</p>
+            <p className="mt-6 text-base leading-relaxed">"{selectedShowcaseData.showcase.prompt}"</p>
             <div className="mt-6 space-y-3">
-              {FEATURED_MOOD_SHOWCASE.summaryHighlights.map((highlight) => (
+              {selectedShowcaseData.showcase.summaryHighlights.map((highlight) => (
                 <div key={highlight} className="flex items-start gap-3 text-sm">
                   <span className="mt-1 h-1.5 w-1.5 flex-none rounded-full bg-white" />
                   <p className="opacity-90">{highlight}</p>
@@ -86,7 +100,7 @@ export default function FeaturedMoodShowcase() {
               ))}
             </div>
             <div className="mt-8 flex flex-wrap gap-2">
-              {FEATURED_MOOD_SHOWCASE.keywords.map((keyword) => (
+              {selectedShowcaseData.showcase.keywords.map((keyword) => (
                 <span
                   key={keyword}
                   className="rounded-full border border-white/40 bg-white/15 px-3 py-1 text-xs font-medium uppercase tracking-widest"
@@ -105,24 +119,24 @@ export default function FeaturedMoodShowcase() {
             transition={{ duration: 0.5, delay: 0.1, ease: 'easeOut' }}
           >
             <p className="text-sm font-semibold uppercase tracking-widest text-primary">AI reads it as</p>
-            <p className="mt-3 text-lg font-medium text-foreground">{FEATURED_MOOD_SHOWCASE.moodInterpretation}</p>
+            <p className="mt-3 text-lg font-medium text-foreground">{selectedShowcaseData.showcase.moodInterpretation}</p>
             <dl className="mt-6 space-y-4">
               <div>
                 <dt className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Primary emotion</dt>
-                <dd className="text-sm font-medium text-foreground">{FEATURED_MOOD_SHOWCASE.primaryEmotion}</dd>
+                <dd className="text-sm font-medium text-foreground">{selectedShowcaseData.showcase.primaryEmotion}</dd>
               </div>
               <div>
                 <dt className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Energy level</dt>
-                <dd className="text-sm font-medium text-foreground">{FEATURED_MOOD_SHOWCASE.energyLevel}</dd>
+                <dd className="text-sm font-medium text-foreground">{selectedShowcaseData.showcase.energyLevel}</dd>
               </div>
             </dl>
             <div className="mt-6 relative">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-medium text-muted-foreground">
-                  Audio features {currentFeatureIndex + 1}/{FEATURED_MOOD_FEATURES.length}
+                  Audio features {currentFeatureIndex + 1}/{selectedShowcaseData.features.length}
                 </span>
                 <div className="flex gap-1">
-                  {FEATURED_MOOD_FEATURES.map((_, index) => (
+                  {selectedShowcaseData.features.map((_, index) => (
                     <button
                       key={index}
                       onClick={() => setCurrentFeatureIndex(index)}
@@ -146,16 +160,16 @@ export default function FeaturedMoodShowcase() {
                     transition={{ duration: 0.4, ease: 'easeInOut' }}
                   >
                     <p className="text-xs font-semibold uppercase tracking-widest text-primary">
-                      {FEATURED_MOOD_FEATURES[currentFeatureIndex].label}
+                      {selectedShowcaseData.features[currentFeatureIndex].label}
                     </p>
                     <p className="mt-1 text-sm font-medium text-foreground">
                       {formatMetricRange(
-                        FEATURED_MOOD_FEATURES[currentFeatureIndex].range,
-                        FEATURED_MOOD_FEATURES[currentFeatureIndex].unit
+                        selectedShowcaseData.features[currentFeatureIndex].range,
+                        selectedShowcaseData.features[currentFeatureIndex].unit
                       )}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {FEATURED_MOOD_FEATURES[currentFeatureIndex].description}
+                      {selectedShowcaseData.features[currentFeatureIndex].description}
                     </p>
                   </motion.div>
                 </AnimatePresence>
@@ -175,7 +189,7 @@ export default function FeaturedMoodShowcase() {
               <span className="text-xs text-muted-foreground">From a real session</span>
             </div>
             <ul className="mt-6 space-y-4">
-              {FEATURED_MOOD_TRACKS.map((track, index) => (
+              {selectedShowcaseData.tracks.map((track, index) => (
                 <motion.li
                   key={track.spotifyUri}
                   className="group relative overflow-hidden rounded-2xl border border-border/60 bg-background/60 p-4"

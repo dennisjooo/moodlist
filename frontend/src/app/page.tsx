@@ -6,12 +6,9 @@ import { cookies } from 'next/headers';
 import { cn } from '@/lib/utils';
 
 // Lazy load below-the-fold components for better initial load performance
-const FeaturedMoodShowcase = dynamic(
-  () => import('@/components/FeaturedMoodShowcase'),
-  {
+const FeaturedMoodShowcase = dynamic(() => import('@/components/FeaturedMoodShowcase'), {
     loading: () => <div className="h-[420px]" />,
-  },
-);
+});
 
 const SampleMoods = dynamic(() => import('@/components/SampleMoods'), {
   loading: () => <div className="h-[320px]" />,
