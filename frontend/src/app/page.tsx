@@ -6,13 +6,31 @@ import { cookies } from 'next/headers';
 import { cn } from '@/lib/utils';
 
 // Lazy load below-the-fold components for better initial load performance
+const FeaturedMoodShowcase = dynamic(() => import('@/components/FeaturedMoodShowcase'), {
+    loading: () => <div className="h-[420px]" />,
+});
+
 const SampleMoods = dynamic(() => import('@/components/SampleMoods'), {
-  loading: () => <div className="h-[300px]" />,
+  loading: () => <div className="h-[320px]" />,
 });
 
 const FeaturesSection = dynamic(() => import('@/components/FeaturesSection'), {
   loading: () => <div className="h-[400px]" />,
 });
+
+const FAQSection = dynamic(
+  () => import('@/components/features/marketing/FAQSection'),
+  {
+    loading: () => <div className="h-[420px]" />,
+  }
+);
+
+const CTASection = dynamic(
+  () => import('@/components/features/marketing/CTASection'),
+  {
+    loading: () => <div className="h-[280px]" />,
+  }
+);
 
 const SocialProof = dynamic(() => import('@/components/SocialProof'), {
   loading: () => <div className="h-[120px]" />,
@@ -43,11 +61,20 @@ export default async function Home() {
           isLoggedIn={isLoggedIn}
         />
 
+        {/* Featured Mood Walkthrough */}
+        <FeaturedMoodShowcase />
+
         {/* Sample Moods */}
         <SampleMoods />
 
         {/* Features */}
         <FeaturesSection />
+
+        {/* Frequently Asked Questions */}
+        <FAQSection />
+
+        {/* Call to Action */}
+        <CTASection isLoggedIn={isLoggedIn} />
 
         {/* Social Proof */}
         <SocialProof />

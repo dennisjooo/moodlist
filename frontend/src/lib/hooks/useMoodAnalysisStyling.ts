@@ -107,7 +107,7 @@ export function useMoodAnalysisStyling(colorScheme?: ColorScheme) {
     }, [colorScheme, brightenColor, createHoverHandlers]);
 
     // Generate styling for keyword badges
-    const getKeywordBadgeStyling = useCallback((keyword: string): BadgeStyling => {
+    const getKeywordBadgeStyling = useCallback((): BadgeStyling => {
         if (!colorScheme) {
             return {
                 style: {},
@@ -135,6 +135,6 @@ export function useMoodAnalysisStyling(colorScheme?: ColorScheme) {
         brightenColor,
         primaryBadgeProps: getPrimaryBadgeStyling(),
         secondaryBadgeProps: getSecondaryBadgeStyling(),
-        getKeywordBadgeProps: (keyword: string) => getKeywordBadgeStyling(keyword)
+        getKeywordBadgeProps: () => getKeywordBadgeStyling()
     };
 }
