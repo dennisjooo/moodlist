@@ -495,22 +495,37 @@ class LLMServices:
             relevant_indices = set(result.get('relevant_tracks', []))
             filtered_out = result.get('filtered_out', [])
 
-            # Log filtered tracks
+            # Log filtered tracks (but protect user-mentioned tracks)
+            protected_count = 0
             for filter_info in filtered_out:
                 track_idx = filter_info.get('track_index', -1)
                 reason = filter_info.get('reason', '')
                 if 0 <= track_idx < len(tracks_for_llm):
                     track_name = tracks_for_llm[track_idx].get('name', 'Unknown')
-                    logger.info(f"LLM filtered track '{track_name}': {reason}")
+                    
+                    # Check if this track is user-mentioned/protected
+                    track_data = tracks[track_idx].get('track', tracks[track_idx])
+                    is_protected = track_data.get('user_mentioned', False) or track_data.get('protected', False)
+                    
+                    if is_protected:
+                        protected_count += 1
+                        logger.info(
+                            f"✓ PROTECTED: LLM tried to filter '{track_name}' but it's user-mentioned (reason: {reason})"
+                        )
+                        # Force include protected tracks
+                        relevant_indices.add(track_idx)
+                    else:
+                        logger.info(f"LLM filtered track '{track_name}': {reason}")
 
-            # Return only relevant tracks
+            # Return only relevant tracks (plus protected tracks)
             filtered_tracks = [
                 tracks[i] for i in range(len(tracks))
                 if i in relevant_indices
             ]
 
             logger.info(
-                f"LLM track filtering: kept {len(filtered_tracks)}/{len(tracks)} tracks"
+                f"LLM track filtering: kept {len(filtered_tracks)}/{len(tracks)} tracks "
+                f"({protected_count} protected from filtering)"
             )
 
             return filtered_tracks

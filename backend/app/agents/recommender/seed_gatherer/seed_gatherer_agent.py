@@ -192,26 +192,13 @@ class SeedGathererAgent(BaseAgent):
         await self._notify_progress(state)
 
         try:
-            # Get data from state
-            mood_analysis = state.mood_analysis or {}
-            target_features = state.metadata.get("target_features", {})
-            genre_keywords = mood_analysis.get("genre_keywords", [])
-            artist_recommendations = mood_analysis.get("artist_recommendations", [])
+            # Prepare anchor selection parameters
+            anchor_params = self._prepare_anchor_selection_params(state, intent_analysis)
             
-            # Use intent analysis for stricter genre matching if available
-            if intent_analysis.get("primary_genre"):
-                genre_keywords = [intent_analysis["primary_genre"]] + genre_keywords
-
-            anchor_tracks, anchor_ids = await self.anchor_track_selector.select_anchor_tracks(
-                genre_keywords,
-                target_features,
-                access_token,
-                mood_prompt=state.mood_prompt,
-                artist_recommendations=artist_recommendations,
-                mood_analysis=mood_analysis,
-                limit=5
-            )
+            # Call anchor selection
+            anchor_tracks, anchor_ids = await self.anchor_track_selector.select_anchor_tracks(**anchor_params)
             
+            # Store results
             state.metadata["anchor_tracks"] = anchor_tracks
             state.metadata["anchor_track_ids"] = anchor_ids
             
@@ -221,6 +208,71 @@ class SeedGathererAgent(BaseAgent):
             logger.warning(f"Failed to select anchor tracks: {e}")
             state.metadata["anchor_tracks"] = []
             state.metadata["anchor_track_ids"] = []
+
+    def _prepare_anchor_selection_params(
+        self,
+        state: AgentState,
+        intent_analysis: dict
+    ) -> dict:
+        """Prepare parameters for anchor track selection.
+        
+        Args:
+            state: Current agent state
+            intent_analysis: Intent analysis data
+            
+        Returns:
+            Dictionary of parameters for anchor selection
+        """
+        mood_analysis = state.mood_analysis or {}
+        target_features = state.metadata.get("target_features", {})
+        genre_keywords = mood_analysis.get("genre_keywords", [])
+        artist_recommendations = mood_analysis.get("artist_recommendations", [])
+        
+        # Use intent analysis for stricter genre matching if available
+        if intent_analysis.get("primary_genre"):
+            genre_keywords = [intent_analysis["primary_genre"]] + genre_keywords
+
+        # Extract user-mentioned artists from intent analysis (HIGHEST PRIORITY)
+        user_mentioned_artists = intent_analysis.get("user_mentioned_artists", [])
+        
+        # Calculate appropriate anchor limit
+        anchor_limit = self._calculate_anchor_limit(user_mentioned_artists)
+        
+        return {
+            "genre_keywords": genre_keywords,
+            "target_features": target_features,
+            "access_token": state.metadata.get("spotify_access_token"),
+            "mood_prompt": state.mood_prompt,
+            "artist_recommendations": artist_recommendations,
+            "mood_analysis": mood_analysis,
+            "limit": anchor_limit,
+            "user_mentioned_artists": user_mentioned_artists
+        }
+
+    def _calculate_anchor_limit(self, user_mentioned_artists: list) -> int:
+        """Calculate appropriate anchor limit based on user-mentioned artists.
+        
+        Args:
+            user_mentioned_artists: List of artists mentioned by user
+            
+        Returns:
+            Appropriate anchor limit
+        """
+        base_limit = 5
+        
+        if not user_mentioned_artists:
+            return base_limit
+        
+        # Guarantee at least 2 tracks per user-mentioned artist, plus some genre anchors
+        min_needed = len(user_mentioned_artists) * 2  # 2 tracks per artist
+        anchor_limit = max(base_limit, min_needed + 2)  # +2 for genre diversity
+        
+        logger.info(
+            f"✓ Passing {len(user_mentioned_artists)} user-mentioned artists to anchor selection: "
+            f"{user_mentioned_artists} (limit increased from {base_limit} to {anchor_limit})"
+        )
+        
+        return anchor_limit
 
     async def _discover_and_validate_artists(
         self,
