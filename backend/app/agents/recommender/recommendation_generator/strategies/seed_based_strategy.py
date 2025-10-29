@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 from ....tools.reccobeat_service import RecoBeatService
 from ....states.agent_state import AgentState
 from ...utils import TrackRecommendationFactory
+from ...utils.config import config
 from ..handlers.audio_features import AudioFeaturesHandler
 from ..handlers.track_filter import TrackFilter
 from ..handlers.scoring import ScoringEngine
@@ -77,7 +78,7 @@ class SeedBasedStrategy(RecommendationStrategy):
             logger.info(f"Deduplicated seeds: {len(state.seed_tracks)} -> {len(unique_seeds)}")
 
         # Split seeds into smaller chunks for multiple API calls
-        seed_chunks = self._chunk_seeds(unique_seeds, chunk_size=3)
+        seed_chunks = self._chunk_seeds(unique_seeds, chunk_size=config.seed_chunk_size)
 
         # Get seed target (5% of total playlist target - very minimal supplementary)
         target_seed_recs = state.metadata.get("_temp_seed_target", 1)  # Default ~5% of 20

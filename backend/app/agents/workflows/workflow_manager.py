@@ -215,6 +215,10 @@ class WorkflowManager:
             state = await self.executor.execute_orchestration(state, progress_callback=notify_progress)
             await self._update_state(session_id, state)
             
+            # STEP 6: Order playlist tracks for optimal energy flow
+            state = await self.executor.execute_playlist_ordering(state)
+            await self._update_state(session_id, state)
+            
             # Mark as completed after recommendations are ready
             state.status = RecommendationStatus.COMPLETED
             state.current_step = "recommendations_ready"

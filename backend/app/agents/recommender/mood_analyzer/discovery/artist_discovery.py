@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from langchain_core.language_models.base import BaseLanguageModel
 
 from ...utils.llm_response_parser import LLMResponseParser
+from ...utils.config import config
 from ..prompts import (
     get_artist_filtering_prompt,
     get_batch_artist_validation_prompt,
@@ -334,9 +335,9 @@ class ArtistDiscovery:
             return artists
         
         try:
-            # Process artists in batches of 30
+            # Process artists in batches
             all_validated = []
-            batch_size = 30
+            batch_size = config.artist_batch_validation_size
             
             for i in range(0, len(artists), batch_size):
                 batch = artists[i:i + batch_size]
