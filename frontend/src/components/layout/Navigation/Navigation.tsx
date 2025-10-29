@@ -51,7 +51,7 @@ export default function Navigation({ extraItems = [] }: NavigationProps) {
                             {isAuthenticated && user ? (
                                 <AuthMenu user={user} />
                             ) : (
-                                <SpotifyLoginButton />
+                                <SpotifyLoginButton className="bg-[#1DB954] hover:bg-[#1ed760] text-white h-8 px-3 text-sm rounded-md font-medium transition-all duration-200 flex items-center gap-1.5 shadow-md hover:shadow-lg sm:h-10 sm:px-6 sm:text-base sm:gap-2" />
                             )}
                         </div>
 
