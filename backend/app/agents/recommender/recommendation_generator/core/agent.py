@@ -133,9 +133,9 @@ class RecommendationGeneratorAgent(BaseAgent):
         Returns:
             Processed TrackRecommendation objects
         """
-        # Filter and rank recommendations
+        # Filter and rank recommendations (with negative seeds exclusion)
         filtered_recommendations = self.track_filter._filter_and_rank_recommendations(
-            recommendations, state.mood_analysis
+            recommendations, state.mood_analysis, negative_seeds=state.negative_seeds
         )
 
         # Ensure diversity in recommendations
