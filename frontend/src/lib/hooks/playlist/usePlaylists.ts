@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { playlistAPI, UserPlaylist } from '@/lib/api/playlist';
-import { ActiveWorkflow } from '@/lib/hooks/useActiveWorkflows';
 import { logger } from '@/lib/utils/logger';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActiveWorkflow } from '../workflow/useActiveWorkflows';
 
 interface UsePlaylistsReturn {
     playlists: UserPlaylist[];
