@@ -30,7 +30,7 @@ export default function SampleMoods() {
       <LoginRequiredDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
 
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-background via-background/95 to-background/80" />
+        <div className="absolute inset-0 -z-10" />
         <div className="relative mx-auto max-w-7xl px-4 pb-20 pt-16 sm:px-6 lg:px-8">
           <motion.div
             className="mx-auto max-w-3xl text-center"
