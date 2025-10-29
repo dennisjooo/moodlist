@@ -96,6 +96,22 @@ class BaseAgent(ABC):
         state.metadata["agent_name"] = self.name
         state.metadata["execution_start"] = datetime.now(timezone.utc).isoformat()
 
+        # Set LLM context for logging if LLM is a LoggingChatModel
+        if self.llm and hasattr(self.llm, 'set_context'):
+            try:
+                # Extract playlist_id from metadata if available
+                playlist_id = state.metadata.get("playlist_id")
+                
+                self.llm.set_context(
+                    user_id=int(state.user_id) if state.user_id else None,
+                    session_id=state.session_id,
+                    playlist_id=playlist_id,
+                    agent_name=self.name
+                )
+                logger.debug(f"Set LLM context for agent {self.name}", session_id=state.session_id, agent=self.name)
+            except Exception as e:
+                logger.warning(f"Failed to set LLM context: {e}")
+
         return state
 
     async def post_execute(self, state: AgentState) -> AgentState:
