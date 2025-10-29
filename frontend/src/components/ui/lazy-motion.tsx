@@ -29,6 +29,7 @@ type MotionLiComponent = React.ComponentType<MotionComponentProps>;
 type MotionButtonComponent = React.ComponentType<MotionComponentProps>;
 type MotionH2Component = React.ComponentType<MotionComponentProps>;
 type MotionPComponent = React.ComponentType<MotionComponentProps>;
+type MotionArticleComponent = React.ComponentType<MotionComponentProps>;
 
 // Dynamically import motion components with placeholder
 export const motion = {
@@ -87,6 +88,14 @@ export const motion = {
       ssr: false
     }
   ) as MotionPComponent,
+
+  article: dynamic(
+    () => import('framer-motion').then((mod) => mod.motion.article),
+    {
+      loading: () => <MotionPlaceholder as="article" />,
+      ssr: false
+    }
+  ) as MotionArticleComponent,
 };
 
 // Export commonly used hooks and utilities - these are lightweight and don't need lazy loading

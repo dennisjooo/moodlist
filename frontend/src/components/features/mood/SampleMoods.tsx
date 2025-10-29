@@ -2,16 +2,14 @@
 
 import LoginRequiredDialog from '@/components/LoginRequiredDialog';
 import MoodCard from '@/components/features/mood/MoodCard';
+import { motion } from '@/components/ui/lazy-motion';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { MOOD_TEMPLATES } from '@/lib/constants/moodTemplates';
 import { shuffleArray } from '@/lib/utils/array';
-import { motion } from '@/components/ui/lazy-motion';
 import { useRouter } from 'next/navigation';
-import { useRef, useState, useMemo } from 'react';
-
+import { useMemo, useState } from 'react';
 
 export default function SampleMoods() {
-  const containerRef = useRef(null);
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   const [showLoginDialog, setShowLoginDialog] = useState(false);
@@ -29,33 +27,28 @@ export default function SampleMoods() {
 
   return (
     <>
-      {/* Login Dialog */}
       <LoginRequiredDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
 
-      {/* Sample Moods Section */}
-      <div ref={containerRef} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-16">
-        <div className="flex flex-col items-center">
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 -z-10" />
+        <div className="relative mx-auto max-w-7xl px-4 pb-20 pt-16 sm:px-6 lg:px-8">
           <motion.div
-            className="text-center mb-8"
-            initial={{ opacity: 0, y: 20 }}
+            className="mx-auto max-w-3xl text-center"
+            initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-50px" }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
+            viewport={{ once: true, margin: '-80px' }}
+            transition={{ duration: 0.6, ease: 'easeOut' }}
           >
-            <h2 className="text-3xl font-bold mb-2">
-              Sample Moods
-            </h2>
-            <p className="text-muted-foreground text-md">
-              Get inspired by some of these mood templates
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1 text-sm font-medium text-primary">
+              Templates on deck
+            </span>
+            <h3 className="mt-6 text-3xl font-semibold sm:text-4xl">Shuffle through sample moods</h3>
+            <p className="mt-3 text-base text-muted-foreground">
+              Every click spins up a ready-to-use mood template. Pick one that fits, or remix it into something brand new.
             </p>
           </motion.div>
-          <motion.div
-            className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-6xl w-full"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-50px" }}
-            transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-          >
+
+          <div className="mt-12 grid grid-cols gap-6 md:grid-cols-4">
             {moodExamples.map((template, index) => {
               const hiddenOnMobile = index > 3;
               return (
@@ -63,8 +56,8 @@ export default function SampleMoods() {
                   key={template.name}
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: "-50px" }}
-                  transition={{ duration: 0.5, delay: index * 0.1, ease: "easeOut" }}
+                  viewport={{ once: true, margin: '-60px' }}
+                  transition={{ duration: 0.5, delay: index * 0.08, ease: 'easeOut' }}
                 >
                   <MoodCard
                     name={template.name}
@@ -78,10 +71,9 @@ export default function SampleMoods() {
                 </motion.div>
               );
             })}
-          </motion.div>
+          </div>
         </div>
-      </div>
+      </section>
     </>
   );
 }
-

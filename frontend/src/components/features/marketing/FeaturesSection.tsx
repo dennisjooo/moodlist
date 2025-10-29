@@ -1,54 +1,37 @@
 'use client';
 
 import { motion } from '@/components/ui/lazy-motion';
-import { Brain, MessageCircle, Music } from 'lucide-react';
 import { useRef } from 'react';
-
-interface TimelineStep {
-    icon: React.ComponentType<{ className?: string }>;
-    title: string;
-    description: string;
-    color: string;
-}
+import { HOW_IT_WORKS_STEPS } from '@/lib/constants/marketing';
+import type { HowItWorksStep } from '@/lib/constants/marketing';
 
 export function FeaturesSection() {
     const containerRef = useRef(null);
 
-    const steps: TimelineStep[] = [
-        {
-            icon: MessageCircle,
-            title: 'Describe Your Mood',
-            description: 'Tell us how you\'re feeling in your own words - happy, melancholic, energetic, or anything in between',
-            color: 'from-blue-500 to-purple-600',
-        },
-        {
-            icon: Brain,
-            title: 'AI Analyzes & Understands',
-            description: 'Our advanced AI processes your mood and matches it with musical characteristics and genres',
-            color: 'from-purple-600 to-pink-600',
-        },
-        {
-            icon: Music,
-            title: 'Spotify Creates Your Playlist',
-            description: 'A personalized playlist is generated and saved directly to your Spotify account, ready to play',
-            color: 'from-pink-600 to-green-500',
-        },
-    ];
+    const steps: HowItWorksStep[] = HOW_IT_WORKS_STEPS;
 
     return (
         <div ref={containerRef} className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-16">
             <div className="flex flex-col items-center">
-                <motion.h2
-                    className="text-3xl font-bold text-center mb-16"
-                    initial={{ opacity: 0, y: 20 }}
+                <motion.div
+                    className="mx-auto max-w-3xl text-center"
+                    initial={{ opacity: 0, y: 24 }}
                     whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: "-50px" }}
-                    transition={{ duration: 0.6, ease: "easeOut" }}
+                    viewport={{ once: true, margin: '-80px' }}
+                    transition={{ duration: 0.6, ease: 'easeOut' }}
                 >
-                    How It Works
-                </motion.h2>
+                    <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1 text-sm font-medium text-primary">
+                        Simple process
+                    </span>
+                    <h2 className="mt-6 text-3xl font-semibold sm:text-4xl">
+                        How It Works
+                    </h2>
+                    <p className="mt-3 text-base text-muted-foreground">
+                        From mood prompt to perfect playlist in four simple steps
+                    </p>
+                </motion.div>
 
-                <div className="relative w-full">
+                <div className="relative w-full mt-16">
                     {/* Vertical line - mobile: left-aligned, desktop: centered */}
                     <div className="absolute left-6 lg:left-1/2 transform -translate-x-1/2 lg:-translate-x-1/2 w-1 bg-gradient-to-b from-blue-500 via-purple-600 via-pink-600 to-green-500 opacity-20 rounded-full h-full"
                     ></div>
@@ -144,18 +127,6 @@ export function FeaturesSection() {
                         })}
                     </div>
                 </div>
-
-                <motion.div
-                    className="mt-16 text-center"
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: "-50px" }}
-                    transition={{ duration: 0.6, delay: 0.3, ease: "easeOut" }}
-                >
-                    <p className="text-lg text-muted-foreground">
-                        Ready to discover your perfect playlist?
-                    </p>
-                </motion.div>
             </div>
         </div>
     );
