@@ -82,6 +82,10 @@ export function useWorkflowState() {
                 error: status.error || null,
                 moodAnalysis: status.mood_analysis || prev.moodAnalysis,
                 metadata: status.metadata || prev.metadata,
+                totalLLMCost: status.total_llm_cost_usd ?? prev.totalLLMCost,
+                totalPromptTokens: status.total_prompt_tokens ?? prev.totalPromptTokens,
+                totalCompletionTokens: status.total_completion_tokens ?? prev.totalCompletionTokens,
+                totalTokens: status.total_tokens ?? prev.totalTokens,
             };
         });
     }, []);
@@ -131,6 +135,10 @@ export function useWorkflowState() {
             moodAnalysis: results?.mood_analysis || prev.moodAnalysis,
             recommendations: results?.recommendations || prev.recommendations,
             playlist: results?.playlist || prev.playlist,
+            totalLLMCost: status.total_llm_cost_usd ?? prev.totalLLMCost,
+            totalPromptTokens: status.total_prompt_tokens ?? prev.totalPromptTokens,
+            totalCompletionTokens: status.total_completion_tokens ?? prev.totalCompletionTokens,
+            totalTokens: status.total_tokens ?? prev.totalTokens,
         }));
     }, [success, showErrorToast]);
 
