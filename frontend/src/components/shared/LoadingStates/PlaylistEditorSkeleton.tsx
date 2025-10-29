@@ -8,7 +8,7 @@ export function PlaylistEditorSkeleton() {
             <Card>
                 <CardHeader>
                     <Skeleton className="h-6 w-48" />
-                    <Skeleton className="h-4 w-96 mt-2" />
+                    <Skeleton className="h-4 w-full max-w-md mt-2" />
                 </CardHeader>
             </Card>
 
