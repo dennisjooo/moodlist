@@ -90,7 +90,7 @@ export default function FeaturedMoodShowcase() {
               </div>
               <div className="h-14 w-14 rounded-full border border-white/40 bg-white/10" aria-hidden />
             </div>
-            <p className="mt-6 text-base leading-relaxed">"{selectedShowcaseData.showcase.prompt}"</p>
+            <p className="mt-6 text-base leading-relaxed">&quot;{selectedShowcaseData.showcase.prompt}&quot;</p>
             <div className="mt-6 space-y-3">
               {selectedShowcaseData.showcase.summaryHighlights.map((highlight) => (
                 <div key={highlight} className="flex items-start gap-3 text-sm">
