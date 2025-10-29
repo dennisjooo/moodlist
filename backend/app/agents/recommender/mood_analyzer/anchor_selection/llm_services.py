@@ -304,6 +304,35 @@ class LLMServices:
             logger.info(f"No additional candidates to fill remaining {remaining_slots} slots")
             return selected_tracks, selected_ids
         
+        # CRITICAL: Filter out low-quality anchors (llm_score < 0.6)
+        # Only user-mentioned tracks are protected - genre anchors must meet quality threshold
+        quality_threshold = 0.6
+        quality_candidates = [
+            c for c in other_candidates 
+            if c.get('llm_score', 0) >= quality_threshold
+        ]
+        
+        filtered_count = len(other_candidates) - len(quality_candidates)
+        if filtered_count > 0:
+            logger.info(
+                f"✓ Filtered {filtered_count} low-quality anchors (llm_score < {quality_threshold})"
+            )
+            # Log which tracks were filtered
+            for candidate in other_candidates:
+                if candidate.get('llm_score', 0) < quality_threshold:
+                    track = candidate.get('track', {})
+                    logger.info(
+                        f"  ✗ Rejected: '{track.get('name')}' by {[a.get('name') for a in track.get('artists', [])]} "
+                        f"(llm_score={candidate.get('llm_score', 0):.2f})"
+                    )
+        
+        # Use quality candidates for selection
+        other_candidates = quality_candidates
+        
+        if not other_candidates:
+            logger.warning(f"No quality candidates remain after filtering (threshold={quality_threshold})")
+            return selected_tracks, selected_ids
+        
         # Use LLM or fallback to select additional tracks
         if not self.llm:
             # Fallback: sort by score and take top N
