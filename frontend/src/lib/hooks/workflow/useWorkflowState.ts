@@ -1,10 +1,10 @@
+import type { WorkflowResults, WorkflowStatus } from '@/lib/api/workflow';
+import type { WorkflowState } from '@/lib/types/workflow';
+import { logger } from '@/lib/utils/logger';
+import { shouldAcceptStatusUpdate } from '@/lib/utils/workflow';
 import { useCallback, useRef, useState } from 'react';
-import { logger } from '../utils/logger';
-import { shouldAcceptStatusUpdate } from '../utils/workflow';
+import { useToast } from '../ui/useToast';
 import { workflowEvents } from './useActiveWorkflows';
-import { useToast } from './useToast';
-import type { WorkflowResults, WorkflowStatus } from '../api/workflow';
-import type { WorkflowState } from '../types/workflow';
 
 const initialWorkflowState: WorkflowState = {
     sessionId: null,

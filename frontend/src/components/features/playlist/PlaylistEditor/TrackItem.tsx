@@ -2,7 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
+import { useReducedMotion } from '@/lib/hooks';
 import type { Track } from '@/lib/types/workflow';
 import { cn } from '@/lib/utils';
 import { useSortable } from '@dnd-kit/sortable';

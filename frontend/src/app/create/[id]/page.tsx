@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { logger } from '@/lib/utils/logger';
-import { usePageCancellation } from '@/lib/hooks/usePageCancellation';
+import { usePageCancellation } from '@/lib/hooks';
 import { CreateSessionSkeleton } from '@/components/shared/LoadingStates/CreateSessionSkeleton';
 import { CreateSessionEditor } from '@/components/features/create/CreateSessionEditor';
 import { CreateSessionProgress } from '@/components/features/create/CreateSessionProgress';

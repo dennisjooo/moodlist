@@ -5,7 +5,7 @@ import { playlistAPI } from '@/lib/playlistApi';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { useToast } from '@/lib/hooks/useToast';
+import { useToast } from '@/lib/hooks';
 import { logger } from '@/lib/utils/logger';
 import PlaylistStatusBanner from './PlaylistStatusBanner';
 import MoodAnalysisCard from './MoodAnalysisCard';
