@@ -112,6 +112,10 @@ export function useWorkflowActions({
                 playlist: results?.playlist,
                 awaitingInput: status.awaiting_input,
                 error: status.error || null,
+                totalLLMCost: status.total_llm_cost_usd,
+                totalPromptTokens: status.total_prompt_tokens,
+                totalCompletionTokens: status.total_completion_tokens,
+                totalTokens: status.total_tokens,
                 metadata: status.metadata || workflowState.metadata,
                 isLoading: false,
             });

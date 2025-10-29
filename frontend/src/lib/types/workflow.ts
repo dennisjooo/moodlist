@@ -35,6 +35,10 @@ export interface WorkflowState {
     error: string | null;
     isLoading: boolean;
     awaitingInput: boolean;
+    totalLLMCost?: number;
+    totalPromptTokens?: number;
+    totalCompletionTokens?: number;
+    totalTokens?: number;
     metadata?: {
         iteration?: number;
         cohesion_score?: number;

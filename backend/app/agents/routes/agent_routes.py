@@ -229,6 +229,9 @@ async def get_workflow_status(request: Request, session_id: str, db: AsyncSessio
                     "cohesion_score": state.metadata.get("cohesion_score"),
                 },
                 "total_llm_cost_usd": session_cost_summary["total_cost_usd"],
+                "total_prompt_tokens": session_cost_summary["total_prompt_tokens"],
+                "total_completion_tokens": session_cost_summary["total_completion_tokens"],
+                "total_tokens": session_cost_summary["total_tokens"],
             }
         
         # If not in cache, try to get from database
@@ -256,6 +259,9 @@ async def get_workflow_status(request: Request, session_id: str, db: AsyncSessio
             "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
             "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
             "total_llm_cost_usd": session_cost_summary["total_cost_usd"],
+            "total_prompt_tokens": session_cost_summary["total_prompt_tokens"],
+            "total_completion_tokens": session_cost_summary["total_completion_tokens"],
+            "total_tokens": session_cost_summary["total_tokens"],
         }
 
     except NotFoundException:
