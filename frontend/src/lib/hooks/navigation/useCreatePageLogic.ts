@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { logger } from '@/lib/utils/logger';
-import { useToast } from '@/lib/hooks/useToast';
+import { useToast } from '../ui/useToast';
 
 /**
  * Custom hook to manage create page logic and state

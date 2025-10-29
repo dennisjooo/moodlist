@@ -8,7 +8,7 @@ import { DotPattern } from '@/components/ui/dot-pattern';
 import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 import { Suspense, useState } from 'react';
-import { useCreatePageLogic } from '@/lib/hooks/useCreatePageLogic';
+import { useCreatePageLogic } from '@/lib/hooks';
 import { CreatePageLayout } from '@/components/features/create/CreatePageLayout';
 import { CreatePageHeader } from '@/components/features/create/CreatePageHeader';
 import { QuotaDisplay } from '@/components/features/create/QuotaDisplay';

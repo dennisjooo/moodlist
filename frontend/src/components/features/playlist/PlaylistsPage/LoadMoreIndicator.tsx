@@ -18,7 +18,7 @@ export function LoadMoreIndicator({
     if (!hasMore && playlistCount > 0) {
         return (
             <div className="py-8 text-center text-muted-foreground">
-                <p>You've reached the end of your playlists</p>
+                <p>You&apos;ve reached the end of your playlists</p>
                 <p className="text-sm mt-2">
                     Showing {playlistCount} of {total} playlists
                 </p>

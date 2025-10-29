@@ -11,8 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useRouter, usePathname } from 'next/navigation';
 import { Loader2, ChevronDown } from 'lucide-react';
-import { useActiveWorkflows } from '@/lib/hooks/useActiveWorkflows';
-import { useGlobalWorkflowPolling } from '@/lib/hooks/useGlobalWorkflowPolling';
+import { useActiveWorkflows, useGlobalWorkflowPolling } from '@/lib/hooks';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 
 export function WorkflowNotificationIndicator() {

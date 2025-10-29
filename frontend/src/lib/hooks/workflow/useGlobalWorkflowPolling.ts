@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
 import { workflowAPI } from '@/lib/api/workflow';
 import { logger } from '@/lib/utils/logger';
+import { useEffect, useRef } from 'react';
+import { useToast } from '../ui/useToast';
 import { workflowEvents } from './useActiveWorkflows';
-import { useToast } from './useToast';
 
 /**
  * Global polling hook that polls ALL active workflows regardless of current page

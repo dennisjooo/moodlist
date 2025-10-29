@@ -4,8 +4,7 @@ import { logger } from '@/lib/utils/logger';
 import { usePathname } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { WorkflowResults, WorkflowStatus } from '../api/workflow';
-import { useWorkflowApi } from '../hooks/useWorkflowApi';
-import { useWorkflowSSE } from '../hooks/useWorkflowSSE';
+import { useWorkflowApi, useWorkflowSSE } from '../hooks/workflow';
 import { WorkflowContextType, WorkflowProviderProps, WorkflowState } from '../types/workflow';
 
 const WorkflowContext = createContext<WorkflowContextType | undefined>(undefined);

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
-import { workflowEvents } from '@/lib/hooks/useActiveWorkflows';
+import { workflowEvents } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
 import { ArrowLeft } from 'lucide-react';

@@ -1,16 +1,23 @@
 // Custom hooks for MoodList application
-export * from './useAccessibility';
-export { useAuthGuard } from './useAuthGuard';
-export { useCreatePageLogic } from './useCreatePageLogic';
-export { useMoodAnalysisStyling } from './useMoodAnalysisStyling';
-export { useNavigationHelpers } from './useNavigationHelpers';
-export { usePlaylistEdits } from './usePlaylistEdits';
-export { usePlaylistFormatting } from './usePlaylistFormatting';
-export { usePlaylists } from './usePlaylists';
-export { useProfile } from './useProfile';
-export { useToast } from './useToast';
-export { useWorkflowApi } from './useWorkflowApi';
-export { useWorkflowPolling } from './useWorkflowPolling';
-export { useWorkflowSession } from './useWorkflowSession';
-export { useWorkflowSSE } from './useWorkflowSSE';
+// Organized by domain for better maintainability
 
+// Accessibility
+export * from './accessibility';
+
+// Authentication
+export * from './auth';
+
+// Navigation
+export * from './navigation';
+
+// Playlist
+export * from './playlist';
+
+// Profile
+export * from './profile';
+
+// UI utilities
+export * from './ui';
+
+// Workflow
+export * from './workflow';
