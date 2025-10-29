@@ -71,7 +71,7 @@ export default function CTASection({ isLoggedIn: serverIsLoggedIn }: CTASectionP
                   Create a playlist
                 </Button>
               ) : (
-                <SpotifyLoginButton data-cta="true" />
+                <SpotifyLoginButton className="bg-[#1DB954] hover:bg-[#1ed760] text-white h-11 w-full px-6 rounded-md font-medium transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-lg sm:h-12 text-base" data-cta="true" />
               )
             ) : (
               <div className="h-11 w-full animate-pulse rounded-lg bg-muted sm:h-12" />
