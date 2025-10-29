@@ -21,7 +21,7 @@ export interface WorkflowStatus {
     "generating_recommendations" | "evaluating_quality" |
     "optimizing_recommendations" | "ordering_playlist" | "awaiting_user_input" |
     "processing_edits" | "creating_playlist" |
-    "completed" | "failed";
+    "completed" | "failed" | "cancelled";
     current_step: string;
     mood_prompt: string;
     mood_analysis?: {
