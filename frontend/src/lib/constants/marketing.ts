@@ -30,24 +30,24 @@ export const CTA_HIGHLIGHTS = [
 
 export const FAQ_ITEMS: FAQItem[] = [
   {
-    question: 'Do I need a premium Spotify account?',
+    question: 'Do I need Spotify Premium?',
     answer:
-      "Moodlist works best with a Spotify Premium account so your playlists can be saved automatically. You can still explore moods and prompts with a free account—when you're ready, connect Premium to unlock instant syncing.",
+      "Technically no, but yeah, kind of. You need Premium to actually save playlists to your library. Free accounts can browse and see what Moodlist generates, but you won't be able to sync anything. It's a Spotify limitation, not ours.",
   },
   {
-    question: 'What kind of prompts should I write?',
+    question: 'What should I actually write in the prompt?',
     answer:
-      'Describe the atmosphere you want to create. Mention emotions, locations, energy levels, or artists you like. The more detail you give, the more accurate the AI becomes at matching tracks to your moment.',
+      'Just describe the vibe. Like "rainy Sunday morning with coffee" or "gym hype but make it rap" or "focus music that won\'t distract me." The more specific you are about mood, energy, or style, the better it works. Or just try one of the preset moods if you\'re stuck.',
   },
   {
-    question: 'Can I edit the playlist after it is generated?',
+    question: 'Can I edit playlists after they\'re made?',
     answer:
-      'Absolutely. Once the playlist is in your Spotify library you can reorder songs, add new tracks, or remove anything that does not fit. Moodlist is designed to give you a thoughtful starting point.',
+      'Yeah, absolutely. Once it hits your Spotify library, it\'s yours. Add songs, delete the ones you hate, reorder them—whatever. Moodlist just gives you a solid starting point, not a locked-in final answer.',
   },
   {
-    question: 'Is my data safe?',
+    question: 'Are you selling my data or listening history?',
     answer:
-      'We only request the permissions required to create playlists on your behalf. Your listening history stays on Spotify—Moodlist never stores or shares your personal data.',
+      'Nope. We only ask Spotify for the bare minimum permissions to create playlists. Your listening history, favorite artists, all that—stays on Spotify. We don\'t store it, we don\'t sell it, we don\'t even look at it.',
   },
 ];
 
