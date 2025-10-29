@@ -27,16 +27,18 @@ class ArtistProcessor:
         artist_recommendations: List[str],
         target_features: Dict[str, Any],
         access_token: str,
-        mood_analysis: Optional[Dict[str, Any]] = None
+        mood_analysis: Optional[Dict[str, Any]] = None,
+        user_mentioned_artists: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """Get anchor candidates from top recommended artists, prioritizing those mentioned in prompt.
 
         Args:
             mood_prompt: User's mood prompt
-            artist_recommendations: List of artist names from mood analysis
+            artist_recommendations: List of artist names from mood analysis (already prioritized if user mentions exist)
             target_features: Target audio features
             access_token: Spotify access token
             mood_analysis: Mood analysis context
+            user_mentioned_artists: Artists explicitly mentioned by user from intent analysis
 
         Returns:
             List of artist-based track candidate dictionaries
@@ -44,29 +46,93 @@ class ArtistProcessor:
         if not self.spotify_service or not artist_recommendations:
             return []
 
-        candidates = []
-        prompt_lower = mood_prompt.lower()
+        # Step 1: Categorize artists (mentioned vs others)
+        mentioned_artists, artists_to_process = self._categorize_and_prioritize_artists(
+            artist_recommendations, mood_prompt, user_mentioned_artists
+        )
 
-        # Prioritize artists mentioned in the prompt
+        # Step 2: Search for artist IDs on Spotify
+        artist_infos = await self._search_artists(
+            artists_to_process, mentioned_artists, access_token
+        )
+
+        # Step 3: Fetch tracks for each validated artist
+        candidates = await self._fetch_artist_tracks(
+            artist_infos, mentioned_artists, target_features, access_token
+        )
+
+        return candidates
+
+    def _categorize_and_prioritize_artists(
+        self,
+        artist_recommendations: List[str],
+        mood_prompt: str,
+        user_mentioned_artists: Optional[List[str]]
+    ) -> tuple[List[str], List[str]]:
+        """Categorize artists into mentioned vs others and create prioritized list.
+
+        Args:
+            artist_recommendations: All recommended artist names
+            mood_prompt: User's mood prompt
+            user_mentioned_artists: Artists from intent analysis
+
+        Returns:
+            Tuple of (mentioned_artists, artists_to_process)
+        """
+        prompt_lower = mood_prompt.lower()
+        user_mentioned_set = {artist.lower() if artist else '' for artist in (user_mentioned_artists or [])}
+
         mentioned_artists = []
         other_artists = []
 
         for artist in artist_recommendations:
-            if artist.lower() in prompt_lower:
+            if not artist:
+                continue
+                
+            # Check if artist is in user-mentioned set OR in the prompt text (case-insensitive)
+            is_user_mentioned = (
+                artist.lower() in user_mentioned_set or
+                artist.lower() in prompt_lower
+            )
+            
+            if is_user_mentioned:
                 mentioned_artists.append(artist)
+                logger.info(f"✓ Detected user-mentioned artist for anchor search: {artist}")
             else:
                 other_artists.append(artist)
 
-        # Process mentioned artists first (up to 3), then other top artists (up to 5 total)
-        artists_to_process = mentioned_artists[:3] + other_artists[:5]
+        # CRITICAL: Process ALL user-mentioned artists first (no limit), then other artists
+        artists_to_process = mentioned_artists + other_artists[:max(0, 8 - len(mentioned_artists))]
+        
+        logger.info(
+            f"Processing {len(artists_to_process)} artists for anchors: "
+            f"{len(mentioned_artists)} user-mentioned + {len(artists_to_process) - len(mentioned_artists)} others"
+        )
 
-        # First, fetch all artist info
+        return mentioned_artists, artists_to_process
+
+    async def _search_artists(
+        self,
+        artists_to_process: List[str],
+        mentioned_artists: List[str],
+        access_token: str
+    ) -> List[Dict[str, Any]]:
+        """Search for artists on Spotify and return validated artist info.
+
+        Args:
+            artists_to_process: List of artist names to search
+            mentioned_artists: List of user-mentioned artist names
+            access_token: Spotify access token
+
+        Returns:
+            List of dicts with 'info', 'name', and 'is_mentioned' keys
+        """
         artist_infos = []
+        
         for artist_name in artists_to_process[:8]:  # Limit to 8 artists total
             try:
                 logger.info(f"Searching for artist: {artist_name}")
 
-                # Search for artist first to get the Spotify artist ID
                 artists = await self.spotify_service.search_spotify_artists(
                     access_token=access_token,
                     query=artist_name,
@@ -89,14 +155,34 @@ class ArtistProcessor:
                 logger.warning(f"Failed to search for artist '{artist_name}': {e}")
                 continue
 
-        # Now fetch tracks for validated artists
+        return artist_infos
+
+    async def _fetch_artist_tracks(
+        self,
+        artist_infos: List[Dict[str, Any]],
+        mentioned_artists: List[str],
+        target_features: Dict[str, Any],
+        access_token: str
+    ) -> List[Dict[str, Any]]:
+        """Fetch top tracks for each artist and create anchor candidates.
+
+        Args:
+            artist_infos: List of validated artist info dicts
+            mentioned_artists: List of user-mentioned artist names
+            target_features: Target audio features
+            access_token: Spotify access token
+
+        Returns:
+            List of anchor candidate dictionaries
+        """
+        candidates = []
+
         for artist_data in artist_infos:
             artist_info = artist_data['info']
             artist_name = artist_data['name']
             artist_id = artist_info.get('id')
 
             try:
-                # Get top tracks for this artist
                 tracks = await self.spotify_service.get_artist_top_tracks(
                     access_token=access_token,
                     artist_id=artist_id,

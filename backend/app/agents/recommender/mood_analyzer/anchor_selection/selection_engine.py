@@ -40,7 +40,8 @@ class AnchorSelectionEngine:
         mood_prompt: str = "",
         artist_recommendations: Optional[List[str]] = None,
         mood_analysis: Optional[Dict[str, Any]] = None,
-        limit: int = 5
+        limit: int = 5,
+        user_mentioned_artists: Optional[List[str]] = None
     ) -> Tuple[List[Dict[str, Any]], List[str]]:
         """
         Select anchor tracks using LLM-guided analysis.
@@ -53,6 +54,7 @@ class AnchorSelectionEngine:
             artist_recommendations: List of artist names from mood analysis
             mood_analysis: Full mood analysis results for LLM context
             limit: Maximum number of anchor tracks to select (fallback if LLM doesn't specify)
+            user_mentioned_artists: Artists explicitly mentioned by user from intent analysis (HIGHEST PRIORITY)
 
         Returns:
             Tuple of (anchor_tracks_for_playlist, anchor_track_ids_for_reference)
@@ -65,13 +67,13 @@ class AnchorSelectionEngine:
         if self.llm_services.llm and mood_analysis:
             return await self._llm_driven_anchor_selection(
                 genre_keywords, target_features, access_token, mood_prompt,
-                artist_recommendations or [], mood_analysis, limit
+                artist_recommendations or [], mood_analysis, limit, user_mentioned_artists or []
             )
         else:
             logger.info("No LLM available, using fallback anchor selection")
             return await self._fallback_anchor_selection(
                 genre_keywords, target_features, access_token, mood_prompt,
-                artist_recommendations or [], limit
+                artist_recommendations or [], limit, user_mentioned_artists or []
             )
 
     async def _llm_driven_anchor_selection(
@@ -82,62 +84,25 @@ class AnchorSelectionEngine:
         mood_prompt: str,
         artist_recommendations: List[str],
         mood_analysis: Dict[str, Any],
-        limit: int
+        limit: int,
+        user_mentioned_artists: List[str]
     ) -> Tuple[List[Dict[str, Any]], List[str]]:
         """Use LLM analysis to determine and select optimal anchor tracks."""
         try:
-            # Step 1: Get user-mentioned tracks (always priority)
-            user_candidates = await self._get_user_mentioned_candidates(
-                mood_prompt, artist_recommendations, access_token
+            # Step 1: Gather all candidate tracks
+            all_candidates = await self._gather_all_candidates(
+                mood_prompt, artist_recommendations, user_mentioned_artists,
+                target_features, access_token, mood_analysis, genre_keywords
             )
-            logger.info(f"Found {len(user_candidates)} user-mentioned tracks as anchors")
-
-            # Step 2: Get tracks from top recommended artists
-            artist_candidates = await self.artist_processor.get_artist_based_candidates(
-                mood_prompt, artist_recommendations, target_features, access_token, mood_analysis
-            )
-            logger.info(f"Found {len(artist_candidates)} artist-based track candidates")
-
-            # Step 3: Get genre-based candidates for LLM to evaluate
-            genre_candidates = []
-            if genre_keywords:
-                genre_candidates = await self._get_genre_based_candidates(
-                    genre_keywords[:8], target_features, access_token, mood_prompt
-                )
-                logger.info(f"Found {len(genre_candidates)} genre-based track candidates")
-
-            # Combine all candidates
-            all_candidates = user_candidates + artist_candidates + genre_candidates
 
             if not all_candidates:
                 logger.warning("No anchor track candidates found")
                 return [], []
 
-            # Step 4: LLM-based filtering for cultural/linguistic relevance
-            all_candidates = await self.llm_services.filter_tracks_by_relevance(
-                all_candidates, mood_prompt, mood_analysis
-            )
-
-            if not all_candidates:
-                logger.warning("No anchor track candidates after LLM filtering")
-                return [], []
-
-            # Step 5: Use LLM to determine optimal selection strategy
-            strategy = await self.llm_services.get_anchor_selection_strategy(
-                mood_prompt, mood_analysis, genre_keywords, target_features, all_candidates
-            )
-
-            anchor_count = strategy.anchor_count or limit
-            selection_criteria = strategy.selection_criteria or {}
-
-            # Step 6: Use LLM to score all candidates
-            scored_candidates = await self.llm_services.score_candidates(
-                all_candidates, target_features, mood_analysis, selection_criteria
-            )
-
-            # Step 7: Use LLM to finalize selection
-            selected_tracks, selected_ids = await self.llm_services.finalize_selection(
-                scored_candidates, anchor_count, mood_analysis
+            # Step 2: Apply LLM filtering and scoring
+            selected_tracks, selected_ids = await self._apply_llm_scoring_and_selection(
+                all_candidates, mood_prompt, mood_analysis, genre_keywords,
+                target_features, limit
             )
 
             logger.info(
@@ -151,8 +116,122 @@ class AnchorSelectionEngine:
             # Fallback to original logic
             return await self._fallback_anchor_selection(
                 genre_keywords, target_features, access_token, mood_prompt,
-                artist_recommendations, limit
+                artist_recommendations, limit, user_mentioned_artists
             )
+
+    async def _gather_all_candidates(
+        self,
+        mood_prompt: str,
+        artist_recommendations: List[str],
+        user_mentioned_artists: List[str],
+        target_features: Dict[str, Any],
+        access_token: str,
+        mood_analysis: Dict[str, Any],
+        genre_keywords: List[str]
+    ) -> List[Dict[str, Any]]:
+        """Gather all anchor track candidates from various sources.
+        
+        Returns:
+            Combined list of all anchor candidates
+        """
+        # Step 1: Get user-mentioned tracks (always priority)
+        user_candidates = await self._get_user_mentioned_candidates(
+            mood_prompt, artist_recommendations, access_token
+        )
+        logger.info(f"Found {len(user_candidates)} user-mentioned tracks as anchors")
+
+        # Step 2: Prioritize artists with user mentions first
+        prioritized_artists = self._prioritize_user_mentioned_artists(
+            user_mentioned_artists, artist_recommendations
+        )
+
+        # Step 3: Get tracks from top recommended artists
+        artist_candidates = await self.artist_processor.get_artist_based_candidates(
+            mood_prompt, prioritized_artists, target_features, access_token, mood_analysis, user_mentioned_artists
+        )
+        logger.info(f"Found {len(artist_candidates)} artist-based track candidates from {len(prioritized_artists)} artists")
+
+        # Step 4: Get genre-based candidates for LLM to evaluate
+        genre_candidates = []
+        if genre_keywords:
+            genre_candidates = await self._get_genre_based_candidates(
+                genre_keywords[:8], target_features, access_token, mood_prompt
+            )
+            logger.info(f"Found {len(genre_candidates)} genre-based track candidates")
+
+        # Combine all candidates
+        return user_candidates + artist_candidates + genre_candidates
+
+    def _prioritize_user_mentioned_artists(
+        self,
+        user_mentioned_artists: List[str],
+        artist_recommendations: List[str]
+    ) -> List[str]:
+        """Create prioritized artist list with user mentions first.
+        
+        CRITICAL: User-mentioned artists are GUARANTEED to be searched,
+        even if not in mood recommendations.
+        
+        Returns:
+            Prioritized list of artists
+        """
+        if not user_mentioned_artists:
+            return artist_recommendations
+
+        logger.info(f"✓ Prioritizing {len(user_mentioned_artists)} user-mentioned artists: {user_mentioned_artists}")
+        
+        # Ensure ALL user-mentioned artists are included, then add mood recommendations
+        prioritized_artists = list(user_mentioned_artists)  # Start with user mentions
+        
+        # Add mood recommendations that aren't already user-mentioned
+        for artist in artist_recommendations:
+            if artist not in user_mentioned_artists:
+                prioritized_artists.append(artist)
+        
+        return prioritized_artists
+
+    async def _apply_llm_scoring_and_selection(
+        self,
+        all_candidates: List[Dict[str, Any]],
+        mood_prompt: str,
+        mood_analysis: Dict[str, Any],
+        genre_keywords: List[str],
+        target_features: Dict[str, Any],
+        limit: int
+    ) -> Tuple[List[Dict[str, Any]], List[str]]:
+        """Apply LLM filtering, scoring, and final selection.
+        
+        Returns:
+            Tuple of (selected_tracks, selected_track_ids)
+        """
+        # Step 1: LLM-based filtering for cultural/linguistic relevance
+        filtered_candidates = await self.llm_services.filter_tracks_by_relevance(
+            all_candidates, mood_prompt, mood_analysis
+        )
+
+        if not filtered_candidates:
+            logger.warning("No anchor track candidates after LLM filtering")
+            return [], []
+
+        # Step 2: Use LLM to determine optimal selection strategy
+        strategy = await self.llm_services.get_anchor_selection_strategy(
+            mood_prompt, mood_analysis, genre_keywords, target_features, filtered_candidates
+        )
+
+        anchor_count = strategy.anchor_count or limit
+        selection_criteria = strategy.selection_criteria or {}
+
+        # Step 3: Use LLM to score all candidates
+        scored_candidates = await self.llm_services.score_candidates(
+            filtered_candidates, target_features, mood_analysis, selection_criteria
+        )
+
+        # Step 4: Use LLM to finalize selection
+        selected_tracks, selected_ids = await self.llm_services.finalize_selection(
+            scored_candidates, anchor_count, mood_analysis
+        )
+
+        return selected_tracks, selected_ids
 
     async def _fallback_anchor_selection(
         self,
@@ -161,9 +240,37 @@ class AnchorSelectionEngine:
         access_token: str,
         mood_prompt: str,
         artist_recommendations: List[str],
-        limit: int
+        limit: int,
+        user_mentioned_artists: List[str]
     ) -> Tuple[List[Dict[str, Any]], List[str]]:
         """Fallback anchor selection using original hard-coded logic."""
+        # Step 1: Gather all candidates (similar to LLM-driven, but simpler)
+        anchor_candidates = await self._gather_fallback_candidates(
+            mood_prompt, artist_recommendations, user_mentioned_artists,
+            target_features, access_token, genre_keywords
+        )
+
+        if not anchor_candidates:
+            logger.warning("No anchor track candidates found")
+            return [], []
+
+        # Step 2: Sort and select top anchors by score
+        return self._select_top_anchors(anchor_candidates, limit)
+
+    async def _gather_fallback_candidates(
+        self,
+        mood_prompt: str,
+        artist_recommendations: List[str],
+        user_mentioned_artists: List[str],
+        target_features: Dict[str, Any],
+        access_token: str,
+        genre_keywords: List[str]
+    ) -> List[Dict[str, Any]]:
+        """Gather all anchor candidates for fallback mode.
+        
+        Returns:
+            Combined list of anchor candidates
+        """
         anchor_candidates = []
 
         # PRIORITY 1: Add user-mentioned tracks with highest priority
@@ -173,36 +280,35 @@ class AnchorSelectionEngine:
         anchor_candidates.extend(user_candidates)
         logger.info(f"Found {len(user_candidates)} user-mentioned tracks as anchors")
 
-        # PRIORITY 2: Add tracks from mentioned artists
-        if artist_recommendations:
-            # Create minimal mood_analysis for fallback mode
+        # PRIORITY 2: Prioritize artists with user mentions first
+        prioritized_artists = self._prioritize_user_mentioned_artists(
+            user_mentioned_artists, artist_recommendations
+        )
+
+        # PRIORITY 3: Add tracks from artists (now prioritized with user mentions first)
+        if prioritized_artists:
             fallback_mood_analysis = {
                 'mood_interpretation': '',
                 'genre_keywords': genre_keywords,
-                'artist_recommendations': artist_recommendations
+                'artist_recommendations': prioritized_artists
             }
             artist_candidates = await self.artist_processor.get_artist_based_candidates(
-                mood_prompt, artist_recommendations, target_features, access_token, fallback_mood_analysis
+                mood_prompt, prioritized_artists, target_features, access_token, 
+                fallback_mood_analysis, user_mentioned_artists
             )
             anchor_candidates.extend(artist_candidates)
             logger.info(f"Found {len(artist_candidates)} artist-based tracks as anchors")
 
-        # PRIORITY 3: Add genre-based tracks
+        # PRIORITY 4: Add genre-based tracks
         if not genre_keywords and (user_candidates or artist_candidates):
             logger.info("No genre keywords, but using user/artist-mentioned tracks as anchors")
         else:
-            # Use top 5 genres for better diversity (increased from 3)
             genre_candidates = await self._get_genre_based_candidates(
                 genre_keywords[:5], target_features, access_token, mood_prompt
             )
             anchor_candidates.extend(genre_candidates)
 
-        if not anchor_candidates:
-            logger.warning("No anchor track candidates found")
-            return [], []
-
-        # Sort and select top anchors
-        return self._select_top_anchors(anchor_candidates, limit)
+        return anchor_candidates
 
     async def _get_user_mentioned_candidates(
         self,

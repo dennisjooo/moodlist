@@ -265,18 +265,20 @@ class UserAnchorStrategy(RecommendationStrategy):
                             # Add top tracks (limited per artist)
                             for track in top_tracks[:tracks_per_artist]:
                                 if track.get("id"):
+                                    # Extract all artists for consistency with other recommendation formats
+                                    artists = [a.get("name", "") for a in track.get("artists", [])]
+                                    
                                     recommendations.append({
                                         "track_id": track["id"],
                                         "track_name": track.get("name", ""),
-                                        "artist_name": track.get("artists", [{}])[0].get("name", ""),
-                                        "artist_id": track.get("artists", [{}])[0].get("id"),
+                                        "artists": artists,  # Use artists list for consistency
                                         "spotify_uri": track.get("uri"),
                                         "popularity": track.get("popularity", 50),
                                         "audio_features": {},
                                         "confidence": 0.85  # Very high confidence for top tracks from mentioned artists
                                     })
 
-                            logger.info(f"Got {len(top_tracks[:tracks_per_artist])} top tracks from {artist_name}")
+                            logger.info(f"✓ Got {len(top_tracks[:tracks_per_artist])} top tracks from user-mentioned artist: {artist_name}")
 
                 except Exception as e:
                     logger.error(f"Error getting top tracks for artist '{artist_name}': {e}")
