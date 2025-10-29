@@ -6,8 +6,14 @@ import { DotPattern } from '@/components/ui/dot-pattern';
 import { cn } from '@/lib/utils';
 import { ArrowLeft } from 'lucide-react';
 
+interface ColorScheme {
+    primary: string;
+    secondary: string;
+    tertiary: string;
+}
+
 interface CreateSessionErrorProps {
-    colorScheme?: any;
+    colorScheme?: ColorScheme;
     error?: string | null;
     onBack: () => void;
 }

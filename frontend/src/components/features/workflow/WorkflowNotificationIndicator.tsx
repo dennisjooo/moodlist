@@ -77,7 +77,7 @@ export function WorkflowNotificationIndicator() {
             <DropdownMenuContent align="end" className="w-[280px]">
                 <DropdownMenuLabel>Active Workflows</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {activeWorkflows.map((workflow, index) => (
+                {activeWorkflows.map((workflow) => (
                     <DropdownMenuItem
                         key={workflow.sessionId}
                         onClick={() => handleWorkflowClick(workflow.sessionId)}

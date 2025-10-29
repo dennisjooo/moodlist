@@ -119,7 +119,7 @@ export function useGlobalWorkflowPolling(activeSessionIds: string[], excludeSess
                 intervalRef.current = null;
             }
         };
-    }, [activeSessionIds, excludeSessionId]);
+    }, [activeSessionIds, excludeSessionId, showErrorToast, success]);
 
     return null;
 }

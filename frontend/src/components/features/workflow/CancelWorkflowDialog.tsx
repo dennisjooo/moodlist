@@ -28,7 +28,7 @@ export function CancelWorkflowDialog({
                 <AlertDialogHeader>
                     <AlertDialogTitle>Cancel Playlist Creation?</AlertDialogTitle>
                     <AlertDialogDescription>
-                        Are you sure you want to cancel this workflow? Your progress will be lost and you'll need to start over.
+                        Are you sure you want to cancel this workflow? Your progress will be lost and you&apos;ll need to start over.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
