@@ -9,7 +9,7 @@ class RecommenderConfig:
     """Centralized configuration for the recommender system."""
 
     # Orchestration settings
-    max_iterations: int = 3
+    max_iterations: int = 1
     cohesion_threshold: float = 0.65
     quality_threshold: float = 0.75
 
@@ -23,6 +23,11 @@ class RecommenderConfig:
     # Agent settings
     timeout_per_agent: int = 120
     max_retries: int = 3
+    
+    # Batch processing settings
+    track_energy_analysis_batch_size: int = 8  # Playlist ordering agent
+    seed_chunk_size: int = 3  # Seed-based recommendation generation
+    artist_batch_validation_size: int = 30  # LLM batch artist validation
 
     # Feature weights for mood matching
     default_feature_weights: Dict[str, float] = field(default_factory=lambda: {
