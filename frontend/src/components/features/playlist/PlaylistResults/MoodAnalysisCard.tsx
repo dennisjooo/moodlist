@@ -135,7 +135,7 @@ export default function MoodAnalysisCard({
               {moodAnalysis.energy_level}
             </Badge>
             {moodAnalysis.search_keywords && moodAnalysis.search_keywords.slice(0, 6).map((keyword, idx) => {
-              const keywordProps = getKeywordBadgeProps(keyword);
+              const keywordProps = getKeywordBadgeProps();
               return (
                 <Badge
                   key={idx}
