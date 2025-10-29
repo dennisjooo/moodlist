@@ -2,14 +2,12 @@
 
 from typing import Optional
 from langchain_openai import ChatOpenAI
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.llm_wrapper import LoggingChatModel
 
 
 def create_logged_llm(
-    db_session: Optional[AsyncSession] = None,
     model: Optional[str] = None,
     temperature: float = 0.25,
     enable_logging: bool = True,
@@ -21,11 +19,12 @@ def create_logged_llm(
     """Create a logged LLM instance.
     
     Args:
-        db_session: Database session for logging (optional, can be set later)
         model: Model name (defaults to settings)
         temperature: Temperature setting
         enable_logging: Whether to enable logging
         log_full_response: Whether to log full response or just metadata
+        base_url: Base URL for the LLM API
+        api_key: API key for the LLM service
         **kwargs: Additional arguments to pass to ChatOpenAI
     
     Returns:
@@ -43,7 +42,6 @@ def create_logged_llm(
     # Wrap with logging
     logged_llm = LoggingChatModel(
         wrapped_llm=base_llm,
-        db_session=db_session,
         provider="openrouter",
         enable_logging=enable_logging,
         log_full_response=log_full_response
@@ -54,17 +52,15 @@ def create_logged_llm(
 
 def create_llm_for_agent(
     agent_name: str,
-    db_session: Optional[AsyncSession] = None,
     session_id: Optional[str] = None,
     user_id: Optional[int] = None,
     playlist_id: Optional[int] = None,
     **kwargs
 ) -> LoggingChatModel:
-    """Create a logged LLM instance with agent context pre-set.
+    """Create a logged LLM instance configured for a specific agent.
     
     Args:
         agent_name: Name of the agent
-        db_session: Database session for logging
         session_id: Workflow session ID
         user_id: User ID
         playlist_id: Playlist ID
@@ -73,7 +69,7 @@ def create_llm_for_agent(
     Returns:
         LoggingChatModel instance with context set
     """
-    llm = create_logged_llm(db_session=db_session, **kwargs)
+    llm = create_logged_llm(**kwargs)
     
     # Set context
     llm.set_context(
