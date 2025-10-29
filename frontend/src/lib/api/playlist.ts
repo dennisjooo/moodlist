@@ -74,13 +74,13 @@ class PlaylistAPI {
         return await response.json();
     }
 
-    async getUserPlaylists(limit: number = 50, offset: number = 0, status?: string): Promise<UserPlaylistsResponse> {
+    async getUserPlaylists(limit: number = 50, offset: number = 0, excludeStatuses?: string[]): Promise<UserPlaylistsResponse> {
         const params = new URLSearchParams({
             limit: limit.toString(),
             offset: offset.toString(),
         });
-        if (status) {
-            params.append('status', status);
+        if (excludeStatuses && excludeStatuses.length > 0) {
+            params.append('exclude_statuses', excludeStatuses.join(','));
         }
         return this.request<UserPlaylistsResponse>(
             `/api/playlists?${params.toString()}`

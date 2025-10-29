@@ -54,7 +54,7 @@ async def get_user_playlists(
     playlist_service: PlaylistService = Depends(get_playlist_service),
     limit: int = Query(default=50, le=100),
     offset: int = Query(default=0),
-    status: Optional[str] = Query(default=None, description="Filter by status (pending, completed, failed)")
+    exclude_statuses: Optional[str] = Query(default=None, description="Comma-separated list of statuses to exclude (e.g., 'failed,cancelled')")
 ):
     """Get all playlists created by the current user.
 
@@ -63,16 +63,21 @@ async def get_user_playlists(
         playlist_service: Playlist service
         limit: Maximum number of playlists to return
         offset: Number of playlists to skip
-        status: Optional status filter
+        exclude_statuses: Comma-separated list of statuses to exclude
 
     Returns:
         List of user's playlists with pagination info
     """
     try:
+        # Parse exclude statuses
+        exclude_status_list = None
+        if exclude_statuses:
+            exclude_status_list = [status.strip() for status in exclude_statuses.split(',') if status.strip()]
+
         # Get playlists from repository with filtering
         playlists = await playlist_service.playlist_repository.get_by_user_id_with_filters(
             user_id=current_user.id,
-            status=status,
+            exclude_statuses=exclude_status_list,
             skip=offset,
             limit=limit
         )
@@ -117,7 +122,7 @@ async def get_user_playlists(
         # Get total count for pagination
         total_count = await playlist_service.playlist_repository.count_user_playlists_with_filters(
             user_id=current_user.id,
-            status=status
+            exclude_statuses=exclude_status_list
         )
 
         return {
