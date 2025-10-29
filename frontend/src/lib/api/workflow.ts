@@ -45,6 +45,10 @@ export interface WorkflowStatus {
     error?: string;
     created_at: string;
     updated_at: string;
+    total_llm_cost_usd?: number;
+    total_prompt_tokens?: number;
+    total_completion_tokens?: number;
+    total_tokens?: number;
     metadata?: {
         iteration?: number;
         cohesion_score?: number;

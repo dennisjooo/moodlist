@@ -122,7 +122,13 @@ export default function PlaylistResults() {
 
       {/* Mood Analysis */}
       {workflowState.moodAnalysis && (
-        <MoodAnalysisCard moodAnalysis={workflowState.moodAnalysis} />
+        <MoodAnalysisCard
+          moodAnalysis={workflowState.moodAnalysis}
+          totalLLMCost={workflowState.totalLLMCost}
+          totalPromptTokens={workflowState.totalPromptTokens}
+          totalCompletionTokens={workflowState.totalCompletionTokens}
+          totalTokens={workflowState.totalTokens}
+        />
       )}
 
       {/* Track List */}

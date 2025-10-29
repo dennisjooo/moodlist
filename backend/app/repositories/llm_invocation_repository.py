@@ -211,6 +211,54 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
             self.logger.error("Error retrieving LLM invocations by session", session_id=session_id, error=str(e))
             raise
 
+    async def get_session_cost_summary(self, session_id: str) -> Dict[str, Any]:
+        """Get aggregate cost and usage metrics for a workflow session."""
+
+        try:
+            query = select(
+                sql_func.count(LLMInvocation.id).label("invocation_count"),
+                sql_func.sum(LLMInvocation.prompt_tokens).label("total_prompt_tokens"),
+                sql_func.sum(LLMInvocation.completion_tokens).label("total_completion_tokens"),
+                sql_func.sum(LLMInvocation.total_tokens).label("total_tokens"),
+                sql_func.sum(LLMInvocation.cost_usd).label("total_cost_usd"),
+            ).where(LLMInvocation.session_id == session_id)
+
+            result = await self.session.execute(query)
+            row = result.one_or_none()
+
+            if not row:
+                return {
+                    "invocation_count": 0,
+                    "total_prompt_tokens": 0,
+                    "total_completion_tokens": 0,
+                    "total_tokens": 0,
+                    "total_cost_usd": 0.0,
+                }
+
+            summary = {
+                "invocation_count": row.invocation_count or 0,
+                "total_prompt_tokens": row.total_prompt_tokens or 0,
+                "total_completion_tokens": row.total_completion_tokens or 0,
+                "total_tokens": row.total_tokens or 0,
+                "total_cost_usd": float(row.total_cost_usd or 0),
+            }
+
+            self.logger.debug(
+                "Retrieved session cost summary",
+                session_id=session_id,
+                summary=summary,
+            )
+
+            return summary
+
+        except Exception as e:
+            self.logger.error(
+                "Error retrieving session cost summary",
+                session_id=session_id,
+                error=str(e),
+            )
+            raise
+
     async def get_by_agent_name(
         self,
         agent_name: str,

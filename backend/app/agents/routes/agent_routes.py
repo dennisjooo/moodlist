@@ -200,7 +200,11 @@ async def get_workflow_status(request: Request, session_id: str, db: AsyncSessio
     """
     try:
         from ...repositories.playlist_repository import PlaylistRepository
+        from ...repositories.llm_invocation_repository import LLMInvocationRepository
         
+        llm_invocation_repo = LLMInvocationRepository(db)
+        session_cost_summary = await llm_invocation_repo.get_session_cost_summary(session_id)
+
         # First try to get from workflow manager (Redis/cache)
         state = workflow_manager.get_workflow_state(session_id)
 
@@ -223,7 +227,11 @@ async def get_workflow_status(request: Request, session_id: str, db: AsyncSessio
                 "metadata": {
                     "iteration": state.metadata.get("iteration"),
                     "cohesion_score": state.metadata.get("cohesion_score"),
-                }
+                },
+                "total_llm_cost_usd": session_cost_summary["total_cost_usd"],
+                "total_prompt_tokens": session_cost_summary["total_prompt_tokens"],
+                "total_completion_tokens": session_cost_summary["total_completion_tokens"],
+                "total_tokens": session_cost_summary["total_tokens"],
             }
         
         # If not in cache, try to get from database
@@ -249,7 +257,11 @@ async def get_workflow_status(request: Request, session_id: str, db: AsyncSessio
             "awaiting_input": False,  # Persisted workflows are not awaiting input
             "error": playlist.error_message,
             "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
-            "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None
+            "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
+            "total_llm_cost_usd": session_cost_summary["total_cost_usd"],
+            "total_prompt_tokens": session_cost_summary["total_prompt_tokens"],
+            "total_completion_tokens": session_cost_summary["total_completion_tokens"],
+            "total_tokens": session_cost_summary["total_tokens"],
         }
 
     except NotFoundException:

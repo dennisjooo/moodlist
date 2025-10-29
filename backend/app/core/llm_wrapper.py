@@ -35,11 +35,16 @@ class LoggingChatModel(BaseChatModel):
     - Cost estimates
     - Context (user, session, agent, operation)
     
+    Multi-worker Safety:
+    - Uses ContextVars for async task isolation
+    - Safe to share a single instance across multiple concurrent workflows
+    - Each workflow's context (session_id, user_id, etc.) is isolated per async task
+    
     Usage:
         llm = ChatOpenAI(model="gpt-4", temperature=0.7)
         logged_llm = LoggingChatModel(llm, db_session)
         
-        # Set context
+        # Set context (automatically uses ContextVars for isolation)
         logged_llm.set_context(
             user_id=123,
             session_id="abc-123",
@@ -57,6 +62,8 @@ class LoggingChatModel(BaseChatModel):
     log_full_response: bool = True
     
     # Context for logging
+    # Note: These are fallback values. Primary context is stored in ContextVars
+    # for async task isolation (multi-worker safety)
     _user_id: Optional[int] = None
     _playlist_id: Optional[int] = None
     _session_id: Optional[str] = None
@@ -102,7 +109,10 @@ class LoggingChatModel(BaseChatModel):
         operation: Optional[str] = None,
         context_metadata: Optional[Dict[str, Any]] = None
     ):
-        """Set context for logging.
+        """Set context for logging using ContextVars (thread-safe for async).
+        
+        ContextVars are isolated per asyncio task, making this safe for
+        concurrent workflows in multi-worker setups.
         
         Args:
             user_id: User ID
@@ -113,14 +123,19 @@ class LoggingChatModel(BaseChatModel):
             context_metadata: Additional context metadata
         """
         if user_id is not None:
-            self._user_id = user_id
+            current_user_id.set(user_id)
+            self._user_id = user_id  # Keep for backwards compatibility
         if playlist_id is not None:
+            current_playlist_id.set(playlist_id)
             self._playlist_id = playlist_id
         if session_id is not None:
+            current_session_id.set(session_id)
             self._session_id = session_id
         if agent_name is not None:
+            current_agent_name.set(agent_name)
             self._agent_name = agent_name
         if operation is not None:
+            current_operation.set(operation)
             self._operation = operation
         if context_metadata is not None:
             self._context_metadata = context_metadata
@@ -296,18 +311,19 @@ class LoggingChatModel(BaseChatModel):
                 success=error is None,
                 error_message=str(error) if error else None,
                 error_type=type(error).__name__ if error else None,
-                user_id=self._user_id or current_user_id.get(),
-                playlist_id=self._playlist_id or current_playlist_id.get(),
-                session_id=self._session_id or current_session_id.get(),
-                agent_name=self._agent_name or current_agent_name.get(),
-                operation=self._operation or current_operation.get(),
-                context_metadata=self._context_metadata,
-                commit=False  # Don't commit here, let the caller handle it
+                user_id=current_user_id.get() or self._user_id,
+                playlist_id=current_playlist_id.get() or self._playlist_id,
+                session_id=current_session_id.get() or self._session_id,
+                agent_name=current_agent_name.get() or self._agent_name,
+                operation=current_operation.get() or self._operation,
+                context_metadata=self._context_metadata
             )
             
             logger.debug(
                 "LLM invocation logged",
                 model=config.get('model_name'),
+                playlist_id=current_playlist_id.get() or self._playlist_id,
+                session_id=current_session_id.get() or self._session_id,
                 agent=self._agent_name,
                 tokens=total_tokens,
                 latency_ms=latency_ms,

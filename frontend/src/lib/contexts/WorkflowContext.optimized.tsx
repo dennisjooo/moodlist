@@ -48,6 +48,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
             awaitingInput: status.awaiting_input,
             error: status.error || null,
             moodAnalysis: status.mood_analysis || prev.moodAnalysis,
+            totalLLMCost: status.total_llm_cost_usd,
             metadata: status.metadata || prev.metadata,
         }));
     }, []);
@@ -66,6 +67,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
             moodAnalysis: results?.mood_analysis || prev.moodAnalysis,
             recommendations: results?.recommendations || prev.recommendations,
             playlist: results?.playlist || prev.playlist,
+            totalLLMCost: status.total_llm_cost_usd,
             isLoading: false,
         }));
     }, []);
@@ -197,6 +199,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
                 playlist: results?.playlist,
                 awaitingInput: status.awaiting_input,
                 error: status.error || null,
+                totalLLMCost: status.total_llm_cost_usd,
                 metadata: status.metadata || prev.metadata,
                 isLoading: false,
             }));
