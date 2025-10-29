@@ -9,58 +9,62 @@ import {
 } from '@/components/ui/accordion';
 import { useId } from 'react';
 import { FAQ_ITEMS } from '@/lib/constants/marketing';
+import { HelpCircle } from 'lucide-react';
 
 export default function FAQSection() {
   const baseId = useId();
 
   return (
-    <section className="relative mt-16 border-y border-border/50 bg-gradient-to-b from-background via-background/90 to-background">
-      <div className="absolute inset-x-0 -top-10 flex justify-center blur-3xl opacity-40">
-        <div className="h-24 w-2/3 max-w-2xl bg-gradient-to-r from-primary/30 via-primary/10 to-transparent" />
-      </div>
-      <div className="relative mx-auto max-w-5xl px-4 py-20 sm:px-6 lg:px-8">
+    <section className="relative mt-16 px-4 sm:px-6 lg:px-8">
+      <div className="relative mx-auto max-w-4xl py-16 sm:py-20">
         <motion.div
-          className="text-center"
-          initial={{ opacity: 0, y: 20 }}
+          className="mb-12 text-center sm:mb-16"
+          initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-50px' }}
+          viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.6, ease: 'easeOut' }}
         >
-          <p className="mb-4 text-sm font-semibold tracking-wide text-primary">FAQ</p>
-          <h2 className="text-3xl font-bold sm:text-4xl">Get quick answers</h2>
-          <p className="mt-3 text-muted-foreground">
-            New to Moodlist? These common questions will guide you from your first prompt to your first playlist.
+          <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1 text-sm font-medium text-primary">
+            <HelpCircle className="h-3.5 w-3.5" />
+            Quick answers
+          </span>
+          <h2 className="mt-6 text-3xl font-semibold sm:text-4xl">
+            Got questions?
+          </h2>
+          <p className="mx-auto mt-3 max-w-2xl text-base text-muted-foreground">
+            Here&apos;s what you probably want to know before diving in.
           </p>
         </motion.div>
 
-        <div className="mt-10">
-          <Accordion type="single" collapsible className="space-y-4">
-            {FAQ_ITEMS.map((item, index) => {
-              const value = `${baseId}-${index}`;
-              return (
-                <motion.div
-                  key={value}
-                  initial={{ opacity: 0, y: 16 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-50px' }}
-                  transition={{ duration: 0.4, delay: index * 0.05, ease: 'easeOut' }}
+        <Accordion type="single" collapsible className="space-y-4">
+          {FAQ_ITEMS.map((item, index) => {
+            const value = `${baseId}-${index}`;
+            return (
+              <motion.div
+                key={value}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-50px' }}
+                transition={{ duration: 0.5, delay: index * 0.08, ease: 'easeOut' }}
+              >
+                <AccordionItem
+                  value={value}
+                  className="overflow-hidden rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm dark:bg-black/20"
+                  style={{
+                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
+                  }}
                 >
-                  <AccordionItem
-                    value={value}
-                    className="overflow-hidden rounded-2xl border border-border/60 bg-background/80 shadow-[0_20px_45px_-30px_rgba(59,130,246,0.45)]"
-                  >
-                    <AccordionTrigger className="px-6 py-5 text-base font-medium sm:text-lg">
-                      {item.question}
-                    </AccordionTrigger>
-                    <AccordionContent className="px-6 pb-6 text-sm leading-relaxed text-muted-foreground sm:text-base">
-                      {item.answer}
-                    </AccordionContent>
-                  </AccordionItem>
-                </motion.div>
-              );
-            })}
-          </Accordion>
-        </div>
+                  <AccordionTrigger className="px-5 py-5 text-left text-base font-semibold hover:no-underline sm:px-6 sm:text-lg">
+                    {item.question}
+                  </AccordionTrigger>
+                  <AccordionContent className="px-5 pb-5 text-sm leading-relaxed text-muted-foreground sm:px-6 sm:text-base">
+                    {item.answer}
+                  </AccordionContent>
+                </AccordionItem>
+              </motion.div>
+            );
+          })}
+        </Accordion>
       </div>
     </section>
   );
