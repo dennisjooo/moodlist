@@ -126,6 +126,26 @@ export function WorkflowInsights({ status, moodAnalysis, recommendations, metada
                     </div>
                 );
 
+            case 'ordering_playlist':
+                return (
+                    <div className="space-y-1.5">
+                        {recommendations && recommendations.length > 0 && (
+                            <p className="text-sm text-foreground flex items-center gap-2">
+                                <Music className="w-3.5 h-3.5" />
+                                <span>Arranging <span className="font-medium">{recommendations.length}</span> tracks</span>
+                            </p>
+                        )}
+                        <p className="text-sm text-muted-foreground">
+                            Creating an energy arc: beginning → build → peak → wind down → closure
+                        </p>
+                        {metadata?.ordering_strategy && (
+                            <p className="text-xs text-muted-foreground">
+                                Strategy: {metadata.ordering_strategy.strategy?.replace(/_/g, ' ')}
+                            </p>
+                        )}
+                    </div>
+                );
+
             case 'creating_playlist':
                 return (
                     <p className="text-sm text-foreground">

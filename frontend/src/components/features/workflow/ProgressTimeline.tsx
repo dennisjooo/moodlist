@@ -14,6 +14,7 @@ const WORKFLOW_STAGES = [
     { key: 'generating_recommendations', label: 'Generating playlist' },
     { key: 'evaluating_quality', label: 'Evaluating' },
     { key: 'optimizing_recommendations', label: 'Optimizing' },
+    { key: 'ordering_playlist', label: 'Ordering tracks' },
     { key: 'creating_playlist', label: 'Creating playlist' },
     { key: 'completed', label: 'Complete' },
 ];

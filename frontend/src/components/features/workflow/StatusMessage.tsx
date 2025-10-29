@@ -25,6 +25,7 @@ export function StatusMessage({ status }: StatusMessageProps) {
             generating_recommendations: '🎼 Curating your perfect music selection...',
             evaluating_quality: '🔍 Making sure every track fits your mood perfectly...',
             optimizing_recommendations: '✨ Perfecting the playlist sequence...',
+            ordering_playlist: '🎢 Creating the perfect energy flow...',
             awaiting_user_input: '✏️ Ready for your creative touch!',
             processing_edits: '🔄 Applying your changes with care...',
             creating_playlist: '🎵 Saving your personalized playlist to Spotify...',
