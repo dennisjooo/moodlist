@@ -1,10 +1,10 @@
-import { Button } from '@/components/ui/button';
-import MoodBackground from '@/components/shared/MoodBackground';
-import { DotPattern } from '@/components/ui/dot-pattern';
 import Navigation from '@/components/Navigation';
-import PlaylistEditor from '@/components/PlaylistEditor';
-import { ArrowLeft } from 'lucide-react';
+import MoodBackground from '@/components/shared/MoodBackground';
+import { Button } from '@/components/ui/button';
+import { DotPattern } from '@/components/ui/dot-pattern';
+import type { Track } from '@/lib/types/workflow';
 import { cn } from '@/lib/utils';
+import { ArrowLeft } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
 const PlaylistEditorComponent = dynamic(() => import('@/components/PlaylistEditor'), {
@@ -12,10 +12,16 @@ const PlaylistEditorComponent = dynamic(() => import('@/components/PlaylistEdito
     ssr: false,
 });
 
+interface ColorScheme {
+    primary: string;
+    secondary: string;
+    tertiary: string;
+}
+
 interface CreateSessionEditorProps {
     sessionId: string;
-    recommendations: any[];
-    colorScheme?: any;
+    recommendations: Track[];
+    colorScheme?: ColorScheme;
     onBack: () => void;
     onSave: () => void;
     onCancel: () => void;
