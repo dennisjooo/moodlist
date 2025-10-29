@@ -6,6 +6,7 @@ export { useMoodAnalysisStyling } from './useMoodAnalysisStyling';
 export { useNavigationHelpers } from './useNavigationHelpers';
 export { usePlaylistEdits } from './usePlaylistEdits';
 export { usePlaylistFormatting } from './usePlaylistFormatting';
+export { usePlaylists } from './usePlaylists';
 export { useProfile } from './useProfile';
 export { useToast } from './useToast';
 export { useWorkflowApi } from './useWorkflowApi';

@@ -26,7 +26,8 @@ class PlaylistRepository(BaseRepository[Playlist]):
     async def get_by_user_id_with_filters(
         self,
         user_id: int,
-        status: Optional[str] = None,
+        status: Optional[str] = None,  # Deprecated: use exclude_statuses instead
+        exclude_statuses: Optional[List[str]] = None,
         skip: int = 0,
         limit: Optional[int] = None,
         include_deleted: bool = False,
@@ -36,7 +37,8 @@ class PlaylistRepository(BaseRepository[Playlist]):
 
         Args:
             user_id: User ID
-            status: Optional status filter
+            status: Optional status filter (deprecated, use exclude_statuses)
+            exclude_statuses: Optional list of statuses to exclude
             skip: Number of records to skip
             limit: Maximum number of records to return
             include_deleted: Include soft-deleted playlists
@@ -52,9 +54,13 @@ class PlaylistRepository(BaseRepository[Playlist]):
             if not include_deleted:
                 query = query.where(Playlist.deleted_at.is_(None))
 
-            # Add status filter if provided
+            # Add status filter if provided (legacy support)
             if status:
                 query = query.where(Playlist.status == status)
+
+            # Add exclude statuses filter if provided (case insensitive)
+            if exclude_statuses:
+                query = query.where(func.lower(Playlist.status).not_in([status.lower() for status in exclude_statuses]))
 
             # Apply pagination
             if skip:
@@ -639,14 +645,16 @@ class PlaylistRepository(BaseRepository[Playlist]):
     async def count_user_playlists_with_filters(
         self,
         user_id: int,
-        status: Optional[str] = None,
+        status: Optional[str] = None,  # Deprecated: use exclude_statuses instead
+        exclude_statuses: Optional[List[str]] = None,
         include_deleted: bool = False
     ) -> int:
         """Count playlists for a user with optional status filtering.
 
         Args:
             user_id: User ID
-            status: Optional status filter
+            status: Optional status filter (deprecated, use exclude_statuses)
+            exclude_statuses: Optional list of statuses to exclude
             include_deleted: Include soft-deleted playlists
 
         Returns:
@@ -659,9 +667,12 @@ class PlaylistRepository(BaseRepository[Playlist]):
             if not include_deleted:
                 query = query.where(Playlist.deleted_at.is_(None))
 
-            # Add status filter if provided
+            # Add status filter if provided (legacy support)
             if status:
                 query = query.where(Playlist.status == status)
+            elif exclude_statuses:
+                # Exclude specified statuses (case insensitive)
+                query = query.where(func.lower(Playlist.status).not_in([status.lower() for status in exclude_statuses]))
             else:
                 # Exclude cancelled playlists by default unless specifically filtering for them
                 query = query.where(Playlist.status != "cancelled")
