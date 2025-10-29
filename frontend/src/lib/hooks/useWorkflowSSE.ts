@@ -34,6 +34,7 @@ export function useWorkflowSSE(
     const callbacksRef = useRef(callbacks);
     const isUsingSSE = useRef(false);
     const currentStatusRef = useRef(status);
+    const terminalHandledRef = useRef(false);
 
     // Keep callbacks ref up to date
     useEffect(() => {
@@ -46,6 +47,9 @@ export function useWorkflowSSE(
     }, [status]);
 
     useEffect(() => {
+        // Reset terminal handled flag for new sessions
+        terminalHandledRef.current = false;
+
         // Don't connect if no session or disabled
         if (!sessionId || !enabled) {
             logger.debug('SSE not starting', {
@@ -113,7 +117,8 @@ export function useWorkflowSSE(
                 // If workflow reached terminal state, fetch results
                 const isTerminal = status.status === 'completed' || status.status === 'failed';
 
-                if (isTerminal) {
+                if (isTerminal && !terminalHandledRef.current) {
+                    terminalHandledRef.current = true;
                     logger.debug('Terminal state detected via SSE', {
                         component: 'useWorkflowSSE',
                         sessionId
@@ -157,10 +162,20 @@ export function useWorkflowSSE(
             };
 
             const handleComplete = async () => {
-                logger.info('SSE stream completed, fetching final status', {
+                logger.info('SSE stream completed, checking if terminal handled', {
                     component: 'useWorkflowSSE',
-                    sessionId
+                    sessionId,
+                    terminalHandled: terminalHandledRef.current
                 });
+
+                // If terminal state was already handled, skip fetching
+                if (terminalHandledRef.current) {
+                    logger.debug('Terminal state already handled, skipping duplicate fetch', {
+                        component: 'useWorkflowSSE',
+                        sessionId
+                    });
+                    return;
+                }
 
                 // When stream ends, fetch final status to ensure we have the complete state
                 try {
@@ -178,7 +193,8 @@ export function useWorkflowSSE(
 
                     // If it's a terminal state, fetch results
                     const isTerminal = finalStatus.status === 'completed' || finalStatus.status === 'failed';
-                    if (isTerminal) {
+                    if (isTerminal && !terminalHandledRef.current) {
+                        terminalHandledRef.current = true;
                         let results = null;
                         try {
                             results = await workflowAPI.getWorkflowResults(sessionId);
