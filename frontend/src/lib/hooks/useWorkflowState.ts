@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { logger } from '../utils/logger';
 import { shouldAcceptStatusUpdate } from '../utils/workflow';
 import { workflowEvents } from './useActiveWorkflows';
@@ -21,6 +21,9 @@ const initialWorkflowState: WorkflowState = {
 export function useWorkflowState() {
     const [workflowState, setWorkflowState] = useState<WorkflowState>(initialWorkflowState);
     const { success, error: showErrorToast } = useToast();
+
+    // Track if we've already shown terminal toast for this session
+    const terminalToastShownRef = useRef<string | null>(null);
 
     const handleStatusUpdate = useCallback(async (status: WorkflowStatus) => {
         logger.info('Status update received', {
@@ -86,21 +89,36 @@ export function useWorkflowState() {
     const handleTerminalUpdate = useCallback(async (status: WorkflowStatus, results: WorkflowResults | null) => {
         logger.debug('Terminal state reached', {
             to: status.status,
+            sessionId: status.session_id,
         });
 
-        // Show toast notification based on final status
-        if (status.status === 'completed') {
-            const trackCount = results?.recommendations?.length || 0;
-            success('Playlist created!', {
-                description: trackCount > 0
-                    ? `${trackCount} tracks ready for you`
-                    : 'Your playlist is ready',
-                duration: 5000
-            });
-        } else if (status.status === 'failed') {
-            showErrorToast('Workflow failed', {
-                description: status.error || 'Something went wrong creating your playlist',
-                duration: 5000
+        // Create a unique key for this terminal state (session + status)
+        const terminalKey = `${status.session_id}-${status.status}`;
+
+        // Only show toast if we haven't shown it for this session's terminal state yet
+        if (terminalToastShownRef.current !== terminalKey) {
+            terminalToastShownRef.current = terminalKey;
+
+            // Show toast notification based on final status
+            if (status.status === 'completed') {
+                const trackCount = results?.recommendations?.length || 0;
+                success('Playlist created!', {
+                    description: trackCount > 0
+                        ? `${trackCount} tracks ready for you`
+                        : 'Your playlist is ready',
+                    duration: 5000
+                });
+            } else if (status.status === 'failed') {
+                showErrorToast('Workflow failed', {
+                    description: status.error || 'Something went wrong creating your playlist',
+                    duration: 5000
+                });
+            }
+        } else {
+            logger.debug('Skipping duplicate terminal toast', {
+                component: 'useWorkflowState',
+                sessionId: status.session_id,
+                status: status.status,
             });
         }
 
@@ -138,6 +156,7 @@ export function useWorkflowState() {
 
     const resetWorkflow = useCallback(() => {
         logger.debug('Resetting workflow state, preserving auth', { component: 'useWorkflowState' });
+        terminalToastShownRef.current = null;
         setWorkflowState(initialWorkflowState);
     }, []);
 
