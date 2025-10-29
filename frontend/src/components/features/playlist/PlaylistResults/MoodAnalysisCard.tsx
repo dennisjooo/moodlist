@@ -55,7 +55,7 @@ export default function MoodAnalysisCard({
   }, [isMetricsOpen]);
 
   return (
-    <Card className="group transition-all duration-300 hover:shadow-lg hover:shadow-black/10">
+    <Card className="group transition-all duration-300 hover:shadow-lg hover:shadow-black/10 gap-4">
       <CardHeader>
         <div className="flex items-center justify-between gap-4">
           <CardTitle className="text-lg">Mood Analysis</CardTitle>
