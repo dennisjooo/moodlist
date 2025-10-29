@@ -31,7 +31,8 @@ class AnchorTrackSelector:
         mood_prompt: str = "",
         artist_recommendations: List[str] = None,
         mood_analysis: Dict[str, Any] = None,
-        limit: int = 5
+        limit: int = 5,
+        user_mentioned_artists: List[str] = None
     ) -> tuple[List[Dict[str, Any]], List[str]]:
         """
         Select anchor tracks using LLM-guided analysis instead of hard-coded logic.
@@ -44,11 +45,12 @@ class AnchorTrackSelector:
             artist_recommendations: List of artist names from mood analysis
             mood_analysis: Full mood analysis results for LLM context
             limit: Maximum number of anchor tracks to select (fallback if LLM doesn't specify)
+            user_mentioned_artists: Artists explicitly mentioned by user from intent analysis (HIGHEST PRIORITY)
 
         Returns:
             Tuple of (anchor_tracks_for_playlist, anchor_track_ids_for_reference)
         """
         return await self.engine.select_anchor_tracks(
             genre_keywords, target_features, access_token, mood_prompt,
-            artist_recommendations, mood_analysis, limit
+            artist_recommendations, mood_analysis, limit, user_mentioned_artists
         )
