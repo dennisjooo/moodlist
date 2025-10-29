@@ -48,7 +48,7 @@ export default function SampleMoods() {
             </p>
           </motion.div>
 
-          <div className="mt-12 grid grid-cols-2 gap-6 md:grid-cols-4">
+          <div className="mt-12 grid grid-cols gap-6 md:grid-cols-4">
             {moodExamples.map((template, index) => {
               const hiddenOnMobile = index > 3;
               return (
