@@ -67,16 +67,16 @@ function QuotaDisplayComponent({ className = '', onRefresh, onLoadingChange }: Q
     return (
         <div className={`${className}`}>
             <div
-                className={`rounded-lg border p-3 transition-colors animate-in fade-in duration-300 ${isAtLimit
-                    ? 'border-destructive/50 bg-destructive/5'
+                className={`rounded-2xl border border-border/40 bg-background/80 p-4 shadow-[0_18px_40px_-25px_rgba(15,23,42,0.4)] backdrop-blur-xl transition-colors animate-in fade-in duration-300 ${isAtLimit
+                    ? 'ring-1 ring-inset ring-destructive/40'
                     : isNearLimit
-                        ? 'border-warning/50 bg-warning/5'
-                        : 'border-border bg-card'
+                        ? 'ring-1 ring-inset ring-warning/40'
+                        : ''
                     }`}
             >
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-0.5">
+                        <div className="mb-1 flex items-center gap-2">
                             {isAtLimit ? (
                                 <AlertCircle className="h-3.5 w-3.5 text-destructive" />
                             ) : isNearLimit ? (
@@ -84,7 +84,7 @@ function QuotaDisplayComponent({ className = '', onRefresh, onLoadingChange }: Q
                             ) : (
                                 <CheckCircle className="h-3.5 w-3.5 text-success" />
                             )}
-                            <h3 className="text-xs font-medium">Daily Quota</h3>
+                            <h3 className="text-xs font-medium tracking-[0.28em] text-muted-foreground/80">Daily quota</h3>
                         </div>
                         <p className="text-xs text-muted-foreground">
                             {isAtLimit ? (
@@ -100,7 +100,7 @@ function QuotaDisplayComponent({ className = '', onRefresh, onLoadingChange }: Q
                         </p>
                     </div>
                     <div className="text-right">
-                        <div className="text-xl font-bold">
+                        <div className="text-xl font-semibold text-foreground">
                             {quota.used}
                             <span className="text-xs text-muted-foreground">/{quota.limit}</span>
                         </div>
@@ -108,7 +108,7 @@ function QuotaDisplayComponent({ className = '', onRefresh, onLoadingChange }: Q
                 </div>
 
                 {/* Progress bar */}
-                <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted/60">
                     <div
                         className={`h-full transition-all duration-300 ${isAtLimit
                             ? 'bg-destructive'
