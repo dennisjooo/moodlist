@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { logger } from '@/lib/utils/logger';
-import { usePageCancellation } from '@/lib/hooks';
+import { usePageCancellation, workflowEvents } from '@/lib/hooks';
 import { CreateSessionSkeleton } from '@/components/shared/LoadingStates';
 import { CreateSessionEditor } from '@/components/features/create/CreateSessionEditor';
 import { CreateSessionProgress } from '@/components/features/create/CreateSessionProgress';
@@ -138,17 +138,32 @@ function CreateSessionPageContent() {
     // Redirect to playlist page if workflow is completed
     useEffect(() => {
         if (workflowState.status === 'completed' && workflowState.recommendations.length > 0 && workflowState.sessionId) {
+            // Clear the notification indicator before redirecting
+            logger.info('Removing completed workflow from active tracking before redirect', {
+                component: 'CreateSessionPage',
+                sessionId: workflowState.sessionId
+            });
+            workflowEvents.removed(workflowState.sessionId);
+
             router.push(`/playlist/${workflowState.sessionId}`);
         }
     }, [workflowState.status, workflowState.recommendations.length, workflowState.sessionId, router]);
 
     const handleEditComplete = () => {
         // Navigate to playlist view to show final results
+        // Clear notification indicator in case workflow is already completed
+        if (workflowState.sessionId) {
+            workflowEvents.removed(workflowState.sessionId);
+        }
         router.push(`/playlist/${sessionId}`);
     };
 
     const handleEditCancel = () => {
         // Go back to results view
+        // Clear notification indicator in case workflow is already completed
+        if (workflowState.sessionId) {
+            workflowEvents.removed(workflowState.sessionId);
+        }
         router.push(`/playlist/${sessionId}`);
     };
 
