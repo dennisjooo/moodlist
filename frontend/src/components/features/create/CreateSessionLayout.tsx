@@ -19,7 +19,7 @@ interface CreateSessionLayoutProps {
 }
 
 export const createSessionCardClassName =
-  'rounded-3xl border border-border/40 bg-background/80 p-6 sm:p-8 shadow-[0_25px_60px_-30px_rgba(15,23,42,0.45)] backdrop-blur-xl';
+  'rounded-3xl p-4 sm:p-6';
 
 export function CreateSessionLayout({
   children,
@@ -29,7 +29,7 @@ export function CreateSessionLayout({
   return (
     <div
       className={cn(
-        'relative min-h-screen overflow-hidden bg-gradient-to-br from-background via-background/95 to-background',
+        'relative h-screen overflow-hidden bg-gradient-to-br from-background via-background/95 to-background',
         'flex flex-col transition-opacity duration-300 ease-in-out',
         dimmed && 'pointer-events-none opacity-60'
       )}
@@ -46,8 +46,8 @@ export function CreateSessionLayout({
 
       <Navigation />
 
-      <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
-        <div className="flex w-full flex-col justify-center space-y-6">{children}</div>
+      <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
+        <div className="flex w-full flex-col justify-center space-y-3">{children}</div>
       </main>
     </div>
   );
