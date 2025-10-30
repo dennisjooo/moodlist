@@ -19,7 +19,7 @@ export function CreateSessionSkeleton({ onBack }: CreateSessionSkeletonProps) {
                 Back
             </Button>
 
-            <div className={`${createSessionCardClassName} flex min-h-[320px] items-center justify-center`}>
+            <div className={`${createSessionCardClassName} flex items-center justify-center`}>
                 <div className="w-full max-w-3xl">
                     <WorkflowProgressSkeleton />
                 </div>
