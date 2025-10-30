@@ -51,7 +51,7 @@ function QuotaDisplayComponent({ className = '', onRefresh, onLoadingChange }: Q
     if (loading) {
         return (
             <div className={`animate-pulse ${className}`}>
-                <div className="h-16 bg-muted/50 rounded-lg" />
+                <div className="h-14 bg-muted/50 rounded-lg" />
             </div>
         );
     }
@@ -67,7 +67,7 @@ function QuotaDisplayComponent({ className = '', onRefresh, onLoadingChange }: Q
     return (
         <div className={`${className}`}>
             <div
-                className={`rounded-2xl border border-border/40 bg-background/80 p-4 shadow-[0_18px_40px_-25px_rgba(15,23,42,0.4)] backdrop-blur-xl transition-colors animate-in fade-in duration-300 ${isAtLimit
+                className={`rounded-2xl border border-border/40 bg-background/80 p-3 shadow-[0_18px_40px_-25px_rgba(15,23,42,0.4)] backdrop-blur-xl transition-colors animate-in fade-in duration-300 ${isAtLimit
                     ? 'ring-1 ring-inset ring-destructive/40'
                     : isNearLimit
                         ? 'ring-1 ring-inset ring-warning/40'
@@ -76,13 +76,13 @@ function QuotaDisplayComponent({ className = '', onRefresh, onLoadingChange }: Q
             >
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
-                        <div className="mb-1 flex items-center gap-2">
+                        <div className="mb-0.5 flex items-center gap-2">
                             {isAtLimit ? (
-                                <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                                <AlertCircle className="h-3 w-3 text-destructive" />
                             ) : isNearLimit ? (
-                                <Clock className="h-3.5 w-3.5 text-warning" />
+                                <Clock className="h-3 w-3 text-warning" />
                             ) : (
-                                <CheckCircle className="h-3.5 w-3.5 text-success" />
+                                <CheckCircle className="h-3 w-3 text-success" />
                             )}
                             <h3 className="text-xs font-medium tracking-[0.28em] text-muted-foreground/80">Daily quota</h3>
                         </div>
@@ -100,7 +100,7 @@ function QuotaDisplayComponent({ className = '', onRefresh, onLoadingChange }: Q
                         </p>
                     </div>
                     <div className="text-right">
-                        <div className="text-xl font-semibold text-foreground">
+                        <div className="text-lg font-semibold text-foreground">
                             {quota.used}
                             <span className="text-xs text-muted-foreground">/{quota.limit}</span>
                         </div>
@@ -108,7 +108,7 @@ function QuotaDisplayComponent({ className = '', onRefresh, onLoadingChange }: Q
                 </div>
 
                 {/* Progress bar */}
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted/60">
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted/60">
                     <div
                         className={`h-full transition-all duration-300 ${isAtLimit
                             ? 'bg-destructive'
