@@ -9,22 +9,24 @@ import { Sparkles } from 'lucide-react';
  */
 export function CreatePageHeader() {
   return (
-    <div className="text-center mb-6">
+    <div className="mb-6 text-center">
       <Badge
         variant="outline"
-        className="px-4 py-1 flex items-center gap-2 w-fit mx-auto mb-4"
+        className="mx-auto mb-3 flex w-fit items-center gap-2 rounded-full border-border/60 bg-background/80 px-4 py-1 text-xs uppercase tracking-[0.24em] text-muted-foreground/80 backdrop-blur"
         aria-label="Feature badge"
       >
-        <Sparkles className="w-4 h-4" aria-hidden="true" />
-        AI-Powered Playlist Creation
+        <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+        Curated by AI
       </Badge>
 
-      <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl mb-3">
-        What&apos;s your mood?
-      </h1>
-      <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-        Describe how you&apos;re feeling and our AI will create the perfect Spotify playlist for your moment.
-      </p>
+      <div className="space-y-2">
+        <h1 className="mx-auto max-w-2xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+          Craft the soundtrack to your moment
+        </h1>
+        <p className="mx-auto max-w-2xl text-sm text-muted-foreground sm:text-base">
+          Share the vibe you&apos;re chasing and our AI blends it into a bespoke Spotify playlist—complete with tracks that match your energy.
+        </p>
+      </div>
     </div>
   );
 }
