@@ -128,7 +128,7 @@ function CreatePageWithAuth() {
 export default function CreatePage() {
   return (
     <Suspense fallback={
-      <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-background via-background/90 to-background">
+      <div className="relative h-screen overflow-hidden bg-gradient-to-br from-background via-background/90 to-background">
         <div className="pointer-events-none absolute inset-0 -z-10">
           <div
             aria-hidden="true"
@@ -147,7 +147,7 @@ export default function CreatePage() {
             )}
           />
         </div>
-        <div className="flex min-h-screen items-center justify-center px-6 py-16">
+        <div className="flex h-screen items-center justify-center px-6">
           <div className="w-full max-w-lg rounded-3xl border border-border/40 bg-background/80 p-10 text-center shadow-[0_25px_60px_-30px_rgba(15,23,42,0.45)] backdrop-blur-xl">
             <AILoadingSpinner title="Loading..." subtitle="Setting up your experience" />
           </div>
