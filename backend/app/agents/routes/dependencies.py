@@ -38,7 +38,6 @@ def _create_agent_resources() -> AgentResources:
     spotify_service = SpotifyService()
 
     llm = create_logged_llm(
-        db_session=None,
         model="google/gemini-2.5-flash-lite-preview-09-2025",
         temperature=0.25,
         enable_logging=True,
