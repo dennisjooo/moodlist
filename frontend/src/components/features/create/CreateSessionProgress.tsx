@@ -39,9 +39,9 @@ export function CreateSessionProgress({
                 {isCancelling ? 'Cancelling...' : 'Back'}
             </Button>
 
-            <div className={`${createSessionCardClassName} space-y-10`}>
+            <div className={`${createSessionCardClassName} space-y-6`}>
                 {status && !isTerminalStatus && (
-                    <div className="space-y-4 text-center">
+                    <div className="space-y-3 text-center">
                         <Badge
                             variant="outline"
                             className="mx-auto flex w-fit items-center gap-2 rounded-full border-border/60 bg-background/80 px-4 py-1 text-xs uppercase tracking-[0.24em] text-muted-foreground/80 backdrop-blur"
@@ -50,11 +50,11 @@ export function CreateSessionProgress({
                             AI-Powered Playlist Creation
                         </Badge>
 
-                        <div className="space-y-2">
-                            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                        <div className="space-y-1">
+                            <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
                                 {isCancelling ? 'Cancelling workflow...' : 'Crafting your playlist'}
                             </h1>
-                            <p className="mx-auto max-w-2xl text-sm text-muted-foreground sm:text-base">
+                            <p className="mx-auto max-w-2xl text-sm text-muted-foreground">
                                 {isCancelling
                                     ? 'Please wait while we cancel your request.'
                                     : 'We are weaving together tracks that match the feeling you shared. Hang tight while the mix comes to life.'}
