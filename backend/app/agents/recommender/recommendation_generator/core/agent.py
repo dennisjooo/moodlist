@@ -146,7 +146,7 @@ class RecommendationGeneratorAgent(BaseAgent):
         recommendations: List[TrackRecommendation],
         state: AgentState
     ) -> List[TrackRecommendation]:
-        """Apply 95:5 ratio limits between artist discovery and RecoBeat tracks.
+        """Apply 98:2 ratio limits between artist discovery and RecoBeat tracks.
 
         Args:
             recommendations: Processed recommendations
@@ -155,23 +155,100 @@ class RecommendationGeneratorAgent(BaseAgent):
         Returns:
             Final recommendations with ratio limits applied
         """
-        # Get playlist target to determine max recommendations
-        playlist_target = state.metadata.get("playlist_target", {})
-        max_recommendations = playlist_target.get("max_count", self.max_recommendations)
+        # Get max recommendations from playlist target
+        max_recommendations = self._get_max_recommendations(state)
 
-        # ENFORCE 98:2 ratio: separate artist discovery, anchor, and RecoBeat tracks
+        # Separate recommendations by source
+        artist_recs, anchor_recs, reccobeat_recs = self._separate_by_source(recommendations)
+
+        # Calculate ratio caps
+        max_artist, max_reccobeat = self._calculate_ratio_caps(max_recommendations)
+
+        # Handle anchor tracks with user-mentioned priority
+        capped_anchor = self._cap_anchor_tracks(anchor_recs)
+
+        # Adjust caps for remaining slots after anchors
+        remaining_slots = max_recommendations - len(capped_anchor)
+        max_artist = int(remaining_slots * 0.98)
+        max_reccobeat = max(1, remaining_slots - max_artist)
+
+        # Cap each source
+        capped_artist = artist_recs[:max_artist]
+        capped_reccobeat = reccobeat_recs[:max_reccobeat]
+
+        logger.info(
+            f"Enforcing 98:2 ratio: {len(capped_anchor)} anchor + {len(capped_artist)} artist tracks (cap: {max_artist}), "
+            f"{len(capped_reccobeat)} RecoBeat tracks (cap: {max_reccobeat}) - RecoBeat minimal fallback only"
+        )
+
+        # Sort and combine
+        return self._sort_and_combine_recommendations(capped_anchor, capped_artist, capped_reccobeat)
+
+    def _get_max_recommendations(self, state: AgentState) -> int:
+        """Get maximum recommendations from playlist target.
+
+        Args:
+            state: Current agent state
+
+        Returns:
+            Maximum number of recommendations
+        """
+        playlist_target = state.metadata.get("playlist_target", {})
+        return playlist_target.get("max_count", self.max_recommendations)
+
+    def _separate_by_source(
+        self,
+        recommendations: List[TrackRecommendation]
+    ) -> tuple[List[TrackRecommendation], List[TrackRecommendation], List[TrackRecommendation]]:
+        """Separate recommendations by source type.
+
+        Args:
+            recommendations: All recommendations
+
+        Returns:
+            Tuple of (artist_recs, anchor_recs, reccobeat_recs)
+        """
         artist_recs = [r for r in recommendations if r.source == "artist_discovery"]
         anchor_recs = [r for r in recommendations if r.source == "anchor_track"]
         reccobeat_recs = [r for r in recommendations if r.source == "reccobeat"]
+        
+        return artist_recs, anchor_recs, reccobeat_recs
 
-        # Calculate strict caps based on 98:2 ratio (anchor tracks don't count toward ratio)
-        max_artist = int(max_recommendations * 0.98)  # 98% (increased from 95%)
-        max_reccobeat = max(1, max_recommendations - max_artist)  # Minimum 1 for edge cases
+    def _calculate_ratio_caps(self, max_recommendations: int) -> tuple[int, int]:
+        """Calculate ratio caps for artist and RecoBeat tracks.
 
-        # CRITICAL: User-mentioned anchors don't count toward the anchor limit
+        Args:
+            max_recommendations: Maximum number of recommendations
+
+        Returns:
+            Tuple of (max_artist, max_reccobeat)
+        """
+        max_artist = int(max_recommendations * 0.98)  # 98%
+        max_reccobeat = max(1, max_recommendations - max_artist)  # Minimum 1
+        
+        return max_artist, max_reccobeat
+
+    def _cap_anchor_tracks(
+        self,
+        anchor_recs: List[TrackRecommendation]
+    ) -> List[TrackRecommendation]:
+        """Cap anchor tracks with priority for user-mentioned tracks.
+
+        Args:
+            anchor_recs: All anchor recommendations
+
+        Returns:
+            Capped anchor recommendations
+        """
         # Separate user-mentioned from other anchors
-        user_mentioned_anchors = [r for r in anchor_recs if r.user_mentioned]
-        other_anchors = [r for r in anchor_recs if not r.user_mentioned]
+        user_mentioned_anchors = [
+            r for r in anchor_recs 
+            if r.user_mentioned or r.user_mentioned_artist
+        ]
+        other_anchors = [
+            r for r in anchor_recs 
+            if not (r.user_mentioned or r.user_mentioned_artist)
+        ]
         
         # Cap non-user-mentioned anchors to 5, but ALWAYS include all user-mentioned
         capped_other_anchors = other_anchors[:5]
@@ -182,30 +259,31 @@ class RecommendationGeneratorAgent(BaseAgent):
             f"{len(capped_other_anchors)} other anchors (capped at 5)"
         )
         
-        # Adjust caps to account for anchor tracks
-        remaining_slots = max_recommendations - len(capped_anchor)
-        max_artist = int(remaining_slots * 0.98)
-        max_reccobeat = max(1, remaining_slots - max_artist)
+        return capped_anchor
 
-        # Take top tracks from each source up to their caps
-        capped_artist = artist_recs[:max_artist]
-        capped_reccobeat = reccobeat_recs[:max_reccobeat]
+    def _sort_and_combine_recommendations(
+        self,
+        anchor_recs: List[TrackRecommendation],
+        artist_recs: List[TrackRecommendation],
+        reccobeat_recs: List[TrackRecommendation]
+    ) -> List[TrackRecommendation]:
+        """Sort each group by confidence and combine with priority order.
 
-        logger.info(
-            f"Enforcing 98:2 ratio: {len(capped_anchor)} anchor + {len(capped_artist)} artist tracks (cap: {max_artist}), "
-            f"{len(capped_reccobeat)} RecoBeat tracks (cap: {max_reccobeat}) - RecoBeat minimal fallback only"
-        )
+        Args:
+            anchor_recs: Anchor recommendations
+            artist_recs: Artist discovery recommendations
+            reccobeat_recs: RecoBeat recommendations
 
-        # CRITICAL: Sort each group independently but maintain priority order
-        # Anchor tracks (especially user-mentioned) MUST stay at the top
-        capped_anchor.sort(key=lambda x: x.confidence_score, reverse=True)
-        capped_artist.sort(key=lambda x: x.confidence_score, reverse=True)
-        capped_reccobeat.sort(key=lambda x: x.confidence_score, reverse=True)
+        Returns:
+            Combined and sorted recommendations
+        """
+        # Sort each group independently by confidence score
+        anchor_recs.sort(key=lambda x: x.confidence_score, reverse=True)
+        artist_recs.sort(key=lambda x: x.confidence_score, reverse=True)
+        reccobeat_recs.sort(key=lambda x: x.confidence_score, reverse=True)
         
         # Combine with anchors first (NEVER re-sort after this!)
-        final_recommendations = capped_anchor + capped_artist + capped_reccobeat
-
-        return final_recommendations
+        return anchor_recs + artist_recs + reccobeat_recs
 
     def _deduplicate_and_add_recommendations(
         self,
@@ -223,34 +301,93 @@ class RecommendationGeneratorAgent(BaseAgent):
         seen_spotify_uris = set()
 
         for rec in recommendations:
-            # Check track ID
-            if rec.track_id in seen_track_ids:
-                logger.debug(f"Skipping duplicate track ID: {rec.track_name} by {', '.join(rec.artists)}")
-                continue
-
-            # Check normalized track name (case-insensitive, remove feat/featuring variations)
-            normalized_name = rec.track_name.lower()
-            # Remove common variations that create duplicates
-            for variant in [" (radio edit)", " - radio edit", " (feat.", " (featuring ", " - feat.", " - featuring "]:
-                if variant in normalized_name:
-                    normalized_name = normalized_name.split(variant)[0]
-            normalized_name = normalized_name.strip()
-
-            if normalized_name in seen_normalized_names:
-                logger.debug(f"Skipping duplicate track name: {rec.track_name} by {', '.join(rec.artists)}")
-                continue
-
-            # Check Spotify URI
-            if rec.spotify_uri and rec.spotify_uri in seen_spotify_uris:
-                logger.debug(f"Skipping duplicate Spotify URI: {rec.track_name} by {', '.join(rec.artists)}")
+            # Check for duplicates
+            if self._is_duplicate(rec, seen_track_ids, seen_normalized_names, seen_spotify_uris):
                 continue
 
             # No duplicates found, add the track
             state.add_recommendation(rec)
-            seen_track_ids.add(rec.track_id)
-            seen_normalized_names.add(normalized_name)
-            if rec.spotify_uri:
-                seen_spotify_uris.add(rec.spotify_uri)
+            self._mark_as_seen(rec, seen_track_ids, seen_normalized_names, seen_spotify_uris)
+
+    def _is_duplicate(
+        self,
+        rec: TrackRecommendation,
+        seen_track_ids: set,
+        seen_normalized_names: set,
+        seen_spotify_uris: set
+    ) -> bool:
+        """Check if recommendation is a duplicate.
+
+        Args:
+            rec: Track recommendation to check
+            seen_track_ids: Set of seen track IDs
+            seen_normalized_names: Set of seen normalized track names
+            seen_spotify_uris: Set of seen Spotify URIs
+
+        Returns:
+            True if duplicate, False otherwise
+        """
+        # Check track ID
+        if rec.track_id in seen_track_ids:
+            logger.debug(f"Skipping duplicate track ID: {rec.track_name} by {', '.join(rec.artists)}")
+            return True
+
+        # Check normalized track name
+        normalized_name = self._normalize_track_name(rec.track_name)
+        if normalized_name in seen_normalized_names:
+            logger.debug(f"Skipping duplicate track name: {rec.track_name} by {', '.join(rec.artists)}")
+            return True
+
+        # Check Spotify URI
+        if rec.spotify_uri and rec.spotify_uri in seen_spotify_uris:
+            logger.debug(f"Skipping duplicate Spotify URI: {rec.track_name} by {', '.join(rec.artists)}")
+            return True
+
+        return False
+
+    def _normalize_track_name(self, track_name: str) -> str:
+        """Normalize track name for duplicate detection.
+
+        Args:
+            track_name: Original track name
+
+        Returns:
+            Normalized track name
+        """
+        normalized_name = track_name.lower()
+        
+        # Remove common variations that create duplicates
+        variants = [
+            " (radio edit)", " - radio edit", 
+            " (feat.", " (featuring ", 
+            " - feat.", " - featuring "
+        ]
+        
+        for variant in variants:
+            if variant in normalized_name:
+                normalized_name = normalized_name.split(variant)[0]
+        
+        return normalized_name.strip()
+
+    def _mark_as_seen(
+        self,
+        rec: TrackRecommendation,
+        seen_track_ids: set,
+        seen_normalized_names: set,
+        seen_spotify_uris: set
+    ) -> None:
+        """Mark recommendation as seen in tracking sets.
+
+        Args:
+            rec: Track recommendation
+            seen_track_ids: Set of seen track IDs
+            seen_normalized_names: Set of seen normalized track names
+            seen_spotify_uris: Set of seen Spotify URIs
+        """
+        seen_track_ids.add(rec.track_id)
+        seen_normalized_names.add(self._normalize_track_name(rec.track_name))
+        if rec.spotify_uri:
+            seen_spotify_uris.add(rec.spotify_uri)
 
     def _update_state_metadata(
         self,
