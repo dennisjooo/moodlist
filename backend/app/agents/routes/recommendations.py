@@ -57,8 +57,6 @@ async def start_recommendation(
 
         current_user = await refresh_spotify_token_if_expired(current_user, db)
 
-        llm.set_db_session(db)
-
         session_id = await workflow_manager.start_workflow(
             mood_prompt=mood_prompt.strip(),
             user_id=str(current_user.id),
