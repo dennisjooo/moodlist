@@ -39,10 +39,12 @@ class LoggingChatModel(BaseChatModel):
     - Uses ContextVars for async task isolation
     - Safe to share a single instance across multiple concurrent workflows
     - Each workflow's context (session_id, user_id, etc.) is isolated per async task
+    - Creates a new database session for each logging operation to prevent
+      concurrent access issues
     
     Usage:
         llm = ChatOpenAI(model="gpt-4", temperature=0.7)
-        logged_llm = LoggingChatModel(llm, db_session)
+        logged_llm = LoggingChatModel(llm)
         
         # Set context (automatically uses ContextVars for isolation)
         logged_llm.set_context(
@@ -56,7 +58,6 @@ class LoggingChatModel(BaseChatModel):
     """
     
     wrapped_llm: BaseChatModel
-    db_session: Optional[AsyncSession] = None
     provider: Optional[str] = None
     enable_logging: bool = True
     log_full_response: bool = True
@@ -74,7 +75,6 @@ class LoggingChatModel(BaseChatModel):
     def __init__(
         self,
         wrapped_llm: BaseChatModel,
-        db_session: Optional[AsyncSession] = None,
         provider: Optional[str] = None,
         enable_logging: bool = True,
         log_full_response: bool = True,
@@ -84,21 +84,15 @@ class LoggingChatModel(BaseChatModel):
         
         Args:
             wrapped_llm: The underlying LangChain chat model to wrap
-            db_session: Database session for logging (optional, can be set later)
             provider: LLM provider name (e.g., "openai", "anthropic", "openrouter")
             enable_logging: Whether to enable logging
             log_full_response: Whether to log full response or just metadata
         """
         super().__init__(wrapped_llm=wrapped_llm, **kwargs)
         self.wrapped_llm = wrapped_llm
-        self.db_session = db_session
         self.provider = provider or self._infer_provider(wrapped_llm)
         self.enable_logging = enable_logging
         self.log_full_response = log_full_response
-
-    def set_db_session(self, db_session: AsyncSession):
-        """Set the database session for logging."""
-        self.db_session = db_session
 
     def set_context(
         self,
@@ -254,84 +248,94 @@ class LoggingChatModel(BaseChatModel):
         latency_ms: int,
         error: Optional[Exception] = None
     ):
-        """Log the invocation to the database."""
-        if not self.enable_logging or not self.db_session:
+        """Log the invocation to the database.
+        
+        Creates a new database session for each logging operation to avoid
+        concurrent access issues when the same LLM instance is shared across
+        multiple async workflows.
+        """
+        if not self.enable_logging:
             return
 
-        try:
-            config = self._extract_model_config()
-            
-            # Extract token usage
-            prompt_tokens = None
-            completion_tokens = None
-            total_tokens = None
-            
-            if response and response.llm_output:
-                token_usage = response.llm_output.get('token_usage', {})
-                prompt_tokens = token_usage.get('prompt_tokens')
-                completion_tokens = token_usage.get('completion_tokens')
-                total_tokens = token_usage.get('total_tokens')
-            
-            # Calculate cost
-            cost_usd = None
-            if prompt_tokens and completion_tokens:
-                cost_usd = self._calculate_cost(
-                    config.get('model_name', ''),
-                    prompt_tokens,
-                    completion_tokens
+        # Create a new database session for this logging operation
+        # to avoid concurrent access issues with shared LLM instances
+        from app.core.database import async_session_factory
+        
+        async with async_session_factory() as db:
+            try:
+                config = self._extract_model_config()
+                
+                # Extract token usage
+                prompt_tokens = None
+                completion_tokens = None
+                total_tokens = None
+                
+                if response and response.llm_output:
+                    token_usage = response.llm_output.get('token_usage', {})
+                    prompt_tokens = token_usage.get('prompt_tokens')
+                    completion_tokens = token_usage.get('completion_tokens')
+                    total_tokens = token_usage.get('total_tokens')
+                
+                # Calculate cost
+                cost_usd = None
+                if prompt_tokens and completion_tokens:
+                    cost_usd = self._calculate_cost(
+                        config.get('model_name', ''),
+                        prompt_tokens,
+                        completion_tokens
+                    )
+                
+                # Extract response text
+                response_text = None
+                response_metadata = None
+                if response and self.log_full_response:
+                    if response.generations:
+                        # response.generations[0] is already a ChatGeneration object
+                        response_text = response.generations[0].text
+                    response_metadata = response.llm_output
+                
+                # Prepare repository with new session
+                repo = LLMInvocationRepository(db)
+                
+                # Create log entry
+                await repo.create_llm_invocation_log(
+                    model_name=config.get('model_name', 'unknown'),
+                    provider=self.provider,
+                    temperature=config.get('temperature'),
+                    max_tokens=config.get('max_tokens'),
+                    prompt=self._extract_prompt_from_messages(messages),
+                    messages=self._messages_to_dict(messages),
+                    response=response_text,
+                    response_metadata=response_metadata,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    total_tokens=total_tokens,
+                    latency_ms=latency_ms,
+                    cost_usd=cost_usd,
+                    success=error is None,
+                    error_message=str(error) if error else None,
+                    error_type=type(error).__name__ if error else None,
+                    user_id=current_user_id.get() or self._user_id,
+                    playlist_id=current_playlist_id.get() or self._playlist_id,
+                    session_id=current_session_id.get() or self._session_id,
+                    agent_name=current_agent_name.get() or self._agent_name,
+                    operation=current_operation.get() or self._operation,
+                    context_metadata=self._context_metadata
                 )
-            
-            # Extract response text
-            response_text = None
-            response_metadata = None
-            if response and self.log_full_response:
-                if response.generations:
-                    # response.generations[0] is already a ChatGeneration object
-                    response_text = response.generations[0].text
-                response_metadata = response.llm_output
-            
-            # Prepare repository
-            repo = LLMInvocationRepository(self.db_session)
-            
-            # Create log entry
-            await repo.create_llm_invocation_log(
-                model_name=config.get('model_name', 'unknown'),
-                provider=self.provider,
-                temperature=config.get('temperature'),
-                max_tokens=config.get('max_tokens'),
-                prompt=self._extract_prompt_from_messages(messages),
-                messages=self._messages_to_dict(messages),
-                response=response_text,
-                response_metadata=response_metadata,
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-                total_tokens=total_tokens,
-                latency_ms=latency_ms,
-                cost_usd=cost_usd,
-                success=error is None,
-                error_message=str(error) if error else None,
-                error_type=type(error).__name__ if error else None,
-                user_id=current_user_id.get() or self._user_id,
-                playlist_id=current_playlist_id.get() or self._playlist_id,
-                session_id=current_session_id.get() or self._session_id,
-                agent_name=current_agent_name.get() or self._agent_name,
-                operation=current_operation.get() or self._operation,
-                context_metadata=self._context_metadata
-            )
-            
-            logger.debug(
-                "LLM invocation logged",
-                model=config.get('model_name'),
-                playlist_id=current_playlist_id.get() or self._playlist_id,
-                session_id=current_session_id.get() or self._session_id,
-                agent=self._agent_name,
-                tokens=total_tokens,
-                latency_ms=latency_ms,
-                cost_usd=cost_usd
-            )
-            
-        except Exception as e:
-            logger.error("Failed to log LLM invocation", error=str(e), exc_info=True)
+                
+                logger.debug(
+                    "LLM invocation logged",
+                    model=config.get('model_name'),
+                    playlist_id=current_playlist_id.get() or self._playlist_id,
+                    session_id=current_session_id.get() or self._session_id,
+                    agent=self._agent_name,
+                    tokens=total_tokens,
+                    latency_ms=latency_ms,
+                    cost_usd=cost_usd
+                )
+                
+            except Exception as e:
+                logger.error("Failed to log LLM invocation", error=str(e), exc_info=True)
 
     @property
     def _llm_type(self) -> str:

@@ -1,7 +1,7 @@
 'use client';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
+import { useReducedMotion } from '@/lib/hooks';
 import { Track } from '@/lib/types/track';
 import { cn } from '@/lib/utils';
 import { Star } from 'lucide-react';

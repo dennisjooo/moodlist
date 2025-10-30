@@ -2,9 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { createContext, useContext, useEffect } from 'react';
-import { useWorkflowActions } from '../hooks/useWorkflowActions';
-import { useWorkflowSSE } from '../hooks/useWorkflowSSE';
-import { useWorkflowState } from '../hooks/useWorkflowState';
+import { useWorkflowActions, useWorkflowSSE, useWorkflowState } from '../hooks/workflow';
 import { WorkflowContextType, WorkflowProviderProps } from '../types/workflow';
 import { shouldStreamWorkflow } from '../utils/workflow';
 

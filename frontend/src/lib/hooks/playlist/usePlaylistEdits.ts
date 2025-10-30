@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { arrayMove } from '@dnd-kit/sortable';
-import { useToast } from '@/lib/hooks/useToast';
+import { useToast } from '../ui/useToast';
 import { logger } from '@/lib/utils/logger';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import type { Track, SearchTrack } from '@/lib/types/workflow';

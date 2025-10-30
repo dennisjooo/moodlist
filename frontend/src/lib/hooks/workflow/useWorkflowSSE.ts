@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { sseManager } from '../sseManager';
-import { pollingManager } from '../pollingManager';
-import { workflowAPI } from '../api/workflow';
-import type { WorkflowStatus, WorkflowResults } from '../api/workflow';
+import { sseManager } from '@/lib/sseManager';
+import { pollingManager } from '@/lib/pollingManager';
+import { workflowAPI } from '@/lib/api/workflow';
+import type { WorkflowStatus, WorkflowResults } from '@/lib/api/workflow';
 import { logger } from '@/lib/utils/logger';
 
 interface SSECallbacks {
