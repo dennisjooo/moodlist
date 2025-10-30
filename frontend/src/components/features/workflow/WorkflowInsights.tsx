@@ -174,10 +174,10 @@ export function WorkflowInsights({ status, moodAnalysis, recommendations, metada
     };
 
     return (
-        <div className="rounded-lg bg-gradient-to-r from-primary/5 to-purple-500/5 p-3 sm:p-4 border border-primary/10 overflow-hidden">
+        <div className="rounded-lg bg-gradient-to-r from-primary/5 to-purple-500/5 p-2.5 sm:p-3 border border-primary/10 overflow-hidden">
             <div className="flex items-start gap-2">
-                <Sparkles className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0 space-y-2">
+                <Sparkles className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0 space-y-1">
                     <p className="text-xs font-medium text-muted-foreground">What we&apos;re cooking:</p>
                     {getInsightContent()}
                 </div>

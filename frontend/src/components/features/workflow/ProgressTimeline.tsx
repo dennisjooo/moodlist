@@ -92,7 +92,7 @@ export function ProgressTimeline({ status }: ProgressTimelineProps) {
 
     return (
         <div className="relative">
-            <div className="flex items-center justify-between px-2 py-3 rounded-lg bg-gradient-to-r from-muted/30 to-muted/10 backdrop-blur-sm border border-border/50">
+            <div className="flex items-center justify-between px-2 py-2 rounded-lg bg-gradient-to-r from-muted/30 to-muted/10 backdrop-blur-sm border border-border/50">
                 {visibleStages.map((stage, index) => {
                     const stageGlobalIndex = WORKFLOW_STAGES.findIndex(s => s.key === stage.key);
                     const isCurrentStage = stageGlobalIndex === currentStageIndex;
