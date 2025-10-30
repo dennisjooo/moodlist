@@ -19,7 +19,7 @@ interface CreateSessionLayoutProps {
 }
 
 export const createSessionCardClassName =
-  'rounded-3xl p-4 sm:p-6';
+  'rounded-3xl border border-border/40 bg-background/85 p-4 shadow-[0_25px_60px_-30px_rgba(15,23,42,0.45)] ring-1 ring-black/[0.04] backdrop-blur-xl sm:p-6';
 
 export function CreateSessionLayout({
   children,

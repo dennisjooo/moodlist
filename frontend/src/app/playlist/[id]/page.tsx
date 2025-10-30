@@ -1,20 +1,19 @@
 'use client';
 
 import { AuthGuard } from '@/components/AuthGuard';
-import Navigation from '@/components/Navigation';
 import { PlaylistResultsSkeleton } from '@/components/shared/LoadingStates';
-import MoodBackground from '@/components/shared/MoodBackground';
 import { Button } from '@/components/ui/button';
-import { DotPattern } from '@/components/ui/dot-pattern';
+import { CreateSessionLayout, createSessionCardClassName } from '@/components/features/create/CreateSessionLayout';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { workflowEvents } from '@/lib/hooks';
-import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
 import { ArrowLeft } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { cn } from '@/lib/utils';
+
 const PlaylistResults = dynamic(() => import('@/components/PlaylistResults'), {
     loading: () => <PlaylistResultsSkeleton />,
 });
@@ -104,110 +103,77 @@ function PlaylistPageContent() {
         syncFromSpotify
     ]);
 
+    const colorScheme = workflowState.moodAnalysis?.color_scheme;
+
     // Loading state - show while loading playlist
     if (isLoadingSession) {
         return (
-            <div className="min-h-screen bg-background relative">
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
-                    <DotPattern
-                        className={cn(
-                            "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-                        )}
-                    />
-                </div>
+            <CreateSessionLayout colorScheme={colorScheme}>
+                <Button
+                    variant="ghost"
+                    onClick={handleBack}
+                    className="w-fit gap-2"
+                >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back
+                </Button>
 
-                <Navigation />
-
-                <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                    <Button
-                        variant="ghost"
-                        onClick={handleBack}
-                        className="mb-6 gap-2"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back
-                    </Button>
-
+                <div className={cn(createSessionCardClassName, 'space-y-6 sm:space-y-8')}>
                     <PlaylistResultsSkeleton />
-                </main>
-            </div>
+                </div>
+            </CreateSessionLayout>
         );
     }
 
     // Error state
     if (workflowState.error || workflowState.status !== 'completed') {
         return (
-            <div className="min-h-screen bg-background relative">
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
-                    <DotPattern
-                        className={cn(
-                            "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-                        )}
-                    />
-                </div>
-
-                <Navigation />
-
-                <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                    <Button
-                        variant="ghost"
-                        onClick={handleBack}
-                        className="mb-6 gap-2"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back
-                    </Button>
-
-                    <div className="flex items-center justify-center min-h-[60vh]">
-                        <div className="text-center">
-                            <h2 className="text-2xl font-bold mb-4">Playlist Not Found</h2>
-                            <p className="text-muted-foreground mb-6">
-                                {workflowState.error || 'This playlist is not available or still being created.'}
-                            </p>
-                            <Button onClick={() => router.push('/create')}>
-                                Create New Playlist
-                            </Button>
-                        </div>
-                    </div>
-                </main>
-            </div>
-        );
-    }
-
-    // Show playlist results
-    const colorScheme = workflowState.moodAnalysis?.color_scheme;
-
-    return (
-        <div className="min-h-screen bg-background relative">
-            <MoodBackground
-                colorScheme={colorScheme}
-                style="linear-diagonal"
-                opacity={0.2}
-            />
-
-            <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
-                <DotPattern
-                    className={cn(
-                        "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-                    )}
-                />
-            </div>
-
-            <Navigation />
-
-            <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+            <CreateSessionLayout colorScheme={colorScheme}>
                 <Button
                     variant="ghost"
                     onClick={handleBack}
-                    className="mb-6 gap-2"
+                    className="w-fit gap-2"
                 >
                     <ArrowLeft className="w-4 h-4" />
                     Back
                 </Button>
 
+                <div
+                    className={cn(
+                        createSessionCardClassName,
+                        'flex min-h-[320px] flex-col items-center justify-center space-y-4 text-center'
+                    )}
+                >
+                    <div className="space-y-2">
+                        <h2 className="text-2xl font-semibold tracking-tight">Playlist Not Found</h2>
+                        <p className="text-sm text-muted-foreground">
+                            {workflowState.error || 'This playlist is not available or still being created.'}
+                        </p>
+                    </div>
+                    <Button onClick={() => router.push('/create')}>
+                        Create New Playlist
+                    </Button>
+                </div>
+            </CreateSessionLayout>
+        );
+    }
+
+    // Show playlist results
+    return (
+        <CreateSessionLayout colorScheme={colorScheme}>
+            <Button
+                variant="ghost"
+                onClick={handleBack}
+                className="w-fit gap-2"
+            >
+                <ArrowLeft className="w-4 h-4" />
+                Back
+            </Button>
+
+            <div className={cn(createSessionCardClassName, 'space-y-6 sm:space-y-8')}>
                 <PlaylistResults />
-            </main>
-        </div>
+            </div>
+        </CreateSessionLayout>
     );
 }
 
