@@ -38,7 +38,10 @@ export function PlaylistResultsSkeleton() {
             {/* Mood Analysis Card Skeleton */}
             <Card>
                 <CardHeader>
-                    <Skeleton className="h-6 w-32" />
+                    <div className="flex items-center justify-between gap-4">
+                        <Skeleton className="h-6 w-32" />
+                        <Skeleton className="h-7 w-16 rounded-md" />
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <div className="space-y-4">

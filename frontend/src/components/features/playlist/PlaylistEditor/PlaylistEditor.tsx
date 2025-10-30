@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { usePlaylistEdits } from '@/lib/hooks/usePlaylistEdits';
+import { usePlaylistEdits } from '@/lib/hooks';
 import type { Track } from '@/lib/types/workflow';
 import { Check, RotateCcw } from 'lucide-react';
 import { TrackList } from './TrackList';

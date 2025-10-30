@@ -11,8 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useRouter, usePathname } from 'next/navigation';
 import { Loader2, ChevronDown } from 'lucide-react';
-import { useActiveWorkflows } from '@/lib/hooks/useActiveWorkflows';
-import { useGlobalWorkflowPolling } from '@/lib/hooks/useGlobalWorkflowPolling';
+import { useActiveWorkflows, useGlobalWorkflowPolling } from '@/lib/hooks';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 
 export function WorkflowNotificationIndicator() {
@@ -21,10 +20,17 @@ export function WorkflowNotificationIndicator() {
     const { activeWorkflows, hasActiveWorkflows } = useActiveWorkflows();
     const { workflowState } = useWorkflow();
 
-    // Determine if we're on a /create/[id] page with active workflow
-    // If so, exclude that session from global polling since WorkflowContext is already polling it
+    // Determine if we're on a /create/[id] or /playlist/[id] page with active workflow
+    // If so, exclude that session from global polling since the page is already handling it
     const isOnCreatePage = pathname?.startsWith('/create/') && pathname.split('/').length === 3;
-    const excludeSessionId = isOnCreatePage ? workflowState.sessionId : null;
+    const isOnPlaylistPage = pathname?.startsWith('/playlist/') && pathname.split('/').length === 3;
+
+    // Extract session ID from URL if on a session-specific page
+    let excludeSessionId: string | null = null;
+    if (isOnCreatePage || isOnPlaylistPage) {
+        const sessionIdFromUrl = pathname.split('/')[2];
+        excludeSessionId = sessionIdFromUrl || workflowState.sessionId;
+    }
 
     // Enable global polling for all active workflows except the one being polled by WorkflowContext
     useGlobalWorkflowPolling(activeWorkflows.map(w => w.sessionId), excludeSessionId);

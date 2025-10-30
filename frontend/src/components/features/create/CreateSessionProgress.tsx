@@ -15,7 +15,7 @@ interface ColorScheme {
 }
 
 interface MoodAnalysis {
-    color_scheme: ColorScheme;
+    color_scheme?: ColorScheme;
     [key: string]: unknown;
 }
 
@@ -36,7 +36,7 @@ export function CreateSessionProgress({
     isCancelling,
     onBack,
 }: CreateSessionProgressProps) {
-    const isTerminalStatus = status === 'completed' || status === 'failed';
+    const isTerminalStatus = status === 'completed' || status === 'failed' || status === 'cancelled';
 
     return (
         <>

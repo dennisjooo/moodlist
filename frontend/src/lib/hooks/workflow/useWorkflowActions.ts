@@ -1,8 +1,8 @@
 import { useCallback, useRef } from 'react';
-import { logger } from '../utils/logger';
+import { logger } from '@/lib/utils/logger';
 import { workflowEvents } from './useActiveWorkflows';
 import { useWorkflowApi } from './useWorkflowApi';
-import type { WorkflowState } from '../types/workflow';
+import type { WorkflowState } from '@/lib/types/workflow';
 
 interface UseWorkflowActionsProps {
     workflowState: WorkflowState;
