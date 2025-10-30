@@ -195,8 +195,6 @@ function CreateSessionPageContent() {
             <CreateSessionProgress
                 sessionId={workflowState.sessionId || ''}
                 status={workflowState.status}
-                moodAnalysis={workflowState.moodAnalysis}
-                recommendations={workflowState.recommendations}
                 colorScheme={colorScheme}
                 isCancelling={isCancelling}
                 onBack={handleBack}
