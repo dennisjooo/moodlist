@@ -71,16 +71,13 @@ class RecommendationProcessor:
         """Enforce source ratio between artist discovery and RecoBeat recommendations.
 
         Args:
-            recommendations: List of track recommendations
+            recommendations: List of track recommendations (assumed to be pre-deduplicated)
             max_count: Maximum number of recommendations to return
             artist_ratio: Ratio of artist recommendations (default 0.95 for 95% artist)
 
         Returns:
             List with enforced source ratio, sorted by confidence
         """
-        # Remove duplicates from the original list
-        recommendations = self.remove_duplicates(recommendations)
-
         if not recommendations or max_count <= 0:
             return []
         
