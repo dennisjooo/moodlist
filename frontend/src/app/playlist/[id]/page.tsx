@@ -27,6 +27,7 @@ function PlaylistPageContent() {
     const { workflowState, loadWorkflow, syncFromSpotify } = useWorkflow();
     const { isAuthenticated } = useAuth();
     const [hasAutoSynced, setHasAutoSynced] = useState(false);
+    const colorScheme = workflowState.moodAnalysis?.color_scheme;
 
     const handleBack = () => {
         router.push('/playlists');
@@ -104,108 +105,85 @@ function PlaylistPageContent() {
         syncFromSpotify
     ]);
 
-    // Loading state - show while loading playlist
+    const cardClassName = cn(
+        'rounded-3xl border border-border/50 bg-background/75 p-6 sm:p-8',
+        'shadow-[0_25px_60px_-30px_rgba(15,23,42,0.45)] backdrop-blur-xl'
+    );
+
+    let content;
+
     if (isLoadingSession) {
-        return (
-            <div className="min-h-screen bg-background relative">
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
-                    <DotPattern
-                        className={cn(
-                            "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-                        )}
-                    />
+        content = (
+            <div className={cn(cardClassName, 'space-y-6')}>
+                <div className="space-y-2">
+                    <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+                        Preparing your playlist
+                    </h1>
+                    <p className="text-sm text-muted-foreground">
+                        We&apos;re syncing the latest details from your session. Hang tight for your curated mix.
+                    </p>
                 </div>
-
-                <Navigation />
-
-                <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                    <Button
-                        variant="ghost"
-                        onClick={handleBack}
-                        className="mb-6 gap-2"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back
+                <PlaylistResultsSkeleton />
+            </div>
+        );
+    } else if (workflowState.error || workflowState.status !== 'completed') {
+        content = (
+            <div className={cn(cardClassName, 'space-y-6 text-center')}>
+                <div className="space-y-2">
+                    <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+                        Playlist not available
+                    </h1>
+                    <p className="text-sm text-muted-foreground">
+                        {workflowState.error || 'This playlist is not available yet or may have been removed.'}
+                    </p>
+                </div>
+                <div className="flex justify-center">
+                    <Button onClick={() => router.push('/create')} className="gap-2">
+                        Create a new playlist
                     </Button>
-
-                    <PlaylistResultsSkeleton />
-                </main>
+                </div>
+            </div>
+        );
+    } else {
+        content = (
+            <div className={cardClassName}>
+                <PlaylistResults />
             </div>
         );
     }
-
-    // Error state
-    if (workflowState.error || workflowState.status !== 'completed') {
-        return (
-            <div className="min-h-screen bg-background relative">
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
-                    <DotPattern
-                        className={cn(
-                            "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-                        )}
-                    />
-                </div>
-
-                <Navigation />
-
-                <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                    <Button
-                        variant="ghost"
-                        onClick={handleBack}
-                        className="mb-6 gap-2"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back
-                    </Button>
-
-                    <div className="flex items-center justify-center min-h-[60vh]">
-                        <div className="text-center">
-                            <h2 className="text-2xl font-bold mb-4">Playlist Not Found</h2>
-                            <p className="text-muted-foreground mb-6">
-                                {workflowState.error || 'This playlist is not available or still being created.'}
-                            </p>
-                            <Button onClick={() => router.push('/create')}>
-                                Create New Playlist
-                            </Button>
-                        </div>
-                    </div>
-                </main>
-            </div>
-        );
-    }
-
-    // Show playlist results
-    const colorScheme = workflowState.moodAnalysis?.color_scheme;
 
     return (
-        <div className="min-h-screen bg-background relative">
-            <MoodBackground
-                colorScheme={colorScheme}
-                style="linear-diagonal"
-                opacity={0.2}
-            />
+        <div
+            className={cn(
+                'relative h-screen overflow-hidden bg-gradient-to-br from-background via-background/95 to-background',
+                'flex flex-col'
+            )}
+        >
+            <MoodBackground colorScheme={colorScheme} style="linear-diagonal" opacity={0.18} />
 
-            <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
+            <div className="pointer-events-none fixed inset-0 -z-10 opacity-0 mix-blend-screen animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
                 <DotPattern
                     className={cn(
-                        "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
+                        '[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]',
                     )}
                 />
             </div>
 
             <Navigation />
 
-            <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                <Button
-                    variant="ghost"
-                    onClick={handleBack}
-                    className="mb-6 gap-2"
-                >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back
-                </Button>
+            <main className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 overflow-y-auto px-4 py-8 sm:px-6 lg:px-8">
+                <div className="flex w-full flex-col gap-6">
+                    <Button
+                        variant="ghost"
+                        onClick={handleBack}
+                        className="w-fit gap-2"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        Back
+                    </Button>
 
-                <PlaylistResults />
+                    {content}
+                </div>
             </main>
         </div>
     );
