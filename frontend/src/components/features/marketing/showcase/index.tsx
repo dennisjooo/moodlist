@@ -1,0 +1,1 @@
+export { default as FeaturedMoodShowcase } from '../showcase/FeaturedMoodShowcase';
