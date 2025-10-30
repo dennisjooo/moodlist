@@ -5,7 +5,7 @@ import json
 from typing import Any, Dict, Optional
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,7 +41,6 @@ async def start_recommendation(
     request: Request,
     mood_prompt: str = Query(..., description="Mood description for playlist generation"),
     current_user: User = Depends(require_auth),
-    background_tasks: Optional[BackgroundTasks] = None,
     db: AsyncSession = Depends(get_db),
     playlist_repo=Depends(get_playlist_repository),
     _rate_limit_check: None = Depends(check_playlist_creation_rate_limit),
