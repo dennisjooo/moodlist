@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { logger } from '@/lib/utils/logger';
-import { usePageCancellation } from '@/lib/hooks/usePageCancellation';
+import { usePageCancellation } from '@/lib/hooks';
 import { CreateSessionSkeleton } from '@/components/shared/LoadingStates/CreateSessionSkeleton';
 import { CreateSessionEditor } from '@/components/features/create/CreateSessionEditor';
 import { CreateSessionProgress } from '@/components/features/create/CreateSessionProgress';
@@ -49,7 +49,7 @@ function CreateSessionPageContent() {
         }
 
         // If workflow is active (not terminal), show confirmation dialog
-        const isActive = workflowState.status !== 'completed' && workflowState.status !== 'failed';
+        const isActive = workflowState.status !== 'completed' && workflowState.status !== 'failed' && workflowState.status !== 'cancelled';
         if (isActive && workflowState.sessionId) {
             setShowCancelDialog(true);
             return;
@@ -175,7 +175,7 @@ function CreateSessionPageContent() {
         }
 
         // Determine if workflow is in a terminal state
-        const isTerminalStatus = workflowState.status === 'completed' || workflowState.status === 'failed';
+        const isTerminalStatus = workflowState.status === 'completed' || workflowState.status === 'failed' || workflowState.status === 'cancelled';
 
         // If workflow is in terminal state but no recommendations, show error or loading state
         if (isTerminalStatus && workflowState.recommendations.length === 0) {

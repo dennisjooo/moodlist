@@ -8,7 +8,7 @@ import { DotPattern } from '@/components/ui/dot-pattern';
 import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 import { Suspense, useState } from 'react';
-import { useCreatePageLogic } from '@/lib/hooks/useCreatePageLogic';
+import { useCreatePageLogic } from '@/lib/hooks';
 import { CreatePageLayout } from '@/components/features/create/CreatePageLayout';
 import { CreatePageHeader } from '@/components/features/create/CreatePageHeader';
 import { QuotaDisplay } from '@/components/features/create/QuotaDisplay';
@@ -128,17 +128,29 @@ function CreatePageWithAuth() {
 export default function CreatePage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-background relative">
-        {/* Fixed Dot Pattern Background */}
-        <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
+      <div className="relative h-screen overflow-hidden bg-gradient-to-br from-background via-background/90 to-background">
+        <div className="pointer-events-none absolute inset-0 -z-10">
+          <div
+            aria-hidden="true"
+            className="absolute left-[-18%] top-[-18%] h-[36rem] w-[36rem] rounded-full bg-primary/25 blur-[130px] opacity-70"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute right-[-20%] bottom-[-25%] h-[32rem] w-[32rem] rounded-full bg-muted/40 blur-[150px] opacity-70"
+          />
+        </div>
+        <div className="pointer-events-none fixed inset-0 -z-10 opacity-0 mix-blend-screen animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
           <DotPattern
             className={cn(
               "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
+              "text-muted-foreground/10"
             )}
           />
         </div>
-        <div className="flex items-center justify-center min-h-screen">
-          <AILoadingSpinner title="Loading..." subtitle="Setting up your experience" />
+        <div className="flex h-screen items-center justify-center px-6">
+          <div className="w-full max-w-lg rounded-3xl border border-border/40 bg-background/80 p-10 text-center shadow-[0_25px_60px_-30px_rgba(15,23,42,0.45)] backdrop-blur-xl">
+            <AILoadingSpinner title="Loading..." subtitle="Setting up your experience" />
+          </div>
         </div>
       </div>
     }>

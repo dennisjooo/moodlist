@@ -1,22 +1,28 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
 import { workflowAPI } from '@/lib/api/workflow';
 import { logger } from '@/lib/utils/logger';
+import { useEffect, useRef } from 'react';
+import { useToast } from '../ui/useToast';
 import { workflowEvents } from './useActiveWorkflows';
-import { useToast } from './useToast';
 
 /**
  * Global polling hook that polls ALL active workflows regardless of current page
  * This ensures workflow updates are tracked even when not on the workflow page
  * 
  * @param activeSessionIds - List of active workflow session IDs to poll
- * @param excludeSessionId - Optional session ID to exclude from polling (e.g., when already being polled on /create/[id])
+ * @param excludeSessionId - Optional session ID to exclude from polling (e.g., when already being polled on /create/[id] or viewed on /playlist/[id])
  */
 export function useGlobalWorkflowPolling(activeSessionIds: string[], excludeSessionId?: string | null) {
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
     const pollingStateRef = useRef<Map<string, { status: string; lastUpdate: number }>>(new Map());
     const { success, error: showErrorToast } = useToast();
+    const excludeSessionIdRef = useRef(excludeSessionId);
+
+    // Keep excluded session ref up to date
+    useEffect(() => {
+        excludeSessionIdRef.current = excludeSessionId;
+    }, [excludeSessionId]);
 
     useEffect(() => {
         // Filter out the excluded session ID (if any)
@@ -67,19 +73,29 @@ export function useGlobalWorkflowPolling(activeSessionIds: string[], excludeSess
                             logger.info('Workflow reached terminal state in global polling', {
                                 component: 'useGlobalWorkflowPolling',
                                 sessionId,
-                                status: status.status
+                                status: status.status,
+                                isExcluded: sessionId === excludeSessionIdRef.current
                             });
 
-                            // Show toast notification for background workflow completion
-                            if (status.status === 'completed') {
-                                success('Playlist ready!', {
-                                    description: `"${status.mood_prompt}" is ready to view`,
-                                    duration: 5000
-                                });
-                            } else if (status.status === 'failed') {
-                                showErrorToast('Playlist creation failed', {
-                                    description: status.error || 'Something went wrong',
-                                    duration: 5000
+                            // Only show toast if this session is not excluded (not being viewed on a specific page)
+                            const isExcluded = sessionId === excludeSessionIdRef.current;
+                            if (!isExcluded) {
+                                // Show toast notification for background workflow completion
+                                if (status.status === 'completed') {
+                                    success('Playlist ready!', {
+                                        description: `"${status.mood_prompt}" is ready to view`,
+                                        duration: 5000
+                                    });
+                                } else if (status.status === 'failed') {
+                                    showErrorToast('Playlist creation failed', {
+                                        description: status.error || 'Something went wrong',
+                                        duration: 5000
+                                    });
+                                }
+                            } else {
+                                logger.debug('Skipping toast for excluded session', {
+                                    component: 'useGlobalWorkflowPolling',
+                                    sessionId
                                 });
                             }
 

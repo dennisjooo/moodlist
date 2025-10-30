@@ -13,7 +13,7 @@ import { StatusIcon } from './StatusIcon';
 import { StatusMessage } from './StatusMessage';
 import { WorkflowInsights } from './WorkflowInsights';
 import { CancelWorkflowDialog } from './CancelWorkflowDialog';
-import { useWorkflowCancellation } from '@/lib/hooks/useWorkflowCancellation';
+import { useWorkflowCancellation } from '@/lib/hooks';
 import { useEffect } from 'react';
 
 export function WorkflowProgress() {

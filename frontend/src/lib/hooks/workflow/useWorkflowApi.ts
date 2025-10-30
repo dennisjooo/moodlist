@@ -1,7 +1,7 @@
 'use client';
 
-import { workflowAPI } from '../api/workflow';
-import type { StartRecommendationRequest, WorkflowStatus, WorkflowResults } from '../api/workflow';
+import { workflowAPI } from '@/lib/api/workflow';
+import type { StartRecommendationRequest, WorkflowStatus, WorkflowResults } from '@/lib/api/workflow';
 import { logger } from '@/lib/utils/logger';
 
 /**

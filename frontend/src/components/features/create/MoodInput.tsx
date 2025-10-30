@@ -40,43 +40,58 @@ export default function MoodInput({ onSubmit, initialMood, disabled = false, loa
   }
 
   return (
-    <Card className="w-full border-0 shadow-lg">
-      <CardContent className="p-6">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Textarea
-              placeholder="Describe your mood..."
-              value={mood}
-              onChange={(e) => setMood(e.target.value)}
-              disabled={disabled}
-              className="min-h-[120px] resize-none border-0 bg-muted/50 text-base placeholder:text-muted-foreground/60 focus-visible:ring-1"
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-1.5 justify-center sm:justify-start">
-            {moodExamples.map((template) => (
-              <button
-                key={template.name}
-                type="button"
-                onClick={() => setMood(template.prompt)}
+    <div className="relative animate-in fade-in duration-500">
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 -z-10 rounded-3xl bg-gradient-to-br from-primary/30 via-primary/10 to-transparent opacity-70 blur-3xl"
+      />
+      <Card className="w-full overflow-hidden rounded-3xl border border-border/40 bg-background/80 shadow-[0_25px_60px_-30px_rgba(15,23,42,0.45)] backdrop-blur-xl">
+        <CardContent className="p-5 sm:p-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-muted-foreground">Tell us about the moment</span>
+                <span className="text-xs text-muted-foreground/70">Be as specific as you like</span>
+              </div>
+              <Textarea
+                placeholder="e.g. Late-night coding session with lo-fi beats and a splash of energy"
+                value={mood}
+                onChange={(e) => setMood(e.target.value)}
                 disabled={disabled}
-                className="px-2.5 py-1 text-xs bg-muted hover:bg-muted/80 rounded-md transition-colors text-muted-foreground hover:text-foreground disabled:cursor-not-allowed"
-              >
-                {template.name}
-              </button>
-            ))}
-          </div>
+                className="min-h-[100px] resize-none rounded-2xl border border-border/50 bg-muted/40 px-4 py-3 text-base shadow-inner focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/40"
+              />
+            </div>
 
-          <Button
-            type="submit"
-            className="w-full h-9"
-            disabled={disabled}
-          >
-            Generate Playlist
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+            <div className="space-y-2">
+              <span className="block text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground/80">
+                Try a preset
+              </span>
+              <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
+                {moodExamples.map((template) => (
+                  <button
+                    key={template.name}
+                    type="button"
+                    onClick={() => setMood(template.prompt)}
+                    disabled={disabled}
+                    className="rounded-full border border-transparent bg-muted/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-background/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed"
+                  >
+                    {template.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              className="h-10 w-full rounded-full bg-gradient-to-r from-primary to-primary/70 text-base font-semibold shadow-lg shadow-primary/20 transition hover:brightness-110 focus-visible:ring-2 focus-visible:ring-primary/40"
+              disabled={disabled}
+            >
+              Generate my playlist
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

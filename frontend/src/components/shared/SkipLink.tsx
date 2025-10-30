@@ -1,6 +1,6 @@
 'use client';
 
-import { useSkipLink } from '@/lib/hooks/useAccessibility';
+import { useSkipLink } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 
 interface SkipLinkProps {

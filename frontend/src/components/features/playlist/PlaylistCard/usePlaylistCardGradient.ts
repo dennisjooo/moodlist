@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { usePlaylistFormatting } from '@/lib/hooks/usePlaylistFormatting';
+import { usePlaylistFormatting } from '@/lib/hooks';
 import { generateMoodGradient } from '@/lib/moodColors';
 import { GradientStyle } from './types';
 
