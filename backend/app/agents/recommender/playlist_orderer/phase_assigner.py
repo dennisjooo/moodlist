@@ -63,6 +63,7 @@ class PhaseAssigner:
         Returns:
             Adjusted phase distribution
         """
+        # Get phase distribution from strategy or use defaults
         phase_distribution = strategy.get("phase_distribution", {
             "opening": 2,
             "build": 5,
@@ -72,23 +73,110 @@ class PhaseAssigner:
             "closure": 2
         })
 
-        # Adjust distribution based on actual track count
-        total_target = sum(phase_distribution.values())
-        scale_factor = track_count / total_target if total_target > 0 else 1
+        # Normalize to standard phases
+        normalized_distribution = self._normalize_phase_names(phase_distribution)
+        
+        # Scale to match track count
+        adjusted_distribution = self._scale_distribution(normalized_distribution, track_count)
+        
+        # Ensure exact track count
+        adjusted_distribution = self._adjust_to_exact_count(adjusted_distribution, track_count)
 
-        adjusted_distribution = {
-            phase: max(1, round(count * scale_factor))
-            for phase, count in phase_distribution.items()
-        }
-
-        # Ensure we use all tracks
-        diff = track_count - sum(adjusted_distribution.values())
-        if diff != 0:
-            # Adjust the largest phase
-            largest_phase = max(adjusted_distribution, key=adjusted_distribution.get)
-            adjusted_distribution[largest_phase] += diff
-
+        logger.info(f"Phase distribution for {track_count} tracks: {adjusted_distribution}")
+        
         return adjusted_distribution
+
+    def _normalize_phase_names(self, phase_distribution: Dict[str, int]) -> Dict[str, int]:
+        """Normalize phase distribution to use only standard phase names.
+
+        Args:
+            phase_distribution: Raw phase distribution from strategy
+
+        Returns:
+            Normalized distribution with only standard phases
+        """
+        all_phases = ["opening", "build", "mid", "high", "descent", "closure"]
+        normalized = {phase: 0 for phase in all_phases}
+        
+        # Separate valid and invalid phases
+        invalid_phases = {k: v for k, v in phase_distribution.items() if k not in all_phases}
+        
+        if invalid_phases:
+            logger.warning(
+                f"LLM invented custom phase names: {list(invalid_phases.keys())}. "
+                f"Redistributing to standard phases."
+            )
+            # Redistribute invalid phase tracks to 'mid' as fallback
+            extra_tracks = sum(invalid_phases.values())
+            if extra_tracks > 0:
+                logger.info(f"Redistributing {extra_tracks} tracks from custom phases to 'mid'")
+                normalized["mid"] = extra_tracks
+        
+        # Merge valid phases
+        for phase, count in phase_distribution.items():
+            if phase in all_phases:
+                normalized[phase] = count
+        
+        return normalized
+
+    def _scale_distribution(self, distribution: Dict[str, int], target_count: int) -> Dict[str, int]:
+        """Scale phase distribution to match target track count.
+
+        Args:
+            distribution: Normalized phase distribution
+            target_count: Target number of tracks
+
+        Returns:
+            Scaled distribution
+        """
+        total_target = sum(distribution.values())
+        
+        if total_target == 0:
+            # No distribution specified - use equal distribution
+            return self._create_equal_distribution(target_count)
+        
+        # Scale proportionally
+        scale_factor = target_count / total_target
+        scaled = {
+            phase: max(0, round(count * scale_factor))
+            for phase, count in distribution.items()
+        }
+        
+        return scaled
+
+    def _create_equal_distribution(self, track_count: int) -> Dict[str, int]:
+        """Create equal distribution across all phases.
+
+        Args:
+            track_count: Number of tracks to distribute
+
+        Returns:
+            Equal distribution with remainder in 'mid'
+        """
+        all_phases = ["opening", "build", "mid", "high", "descent", "closure"]
+        tracks_per_phase = track_count // len(all_phases)
+        distribution = {phase: tracks_per_phase for phase in all_phases}
+        distribution["mid"] += track_count % len(all_phases)
+        return distribution
+
+    def _adjust_to_exact_count(self, distribution: Dict[str, int], target_count: int) -> Dict[str, int]:
+        """Adjust distribution to match exact track count.
+
+        Args:
+            distribution: Current distribution
+            target_count: Target number of tracks
+
+        Returns:
+            Adjusted distribution with exact count
+        """
+        diff = target_count - sum(distribution.values())
+        
+        if diff != 0:
+            # Adjust the largest phase (or 'mid' if all are zero)
+            largest_phase = max(distribution, key=distribution.get) if any(distribution.values()) else "mid"
+            distribution[largest_phase] = max(0, distribution[largest_phase] + diff)
+        
+        return distribution
 
     def _score_tracks_for_phases(
         self,

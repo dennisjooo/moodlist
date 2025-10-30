@@ -106,24 +106,18 @@ class MoodAnalyzerAgent(BaseAgent):
         # Perform mood analysis
         mood_analysis = await self.mood_analysis_engine.analyze_mood(state.mood_prompt)
 
-        # Phase 2: Filter out user-mentioned artists from recommendations
-        # The UserAnchorStrategy already handles these artists
+        # BUGFIX: DO NOT filter out user-mentioned artists from recommendations
+        # Both UserAnchorStrategy AND ArtistDiscovery should process user-mentioned artists
+        # This provides redundancy - if one fails, the other can still get tracks
+        # The diversity manager will handle deduplication if needed
         intent_analysis = state.metadata.get("intent_analysis", {})
-        user_mentioned_artists = set(intent_analysis.get("user_mentioned_artists", []))
+        user_mentioned_artists = intent_analysis.get("user_mentioned_artists", [])
         
-        if user_mentioned_artists and "artist_recommendations" in mood_analysis:
-            original_count = len(mood_analysis["artist_recommendations"])
-            mood_analysis["artist_recommendations"] = [
-                artist for artist in mood_analysis["artist_recommendations"]
-                if artist not in user_mentioned_artists
-            ]
-            filtered_count = original_count - len(mood_analysis["artist_recommendations"])
-            
-            if filtered_count > 0:
-                logger.info(
-                    f"Filtered {filtered_count} user-mentioned artists from mood recommendations "
-                    f"(e.g., {', '.join(list(user_mentioned_artists)[:3])})"
-                )
+        if user_mentioned_artists:
+            logger.info(
+                f"User mentioned {len(user_mentioned_artists)} artist(s): {', '.join(user_mentioned_artists)}. "
+                f"These will be processed by BOTH UserAnchorStrategy and ArtistDiscovery for redundancy."
+            )
 
         # Update state with analysis
         state.mood_analysis = mood_analysis
