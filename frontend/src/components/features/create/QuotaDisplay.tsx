@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, memo } from 'react';
 import { userAPI, QuotaStatus } from '@/lib/api/user';
 import { logger } from '@/lib/utils/logger';
 import { AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import { QuotaDisplaySkeleton } from '@/components/shared/LoadingStates';
 
 interface QuotaDisplayProps {
     className?: string;
@@ -49,11 +50,7 @@ function QuotaDisplayComponent({ className = '', onRefresh, onLoadingChange }: Q
     }, [loading, onLoadingChange]);
 
     if (loading) {
-        return (
-            <div className={`animate-pulse ${className}`}>
-                <div className="h-14 bg-muted/50 rounded-lg" />
-            </div>
-        );
+        return <QuotaDisplaySkeleton className={className} />;
     }
 
     if (error || !quota) {
@@ -84,7 +81,7 @@ function QuotaDisplayComponent({ className = '', onRefresh, onLoadingChange }: Q
                             ) : (
                                 <CheckCircle className="h-3 w-3 text-success" />
                             )}
-                            <h3 className="text-xs font-medium tracking-[0.28em] text-muted-foreground/80">Daily quota</h3>
+                            <h3 className="text-xs font-medium">Daily Usage</h3>
                         </div>
                         <p className="text-xs text-muted-foreground">
                             {isAtLimit ? (
