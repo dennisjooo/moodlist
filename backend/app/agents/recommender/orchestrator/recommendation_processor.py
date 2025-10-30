@@ -33,9 +33,16 @@ class RecommendationProcessor:
         unique_recommendations = []
 
         for rec in recommendations:
-            if rec.track_id not in seen_track_ids and rec.spotify_uri not in seen_spotify_uris:
+            # Check if track is already seen by ID or Spotify URI
+            is_duplicate = (
+                rec.track_id in seen_track_ids or 
+                rec.spotify_uri in seen_spotify_uris
+            )
+            
+            if not is_duplicate:
                 seen_track_ids.add(rec.track_id)
-                seen_spotify_uris.add(rec.spotify_uri)
+                if rec.spotify_uri:
+                    seen_spotify_uris.add(rec.spotify_uri) # There are tracks that might not have a spotify_uri
                 unique_recommendations.append(rec)
             else:
                 logger.debug(
@@ -117,7 +124,7 @@ class RecommendationProcessor:
 
     def calculate_source_limits(self, max_count: int, artist_ratio: float) -> Dict[str, int]:
         """Calculate maximum counts for each source.
-        
+        `
         Note: This returns a generic limit for anchor tracks, but the actual capping
         logic in cap_and_sort_by_source handles user-mentioned tracks specially
         (they don't count toward the limit).
@@ -168,12 +175,15 @@ class RecommendationProcessor:
 
             limit = source_limits.get(source, 0)
 
-            # Special handling for anchor tracks: user-mentioned tracks are unlimited
+            # Special handling for anchor tracks: user-mentioned tracks and user-mentioned artist tracks are unlimited
             if source == "anchor_track":
                 user_mentioned: List[TrackRecommendation] = []
                 other_anchors: List[TrackRecommendation] = []
                 for rec in recommendations:
-                    (user_mentioned if rec.user_mentioned else other_anchors).append(rec)
+                    # Include both user-mentioned tracks AND tracks from user-mentioned artists
+                    is_protected = rec.user_mentioned or rec.user_mentioned_artist or rec.protected
+                    logger.info(f"Protected track: {rec.track_name} by {rec.artists} (user_mentioned={rec.user_mentioned}, user_mentioned_artist={rec.user_mentioned_artist}, protected={rec.protected})")
+                    (user_mentioned if is_protected else other_anchors).append(rec)
 
                 # Sort each group independently
                 user_mentioned.sort(key=lambda r: r.confidence_score, reverse=True)
@@ -189,6 +199,7 @@ class RecommendationProcessor:
                     allowed=len(other_anchors[:limit]),
                     overflow=len(overflow_sources[source]),
                     limit=limit,
+                    note="user_mentioned includes tracks from user-mentioned artists"
                 )
             else:
                 # Normal capping for other sources
