@@ -5,4 +5,5 @@ export { QuickActions } from './QuickActions';
 export { ProfileHeader } from './ProfileHeader';
 export { ProfileStats } from './ProfileStats';
 export { ProfileDashboard } from './ProfileDashboard';
+export { ProfilePageLayout } from './ProfilePageLayout';
 
