@@ -1,6 +1,6 @@
 """Playlist repository for playlist-specific database operations."""
 
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Iterable
 from datetime import datetime, timezone
 
 import structlog
@@ -22,6 +22,60 @@ class PlaylistRepository(BaseRepository[Playlist]):
     def model_class(self) -> type[Playlist]:
         """Return the Playlist model class."""
         return Playlist
+
+    def _build_user_playlist_query(
+        self,
+        user_id: int,
+        *,
+        status: Optional[str] = None,
+        skip: int = 0,
+        limit: Optional[int] = None,
+        include_deleted: bool = False,
+        load_relationships: Optional[Iterable[str]] = None,
+    ):
+        """Construct the common playlist query used by the user fetch helpers."""
+
+        query = select(Playlist).where(Playlist.user_id == user_id)
+
+        if not include_deleted:
+            query = query.where(Playlist.deleted_at.is_(None))
+
+        if status:
+            query = query.where(Playlist.status == status)
+
+        if skip:
+            query = query.offset(skip)
+        if limit:
+            query = query.limit(limit)
+
+        query = query.order_by(desc(Playlist.created_at))
+
+        if load_relationships:
+            for relationship in load_relationships:
+                query = query.options(selectinload(getattr(Playlist, relationship)))
+
+        return query
+
+    async def _execute_playlist_query(
+        self,
+        query,
+        *,
+        success_event: str,
+        error_event: str,
+        log_context: Optional[Dict[str, object]] = None,
+    ) -> List[Playlist]:
+        """Execute the playlist query and provide consistent logging."""
+
+        log_context = log_context or {}
+
+        try:
+            result = await self.session.execute(query)
+            playlists = list(result.scalars().all())
+            self.logger.debug(success_event, count=len(playlists), **log_context)
+            return playlists
+        except Exception as exc:
+            self.logger.error(error_event, error=str(exc), **log_context)
+            raise
 
     async def get_by_user_id_with_filters(
         self,
@@ -47,57 +101,31 @@ class PlaylistRepository(BaseRepository[Playlist]):
         Returns:
             List of user's playlists
         """
-        try:
-            query = select(Playlist).where(Playlist.user_id == user_id)
+        query = self._build_user_playlist_query(
+            user_id,
+            status=status,
+            skip=skip,
+            limit=limit,
+            include_deleted=include_deleted,
+            load_relationships=load_relationships,
+        )
 
-            # Exclude soft-deleted unless explicitly requested
-            if not include_deleted:
-                query = query.where(Playlist.deleted_at.is_(None))
+        # Add exclude statuses filter if provided (case insensitive)
+        if exclude_statuses:
+            query = query.where(func.lower(Playlist.status).not_in([status.lower() for status in exclude_statuses]))
 
-            # Add status filter if provided (legacy support)
-            if status:
-                query = query.where(Playlist.status == status)
-
-            # Add exclude statuses filter if provided (case insensitive)
-            if exclude_statuses:
-                query = query.where(func.lower(Playlist.status).not_in([status.lower() for status in exclude_statuses]))
-
-            # Apply pagination
-            if skip:
-                query = query.offset(skip)
-            if limit:
-                query = query.limit(limit)
-
-            # Order by creation date (newest first)
-            query = query.order_by(desc(Playlist.created_at))
-
-            # Apply eager loading
-            if load_relationships:
-                for relationship in load_relationships:
-                    query = query.options(selectinload(getattr(Playlist, relationship)))
-
-            result = await self.session.execute(query)
-            playlists = result.scalars().all()
-
-            self.logger.debug(
-                "User playlists retrieved with filters",
-                user_id=user_id,
-                status=status,
-                count=len(playlists),
-                skip=skip,
-                limit=limit
-            )
-
-            return list(playlists)
-
-        except Exception as e:
-            self.logger.error(
-                "Database error retrieving user playlists with filters",
-                user_id=user_id,
-                status=status,
-                error=str(e)
-            )
-            raise
+        return await self._execute_playlist_query(
+            query,
+            success_event="User playlists retrieved with filters",
+            error_event="Database error retrieving user playlists with filters",
+            log_context={
+                "user_id": user_id,
+                "status": status,
+                "exclude_statuses": exclude_statuses,
+                "skip": skip,
+                "limit": limit,
+            },
+        )
 
     async def get_by_user_id(
         self,
@@ -119,47 +147,24 @@ class PlaylistRepository(BaseRepository[Playlist]):
         Returns:
             List of user's playlists
         """
-        try:
-            query = select(Playlist).where(Playlist.user_id == user_id)
+        query = self._build_user_playlist_query(
+            user_id,
+            skip=skip,
+            limit=limit,
+            include_deleted=include_deleted,
+            load_relationships=load_relationships,
+        )
 
-            # Exclude soft-deleted unless explicitly requested
-            if not include_deleted:
-                query = query.where(Playlist.deleted_at.is_(None))
-
-            # Apply pagination
-            if skip:
-                query = query.offset(skip)
-            if limit:
-                query = query.limit(limit)
-
-            # Order by creation date (newest first)
-            query = query.order_by(desc(Playlist.created_at))
-
-            # Apply eager loading
-            if load_relationships:
-                for relationship in load_relationships:
-                    query = query.options(selectinload(getattr(Playlist, relationship)))
-
-            result = await self.session.execute(query)
-            playlists = result.scalars().all()
-
-            self.logger.debug(
-                "User playlists retrieved successfully",
-                user_id=user_id,
-                count=len(playlists),
-                skip=skip,
-                limit=limit
-            )
-
-            return list(playlists)
-
-        except Exception as e:
-            self.logger.error(
-                "Database error retrieving user playlists",
-                user_id=user_id,
-                error=str(e)
-            )
-            raise
+        return await self._execute_playlist_query(
+            query,
+            success_event="User playlists retrieved successfully",
+            error_event="Database error retrieving user playlists",
+            log_context={
+                "user_id": user_id,
+                "skip": skip,
+                "limit": limit,
+            },
+        )
 
     async def get_by_session_id_for_update(self, session_id: str) -> Optional[Playlist]:
         """Get playlist by session ID for update operations (no user check needed for internal operations).
