@@ -15,9 +15,10 @@ interface CreatePageLayoutProps {
  */
 export function CreatePageLayout({ children }: CreatePageLayoutProps) {
   return (
-    <div className="min-h-screen bg-background relative">
-      {/* Fixed Dot Pattern Background */}
-      <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
+    <div className="relative h-screen overflow-hidden flex flex-col">
+
+      {/* Subtle dot pattern overlay */}
+      <div className="pointer-events-none fixed inset-0 -z-10 opacity-0 mix-blend-screen animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
         <DotPattern
           className={cn(
             "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
@@ -29,7 +30,7 @@ export function CreatePageLayout({ children }: CreatePageLayoutProps) {
       <Navigation />
 
       {/* Main Content */}
-      <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center min-h-[calc(100vh-4rem)]">
+      <main className="relative z-10 mx-auto flex flex-1 w-full max-w-4xl items-center px-4 py-8 sm:px-6 lg:px-8">
         <div className="w-full">
           {children}
         </div>
