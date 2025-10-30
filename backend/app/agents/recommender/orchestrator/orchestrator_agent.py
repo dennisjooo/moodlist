@@ -211,9 +211,6 @@ class OrchestratorAgent(BaseAgent):
 
             # Small delay between iterations
             await asyncio.sleep(0.1)
-            
-            # Remove duplicates
-            state.recommendations = self.recommendation_processor.remove_duplicates(state.recommendations)
 
         return quality_evaluation
 
