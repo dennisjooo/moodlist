@@ -1,4 +1,4 @@
-import { WorkflowProgressSkeleton } from '@/components/shared/LoadingStates';
+import { WorkflowProgressSkeleton } from './WorkflowProgressSkeleton';
 import { Button } from '@/components/ui/button';
 import { CreateSessionLayout, createSessionCardClassName } from '@/components/features/create/CreateSessionLayout';
 import { ArrowLeft } from 'lucide-react';
