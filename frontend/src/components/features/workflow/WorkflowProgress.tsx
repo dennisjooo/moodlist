@@ -52,9 +52,9 @@ export function WorkflowProgress() {
     return (
         <>
             <Card className={cn("w-full overflow-hidden", isCancelling && "opacity-60 pointer-events-none")}>
-                <CardHeader className="pb-3 overflow-hidden">
+                <CardHeader className="pb-2 overflow-hidden">
                     <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg flex items-center gap-2">
+                        <CardTitle className="text-base flex items-center gap-2">
                             <StatusIcon status={workflowState.status} />
                             {isCancelling ? 'Cancelling...' : 'Playlist Generation'}
                         </CardTitle>
@@ -66,7 +66,7 @@ export function WorkflowProgress() {
                     </div>
                 </CardHeader>
 
-                <CardContent className="space-y-4 overflow-hidden">
+                <CardContent className="space-y-3 overflow-hidden">
                     {/* Error Alert */}
                     {workflowState.error && (
                         <Alert variant="destructive">
@@ -81,7 +81,7 @@ export function WorkflowProgress() {
                     )}
 
                     {/* Status Message and Timeline */}
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                         <div className="flex items-center justify-between gap-4">
                             <StatusMessage status={workflowState.status} />
                         </div>
@@ -106,7 +106,7 @@ export function WorkflowProgress() {
 
                     {/* Completion Actions */}
                     {workflowState.status === 'completed' && workflowState.playlist && (
-                        <div className="flex gap-2 pt-2">
+                        <div className="flex gap-2 pt-1">
                             <Button variant="outline" onClick={handleCancelClick}>
                                 Start New
                             </Button>
@@ -114,7 +114,7 @@ export function WorkflowProgress() {
                     )}
 
                     {workflowState.status === 'failed' && (
-                        <div className="flex gap-2 pt-2">
+                        <div className="flex gap-2 pt-1">
                             <Button onClick={handleRetry} className="flex-1">
                                 Try Again
                             </Button>
