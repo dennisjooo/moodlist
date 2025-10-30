@@ -46,9 +46,9 @@ export default function MoodInput({ onSubmit, initialMood, disabled = false, loa
         className="absolute inset-0 -z-10 rounded-3xl bg-gradient-to-br from-primary/30 via-primary/10 to-transparent opacity-70 blur-3xl"
       />
       <Card className="w-full overflow-hidden rounded-3xl border border-border/40 bg-background/80 shadow-[0_25px_60px_-30px_rgba(15,23,42,0.45)] backdrop-blur-xl">
-        <CardContent className="p-6 sm:p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-3">
+        <CardContent className="p-5 sm:p-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-muted-foreground">Tell us about the moment</span>
                 <span className="text-xs text-muted-foreground/70">Be as specific as you like</span>
@@ -58,11 +58,11 @@ export default function MoodInput({ onSubmit, initialMood, disabled = false, loa
                 value={mood}
                 onChange={(e) => setMood(e.target.value)}
                 disabled={disabled}
-                className="min-h-[140px] resize-none rounded-2xl border border-border/50 bg-muted/40 px-4 py-4 text-base shadow-inner focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/40"
+                className="min-h-[100px] resize-none rounded-2xl border border-border/50 bg-muted/40 px-4 py-3 text-base shadow-inner focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/40"
               />
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               <span className="block text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground/80">
                 Try a preset
               </span>
@@ -83,7 +83,7 @@ export default function MoodInput({ onSubmit, initialMood, disabled = false, loa
 
             <Button
               type="submit"
-              className="h-11 w-full rounded-full bg-gradient-to-r from-primary to-primary/70 text-base font-semibold shadow-lg shadow-primary/20 transition hover:brightness-110 focus-visible:ring-2 focus-visible:ring-primary/40"
+              className="h-10 w-full rounded-full bg-gradient-to-r from-primary to-primary/70 text-base font-semibold shadow-lg shadow-primary/20 transition hover:brightness-110 focus-visible:ring-2 focus-visible:ring-primary/40"
               disabled={disabled}
             >
               Generate my playlist
