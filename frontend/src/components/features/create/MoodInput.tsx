@@ -40,7 +40,7 @@ export default function MoodInput({ onSubmit, initialMood, disabled = false, loa
   }
 
   return (
-    <div className="relative">
+    <div className="relative animate-in fade-in duration-500">
       <div
         aria-hidden="true"
         className="absolute inset-0 -z-10 rounded-3xl bg-gradient-to-br from-primary/30 via-primary/10 to-transparent opacity-70 blur-3xl"
