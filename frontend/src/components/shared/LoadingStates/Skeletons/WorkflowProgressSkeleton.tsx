@@ -20,7 +20,10 @@ export function WorkflowProgressSkeleton() {
                         Crafting your playlist
                     </h1>
                     <p className="mx-auto max-w-2xl text-sm text-muted-foreground">
-                        We are weaving together tracks that match the feeling you shared. Hang tight while the mix comes to life.
+                        We are weaving together tracks that match the feeling you shared.
+                    </p>
+                    <p className="mx-auto max-w-2xl text-sm text-muted-foreground">
+                        Hang tight while the mix comes to life.
                     </p>
                 </div>
             </div>
