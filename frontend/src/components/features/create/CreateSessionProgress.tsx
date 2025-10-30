@@ -57,7 +57,13 @@ export function CreateSessionProgress({
                             <p className="mx-auto max-w-2xl text-sm text-muted-foreground">
                                 {isCancelling
                                     ? 'Please wait while we cancel your request.'
-                                    : 'We are weaving together tracks that match the feeling you shared. Hang tight while the mix comes to life.'}
+                                    : (
+                                        <>
+                                            We are weaving together tracks that match the feeling you shared.
+                                            <br />
+                                            Hang tight while the mix comes to life.
+                                        </>
+                                    )}
                             </p>
                         </div>
                     </div>
