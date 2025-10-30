@@ -1,7 +1,7 @@
 'use client';
 
 import LoginRequiredDialog from '@/components/LoginRequiredDialog';
-import MoodCard from '@/components/features/mood/MoodCard';
+import MoodCard from '@/components/features/marketing/sample_moods/MoodCard';
 import { motion } from '@/components/ui/lazy-motion';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { MOOD_TEMPLATES } from '@/lib/constants/moodTemplates';
