@@ -129,7 +129,18 @@ class UserAnchorStrategy(RecommendationStrategy):
                 target_count // 2 if user_mentioned_track_ids else target_count
             )
             recommendations.extend(artist_based_recs)
-            logger.info(f"Got {len(artist_based_recs)} top tracks from user-mentioned artists")
+            
+            # CRITICAL: Log prominently if we failed to get tracks for user-mentioned artists
+            if len(artist_based_recs) == 0:
+                logger.error(
+                    f"FAILED to get any tracks from user-mentioned artists: {user_mentioned_artists}. "
+                    f"This is a critical failure - user explicitly requested these artists!"
+                )
+            else:
+                logger.info(
+                    f"✓ Got {len(artist_based_recs)} top tracks from {len(user_mentioned_artists)} "
+                    f"user-mentioned artist(s): {', '.join(user_mentioned_artists)}"
+                )
 
         # Mark all recommendations with high confidence
         # CRITICAL: Use "artist_discovery" as source so they're recognized by the processor
@@ -263,6 +274,7 @@ class UserAnchorStrategy(RecommendationStrategy):
                             )
 
                             # Add top tracks (limited per artist)
+                            track_count = 0
                             for track in top_tracks[:tracks_per_artist]:
                                 if track.get("id"):
                                     # Extract all artists for consistency with other recommendation formats
@@ -277,11 +289,16 @@ class UserAnchorStrategy(RecommendationStrategy):
                                         "audio_features": {},
                                         "confidence": 0.85  # Very high confidence for top tracks from mentioned artists
                                     })
+                                    track_count += 1
 
-                            logger.info(f"✓ Got {len(top_tracks[:tracks_per_artist])} top tracks from user-mentioned artist: {artist_name}")
+                            logger.info(f"✓ Got {track_count} top tracks from user-mentioned artist: {artist_name}")
+                        else:
+                            logger.warning(f"Found artist '{artist_name}' in search but no artist ID available")
+                    else:
+                        logger.warning(f"Could not find artist '{artist_name}' on Spotify (search returned empty)")
 
                 except Exception as e:
-                    logger.error(f"Error getting top tracks for artist '{artist_name}': {e}")
+                    logger.error(f"Error getting top tracks for user-mentioned artist '{artist_name}': {e}", exc_info=True)
                     continue
 
         except Exception as e:
