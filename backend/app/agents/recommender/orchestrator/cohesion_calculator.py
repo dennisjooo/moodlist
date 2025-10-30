@@ -196,10 +196,10 @@ class CohesionCalculator:
 
         for rec in recommendations:
             # CRITICAL: Skip quality evaluation for protected tracks (user-mentioned anchors)
-            if rec.protected or rec.user_mentioned:
+            if rec.protected or rec.user_mentioned or rec.user_mentioned_artist:
                 logger.info(
                     f"Skipping outlier detection for protected track: {rec.track_name} by {', '.join(rec.artists)} "
-                    f"(user_mentioned={rec.user_mentioned}, anchor_type={rec.anchor_type})"
+                    f"(user_mentioned={rec.user_mentioned}, user_mentioned_artist={rec.user_mentioned_artist}, anchor_type={rec.anchor_type})"
                 )
                 # Include in cohesion scores with perfect score (don't penalize playlist)
                 cohesion_scores.append(1.0)

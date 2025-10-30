@@ -241,7 +241,7 @@ class OrchestratorAgent(BaseAgent):
             for rec in state.recommendations:
                 if rec.track_id in outlier_ids:
                     # CRITICAL: Never filter protected tracks (user-mentioned)
-                    if rec.protected or rec.user_mentioned:
+                    if rec.protected or rec.user_mentioned or rec.user_mentioned_artist:
                         logger.info(
                             f"Keeping outlier because it's protected: {rec.track_name} by {', '.join(rec.artists)}"
                         )
@@ -301,7 +301,7 @@ class OrchestratorAgent(BaseAgent):
         # Use target_count as the limit since we regenerated to meet it
         # But cap at max_count as a safety measure
         final_limit = min(target_count, max_count, len(state.recommendations))
-
+        
         # Enforce 95:5 ratio (95% artist, 5% RecoBeat) at the target count
         state.recommendations = self.recommendation_processor.enforce_source_ratio(
             recommendations=state.recommendations,

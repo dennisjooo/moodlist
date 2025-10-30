@@ -277,8 +277,8 @@ class TrackFilter:
                     audio_features=rec_data.get("audio_features"),
                     reasoning=rec_data.get("reasoning", "Mood-based recommendation"),
                     source=rec_data.get("source", "reccobeat"),
-                    # CRITICAL: Preserve user-mentioned metadata
                     user_mentioned=rec_data.get("user_mentioned", False),
+                    user_mentioned_artist=rec_data.get("user_mentioned_artist", False),
                     anchor_type=rec_data.get("anchor_type"),
                     protected=rec_data.get("protected", False)
                 )
