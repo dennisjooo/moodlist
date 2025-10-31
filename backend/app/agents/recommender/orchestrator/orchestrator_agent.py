@@ -148,47 +148,17 @@ class OrchestratorAgent(BaseAgent):
 
         for iteration in range(self.max_iterations):
             state.metadata["orchestration_iterations"] = iteration + 1
-            state.current_step = f"evaluating_quality_iteration_{iteration + 1}"
-            state.status = RecommendationStatus.EVALUATING_QUALITY
-            await self._notify_progress(state)
-
-            # Evaluate current playlist quality
-            quality_evaluation = await self.quality_evaluator.evaluate_playlist_quality(state)
-            state.metadata["quality_scores"].append(quality_evaluation)
-
-            current_score = quality_evaluation['overall_score']
             
-            logger.info(
-                f"Iteration {iteration + 1}: Overall score={current_score:.2f}, "
-                f"Cohesion={quality_evaluation['cohesion_score']:.2f}, "
-                f"Count={quality_evaluation['recommendations_count']}"
+            # Evaluate quality and check for convergence
+            quality_evaluation = await self.evaluate_quality_with_convergence(
+                state, iteration, previous_score, convergence_threshold,
+                stalled_iterations, max_stalled
             )
-
-            # Check for convergence (after first iteration)
-            if iteration > 0:
-                improvement = current_score - previous_score
-                if improvement < convergence_threshold:
-                    stalled_iterations += 1
-                    logger.info(
-                        f"⚠ Iteration {iteration + 1} stalled: "
-                        f"improvement {improvement:.3f} < threshold {convergence_threshold} "
-                        f"({stalled_iterations}/{max_stalled} stalled iterations)"
-                    )
-                else:
-                    stalled_iterations = 0  # Reset if improvement is significant
-                    logger.info(f"✓ Meaningful improvement: +{improvement:.3f}")
             
-            previous_score = current_score
-
-            # Stop if converged (no improvement for multiple iterations)
-            if stalled_iterations >= max_stalled:
-                logger.info(
-                    f"✓ Convergence detected after {iteration + 1} iterations "
-                    f"(score stalled at {current_score:.2f}). Stopping early."
-                )
-                state.current_step = "recommendations_converged"
+            if quality_evaluation is None:
+                # Converged or threshold met
                 break
-
+                
             # Check if quality meets threshold
             if quality_evaluation["meets_threshold"]:
                 logger.info(f"✓ Quality threshold met after {iteration + 1} iteration(s)")
@@ -196,37 +166,123 @@ class OrchestratorAgent(BaseAgent):
                 break
 
             # Apply improvement strategies
-            state.current_step = f"optimizing_recommendations_iteration_{iteration + 1}"
-            state.status = RecommendationStatus.OPTIMIZING_RECOMMENDATIONS
-            await self._notify_progress(state)
-
-            improvement_strategies = await self.improvement_strategy.decide_improvement_strategy(
-                quality_evaluation, state
-            )
-            logger.info(f"Applying improvement strategies: {improvement_strategies}")
-
-            state = await self.improvement_strategy.apply_improvements(
-                improvement_strategies, quality_evaluation, state
-            )
+            previous_score = quality_evaluation['overall_score']
+            state = await self.apply_improvement_strategies(state, iteration, quality_evaluation)
 
             # Small delay between iterations
             await asyncio.sleep(0.1)
-            
-            # Remove duplicates
-            state.recommendations = self.recommendation_processor.remove_duplicates(state.recommendations)
 
         return quality_evaluation
+
+    async def evaluate_quality_with_convergence(
+        self,
+        state: AgentState,
+        iteration: int,
+        previous_score: float,
+        convergence_threshold: float,
+        stalled_iterations: int,
+        max_stalled: int
+    ) -> Optional[Dict[str, Any]]:
+        """Evaluate playlist quality and check for convergence."""
+        state.current_step = f"evaluating_quality_iteration_{iteration + 1}"
+        state.status = RecommendationStatus.EVALUATING_QUALITY
+        await self._notify_progress(state)
+
+        # Evaluate current playlist quality
+        quality_evaluation = await self.quality_evaluator.evaluate_playlist_quality(state)
+        state.metadata["quality_scores"].append(quality_evaluation)
+
+        current_score = quality_evaluation['overall_score']
+        
+        logger.info(
+            f"Iteration {iteration + 1}: Overall score={current_score:.2f}, "
+            f"Cohesion={quality_evaluation['cohesion_score']:.2f}, "
+            f"Count={quality_evaluation['recommendations_count']}"
+        )
+
+        # Check for convergence (after first iteration)
+        new_stalled_iterations = stalled_iterations
+        if iteration > 0:
+            improvement = current_score - previous_score
+            if improvement < convergence_threshold:
+                new_stalled_iterations += 1
+                logger.info(
+                    f"⚠ Iteration {iteration + 1} stalled: "
+                    f"improvement {improvement:.3f} < threshold {convergence_threshold} "
+                    f"({new_stalled_iterations}/{max_stalled} stalled iterations)"
+                )
+            else:
+                new_stalled_iterations = 0  # Reset if improvement is significant
+                logger.info(f"✓ Meaningful improvement: +{improvement:.3f}")
+
+        # Stop if converged (no improvement for multiple iterations)
+        if new_stalled_iterations >= max_stalled:
+            logger.info(
+                f"✓ Convergence detected after {iteration + 1} iterations "
+                f"(score stalled at {current_score:.2f}). Stopping early."
+            )
+            state.current_step = "recommendations_converged"
+            return None
+
+        return quality_evaluation
+
+    async def apply_improvement_strategies(
+        self,
+        state: AgentState,
+        iteration: int,
+        quality_evaluation: Dict[str, Any]
+    ) -> AgentState:
+        """Apply improvement strategies to enhance playlist quality."""
+        state.current_step = f"optimizing_recommendations_iteration_{iteration + 1}"
+        state.status = RecommendationStatus.OPTIMIZING_RECOMMENDATIONS
+        await self._notify_progress(state)
+
+        improvement_strategies = await self.improvement_strategy.decide_improvement_strategy(
+            quality_evaluation, state
+        )
+        logger.info(f"Applying improvement strategies: {improvement_strategies}")
+
+        state = await self.improvement_strategy.apply_improvements(
+            improvement_strategies, quality_evaluation, state
+        )
+        
+        return state
 
     async def perform_final_processing(self, state: AgentState, quality_evaluation: Dict[str, Any]) -> AgentState:
         """Perform final processing and cleanup with outlier filtering."""
         logger.info("Starting final processing and cleanup...")
         
+        # Remove duplicates and enrich tracks
+        state = await self.handle_duplicates_and_enrichment(state)
+        
+        # Filter outliers with protection logic
+        state = await self.filter_outliers_with_protection(state)
+        
+        # Enforce playlist targets and source ratios
+        state = await self.enforce_playlist_targets(state)
+        state = await self.enforce_source_ratio(state)
+        
+        # Final state update
+        state.current_step = "recommendations_ready"
+        
+        logger.info(
+            f"Final processing complete: {len(state.recommendations)} tracks delivered"
+        )
+
+        return state
+
+    async def handle_duplicates_and_enrichment(self, state: AgentState) -> AgentState:
+        """Remove duplicates and enrich tracks with Spotify data."""
         # Remove duplicates
         state.recommendations = self.recommendation_processor.remove_duplicates(state.recommendations)
         
         # Enrich tracks with missing Spotify URIs
         state = await self.enrich_tracks_with_spotify_data(state)
         
+        return state
+
+    async def filter_outliers_with_protection(self, state: AgentState) -> AgentState:
+        """Filter outliers while protecting user-mentioned tracks."""
         # Run final quality evaluation to get fresh outlier list
         final_evaluation = await self.quality_evaluator.evaluate_playlist_quality(state)
         state.metadata["final_quality_evaluation"] = final_evaluation
@@ -241,7 +297,7 @@ class OrchestratorAgent(BaseAgent):
             for rec in state.recommendations:
                 if rec.track_id in outlier_ids:
                     # CRITICAL: Never filter protected tracks (user-mentioned)
-                    if rec.protected or rec.user_mentioned:
+                    if rec.protected or rec.user_mentioned or rec.user_mentioned_artist:
                         logger.info(
                             f"Keeping outlier because it's protected: {rec.track_name} by {', '.join(rec.artists)}"
                         )
@@ -261,39 +317,44 @@ class OrchestratorAgent(BaseAgent):
                 f"Final outlier filtering: removed {original_count - len(filtered_recommendations)} tracks "
                 f"({protected_kept} protected tracks kept despite being outliers)"
             )
-            
-            # Check if we're below target after filtering - regenerate to meet target
-            playlist_target = state.metadata.get("playlist_target", {})
-            target_count = playlist_target.get("target_count", 20)
-            min_count = playlist_target.get("min_count", 15)
-
-            if len(state.recommendations) < target_count:
-                shortfall = target_count - len(state.recommendations)
-                logger.warning(
-                    f"Below target after filtering ({len(state.recommendations)} < {target_count}). "
-                    f"Generating {shortfall} additional recommendations..."
-                )
-
-                # Use remaining good tracks as seeds
-                if state.recommendations:
-                    state.seed_tracks = [rec.track_id for rec in state.recommendations[:5]]
-
-                # Generate enough to reach target (recommendation generator will add to existing)
-                # Store current count to know how many were added
-                before_count = len(state.recommendations)
-                state = await self.recommendation_generator.run_with_error_handling(state)
-                added_count = len(state.recommendations) - before_count
-
-                logger.info(f"Added {added_count} tracks, now have {len(state.recommendations)} total")
-            elif len(state.recommendations) < min_count:
-                # Emergency regeneration if somehow below minimum
-                logger.error(f"Critical: Below minimum after filtering ({len(state.recommendations)} < {min_count})")
-                if state.recommendations:
-                    state.seed_tracks = [rec.track_id for rec in state.recommendations[:5]]
-                state = await self.recommendation_generator.run_with_error_handling(state)
         
+        return state
 
-        # Enforce ratio respecting the target count
+    async def enforce_playlist_targets(self, state: AgentState) -> AgentState:
+        """Enforce playlist target counts and regenerate if needed."""
+        playlist_target = state.metadata.get("playlist_target", {})
+        target_count = playlist_target.get("target_count", 20)
+        min_count = playlist_target.get("min_count", 15)
+
+        if len(state.recommendations) < target_count:
+            shortfall = target_count - len(state.recommendations)
+            logger.warning(
+                f"Below target after filtering ({len(state.recommendations)} < {target_count}). "
+                f"Generating {shortfall} additional recommendations..."
+            )
+
+            # Use remaining good tracks as seeds
+            if state.recommendations:
+                state.seed_tracks = [rec.track_id for rec in state.recommendations[:5]]
+
+            # Generate enough to reach target (recommendation generator will add to existing)
+            # Store current count to know how many were added
+            before_count = len(state.recommendations)
+            state = await self.recommendation_generator.run_with_error_handling(state)
+            added_count = len(state.recommendations) - before_count
+
+            logger.info(f"Added {added_count} tracks, now have {len(state.recommendations)} total")
+        elif len(state.recommendations) < min_count:
+            # Emergency regeneration if somehow below minimum
+            logger.error(f"Critical: Below minimum after filtering ({len(state.recommendations)} < {min_count})")
+            if state.recommendations:
+                state.seed_tracks = [rec.track_id for rec in state.recommendations[:5]]
+            state = await self.recommendation_generator.run_with_error_handling(state)
+        
+        return state
+
+    async def enforce_source_ratio(self, state: AgentState) -> AgentState:
+        """Enforce source ratio and final count limits."""
         playlist_target = state.metadata.get("playlist_target", {})
         target_count = playlist_target.get("target_count", 20)
         max_count = playlist_target.get("max_count", 30)
@@ -301,7 +362,7 @@ class OrchestratorAgent(BaseAgent):
         # Use target_count as the limit since we regenerated to meet it
         # But cap at max_count as a safety measure
         final_limit = min(target_count, max_count, len(state.recommendations))
-
+        
         # Enforce 95:5 ratio (95% artist, 5% RecoBeat) at the target count
         state.recommendations = self.recommendation_processor.enforce_source_ratio(
             recommendations=state.recommendations,
@@ -309,85 +370,104 @@ class OrchestratorAgent(BaseAgent):
             artist_ratio=0.95
         )
         
-        # Final state update
-        state.current_step = "recommendations_ready"
-        
+        final_evaluation = state.metadata.get("final_quality_evaluation", {})
         logger.info(
             f"Final processing complete: {len(state.recommendations)} tracks delivered "
-            f"(cohesion: {final_evaluation['cohesion_score']:.2f}, "
-            f"overall: {final_evaluation['overall_score']:.2f})"
+            f"(cohesion: {final_evaluation.get('cohesion_score', 0):.2f}, "
+            f"overall: {final_evaluation.get('overall_score', 0):.2f})"
         )
-
+        
         return state
 
     async def enrich_tracks_with_spotify_data(self, state: AgentState) -> AgentState:
-        """Enrich recommendations with missing Spotify URIs and artist data.
-
-        Args:
-            state: Current workflow state
-
-        Returns:
-            Updated state with enriched recommendations
-        """
+        """Enrich recommendations with missing Spotify URIs and artist data."""
         if not state.recommendations:
             return state
 
         try:
             logger.info("Enriching tracks with missing Spotify data...")
 
-            # Get Spotify access token
-            access_token = state.metadata.get("spotify_access_token")
-            if not access_token:
-                logger.warning("No Spotify access token available for enrichment")
+            # Validate enrichment requirements
+            validation_result = self.validate_enrichment_requirements(state)
+            if not validation_result["can_proceed"]:
                 return state
+                
+            access_token = validation_result["access_token"]
+            tracks_needing_enrichment = validation_result["tracks_needing_enrichment"]
 
-            # Count tracks that need enrichment
-            tracks_needing_enrichment = sum(
-                1 for rec in state.recommendations
-                if not rec.spotify_uri or
-                   rec.spotify_uri == "null" or
-                   "Unknown Artist" in rec.artists
-            )
-
-            if tracks_needing_enrichment == 0:
-                logger.info("No tracks need enrichment - all have valid Spotify URIs")
-                return state
-
-            logger.info(
-                f"Found {tracks_needing_enrichment}/{len(state.recommendations)} tracks "
-                f"that need enrichment"
-            )
-
-            # Enrich recommendations
-            state.current_step = "enriching_tracks"
-            await self._notify_progress(state)
-
-            enriched_recommendations = await self.track_enrichment_service.enrich_recommendations(
-                recommendations=state.recommendations,
-                access_token=access_token
-            )
-
-            # Update state with enriched recommendations
-            original_count = len(state.recommendations)
-            state.recommendations = enriched_recommendations
-
-            logger.info(
-                f"Track enrichment complete: "
-                f"{original_count} -> {len(enriched_recommendations)} tracks "
-                f"({original_count - len(enriched_recommendations)} removed)"
-            )
-
-            # Store enrichment metadata
-            state.metadata["track_enrichment"] = {
-                "original_count": original_count,
-                "enriched_count": len(enriched_recommendations),
-                "removed_count": original_count - len(enriched_recommendations),
-                "tracks_needing_enrichment": tracks_needing_enrichment
-            }
+            # Process track enrichment
+            state = await self.process_track_enrichment(state, access_token, tracks_needing_enrichment)
 
         except Exception as e:
             logger.error(f"Error enriching tracks: {e}", exc_info=True)
             # Don't fail the workflow if enrichment fails
             state.metadata["track_enrichment_error"] = str(e)
 
+        return state
+
+    def validate_enrichment_requirements(self, state: AgentState) -> Dict[str, Any]:
+        """Validate if track enrichment can proceed."""
+        # Get Spotify access token
+        access_token = state.metadata.get("spotify_access_token")
+        if not access_token:
+            logger.warning("No Spotify access token available for enrichment")
+            return {"can_proceed": False, "access_token": None, "tracks_needing_enrichment": 0}
+
+        # Count tracks that need enrichment
+        tracks_needing_enrichment = sum(
+            1 for rec in state.recommendations
+            if not rec.spotify_uri or
+               rec.spotify_uri == "null" or
+               "Unknown Artist" in rec.artists
+        )
+
+        if tracks_needing_enrichment == 0:
+            logger.info("No tracks need enrichment - all have valid Spotify URIs")
+            return {"can_proceed": False, "access_token": access_token, "tracks_needing_enrichment": 0}
+
+        logger.info(
+            f"Found {tracks_needing_enrichment}/{len(state.recommendations)} tracks "
+            f"that need enrichment"
+        )
+        
+        return {
+            "can_proceed": True,
+            "access_token": access_token,
+            "tracks_needing_enrichment": tracks_needing_enrichment
+        }
+
+    async def process_track_enrichment(
+        self,
+        state: AgentState,
+        access_token: str,
+        tracks_needing_enrichment: int
+    ) -> AgentState:
+        """Process the actual track enrichment."""
+        # Enrich recommendations
+        state.current_step = "enriching_tracks"
+        await self._notify_progress(state)
+
+        enriched_recommendations = await self.track_enrichment_service.enrich_recommendations(
+            recommendations=state.recommendations,
+            access_token=access_token
+        )
+
+        # Update state with enriched recommendations
+        original_count = len(state.recommendations)
+        state.recommendations = enriched_recommendations
+
+        logger.info(
+            f"Track enrichment complete: "
+            f"{original_count} -> {len(enriched_recommendations)} tracks "
+            f"({original_count - len(enriched_recommendations)} removed)"
+        )
+
+        # Store enrichment metadata
+        state.metadata["track_enrichment"] = {
+            "original_count": original_count,
+            "enriched_count": len(enriched_recommendations),
+            "removed_count": original_count - len(enriched_recommendations),
+            "tracks_needing_enrichment": tracks_needing_enrichment
+        }
+        
         return state
