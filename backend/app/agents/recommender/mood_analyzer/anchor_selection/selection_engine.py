@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from .track_processor import TrackProcessor
 from .artist_processor import ArtistProcessor
 from .llm_services import LLMServices
-from .types import AnchorCandidate, AnchorSelectionStrategy
 
 logger = structlog.get_logger(__name__)
 
@@ -474,7 +473,7 @@ class AnchorSelectionEngine:
                 tracks = await self.spotify_service.search_spotify_tracks(
                     access_token=access_token,
                     query=f"genre:{genre}",
-                    limit=10
+                    limit=15
                 )
 
                 genre_candidates = await self._score_and_create_candidates(
