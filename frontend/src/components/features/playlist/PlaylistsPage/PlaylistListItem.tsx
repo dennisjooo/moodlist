@@ -3,7 +3,6 @@
 import { DeletePlaylistDialog } from '@/components/features/playlist/PlaylistCard/DeletePlaylistDialog';
 import { usePlaylistCardDelete } from '@/components/features/playlist/PlaylistCard/usePlaylistCardDelete';
 import { usePlaylistCardGradient } from '@/components/features/playlist/PlaylistCard/usePlaylistCardGradient';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { UserPlaylist } from '@/lib/api/playlist';
 import { cn } from '@/lib/utils';
@@ -86,69 +85,70 @@ export function PlaylistListItem({ playlist, onDelete, formatDate }: PlaylistLis
                     </div>
 
                     {/* Right side - Status & Actions */}
-                    <div className="flex shrink-0 flex-row items-end justify-between gap-3 border-t border-border/30 pt-3 sm:border-t-0 sm:pt-0 md:min-w-[140px] md:flex-col md:border-l md:border-t-0 md:pl-6 md:pt-0">
-                        <Badge
-                            variant={isCompleted ? "default" : "secondary"}
-                            className="shrink-0 capitalize text-[10px] font-semibold px-2 py-0.5 shadow-sm sm:text-xs sm:px-3 sm:py-1"
-                        >
-                            {playlist.status}
-                        </Badge>
+                    <div className="flex shrink-0 flex-row items-end justify-between gap-3 border-t border-border/30 pt-3 sm:border-t-0 sm:pt-0 md:min-w-[200px] md:flex-col md:border-l md:border-t-0 md:pl-6 md:pt-0">
 
-                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                            {playlist.session_id && isCompleted && (
-                                <Button asChild variant="default" size="sm" className="h-8 gap-1.5 text-xs font-semibold shadow-md hover:shadow-lg transition-shadow sm:h-9 sm:gap-2 sm:text-sm">
-                                    <Link
-                                        href={`/playlist/${playlist.session_id}`}
-                                        onClick={event => event.stopPropagation()}
+                        <div className="flex w-full flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                                {playlist.session_id && isCompleted && (
+                                    <Button asChild variant="default" size="sm" className="flex-1 h-9 gap-2 text-sm font-semibold shadow-md hover:shadow-lg transition-shadow">
+                                        <Link
+                                            href={`/playlist/${playlist.session_id}`}
+                                            onClick={event => event.stopPropagation()}
+                                        >
+                                            <Play className="h-4 w-4" />
+                                            <span>View</span>
+                                        </Link>
+                                    </Button>
+                                )}
+
+                                {playlist.session_id && !isCompleted && (
+                                    <Button asChild variant="outline" size="sm" className="flex-1 h-9 gap-2 text-sm font-semibold border-2">
+                                        <Link
+                                            href={`/create/${playlist.session_id}`}
+                                            onClick={event => event.stopPropagation()}
+                                        >
+                                            <Edit className="h-4 w-4" />
+                                            <span>Continue</span>
+                                        </Link>
+                                    </Button>
+                                )}
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2">
+                                {hasSpotifyUrl ? (
+                                    <Button
+                                        asChild
+                                        variant="outline"
+                                        size="sm"
+                                        className="flex-1 h-9 gap-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-all"
                                     >
-                                        <Play className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                        <span className="hidden xs:inline sm:inline">View</span>
-                                    </Link>
-                                </Button>
-                            )}
+                                        <a
+                                            href={playlist.spotify_url ?? '#'}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={event => event.stopPropagation()}
+                                            aria-label="Open in Spotify"
+                                        >
+                                            <ExternalLink className="h-4 w-4" />
+                                            <span>Spotify</span>
+                                        </a>
+                                    </Button>
+                                ) : (
+                                    <div className="flex-1" />
+                                )}
 
-                            {playlist.session_id && !isCompleted && (
-                                <Button asChild variant="outline" size="sm" className="h-8 gap-1.5 text-xs font-semibold border-2 sm:h-9 sm:gap-2 sm:text-sm">
-                                    <Link
-                                        href={`/create/${playlist.session_id}`}
-                                        onClick={event => event.stopPropagation()}
-                                    >
-                                        <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                        <span className="hidden xs:inline sm:inline">Continue</span>
-                                    </Link>
-                                </Button>
-                            )}
-
-                            {hasSpotifyUrl && (
                                 <Button
-                                    asChild
+                                    type="button"
                                     variant="ghost"
                                     size="sm"
-                                    className="h-8 w-8 p-0 text-muted-foreground hover:bg-accent hover:text-foreground transition-all sm:h-9 sm:w-9"
+                                    onClick={handleDeleteClick}
+                                    disabled={isDeleting}
+                                    className="h-9 w-9 p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
+                                    aria-label="Delete playlist"
                                 >
-                                    <a
-                                        href={playlist.spotify_url ?? '#'}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        onClick={event => event.stopPropagation()}
-                                        aria-label="Open in Spotify"
-                                    >
-                                        <ExternalLink className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                                    </a>
+                                    <Trash2 className="h-4 w-4" />
                                 </Button>
-                            )}
-
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleDeleteClick}
-                                disabled={isDeleting}
-                                className="h-8 w-8 p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all sm:h-9 sm:w-9"
-                                aria-label="Delete playlist"
-                            >
-                                <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                            </Button>
+                            </div>
                         </div>
                     </div>
                 </div>
