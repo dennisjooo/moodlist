@@ -118,7 +118,7 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overflow-x-hidden;
   }
 
   /* Screen reader only utility */
@@ -151,6 +151,7 @@
 
   /* Reduce motion for users who prefer it */
   @media (prefers-reduced-motion: reduce) {
+
     *,
     *::before,
     *::after {
@@ -166,12 +167,10 @@
   position: relative;
   overflow: hidden;
   background-color: var(--color-muted, oklch(0.97 0.001 106.424));
-  background-image: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.45) 50%,
-    transparent 100%
-  );
+  background-image: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.45) 50%,
+      transparent 100%);
   background-size: 200% 100%;
   background-position: -200% 0;
   animation: shimmer 1.8s ease-in-out infinite;
@@ -179,12 +178,10 @@
 
 .dark .animate-shimmer {
   background-color: var(--color-muted, oklch(0.268 0.007 34.298));
-  background-image: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.12) 50%,
-    transparent 100%
-  );
+  background-image: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.12) 50%,
+      transparent 100%);
 }
 
 @keyframes fadeIn {
@@ -213,6 +210,7 @@
   0% {
     background-position: -200% 0;
   }
+
   100% {
     background-position: 200% 0;
   }
@@ -222,6 +220,7 @@
   from {
     opacity: 1;
   }
+
   to {
     opacity: 0;
   }
