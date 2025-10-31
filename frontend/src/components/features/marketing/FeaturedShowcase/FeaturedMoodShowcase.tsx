@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from '@/components/ui/lazy-motion';
+import { FeatureBadge } from '@/components/ui/feature-badge';
 import {
   FEATURED_MOOD_FEATURES_ARRAYS,
   FEATURED_MOOD_SHOWCASES,
@@ -57,9 +58,9 @@ export default function FeaturedMoodShowcase() {
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.6, ease: 'easeOut' }}
         >
-          <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1 text-sm font-medium text-primary">
+          <FeatureBadge>
             Live mood walkthrough
-          </span>
+          </FeatureBadge>
           <h2 className="mt-6 text-3xl font-semibold sm:text-4xl">See how Moodlist builds a vibe</h2>
           <p className="mt-3 text-base text-muted-foreground">
             Peek at a real mood prompt, the AI interpretation, and the tracks it surfaces—then try your own twist.

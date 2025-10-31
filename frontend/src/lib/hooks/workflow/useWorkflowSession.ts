@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { logger } from '@/lib/utils/logger';
+import { workflowEvents } from './useActiveWorkflows';
 
 /**
  * Custom hook for managing workflow session loading and state
@@ -41,9 +42,9 @@ export function useWorkflowSession() {
 
     // If we already have this session loaded with status, mark as done
     if (workflowState.sessionId === sessionId && workflowState.status !== null) {
-      logger.debug('[useWorkflowSession] Session already loaded with status, skipping', { 
-        component: 'useWorkflowSession', 
-        sessionId 
+      logger.debug('[useWorkflowSession] Session already loaded with status, skipping', {
+        component: 'useWorkflowSession',
+        sessionId
       });
       setIsLoadingSession(false);
       return;
@@ -51,18 +52,18 @@ export function useWorkflowSession() {
 
     // If workflow is already loading, don't start another load
     if (workflowState.isLoading) {
-      logger.debug('[useWorkflowSession] Workflow already loading, waiting...', { 
-        component: 'useWorkflowSession', 
-        sessionId 
+      logger.debug('[useWorkflowSession] Workflow already loading, waiting...', {
+        component: 'useWorkflowSession',
+        sessionId
       });
       return;
     }
 
-    logger.info('[useWorkflowSession] Calling loadWorkflow', { 
-      component: 'useWorkflowSession', 
-      sessionId 
+    logger.info('[useWorkflowSession] Calling loadWorkflow', {
+      component: 'useWorkflowSession',
+      sessionId
     });
-    
+
     await loadWorkflow(sessionId);
   }, [sessionId, workflowState.sessionId, workflowState.status, workflowState.isLoading, router, loadWorkflow]);
 
@@ -83,6 +84,13 @@ export function useWorkflowSession() {
   // Redirect to playlist page if workflow is completed
   useEffect(() => {
     if (workflowState.status === 'completed' && workflowState.recommendations.length > 0 && workflowState.sessionId) {
+      // Clear the notification indicator before redirecting
+      logger.info('Removing completed workflow from active tracking before redirect', {
+        component: 'useWorkflowSession',
+        sessionId: workflowState.sessionId
+      });
+      workflowEvents.removed(workflowState.sessionId);
+
       router.push(`/playlist/${workflowState.sessionId}`);
     }
   }, [workflowState.status, workflowState.recommendations.length, workflowState.sessionId, router]);

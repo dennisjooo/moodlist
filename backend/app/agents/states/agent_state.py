@@ -35,6 +35,7 @@ class TrackRecommendation(BaseModel):
     
     # Anchor track protection metadata (Phase 1)
     user_mentioned: bool = Field(default=False, description="Whether track was explicitly mentioned by user")
+    user_mentioned_artist: bool = Field(default=False, description="Whether track is from a user-mentioned artist")
     anchor_type: Optional[str] = Field(None, description="Type of anchor: 'user' or 'genre'")
     protected: bool = Field(default=False, description="Whether track is protected from quality filtering")
     

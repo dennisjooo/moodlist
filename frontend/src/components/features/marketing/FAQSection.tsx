@@ -7,6 +7,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import { FeatureBadge } from '@/components/ui/feature-badge';
 import { useId } from 'react';
 import { FAQ_ITEMS } from '@/lib/constants/marketing';
 import { HelpCircle } from 'lucide-react';
@@ -24,10 +25,9 @@ export default function FAQSection() {
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.6, ease: 'easeOut' }}
         >
-          <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1 text-sm font-medium text-primary">
-            <HelpCircle className="h-3.5 w-3.5" />
+          <FeatureBadge icon={HelpCircle}>
             Quick answers
-          </span>
+          </FeatureBadge>
           <h2 className="mt-6 text-3xl font-semibold sm:text-4xl">
             Got questions?
           </h2>

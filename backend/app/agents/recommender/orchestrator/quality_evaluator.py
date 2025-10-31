@@ -195,10 +195,11 @@ class QualityEvaluator:
             mood_interpretation = state.mood_analysis.get("mood_interpretation", "N/A")
             artist_recommendations = state.mood_analysis.get("artist_recommendations", [])
             genre_keywords = state.mood_analysis.get("genre_keywords", [])
+            temporal_context = state.mood_analysis.get("temporal_context")
             target_features = state.metadata.get("target_features", {})
             playlist_target = state.metadata.get("playlist_target", {})
             target_count = playlist_target.get("target_count", 20)
-            
+
             prompt = get_quality_evaluation_prompt(
                 mood_prompt=state.mood_prompt,
                 mood_interpretation=mood_interpretation,
@@ -208,7 +209,8 @@ class QualityEvaluator:
                 tracks_summary=chr(10).join(tracks_summary),
                 target_count=target_count,
                 evaluation=evaluation,
-                user_mentioned_tracks=user_mentioned_tracks
+                user_mentioned_tracks=user_mentioned_tracks,
+                temporal_context=temporal_context
             )
 
             response = await self.llm.ainvoke([{"role": "user", "content": prompt}])

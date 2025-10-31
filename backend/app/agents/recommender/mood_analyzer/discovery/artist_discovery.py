@@ -7,6 +7,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 
 from ...utils.llm_response_parser import LLMResponseParser
 from ...utils.config import config
+from ...utils.artist_utils import ArtistDeduplicator
 from ..prompts import (
     get_artist_filtering_prompt,
     get_batch_artist_validation_prompt,
@@ -90,14 +91,8 @@ class ArtistDiscovery:
                 logger.warning("No artists found during discovery")
                 return
 
-            # Remove duplicates
-            seen_ids = set()
-            unique_artists = []
-            for artist in all_artists:
-                artist_id = artist.get("id")
-                if artist_id and artist_id not in seen_ids:
-                    seen_ids.add(artist_id)
-                    unique_artists.append(artist)
+            # Remove duplicates using shared utility
+            unique_artists = ArtistDeduplicator.deduplicate(all_artists)
 
             logger.info(f"Found {len(unique_artists)} unique artists from search")
 

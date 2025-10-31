@@ -4,7 +4,7 @@ Phase 2: New strategy that prioritizes tracks/artists explicitly mentioned by th
 """
 
 import structlog
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from ....states.agent_state import AgentState
 from .base_strategy import RecommendationStrategy
@@ -35,6 +35,59 @@ class UserAnchorStrategy(RecommendationStrategy):
         self.spotify_service = spotify_service
         self.reccobeat_service = reccobeat_service
 
+    def _check_temporal_match(
+        self,
+        track: Dict[str, Any],
+        temporal_context: Optional[Dict[str, Any]]
+    ) -> tuple[bool, Optional[str]]:
+        """Check if a track matches the temporal context requirements.
+
+        Args:
+            track: Track dictionary from Spotify (should have album.release_date)
+            temporal_context: Temporal context from mood analysis
+
+        Returns:
+            Tuple of (is_match, reason) - (True, None) if matches or no constraint,
+            (False, reason) if violates temporal requirement
+        """
+        # If no temporal context or not temporal, allow all tracks
+        if not temporal_context or not temporal_context.get('is_temporal'):
+            return (True, None)
+
+        # Extract year range
+        year_range = temporal_context.get('year_range')
+        if not year_range or len(year_range) != 2:
+            return (True, None)
+
+        min_year, max_year = year_range
+
+        # Get release date from track
+        album = track.get('album', {})
+        release_date = album.get('release_date', '')
+
+        if not release_date:
+            # No release date - allow it (might be incomplete data)
+            logger.debug(f"Track '{track.get('name')}' has no release_date, allowing")
+            return (True, None)
+
+        # Parse year from release_date (formats: YYYY, YYYY-MM-DD, YYYY-MM)
+        try:
+            release_year = int(release_date.split('-')[0])
+        except (ValueError, IndexError):
+            logger.debug(f"Could not parse release_date '{release_date}', allowing")
+            return (True, None)
+
+        # Check if within range
+        if min_year <= release_year <= max_year:
+            return (True, None)
+        else:
+            decade = temporal_context.get('decade', f'{min_year}-{max_year}')
+            reason = (
+                f"Released in {release_year}, outside {decade} requirement "
+                f"({min_year}-{max_year})"
+            )
+            return (False, reason)
+
     async def generate_recommendations(
         self,
         state: AgentState,
@@ -50,12 +103,15 @@ class UserAnchorStrategy(RecommendationStrategy):
             List of recommendation dictionaries with high confidence scores
         """
         recommendations = []
-        
+
         # Get user-mentioned tracks from metadata (set by SeedGathererAgent)
         user_mentioned_track_ids = state.metadata.get("user_mentioned_track_ids", [])
         user_mentioned_tracks_full = state.metadata.get("user_mentioned_tracks_full", [])
         intent_analysis = state.metadata.get("intent_analysis", {})
         user_mentioned_artists = intent_analysis.get("user_mentioned_artists", [])
+
+        # CRITICAL: Get temporal context for filtering
+        temporal_context = state.mood_analysis.get('temporal_context') if state.mood_analysis else None
 
         if not user_mentioned_track_ids and not user_mentioned_artists:
             logger.info("No user-mentioned tracks or artists, user anchor strategy skipped")
@@ -74,49 +130,16 @@ class UserAnchorStrategy(RecommendationStrategy):
 
         # PART 0: ALWAYS include the actual user-mentioned tracks themselves!
         if user_mentioned_tracks_full:
-            for track in user_mentioned_tracks_full:
-                track_id = track.get("id")
-                track_name = track.get("name", "Unknown")
-                artist_name = track.get("artist", "Unknown Artist")
-                
-                # Build Spotify URI if missing
-                spotify_uri = track.get("uri")
-                if not spotify_uri and track_id:
-                    spotify_uri = f"spotify:track:{track_id}"
-                
-                # Try to get audio features if available
-                audio_features = track.get("audio_features", {})
-                
-                # Build the recommendation with all required fields
-                user_track_rec = {
-                    "track_id": track_id,
-                    "track_name": track_name,
-                    "artists": [artist_name],
-                    "spotify_uri": spotify_uri,
-                    "confidence": 1.0,  # Maximum confidence - user explicitly requested this
-                    "confidence_score": 1.0,  # Also set confidence_score for compatibility
-                    "audio_features": audio_features,
-                    "source": "anchor_track",  # CRITICAL: Must be anchor_track so it's recognized by the processor
-                    "reasoning": f"User explicitly mentioned this track: '{track_name}' by {artist_name}",
-                    "user_mentioned": True,
-                    "protected": True,
-                    "anchor_type": "user"
-                }
-                
-                recommendations.append(user_track_rec)
-                logger.info(
-                    f"✓ Added user-mentioned track: '{track_name}' by {artist_name} "
-                    f"(ID: {track_id}, URI: {spotify_uri}, source: anchor_track)"
-                )
-            logger.info(f"✓ Total {len(user_mentioned_tracks_full)} user-mentioned tracks added with full metadata")
+            user_track_recs = self._add_user_mentioned_tracks(user_mentioned_tracks_full, temporal_context)
+            recommendations.extend(user_track_recs)
 
         # PART 1: Get artists from user-mentioned tracks and fetch their top tracks
         if user_mentioned_track_ids:
-            # Get full track info to extract artists
             track_based_recs = await self._get_tracks_from_same_artists(
                 user_mentioned_tracks_full,
                 access_token,
-                target_count // 2 if user_mentioned_artists else target_count
+                target_count // 2 if user_mentioned_artists else target_count,
+                temporal_context
             )
             recommendations.extend(track_based_recs)
             logger.info(f"Got {len(track_based_recs)} tracks from user-mentioned track artists")
@@ -126,7 +149,8 @@ class UserAnchorStrategy(RecommendationStrategy):
             artist_based_recs = await self._get_top_tracks_from_artists(
                 user_mentioned_artists,
                 access_token,
-                target_count // 2 if user_mentioned_track_ids else target_count
+                target_count // 2 if user_mentioned_track_ids else target_count,
+                temporal_context
             )
             recommendations.extend(artist_based_recs)
             
@@ -143,27 +167,100 @@ class UserAnchorStrategy(RecommendationStrategy):
                 )
 
         # Mark all recommendations with high confidence
-        # CRITICAL: Use "artist_discovery" as source so they're recognized by the processor
-        for rec in recommendations:
-            # If this is the actual user-mentioned track, it already has source="anchor_track"
-            # Otherwise, set to artist_discovery so it's properly categorized
-            if not rec.get("user_mentioned"):
-                rec["source"] = "artist_discovery"
-                rec["confidence_boost"] = 0.3  # Boost confidence for user mentions
-                rec["user_mentioned_related"] = True
-                # Set base confidence high since these are directly related to user intent
-                if "confidence" not in rec:
-                    rec["confidence"] = 0.85
+        self._mark_recommendations_with_confidence(recommendations)
 
         logger.info(f"User anchor strategy generated {len(recommendations)} recommendations")
 
         return recommendations[:target_count]
 
+    def _add_user_mentioned_tracks(
+        self,
+        user_mentioned_tracks_full: List[Dict[str, Any]],
+        temporal_context: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """Add the actual user-mentioned tracks to recommendations.
+
+        IMPORTANT: These are EXPLICIT user track mentions - we do NOT filter them by temporal context.
+        If the user explicitly asks for a track, they get it regardless of era/decade constraints.
+
+        Args:
+            user_mentioned_tracks_full: List of full track dictionaries
+            temporal_context: Temporal context (unused for explicit mentions)
+
+        Returns:
+            List of recommendation dictionaries for user-mentioned tracks
+        """
+        recommendations = []
+
+        for track in user_mentioned_tracks_full:
+            track_id = track.get("id")
+            track_name = track.get("name", "Unknown")
+            artist_name = track.get("artist", "Unknown Artist")
+
+            # Build Spotify URI if missing
+            spotify_uri = track.get("uri")
+            if not spotify_uri and track_id:
+                spotify_uri = f"spotify:track:{track_id}"
+
+            # Try to get audio features if available
+            audio_features = track.get("audio_features", {})
+
+            # Build the recommendation with all required fields
+            user_track_rec = {
+                "track_id": track_id,
+                "track_name": track_name,
+                "artists": [artist_name],
+                "spotify_uri": spotify_uri,
+                "confidence": 1.0,  # Maximum confidence - user explicitly requested this
+                "confidence_score": 1.0,  # Also set confidence_score for compatibility
+                "audio_features": audio_features,
+                "source": "anchor_track",  # CRITICAL: Must be anchor_track so it's recognized by the processor
+                "reasoning": f"User explicitly mentioned this track: '{track_name}' by {artist_name}",
+                "user_mentioned": True,
+                "protected": True,
+                "anchor_type": "user"
+            }
+
+            recommendations.append(user_track_rec)
+            logger.info(
+                f"✓ Added user-mentioned track: '{track_name}' by {artist_name} "
+                f"(ID: {track_id}, URI: {spotify_uri}, source: anchor_track, PROTECTED from temporal filtering)"
+            )
+
+        logger.info(f"✓ Total {len(recommendations)} user-mentioned tracks added (no temporal filtering for explicit mentions)")
+        return recommendations
+
+    def _mark_recommendations_with_confidence(
+        self,
+        recommendations: List[Dict[str, Any]]
+    ) -> None:
+        """Mark all recommendations with high confidence and protection flags.
+
+        Args:
+            recommendations: List of recommendation dictionaries to modify in-place
+        """
+        # CRITICAL: Use "anchor_track" as source for user-mentioned artist tracks so they're protected
+        for rec in recommendations:
+            # If this is the actual user-mentioned track, it already has source="anchor_track"
+            # For tracks from user-mentioned artists, also mark as anchor_track but with user_mentioned_artist flag
+            if not rec.get("user_mentioned"):
+                rec["source"] = "anchor_track"  # CHANGED: Use anchor_track for protection
+                rec["user_mentioned_artist"] = True  # Flag that this is from a user-mentioned artist
+                rec["protected"] = True  # Protect from filtering
+                rec["confidence_boost"] = 0.3  # Boost confidence for user mentions
+                rec["user_mentioned_related"] = True
+                # Set base confidence high since these are directly related to user intent
+                if "confidence" not in rec:
+                    rec["confidence"] = 0.95  # Higher confidence than generic artist discovery
+                if "confidence_score" not in rec:
+                    rec["confidence_score"] = 0.95  # FIXED: Also set confidence_score for proper sorting
+
     async def _get_tracks_from_same_artists(
         self,
         user_mentioned_tracks: List[Dict[str, Any]],
         access_token: str,
-        limit: int
+        limit: int,
+        temporal_context: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """Get top tracks from artists of user-mentioned tracks.
 
@@ -171,60 +268,33 @@ class UserAnchorStrategy(RecommendationStrategy):
             user_mentioned_tracks: List of user-mentioned track dictionaries with artist info
             access_token: Spotify access token
             limit: Maximum number of tracks
+            temporal_context: Temporal context for filtering
 
         Returns:
             List of recommendation dictionaries
         """
         try:
-            recommendations = []
-            artist_ids_seen = set()
-            
-            # Extract unique artist IDs from user-mentioned tracks
-            for track in user_mentioned_tracks:
-                artist_id = track.get("artist_id")
-                if artist_id and artist_id not in artist_ids_seen:
-                    artist_ids_seen.add(artist_id)
-            
+            # Extract unique artist IDs
+            artist_ids_seen = self._extract_unique_artist_ids(user_mentioned_tracks)
+
             if not artist_ids_seen:
                 return []
-            
+
             # Get MORE tracks from user-mentioned artists (5-7 per artist instead of 2-3)
             tracks_per_artist = max(5, min(7, limit // len(artist_ids_seen)))
-            
+
             logger.info(
                 f"Getting {tracks_per_artist} tracks from each of {len(artist_ids_seen)} "
                 f"user-mentioned track artists (limit: {limit})"
             )
-            
+
             # Get top tracks for each artist
-            for artist_id in artist_ids_seen:
-                try:
-                    top_tracks = await self.spotify_service.get_artist_top_tracks(
-                        artist_id=artist_id,
-                        access_token=access_token
-                    )
-                    
-                    for track in top_tracks[:tracks_per_artist]:
-                        if track.get("id"):
-                            # Build proper artist list
-                            artists = [a.get("name", "") for a in track.get("artists", [])]
-                            
-                            recommendations.append({
-                                "track_id": track["id"],
-                                "track_name": track.get("name", ""),
-                                "artists": artists,  # Use artists list, not artist_name
-                                "spotify_uri": track.get("uri"),
-                                "popularity": track.get("popularity", 50),
-                                "audio_features": {},
-                                "confidence": 0.85  # High confidence - same artist as user mentioned
-                            })
-                            
-                            logger.debug(
-                                f"Added track from user-mentioned artist: '{track.get('name')}' by {', '.join(artists)}"
-                            )
-                except Exception as e:
-                    logger.error(f"Error getting tracks for artist {artist_id}: {e}")
-                    continue
+            recommendations = await self._fetch_tracks_for_artists(
+                artist_ids_seen,
+                access_token,
+                tracks_per_artist,
+                temporal_context
+            )
 
             return recommendations[:limit]
 
@@ -232,11 +302,102 @@ class UserAnchorStrategy(RecommendationStrategy):
             logger.error(f"Error getting tracks from same artists: {e}", exc_info=True)
             return []
 
+    def _extract_unique_artist_ids(
+        self,
+        user_mentioned_tracks: List[Dict[str, Any]]
+    ) -> set:
+        """Extract unique artist IDs from user-mentioned tracks.
+
+        Args:
+            user_mentioned_tracks: List of track dictionaries
+
+        Returns:
+            Set of unique artist IDs
+        """
+        artist_ids_seen = set()
+        
+        for track in user_mentioned_tracks:
+            artist_id = track.get("artist_id")
+            if artist_id and artist_id not in artist_ids_seen:
+                artist_ids_seen.add(artist_id)
+        
+        return artist_ids_seen
+
+    async def _fetch_tracks_for_artists(
+        self,
+        artist_ids: set,
+        access_token: str,
+        tracks_per_artist: int,
+        temporal_context: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """Fetch top tracks for a set of artist IDs.
+
+        Args:
+            artist_ids: Set of artist IDs
+            access_token: Spotify access token
+            tracks_per_artist: Number of tracks to fetch per artist
+            temporal_context: Temporal context for filtering
+
+        Returns:
+            List of recommendation dictionaries
+        """
+        recommendations = []
+
+        for artist_id in artist_ids:
+            try:
+                top_tracks = await self.spotify_service.get_artist_top_tracks(
+                    artist_id=artist_id,
+                    access_token=access_token
+                )
+
+                for track in top_tracks[:tracks_per_artist]:
+                    if not track.get("id"):
+                        continue
+
+                    # CRITICAL: Apply temporal filtering BEFORE marking as protected
+                    is_temporal_match, temporal_reason = self._check_temporal_match(track, temporal_context)
+                    if not is_temporal_match:
+                        artists = [a.get("name", "") for a in track.get("artists", [])]
+                        logger.info(
+                            f"✗ Filtered user-mentioned artist track '{track.get('name')}' "
+                            f"by {', '.join(artists)}: {temporal_reason}"
+                        )
+                        continue
+
+                    # Build proper artist list
+                    artists = [a.get("name", "") for a in track.get("artists", [])]
+
+                    recommendations.append({
+                        "track_id": track["id"],
+                        "track_name": track.get("name", ""),
+                        "artists": artists,  # Use artists list, not artist_name
+                        "spotify_uri": track.get("uri"),
+                        "popularity": track.get("popularity", 50),
+                        "audio_features": {},
+                        "confidence": 0.85,  # High confidence - same artist as user mentioned
+                        "confidence_score": 0.85,  # FIXED: Also set confidence_score for proper sorting
+                        "source": "anchor_track",  # CRITICAL: Mark as anchor track
+                        "user_mentioned": False,  # This is not a user-mentioned track itself
+                        "user_mentioned_artist": True,  # CRITICAL: This is from a user-mentioned ARTIST
+                        "protected": True,  # CRITICAL: Protect from filtering
+                        "anchor_type": "user"  # Mark as user anchor
+                    })
+
+                    logger.debug(
+                        f"Added track from user-mentioned artist: '{track.get('name')}' by {', '.join(artists)}"
+                    )
+            except Exception as e:
+                logger.error(f"Error getting tracks for artist {artist_id}: {e}")
+                continue
+
+        return recommendations
+
     async def _get_top_tracks_from_artists(
         self,
         artist_names: List[str],
         access_token: str,
-        limit: int
+        limit: int,
+        temporal_context: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """Get top tracks from user-mentioned artists.
 
@@ -244,58 +405,25 @@ class UserAnchorStrategy(RecommendationStrategy):
             artist_names: List of artist names mentioned by user
             access_token: Spotify access token
             limit: Maximum number of tracks to return
+            temporal_context: Temporal context for filtering
 
         Returns:
             List of recommendation dictionaries
         """
         recommendations = []
-        
+
         try:
             tracks_per_artist = max(2, limit // len(artist_names)) if artist_names else limit
 
             for artist_name in artist_names:
                 try:
-                    # Search for the artist
-                    artist_results = await self.spotify_service.search_spotify_artists(
-                        access_token=access_token,
-                        query=artist_name,
-                        limit=1
+                    artist_recs = await self._get_tracks_for_single_artist(
+                        artist_name,
+                        access_token,
+                        tracks_per_artist,
+                        temporal_context
                     )
-
-                    if artist_results and len(artist_results) > 0:
-                        artist = artist_results[0]
-                        artist_id = artist.get("id")
-
-                        if artist_id:
-                            # Get artist's top tracks
-                            top_tracks = await self.spotify_service.get_artist_top_tracks(
-                                artist_id=artist_id,
-                                access_token=access_token
-                            )
-
-                            # Add top tracks (limited per artist)
-                            track_count = 0
-                            for track in top_tracks[:tracks_per_artist]:
-                                if track.get("id"):
-                                    # Extract all artists for consistency with other recommendation formats
-                                    artists = [a.get("name", "") for a in track.get("artists", [])]
-                                    
-                                    recommendations.append({
-                                        "track_id": track["id"],
-                                        "track_name": track.get("name", ""),
-                                        "artists": artists,  # Use artists list for consistency
-                                        "spotify_uri": track.get("uri"),
-                                        "popularity": track.get("popularity", 50),
-                                        "audio_features": {},
-                                        "confidence": 0.85  # Very high confidence for top tracks from mentioned artists
-                                    })
-                                    track_count += 1
-
-                            logger.info(f"✓ Got {track_count} top tracks from user-mentioned artist: {artist_name}")
-                        else:
-                            logger.warning(f"Found artist '{artist_name}' in search but no artist ID available")
-                    else:
-                        logger.warning(f"Could not find artist '{artist_name}' on Spotify (search returned empty)")
+                    recommendations.extend(artist_recs)
 
                 except Exception as e:
                     logger.error(f"Error getting top tracks for user-mentioned artist '{artist_name}': {e}", exc_info=True)
@@ -306,3 +434,135 @@ class UserAnchorStrategy(RecommendationStrategy):
 
         return recommendations[:limit]
 
+    async def _get_tracks_for_single_artist(
+        self,
+        artist_name: str,
+        access_token: str,
+        tracks_per_artist: int,
+        temporal_context: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """Get top tracks for a single artist by name.
+
+        Args:
+            artist_name: Name of the artist
+            access_token: Spotify access token
+            tracks_per_artist: Number of tracks to fetch
+            temporal_context: Temporal context for filtering
+
+        Returns:
+            List of recommendation dictionaries
+        """
+        recommendations = []
+
+        # Search for the artist (get 3 results to find best match)
+        artist_results = await self.spotify_service.search_spotify_artists(
+            access_token=access_token,
+            query=artist_name,
+            limit=3
+        )
+
+        if not artist_results or len(artist_results) == 0:
+            logger.warning(f"Could not find artist '{artist_name}' on Spotify (search returned empty)")
+            return []
+
+        # Find the best matching artist
+        artist = self._find_best_matching_artist(artist_results, artist_name)
+        artist_id = artist.get("id")
+        if not artist_id:
+            logger.warning(f"Found artist '{artist_name}' in search but no artist ID available")
+            return []
+
+        # Get artist's top tracks
+        top_tracks = await self.spotify_service.get_artist_top_tracks(
+            artist_id=artist_id,
+            access_token=access_token
+        )
+
+        # Add top tracks (limited per artist)
+        track_count = 0
+        filtered_count = 0
+        for track in top_tracks[:tracks_per_artist]:
+            if not track.get("id"):
+                continue
+
+            # CRITICAL: Apply temporal filtering BEFORE marking as protected
+            is_temporal_match, temporal_reason = self._check_temporal_match(track, temporal_context)
+            if not is_temporal_match:
+                artists = [a.get("name", "") for a in track.get("artists", [])]
+                logger.info(
+                    f"✗ Filtered user-mentioned artist track '{track.get('name')}' "
+                    f"by {', '.join(artists)}: {temporal_reason}"
+                )
+                filtered_count += 1
+                continue
+
+            # Extract all artists for consistency with other recommendation formats
+            artists = [a.get("name", "") for a in track.get("artists", [])]
+
+            recommendations.append({
+                "track_id": track["id"],
+                "track_name": track.get("name", ""),
+                "artists": artists,  # Use artists list for consistency
+                "spotify_uri": track.get("uri"),
+                "popularity": track.get("popularity", 50),
+                "audio_features": {},
+                "confidence": 0.85,  # Very high confidence for top tracks from mentioned artists
+                "confidence_score": 0.85,  # FIXED: Also set confidence_score for proper sorting
+                "source": "anchor_track",  # CRITICAL: Mark as anchor track
+                "user_mentioned": False,  # This is not a user-mentioned track itself
+                "user_mentioned_artist": True,  # CRITICAL: This is from a user-mentioned ARTIST
+                "protected": True,  # CRITICAL: Protect from filtering
+                "anchor_type": "user"  # Mark as user anchor
+            })
+            track_count += 1
+
+        logger.info(
+            f"✓ Got {track_count} top tracks from user-mentioned artist: {artist_name} "
+            f"(filtered {filtered_count}, marked as source='anchor_track', protected=True)"
+        )
+
+        return recommendations
+
+    def _find_best_matching_artist(
+        self,
+        artist_results: List[Dict[str, Any]],
+        search_name: str
+    ) -> Dict[str, Any]:
+        """Find the best matching artist from search results.
+
+        Args:
+            artist_results: List of artist dictionaries from Spotify search
+            search_name: Original artist name searched for
+
+        Returns:
+            Best matching artist dictionary
+        """
+        # Find the first artist whose name actually matches what we searched for
+        matched_artist = None
+        for artist_candidate in artist_results:
+            candidate_name = artist_candidate.get("name", "").lower()
+            search_name_lower = search_name.lower()
+            
+            # Check if names match (exact or very close)
+            if candidate_name == search_name_lower or search_name_lower in candidate_name or candidate_name in search_name_lower:
+                matched_artist = artist_candidate
+                break
+        
+        # If no match found, fall back to first result
+        artist = matched_artist if matched_artist else artist_results[0]
+        artist_name_from_spotify = artist.get("name", "Unknown")
+        artist_id = artist.get("id")
+        
+        # Log what Spotify actually returned
+        if matched_artist:
+            logger.info(
+                f"✓ Spotify search for '{search_name}' matched: "
+                f"'{artist_name_from_spotify}' (ID: {artist_id})"
+            )
+        else:
+            logger.warning(
+                f"Spotify search for '{search_name}' returned unmatched: "
+                f"'{artist_name_from_spotify}' (ID: {artist_id}) - using anyway"
+            )
+        
+        return artist

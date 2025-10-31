@@ -280,6 +280,7 @@ class TrackEnrichmentService:
             reasoning=f"{original_rec.reasoning} (enriched from Spotify)",
             source=original_rec.source,
             user_mentioned=original_rec.user_mentioned,
+            user_mentioned_artist=original_rec.user_mentioned_artist,
             anchor_type=original_rec.anchor_type,
             protected=original_rec.protected
         )
