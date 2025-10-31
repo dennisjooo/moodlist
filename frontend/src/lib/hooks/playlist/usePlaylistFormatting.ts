@@ -34,7 +34,20 @@ export function usePlaylistFormatting() {
         };
     }, []);
 
+    // Format date string to localized format
+    const formatDate = useMemo(() => {
+        return (dateString: string) => {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        };
+    }, []);
+
     return {
         generateModernGradient,
+        formatDate,
     };
 }
