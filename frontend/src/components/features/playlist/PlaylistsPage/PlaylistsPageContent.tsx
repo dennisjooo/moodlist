@@ -1,13 +1,12 @@
 "use client";
 
 import Navigation from '@/components/Navigation';
-import { PlaylistGridSkeleton } from '@/components/shared/LoadingStates';
+import { PlaylistGridSkeleton, PlaylistListSkeleton } from '@/components/shared/LoadingStates';
 import { CrossfadeTransition } from '@/components/ui/crossfade-transition';
 import { DotPattern } from '@/components/ui/dot-pattern';
-import { usePlaylists } from '@/lib/hooks/playlist';
-import { useInfiniteScroll } from '@/lib/hooks';
+import { usePlaylists, usePlaylistFormatting } from '@/lib/hooks/playlist';
+import { useInfiniteScroll, useDebouncedSearch, useViewMode } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
-import { useEffect, useState } from 'react';
 import { EmptyState } from './EmptyState';
 import { ErrorState } from './ErrorState';
 import { LoadMoreIndicator } from './LoadMoreIndicator';
@@ -32,35 +31,14 @@ export function PlaylistsPageContent() {
         setSort,
     } = usePlaylists();
 
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-    const [searchValue, setSearchValue] = useState(filters.search);
+    // Custom hooks for UI state management
+    const [viewMode, setViewMode] = useViewMode('playlistViewMode', 'grid');
+    const [searchValue, setSearchValue] = useDebouncedSearch(filters.search, setSearchQuery, 300);
+    const { formatDate } = usePlaylistFormatting();
 
     const loadMoreRef = useInfiniteScroll(loadMore, {
         threshold: 500,
     });
-
-    useEffect(() => {
-        setSearchValue(filters.search);
-    }, [filters.search]);
-
-    useEffect(() => {
-        const timeout = window.setTimeout(() => {
-            setSearchQuery(searchValue);
-        }, 300);
-
-        return () => {
-            window.clearTimeout(timeout);
-        };
-    }, [searchValue, setSearchQuery]);
-
-    const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
-    };
 
     return (
         <div className="min-h-screen bg-background relative">
@@ -93,7 +71,7 @@ export function PlaylistsPageContent() {
 
                 <CrossfadeTransition
                     isLoading={isLoading}
-                    skeleton={<PlaylistGridSkeleton />}
+                    skeleton={viewMode === 'list' ? <PlaylistListSkeleton /> : <PlaylistGridSkeleton />}
                 >
                     <div className="space-y-12">
                         {isUnauthorized ? (
