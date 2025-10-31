@@ -159,7 +159,7 @@ class GetTrackAudioFeaturesTool(RateLimitedTool):
             ToolResult with audio features or error
         """
         try:
-            logger.info(f"Getting audio features for track {track_id}")
+            logger.debug(f"Getting audio features for track {track_id}")
 
             # Make API request with caching (60 minutes TTL for audio features)
             response_data = await self._make_request(
@@ -198,7 +198,7 @@ class GetTrackAudioFeaturesTool(RateLimitedTool):
                 "valence": response_data.get("valence")
             }
 
-            logger.info(f"Successfully retrieved audio features for track {track_id}")
+            logger.debug(f"Successfully retrieved audio features for track {track_id}")
 
             return ToolResult.success_result(
                 data=audio_features,
