@@ -163,6 +163,59 @@ class TrackProcessor:
         # Apply penalty (likely a cultural mismatch)
         return True
 
+    def check_temporal_match(
+        self,
+        track: Dict[str, Any],
+        temporal_context: Optional[Dict[str, Any]]
+    ) -> tuple[bool, Optional[str]]:
+        """Check if a track matches the temporal context requirements.
+
+        Args:
+            track: Track dictionary from Spotify (should have album.release_date)
+            temporal_context: Temporal context from mood analysis
+
+        Returns:
+            Tuple of (is_match, reason) - (True, None) if matches or no constraint,
+            (False, reason) if violates temporal requirement
+        """
+        # If no temporal context or not temporal, allow all tracks
+        if not temporal_context or not temporal_context.get('is_temporal'):
+            return (True, None)
+
+        # Extract year range
+        year_range = temporal_context.get('year_range')
+        if not year_range or len(year_range) != 2:
+            return (True, None)
+
+        min_year, max_year = year_range
+
+        # Get release date from track
+        album = track.get('album', {})
+        release_date = album.get('release_date', '')
+
+        if not release_date:
+            # No release date - allow it (might be incomplete data)
+            logger.debug(f"Track '{track.get('name')}' has no release_date, allowing")
+            return (True, None)
+
+        # Parse year from release_date (formats: YYYY, YYYY-MM-DD, YYYY-MM)
+        try:
+            release_year = int(release_date.split('-')[0])
+        except (ValueError, IndexError):
+            logger.debug(f"Could not parse release_date '{release_date}', allowing")
+            return (True, None)
+
+        # Check if within range
+        if min_year <= release_year <= max_year:
+            return (True, None)
+        else:
+            decade = temporal_context.get('decade', f'{min_year}-{max_year}')
+            reason = (
+                f"Released in {release_year}, outside {decade} requirement "
+                f"({min_year}-{max_year})"
+            )
+            return (False, reason)
+
     def create_candidate_from_track(
         self,
         track: Dict[str, Any],
@@ -171,8 +224,9 @@ class TrackProcessor:
         mood_prompt: str,
         genre_keywords: List[str],
         features: Optional[Dict[str, Any]] = None,
-        source: str = "genre_search"
-    ) -> Dict[str, Any]:
+        source: str = "genre_search",
+        temporal_context: Optional[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
         """Create an anchor candidate from a track with scoring.
 
         Args:
@@ -183,12 +237,22 @@ class TrackProcessor:
             genre_keywords: All genre keywords
             features: Pre-fetched audio features
             source: Source of the track
+            temporal_context: Temporal context from mood analysis (optional)
 
         Returns:
-            Anchor candidate dictionary
+            Anchor candidate dictionary, or None if track should be filtered
         """
         track_id = track.get('id')
         if not track_id:
+            return None
+
+        # CRITICAL: Check temporal match first - filter out before any processing
+        is_temporal_match, temporal_reason = self.check_temporal_match(track, temporal_context)
+        if not is_temporal_match:
+            artist_names = [a.get('name', '') for a in track.get('artists', [])]
+            logger.info(
+                f"✗ Filtered '{track.get('name')}' by {', '.join(artist_names)}: {temporal_reason}"
+            )
             return None
 
         # Get features if not provided
