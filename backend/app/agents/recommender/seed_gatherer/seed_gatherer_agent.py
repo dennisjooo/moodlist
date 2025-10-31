@@ -14,6 +14,7 @@ import structlog
 from ...core.base_agent import BaseAgent
 from ...states.agent_state import AgentState, RecommendationStatus
 from ...tools.spotify_service import SpotifyService
+from ..utils.artist_utils import ArtistDeduplicator
 from ..mood_analyzer.anchor_selection import AnchorTrackSelector
 from ..mood_analyzer.discovery import ArtistDiscovery
 from .seed_selector import SeedSelector
@@ -298,50 +299,45 @@ class SeedGathererAgent(BaseAgent):
             
             # Discover artists using mood analysis
             await self.artist_discovery.discover_mood_artists(state, mood_analysis)
-            
-            # Add artists from user-mentioned tracks
-            user_mentioned_tracks = state.metadata.get("user_mentioned_tracks_full", [])
-            if user_mentioned_tracks:
-                discovered_artists = state.metadata.get("discovered_artists", [])
-                existing_ids = {a["id"] for a in discovered_artists}
-                
-                for track in user_mentioned_tracks:
-                    artist_id = track.get("artist_id")
-                    artist_name = track.get("artist")
-                    if artist_id and artist_id not in existing_ids:
-                        discovered_artists.append({
-                            "id": artist_id,
-                            "name": artist_name,
-                            "popularity": track.get("popularity", 50),
-                            "source": "user_mentioned"
-                        })
-                        existing_ids.add(artist_id)
-                
-                state.metadata["discovered_artists"] = discovered_artists
-                logger.info(f"Added {len(user_mentioned_tracks)} artists from user mentions")
-            
-            # Add artists from anchor tracks
-            anchor_tracks = state.metadata.get("anchor_tracks", [])
-            if anchor_tracks:
-                discovered_artists = state.metadata.get("discovered_artists", [])
-                existing_ids = {a["id"] for a in discovered_artists}
-                
-                for track in anchor_tracks:
-                    artist_id = track.get("artist_id")
-                    artist_name = track.get("artist")
-                    if artist_id and artist_id not in existing_ids:
-                        discovered_artists.append({
-                            "id": artist_id,
-                            "name": artist_name,
-                            "popularity": track.get("popularity", 50),
-                            "source": "anchor_track"
-                        })
-                        existing_ids.add(artist_id)
-                
-                state.metadata["discovered_artists"] = discovered_artists
-                logger.info(f"Added artists from anchor tracks")
 
+            # Build artist lists from user-mentioned and anchor tracks
+            user_mentioned_tracks = state.metadata.get("user_mentioned_tracks_full", [])
+            user_mentioned_artists = [
+                {
+                    "id": track.get("artist_id"),
+                    "name": track.get("artist"),
+                    "popularity": track.get("popularity", 50),
+                    "source": "user_mentioned"
+                }
+                for track in user_mentioned_tracks
+                if track.get("artist_id")
+            ]
+
+            anchor_tracks = state.metadata.get("anchor_tracks", [])
+            anchor_artists = [
+                {
+                    "id": track.get("artist_id"),
+                    "name": track.get("artist"),
+                    "popularity": track.get("popularity", 50),
+                    "source": "anchor_track"
+                }
+                for track in anchor_tracks
+                if track.get("artist_id")
+            ]
+
+            # Merge and deduplicate all artist sources using shared utility
             discovered_artists = state.metadata.get("discovered_artists", [])
+            discovered_artists = ArtistDeduplicator.merge_and_deduplicate(
+                discovered_artists,
+                user_mentioned_artists,
+                anchor_artists
+            )
+            state.metadata["discovered_artists"] = discovered_artists
+
+            if user_mentioned_artists:
+                logger.info(f"Added artists from {len(user_mentioned_tracks)} user-mentioned tracks")
+            if anchor_artists:
+                logger.info(f"Added artists from {len(anchor_tracks)} anchor tracks")
             logger.info(f"✓ Discovered {len(discovered_artists)} artists")
             
         except Exception as e:

@@ -179,7 +179,7 @@ class RecommendationProcessor:
                 for rec in recommendations:
                     # Include both user-mentioned tracks AND tracks from user-mentioned artists
                     is_protected = rec.user_mentioned or rec.user_mentioned_artist or rec.protected
-                    logger.info(f"Protected track: {rec.track_name} by {rec.artists} (user_mentioned={rec.user_mentioned}, user_mentioned_artist={rec.user_mentioned_artist}, protected={rec.protected})")
+                    logger.debug(f"Protected track: {rec.track_name} by {rec.artists} (user_mentioned={rec.user_mentioned}, user_mentioned_artist={rec.user_mentioned_artist}, protected={rec.protected})")
                     (user_mentioned if is_protected else other_anchors).append(rec)
 
                 # Sort each group independently

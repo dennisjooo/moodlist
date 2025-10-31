@@ -7,6 +7,7 @@ from ....core.base_agent import BaseAgent
 from ....states.agent_state import AgentState, RecommendationStatus, TrackRecommendation
 from ....tools.reccobeat_service import RecoBeatService
 from ....tools.spotify_service import SpotifyService
+from ...orchestrator.recommendation_processor import RecommendationProcessor
 from ..handlers.token import TokenManager
 from ..handlers.audio_features import AudioFeaturesHandler
 from ..handlers.track_filter import TrackFilter
@@ -56,6 +57,7 @@ class RecommendationGeneratorAgent(BaseAgent):
         self.track_filter = TrackFilter()
         self.scoring_engine = ScoringEngine()
         self.diversity_manager = DiversityManager()
+        self.recommendation_processor = RecommendationProcessor()
 
     async def execute(self, state: AgentState) -> AgentState:
         """Execute recommendation generation.
@@ -86,9 +88,15 @@ class RecommendationGeneratorAgent(BaseAgent):
             # Update: Applying diversity
             state.current_step = "generating_recommendations_diversifying"
             await self._notify_progress(state)
-            
-            # Apply ratio limits and get final recommendations
-            final_recommendations = self._apply_ratio_limits(processed_recommendations, state)
+
+            # Apply ratio limits and get final recommendations using the shared processor
+            # Use 98:2 ratio (0.98 for artist discovery) to minimize RecoBeat fallback
+            max_recommendations = self._get_max_recommendations(state)
+            final_recommendations = self.recommendation_processor.enforce_source_ratio(
+                recommendations=processed_recommendations,
+                max_count=max_recommendations,
+                artist_ratio=0.98
+            )
 
             # Deduplicate and add to state
             self._deduplicate_and_add_recommendations(final_recommendations, state)
@@ -141,48 +149,6 @@ class RecommendationGeneratorAgent(BaseAgent):
         # Ensure diversity in recommendations
         return self.diversity_manager._ensure_diversity(filtered_recommendations)
 
-    def _apply_ratio_limits(
-        self,
-        recommendations: List[TrackRecommendation],
-        state: AgentState
-    ) -> List[TrackRecommendation]:
-        """Apply 98:2 ratio limits between artist discovery and RecoBeat tracks.
-
-        Args:
-            recommendations: Processed recommendations
-            state: Current agent state
-
-        Returns:
-            Final recommendations with ratio limits applied
-        """
-        # Get max recommendations from playlist target
-        max_recommendations = self._get_max_recommendations(state)
-
-        # Separate recommendations by source
-        artist_recs, anchor_recs, reccobeat_recs = self._separate_by_source(recommendations)
-
-        # Calculate ratio caps
-        max_artist, max_reccobeat = self._calculate_ratio_caps(max_recommendations)
-
-        # Handle anchor tracks with user-mentioned priority
-        capped_anchor = self._cap_anchor_tracks(anchor_recs)
-
-        # Adjust caps for remaining slots after anchors
-        remaining_slots = max_recommendations - len(capped_anchor)
-        max_artist = int(remaining_slots * 0.98)
-        max_reccobeat = max(1, remaining_slots - max_artist)
-
-        # Cap each source
-        capped_artist = artist_recs[:max_artist]
-        capped_reccobeat = reccobeat_recs[:max_reccobeat]
-
-        logger.info(
-            f"Enforcing 98:2 ratio: {len(capped_anchor)} anchor + {len(capped_artist)} artist tracks (cap: {max_artist}), "
-            f"{len(capped_reccobeat)} RecoBeat tracks (cap: {max_reccobeat}) - RecoBeat minimal fallback only"
-        )
-
-        # Sort and combine
-        return self._sort_and_combine_recommendations(capped_anchor, capped_artist, capped_reccobeat)
 
     def _get_max_recommendations(self, state: AgentState) -> int:
         """Get maximum recommendations from playlist target.
@@ -195,95 +161,6 @@ class RecommendationGeneratorAgent(BaseAgent):
         """
         playlist_target = state.metadata.get("playlist_target", {})
         return playlist_target.get("max_count", self.max_recommendations)
-
-    def _separate_by_source(
-        self,
-        recommendations: List[TrackRecommendation]
-    ) -> tuple[List[TrackRecommendation], List[TrackRecommendation], List[TrackRecommendation]]:
-        """Separate recommendations by source type.
-
-        Args:
-            recommendations: All recommendations
-
-        Returns:
-            Tuple of (artist_recs, anchor_recs, reccobeat_recs)
-        """
-        artist_recs = [r for r in recommendations if r.source == "artist_discovery"]
-        anchor_recs = [r for r in recommendations if r.source == "anchor_track"]
-        reccobeat_recs = [r for r in recommendations if r.source == "reccobeat"]
-        
-        return artist_recs, anchor_recs, reccobeat_recs
-
-    def _calculate_ratio_caps(self, max_recommendations: int) -> tuple[int, int]:
-        """Calculate ratio caps for artist and RecoBeat tracks.
-
-        Args:
-            max_recommendations: Maximum number of recommendations
-
-        Returns:
-            Tuple of (max_artist, max_reccobeat)
-        """
-        max_artist = int(max_recommendations * 0.98)  # 98%
-        max_reccobeat = max(1, max_recommendations - max_artist)  # Minimum 1
-        
-        return max_artist, max_reccobeat
-
-    def _cap_anchor_tracks(
-        self,
-        anchor_recs: List[TrackRecommendation]
-    ) -> List[TrackRecommendation]:
-        """Cap anchor tracks with priority for user-mentioned tracks.
-
-        Args:
-            anchor_recs: All anchor recommendations
-
-        Returns:
-            Capped anchor recommendations
-        """
-        # Separate user-mentioned from other anchors
-        user_mentioned_anchors = [
-            r for r in anchor_recs 
-            if r.user_mentioned or r.user_mentioned_artist
-        ]
-        other_anchors = [
-            r for r in anchor_recs 
-            if not (r.user_mentioned or r.user_mentioned_artist)
-        ]
-        
-        # Cap non-user-mentioned anchors to 5, but ALWAYS include all user-mentioned
-        capped_other_anchors = other_anchors[:5]
-        capped_anchor = user_mentioned_anchors + capped_other_anchors
-        
-        logger.info(
-            f"Anchor breakdown: {len(user_mentioned_anchors)} user-mentioned (unlimited), "
-            f"{len(capped_other_anchors)} other anchors (capped at 5)"
-        )
-        
-        return capped_anchor
-
-    def _sort_and_combine_recommendations(
-        self,
-        anchor_recs: List[TrackRecommendation],
-        artist_recs: List[TrackRecommendation],
-        reccobeat_recs: List[TrackRecommendation]
-    ) -> List[TrackRecommendation]:
-        """Sort each group by confidence and combine with priority order.
-
-        Args:
-            anchor_recs: Anchor recommendations
-            artist_recs: Artist discovery recommendations
-            reccobeat_recs: RecoBeat recommendations
-
-        Returns:
-            Combined and sorted recommendations
-        """
-        # Sort each group independently by confidence score
-        anchor_recs.sort(key=lambda x: x.confidence_score, reverse=True)
-        artist_recs.sort(key=lambda x: x.confidence_score, reverse=True)
-        reccobeat_recs.sort(key=lambda x: x.confidence_score, reverse=True)
-        
-        # Combine with anchors first (NEVER re-sort after this!)
-        return anchor_recs + artist_recs + reccobeat_recs
 
     def _deduplicate_and_add_recommendations(
         self,
