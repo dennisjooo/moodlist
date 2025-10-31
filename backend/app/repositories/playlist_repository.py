@@ -149,6 +149,12 @@ class PlaylistRepository(BaseRepository[Playlist]):
 
         # Add exclude statuses filter if provided (case insensitive)
         if exclude_statuses:
+            # Validate all statuses are strings to prevent AttributeError
+            for status_item in exclude_statuses:
+                if not isinstance(status_item, str):
+                    raise ValidationException(
+                        f"Status must be a string, got {type(status_item).__name__}"
+                    )
             query = query.where(func.lower(Playlist.status).not_in([status.lower() for status in exclude_statuses]))
 
         return await self._execute_playlist_query(

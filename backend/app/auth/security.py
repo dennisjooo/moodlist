@@ -55,8 +55,19 @@ def verify_password(password: str, hashed: str) -> bool:
     return pwd_context.verify(password, hashed)
 
 
-def encrypt_token(token: str) -> str:
-    """Encrypt a token using bcrypt for storage."""
+def hash_token(token: str) -> str:
+    """Hash a token using bcrypt for secure storage.
+
+    Note: This is ONE-WAY hashing. The original token cannot be retrieved.
+    Use this for storing tokens when you only need to verify them later
+    (similar to password hashing).
+
+    Args:
+        token: The token to hash
+
+    Returns:
+        The hashed token as a string
+    """
     # Convert token to bytes and hash it
     token_bytes = token.encode('utf-8')
     salt = bcrypt.gensalt()
@@ -64,11 +75,19 @@ def encrypt_token(token: str) -> str:
     return hashed.decode('utf-8')
 
 
-def verify_encrypted_token(plain_token: str, encrypted_token: str) -> bool:
-    """Verify a plain token against its encrypted version."""
+def verify_hashed_token(plain_token: str, hashed_token: str) -> bool:
+    """Verify a plain token against its hashed version.
+
+    Args:
+        plain_token: The plain text token to verify
+        hashed_token: The hashed token to compare against
+
+    Returns:
+        True if the token matches the hash, False otherwise
+    """
     plain_bytes = plain_token.encode('utf-8')
-    encrypted_bytes = encrypted_token.encode('utf-8')
-    return bcrypt.checkpw(plain_bytes, encrypted_bytes)
+    hashed_bytes = hashed_token.encode('utf-8')
+    return bcrypt.checkpw(plain_bytes, hashed_bytes)
 
 
 def generate_session_token() -> str:
