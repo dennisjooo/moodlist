@@ -30,11 +30,16 @@ async_session_factory = async_sessionmaker(
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Dependency to get database session."""
+    """Dependency to get database session.
+
+    Note: Does not auto-commit. Write operations should commit explicitly.
+    This allows better control over transaction boundaries and avoids
+    unnecessary commits for read-only operations.
+    """
     async with async_session_factory() as session:
         try:
             yield session
-            await session.commit()
+            # Let caller decide when to commit
         except Exception:
             await session.rollback()
             raise

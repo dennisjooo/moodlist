@@ -4,7 +4,7 @@ from typing import List, Optional
 from datetime import datetime, timezone
 
 import structlog
-from sqlalchemy import select, desc, delete, and_
+from sqlalchemy import select, desc, delete, and_, func
 from sqlalchemy.orm import selectinload
 
 from app.models.session import Session
@@ -335,7 +335,8 @@ class SessionRepository(BaseRepository[Session]):
             Number of sessions matching filters
         """
         try:
-            query = select(Session)
+            # Use SQL COUNT for efficiency instead of loading all records
+            query = select(func.count(Session.id))
 
             if user_id:
                 query = query.where(Session.user_id == user_id)
@@ -345,7 +346,7 @@ class SessionRepository(BaseRepository[Session]):
                 query = query.where(Session.expires_at > now)
 
             result = await self.session.execute(query)
-            count = len(result.scalars().all())
+            count = result.scalar()
 
             self.logger.debug(
                 "Session count retrieved",

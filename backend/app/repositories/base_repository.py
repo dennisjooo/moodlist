@@ -6,13 +6,17 @@ from typing import Generic, TypeVar, List, Optional, Any, Dict
 import structlog
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, and_, desc, asc
+from sqlalchemy import select, delete, and_, desc, asc, func
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.core.exceptions import NotFoundException, ValidationException, InternalServerError
 
 T = TypeVar('T')
+
+# Pagination constants to prevent DOS attacks
+DEFAULT_LIMIT = 50
+MAX_LIMIT = 100
 
 logger = structlog.get_logger(__name__)
 
@@ -96,8 +100,8 @@ class BaseRepository(ABC, Generic[T]):
         """Get all entities with optional filtering and pagination.
 
         Args:
-            skip: Number of records to skip
-            limit: Maximum number of records to return
+            skip: Number of records to skip (must be >= 0)
+            limit: Maximum number of records to return (max: 100, default: 50)
             order_by: Field to order by
             order_desc: Order descending if True
             filters: Dictionary of field filters
@@ -105,8 +109,28 @@ class BaseRepository(ABC, Generic[T]):
 
         Returns:
             List of entities
+
+        Raises:
+            ValidationException: If pagination parameters are invalid
         """
         try:
+            # Validate and apply pagination limits
+            if skip < 0:
+                raise ValidationException("Skip parameter must be >= 0")
+
+            # Apply default and max limits to prevent DOS attacks
+            if limit is None:
+                limit = DEFAULT_LIMIT
+            elif limit < 1:
+                raise ValidationException("Limit parameter must be >= 1")
+            elif limit > MAX_LIMIT:
+                self.logger.warning(
+                    f"Limit {limit} exceeds maximum {MAX_LIMIT}, capping to max",
+                    requested_limit=limit,
+                    max_limit=MAX_LIMIT
+                )
+                limit = MAX_LIMIT
+
             query = select(self.model_class)
 
             # Apply filters
@@ -126,8 +150,7 @@ class BaseRepository(ABC, Generic[T]):
             # Apply pagination
             if skip:
                 query = query.offset(skip)
-            if limit:
-                query = query.limit(limit)
+            query = query.limit(limit)
 
             # Apply eager loading
             if load_relationships:
@@ -166,7 +189,8 @@ class BaseRepository(ABC, Generic[T]):
         try:
             entity = self.model_class(**kwargs)
             self.session.add(entity)
-            await self.session.flush()  # Get the ID without committing
+            await self.session.flush()  # Get the ID
+            await self.session.commit()  # Persist the change
 
             self.logger.info("Entity created successfully", entity_id=getattr(entity, 'id', None))
             return entity
@@ -204,6 +228,7 @@ class BaseRepository(ABC, Generic[T]):
                     setattr(entity, key, value)
 
             await self.session.flush()
+            await self.session.commit()  # Persist the change
 
             self.logger.info("Entity updated successfully", entity_id=id)
             return entity
@@ -234,6 +259,7 @@ class BaseRepository(ABC, Generic[T]):
         try:
             query = delete(self.model_class).where(self.model_class.id == id)
             result = await self.session.execute(query)
+            await self.session.commit()  # Persist the change
 
             deleted = result.rowcount > 0
 
@@ -280,7 +306,8 @@ class BaseRepository(ABC, Generic[T]):
             Number of entities matching filters
         """
         try:
-            query = select(self.model_class)
+            # Use SQL COUNT for efficiency instead of loading all records
+            query = select(func.count(self.model_class.id))
 
             if filters:
                 conditions = []
@@ -291,7 +318,7 @@ class BaseRepository(ABC, Generic[T]):
                     query = query.where(and_(*conditions))
 
             result = await self.session.execute(query)
-            count = len(result.scalars().all())
+            count = result.scalar()
 
             self.logger.debug("Entities counted", count=count, filters=filters)
             return count
