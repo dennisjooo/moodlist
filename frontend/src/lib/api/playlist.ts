@@ -46,6 +46,9 @@ export interface UserPlaylistsResponse {
     total: number;
     limit: number;
     offset: number;
+    sort_by?: 'created_at' | 'name' | 'track_count';
+    sort_order?: 'asc' | 'desc';
+    search?: string | null;
 }
 
 class PlaylistAPI {
@@ -74,13 +77,29 @@ class PlaylistAPI {
         return await response.json();
     }
 
-    async getUserPlaylists(limit: number = 50, offset: number = 0, excludeStatuses?: string[]): Promise<UserPlaylistsResponse> {
+    async getUserPlaylists(
+        limit: number = 50,
+        offset: number = 0,
+        excludeStatuses?: string[],
+        search?: string,
+        sortBy?: 'created_at' | 'name' | 'track_count',
+        sortOrder?: 'asc' | 'desc',
+    ): Promise<UserPlaylistsResponse> {
         const params = new URLSearchParams({
             limit: limit.toString(),
             offset: offset.toString(),
         });
         if (excludeStatuses && excludeStatuses.length > 0) {
             params.append('exclude_statuses', excludeStatuses.join(','));
+        }
+        if (search) {
+            params.append('search', search);
+        }
+        if (sortBy) {
+            params.append('sort_by', sortBy);
+        }
+        if (sortOrder) {
+            params.append('sort_order', sortOrder);
         }
         return this.request<UserPlaylistsResponse>(
             `/api/playlists?${params.toString()}`

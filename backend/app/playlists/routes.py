@@ -1,7 +1,7 @@
 """Playlist CRUD routes for managing user playlists."""
 
 import structlog
-from typing import Optional
+from typing import Optional, Literal
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
@@ -54,7 +54,13 @@ async def get_user_playlists(
     playlist_service: PlaylistService = Depends(get_playlist_service),
     limit: int = Query(default=50, le=100),
     offset: int = Query(default=0),
-    exclude_statuses: Optional[str] = Query(default=None, description="Comma-separated list of statuses to exclude (e.g., 'failed,cancelled')")
+    exclude_statuses: Optional[str] = Query(
+        default=None,
+        description="Comma-separated list of statuses to exclude (e.g., 'failed,cancelled')",
+    ),
+    search: Optional[str] = Query(default=None, description="Filter playlists by prompt or name"),
+    sort_by: Literal["created_at", "name", "track_count"] = Query(default="created_at"),
+    sort_order: Literal["asc", "desc"] = Query(default="desc"),
 ):
     """Get all playlists created by the current user.
 
@@ -74,12 +80,17 @@ async def get_user_playlists(
         if exclude_statuses:
             exclude_status_list = [status.strip() for status in exclude_statuses.split(',') if status.strip()]
 
+        search_query = search.strip() if search else None
+
         # Get playlists from repository with filtering
         playlists = await playlist_service.playlist_repository.get_by_user_id_with_filters(
             user_id=current_user.id,
             exclude_statuses=exclude_status_list,
             skip=offset,
-            limit=limit
+            limit=limit,
+            search_query=search_query,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
 
         # Format playlists for response
@@ -122,14 +133,18 @@ async def get_user_playlists(
         # Get total count for pagination
         total_count = await playlist_service.playlist_repository.count_user_playlists_with_filters(
             user_id=current_user.id,
-            exclude_statuses=exclude_status_list
+            exclude_statuses=exclude_status_list,
+            search_query=search_query,
         )
 
         return {
             "playlists": playlists_data,
             "total": total_count,
             "limit": limit,
-            "offset": offset
+            "offset": offset,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
+            "search": search_query,
         }
 
     except Exception as e:
