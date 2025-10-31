@@ -1,5 +1,5 @@
 import Navigation from '@/components/Navigation';
-import { Badge } from '@/components/ui/badge';
+import { FeatureBadge } from '@/components/ui/feature-badge';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { cn } from '@/lib/utils';
 import { Music } from 'lucide-react';
@@ -21,10 +21,9 @@ export function AboutHero() {
 
             {/* Hero Section */}
             <div className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 sm:pt-24">
-                <Badge variant="outline" className="px-3 py-1 flex items-center gap-2 w-fit mx-auto mb-6 text-xs font-medium border-primary/20">
-                    <Music className="w-3.5 h-3.5" />
+                <FeatureBadge icon={Music} className="mb-6">
                     The Story Behind MoodList
-                </Badge>
+                </FeatureBadge>
 
                 <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground mb-4 leading-tight">
                     Building a playlist generator{' '}
