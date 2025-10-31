@@ -3,7 +3,7 @@
 import structlog
 from typing import Any, Dict, List, Optional
 
-from .types import AnchorCandidate
+from .track_processor import TrackProcessor
 
 logger = structlog.get_logger(__name__)
 
@@ -20,6 +20,7 @@ class ArtistProcessor:
         """
         self.spotify_service = spotify_service
         self.reccobeat_service = reccobeat_service
+        self.track_processor = TrackProcessor(reccobeat_service)
 
     async def get_artist_based_candidates(
         self,
@@ -46,6 +47,9 @@ class ArtistProcessor:
         if not self.spotify_service or not artist_recommendations:
             return []
 
+        # Extract temporal context for filtering
+        temporal_context = mood_analysis.get('temporal_context') if mood_analysis else None
+
         # Step 1: Categorize artists (mentioned vs others)
         mentioned_artists, artists_to_process = self._categorize_and_prioritize_artists(
             artist_recommendations, mood_prompt, user_mentioned_artists
@@ -55,10 +59,10 @@ class ArtistProcessor:
         artist_infos = await self._search_artists(
             artists_to_process, mentioned_artists, access_token
         )
-
+        
         # Step 3: Fetch tracks for each validated artist
         candidates = await self._fetch_artist_tracks(
-            artist_infos, mentioned_artists, target_features, access_token
+            artist_infos, mentioned_artists, target_features, access_token, temporal_context
         )
 
         return candidates
@@ -73,13 +77,12 @@ class ArtistProcessor:
 
         Args:
             artist_recommendations: All recommended artist names
-            mood_prompt: User's mood prompt
+            mood_prompt: User's mood prompt (unused, kept for compatibility)
             user_mentioned_artists: Artists from intent analysis
 
         Returns:
             Tuple of (mentioned_artists, artists_to_process)
         """
-        prompt_lower = mood_prompt.lower()
         user_mentioned_set = {artist.lower() if artist else '' for artist in (user_mentioned_artists or [])}
 
         mentioned_artists = []
@@ -88,19 +91,18 @@ class ArtistProcessor:
         for artist in artist_recommendations:
             if not artist:
                 continue
-                
-            # Check if artist is in user-mentioned set OR in the prompt text (case-insensitive)
-            is_user_mentioned = (
-                artist.lower() in user_mentioned_set or
-                artist.lower() in prompt_lower
-            )
-            
+
+            # CRITICAL FIX: Only check user_mentioned_set from IntentAnalyzer
+            # DO NOT check if artist name appears in prompt text - that's too broad
+            # and incorrectly marks artists like "The Notorious B.I.G." as user-mentioned
+            # when they're just in mood recommendations or user's listening history
+            is_user_mentioned = artist.lower() in user_mentioned_set
+
             if is_user_mentioned:
                 mentioned_artists.append(artist)
                 logger.info(f"✓ Detected user-mentioned artist for anchor search: {artist}")
             else:
                 other_artists.append(artist)
-
         # CRITICAL: Process ALL user-mentioned artists first (no limit), then other artists
         artists_to_process = mentioned_artists + other_artists[:max(0, 8 - len(mentioned_artists))]
         
@@ -136,19 +138,31 @@ class ArtistProcessor:
                 artists = await self.spotify_service.search_spotify_artists(
                     access_token=access_token,
                     query=artist_name,
-                    limit=1
+                    limit=3
                 )
 
                 if not artists:
                     continue
 
-                artist_info = artists[0]
+                # Find the artist with exact name match (case-insensitive)
+                artist_info = None
+                for artist_result in artists:
+                    if artist_result.get('name', '').lower() == artist_name.lower():
+                        artist_info = artist_result
+                        break
+                
+                # If no exact match, fall back to first result
+                if not artist_info:
+                    logger.warning(f"No exact match for '{artist_name}', using closest match: {artists[0].get('name')}")
+                    artist_info = artists[0]
+                
                 artist_id = artist_info.get('id')
                 if artist_id:
+                    is_mentioned_check = artist_name in mentioned_artists
                     artist_infos.append({
                         'info': artist_info,
                         'name': artist_name,
-                        'is_mentioned': artist_name in mentioned_artists
+                        'is_mentioned': is_mentioned_check
                     })
 
             except Exception as e:
@@ -162,7 +176,8 @@ class ArtistProcessor:
         artist_infos: List[Dict[str, Any]],
         mentioned_artists: List[str],
         target_features: Dict[str, Any],
-        access_token: str
+        access_token: str,
+        temporal_context: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """Fetch top tracks for each artist and create anchor candidates.
 
@@ -171,6 +186,7 @@ class ArtistProcessor:
             mentioned_artists: List of user-mentioned artist names
             target_features: Target audio features
             access_token: Spotify access token
+            temporal_context: Temporal context for filtering tracks
 
         Returns:
             List of anchor candidate dictionaries
@@ -185,21 +201,20 @@ class ArtistProcessor:
             try:
                 tracks = await self.spotify_service.get_artist_top_tracks(
                     access_token=access_token,
-                    artist_id=artist_id,
-                    market='US'  # Could be made configurable
+                    artist_id=artist_id
                 )
 
                 if not tracks:
                     continue
 
-                # Take top 2 tracks per artist for mentioned artists, 1 for others
-                limit_per_artist = 2 if artist_name in mentioned_artists else 1
+                # Take top 5 tracks per artist for mentioned artists, 3 for others
+                limit_per_artist = 5 if artist_name in mentioned_artists else 3
                 selected_tracks = tracks[:limit_per_artist]
 
                 # Create candidates for each track
                 for track in selected_tracks:
                     candidate = await self._create_artist_candidate(
-                        track, artist_name, artist_data['is_mentioned'], target_features
+                        track, artist_name, artist_data['is_mentioned'], target_features, temporal_context
                     )
                     if candidate:
                         candidates.append(candidate)
@@ -215,7 +230,8 @@ class ArtistProcessor:
         track: Dict[str, Any],
         artist_name: str,
         is_mentioned: bool,
-        target_features: Dict[str, Any]
+        target_features: Dict[str, Any],
+        temporal_context: Optional[Dict[str, Any]] = None
     ) -> Optional[Dict[str, Any]]:
         """Create an anchor candidate from an artist track.
 
@@ -224,11 +240,25 @@ class ArtistProcessor:
             artist_name: Name of the artist
             is_mentioned: Whether the artist was mentioned in the prompt
             target_features: Target audio features
+            temporal_context: Temporal context for filtering
 
         Returns:
             Anchor candidate dictionary or None if invalid
         """
         if not track.get('id'):
+            return None
+
+        # CRITICAL: Apply temporal filtering BEFORE marking as protected
+        # This prevents temporally mismatched tracks from becoming protected anchors
+        is_temporal_match, temporal_reason = self.track_processor.check_temporal_match(
+            track, temporal_context
+        )
+        if not is_temporal_match:
+            artist_mention_status = "user-mentioned" if is_mentioned else "recommended"
+            logger.info(
+                f"✗ Filtered {artist_mention_status} artist track '{track.get('name')}' "
+                f"by {artist_name}: {temporal_reason}"
+            )
             return None
 
         # Get audio features if available

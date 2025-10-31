@@ -277,8 +277,8 @@ class TrackFilter:
                     audio_features=rec_data.get("audio_features"),
                     reasoning=rec_data.get("reasoning", "Mood-based recommendation"),
                     source=rec_data.get("source", "reccobeat"),
-                    # CRITICAL: Preserve user-mentioned metadata
                     user_mentioned=rec_data.get("user_mentioned", False),
+                    user_mentioned_artist=rec_data.get("user_mentioned_artist", False),
                     anchor_type=rec_data.get("anchor_type"),
                     protected=rec_data.get("protected", False)
                 )
@@ -552,17 +552,22 @@ class TrackFilter:
         Returns:
             True if recommendation should be filtered
         """
-        # Only filter if we have 2+ critical violations (very strict filtering)
-        if critical_violations >= 2:
+        # Artist discovery tracks are higher quality - be more lenient with filtering
+        # (they already passed a 0.3 cohesion threshold vs 0.6 for reccobeat)
+        threshold = 3 if recommendation.source == "artist_discovery" else 2
+
+        # Only filter if we exceed the threshold
+        if critical_violations >= threshold:
             logger.debug(
                 f"Filtered out '{recommendation.track_name}' by {', '.join(recommendation.artists)} "
-                f"due to {critical_violations} critical violations: {'; '.join(violations)}"
+                f"(source={recommendation.source}) due to {critical_violations} critical violations "
+                f"(threshold={threshold}): {'; '.join(violations)}"
             )
             return True
         else:
             if violations:
                 logger.debug(
                     f"Keeping '{recommendation.track_name}' despite violations "
-                    f"({critical_violations} critical): {'; '.join(violations[:3])}"
+                    f"({critical_violations} critical, threshold={threshold}): {'; '.join(violations[:3])}"
                 )
             return False

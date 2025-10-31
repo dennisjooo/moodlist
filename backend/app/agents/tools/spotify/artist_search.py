@@ -62,7 +62,7 @@ class SearchSpotifyArtistsTool(RateLimitedTool):
         try:
             logger.info(f"Searching Spotify for artists: '{query}' (limit: {limit})")
 
-            # Make API request
+            # Make API request with caching enabled (15 min TTL)
             response_data = await self._make_request(
                 method="GET",
                 endpoint="/search",
@@ -71,7 +71,9 @@ class SearchSpotifyArtistsTool(RateLimitedTool):
                     "type": "artist",
                     "limit": limit
                 },
-                headers={"Authorization": f"Bearer {access_token}"}
+                headers={"Authorization": f"Bearer {access_token}"},
+                use_cache=True,
+                cache_ttl=900  # 15 minutes - artist data doesn't change frequently
             )
 
             # Validate response structure

@@ -2,7 +2,7 @@
 
 import { SpotifyLoginButton } from '@/components/features/auth/SpotifyLoginButton';
 import TypewriterText from '@/components/TypewriterText';
-import { Badge } from '@/components/ui/badge';
+import { FeatureBadge } from '@/components/ui/feature-badge';
 import { Button } from '@/components/ui/button';
 import { Music, ArrowDown } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -56,10 +56,9 @@ export function HeroSection({ isLoggedIn: serverIsLoggedIn }: HeroSectionProps) 
             <div className="max-w-7xl mx-auto w-full">
                 <div className="flex flex-col items-center text-center justify-center h-full">
                     <div className="mb-8">
-                        <Badge variant="outline" className="px-4 py-1 flex items-center gap-2">
-                            <Music className="w-4 h-4" />
+                        <FeatureBadge icon={Music}>
                             AI-Powered Playlist Generation
-                        </Badge>
+                        </FeatureBadge>
                     </div>
 
                     <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-6xl lg:text-7xl mb-8">

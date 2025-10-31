@@ -76,6 +76,20 @@ Common regional categories:
 - Latin American: Brazil, Mexico, Argentina, etc.
 - Middle Eastern: Arabic, Persian, Turkish, Israeli
 
+CRITICAL: Detect temporal/era context from the user's request:
+- temporal_context: Identify if the user requests a specific time period, decade, or era
+  * decade: Specific decade if mentioned (e.g., "1960s", "1970s", "1980s", "1990s", "2000s", "2010s")
+  * era: Broader era if mentioned (e.g., "golden age", "classic", "modern", "contemporary", "vintage", "retro")
+  * year_range: Specific year range if mentioned (e.g., [1990, 1999] for "90s")
+  * is_temporal: Boolean indicating if temporal context was explicitly requested
+  * Examples:
+    - "90s West Coast hip hop" → {"decade": "1990s", "year_range": [1990, 1999], "is_temporal": true}
+    - "classic jazz" → {"era": "classic", "is_temporal": true}
+    - "modern indie" → {"era": "modern", "is_temporal": false} (not strict temporal requirement)
+    - "chill vibes" → {"is_temporal": false} (no temporal context)
+  * IMPORTANT: Only set is_temporal=true if the user explicitly requests a specific time period
+  * This helps ensure playlist cohesion when users want era-specific music
+
 CRITICAL: Generate a triadic color scheme that visually represents the mood:
 - color_scheme: Object with three hex color codes that form a harmonious triadic palette
   * primary: Main color representing the dominant mood (e.g., "#FF5733" for energetic/warm)
@@ -114,6 +128,12 @@ Provide your analysis in valid JSON format with this structure:
   "genre_keywords": ["indie", "alternative", "rock"],
   "preferred_regions": ["Western", "European"],
   "excluded_regions": ["Southeast Asian", "Indonesian"],
+  "temporal_context": {
+    "decade": "1990s",
+    "era": "classic",
+    "year_range": [1990, 1999],
+    "is_temporal": true
+  },
   "color_scheme": {
     "primary": "#6B9BD1",
     "secondary": "#B5D16B",
