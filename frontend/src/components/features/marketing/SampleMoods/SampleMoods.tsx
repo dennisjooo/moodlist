@@ -3,6 +3,7 @@
 import LoginRequiredDialog from '@/components/LoginRequiredDialog';
 import MoodCard from '@/components/features/marketing/SampleMoods/MoodCard';
 import { motion } from '@/components/ui/lazy-motion';
+import { FeatureBadge } from '@/components/ui/feature-badge';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { MOOD_TEMPLATES } from '@/lib/constants/moodTemplates';
 import { shuffleArray } from '@/lib/utils/array';
@@ -39,9 +40,9 @@ export default function SampleMoods() {
             viewport={{ once: true, margin: '-80px' }}
             transition={{ duration: 0.6, ease: 'easeOut' }}
           >
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1 text-sm font-medium text-primary">
+            <FeatureBadge>
               Templates on deck
-            </span>
+            </FeatureBadge>
             <h3 className="mt-6 text-3xl font-semibold sm:text-4xl">Shuffle through sample moods</h3>
             <p className="mt-3 text-base text-muted-foreground">
               Every click spins up a ready-to-use mood template. Pick one that fits, or remix it into something brand new.

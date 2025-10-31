@@ -1,6 +1,6 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
+import { FeatureBadge } from '@/components/ui/feature-badge';
 import { Sparkles } from 'lucide-react';
 
 /**
@@ -10,14 +10,9 @@ import { Sparkles } from 'lucide-react';
 export function CreatePageHeader() {
   return (
     <div className="mb-6 text-center">
-      <Badge
-        variant="outline"
-        className="mx-auto mb-3 flex w-fit items-center gap-2 rounded-full border-border/60 bg-background/80 px-4 py-1 text-xs uppercase tracking-[0.24em] text-muted-foreground/80 backdrop-blur"
-        aria-label="Feature badge"
-      >
-        <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+      <FeatureBadge icon={Sparkles} className="mb-3" ariaLabel="Feature badge">
         Curated by AI
-      </Badge>
+      </FeatureBadge>
 
       <div className="space-y-2">
         <h1 className="mx-auto max-w-2xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
