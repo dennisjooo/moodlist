@@ -48,11 +48,16 @@ class PlaylistRepository(BaseRepository[Playlist]):
 
         if search_query:
             search_term = f"%{search_query.lower()}%"
-            playlist_name = func.coalesce(Playlist.playlist_data["name"].astext, "")
+            playlist_name = func.coalesce(Playlist.playlist_data["name"].as_string(), "")
+            primary_emotion = func.coalesce(Playlist.mood_analysis_data["primary_emotion"].as_string(), "")
+            energy_level = func.coalesce(Playlist.mood_analysis_data["energy_level"].as_string(), "")
             query = query.where(
                 or_(
                     func.lower(Playlist.mood_prompt).like(search_term),
                     func.lower(playlist_name).like(search_term),
+                    func.lower(primary_emotion).like(search_term),
+                    func.lower(energy_level).like(search_term),
+                    func.lower(Playlist.status).like(search_term),
                 )
             )
 
@@ -65,7 +70,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
         sort_column = Playlist.created_at
         if sort_by == "name":
             sort_column = func.lower(
-                func.coalesce(Playlist.playlist_data["name"].astext, Playlist.mood_prompt)
+                func.coalesce(Playlist.playlist_data["name"].as_string(), Playlist.mood_prompt)
             )
         elif sort_by == "track_count":
             sort_column = Playlist.track_count
@@ -718,11 +723,16 @@ class PlaylistRepository(BaseRepository[Playlist]):
 
             if search_query:
                 search_term = f"%{search_query.lower()}%"
-                playlist_name = func.coalesce(Playlist.playlist_data["name"].astext, "")
+                playlist_name = func.coalesce(Playlist.playlist_data["name"].as_string(), "")
+                primary_emotion = func.coalesce(Playlist.mood_analysis_data["primary_emotion"].as_string(), "")
+                energy_level = func.coalesce(Playlist.mood_analysis_data["energy_level"].as_string(), "")
                 query = query.where(
                     or_(
                         func.lower(Playlist.mood_prompt).like(search_term),
                         func.lower(playlist_name).like(search_term),
+                        func.lower(primary_emotion).like(search_term),
+                        func.lower(energy_level).like(search_term),
+                        func.lower(Playlist.status).like(search_term),
                     )
                 )
 
