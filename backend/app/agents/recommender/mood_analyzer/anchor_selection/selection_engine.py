@@ -130,13 +130,16 @@ class AnchorSelectionEngine:
         genre_keywords: List[str]
     ) -> List[Dict[str, Any]]:
         """Gather all anchor track candidates from various sources.
-        
+
         Returns:
             Combined list of all anchor candidates
         """
+        # Extract temporal context for filtering (if present)
+        temporal_context = mood_analysis.get('temporal_context')
+
         # Step 1: Get user-mentioned tracks (always priority)
         user_candidates = await self._get_user_mentioned_candidates(
-            mood_prompt, artist_recommendations, access_token
+            mood_prompt, artist_recommendations, access_token, temporal_context
         )
         logger.info(f"Found {len(user_candidates)} user-mentioned tracks as anchors")
 
@@ -155,7 +158,7 @@ class AnchorSelectionEngine:
         genre_candidates = []
         if genre_keywords:
             genre_candidates = await self._get_genre_based_candidates(
-                genre_keywords[:8], target_features, access_token, mood_prompt
+                genre_keywords[:8], target_features, access_token, mood_prompt, temporal_context
             )
             logger.info(f"Found {len(genre_candidates)} genre-based track candidates")
 
@@ -314,7 +317,8 @@ class AnchorSelectionEngine:
         self,
         mood_prompt: str,
         artist_recommendations: List[str],
-        access_token: str
+        access_token: str,
+        temporal_context: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """Get anchor candidates from user-mentioned tracks."""
         user_mentioned_tracks = await self._find_user_mentioned_tracks(
@@ -324,6 +328,17 @@ class AnchorSelectionEngine:
         candidates = []
         for track in user_mentioned_tracks:
             if not track.get('id'):
+                continue
+
+            # CRITICAL: Apply temporal filtering before adding as candidate
+            is_temporal_match, temporal_reason = self.track_processor.check_temporal_match(
+                track, temporal_context
+            )
+            if not is_temporal_match:
+                artist_names = [a.get('name', '') for a in track.get('artists', [])]
+                logger.info(
+                    f"✗ Filtered LLM-discovered anchor '{track.get('name')}' by {', '.join(artist_names)}: {temporal_reason}"
+                )
                 continue
 
             # Get audio features if available
@@ -447,7 +462,8 @@ class AnchorSelectionEngine:
         genres: List[str],
         target_features: Dict[str, Any],
         access_token: str,
-        mood_prompt: str = ""
+        mood_prompt: str = "",
+        temporal_context: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """Get anchor candidates from genre-based track search."""
         candidates = []
@@ -462,7 +478,7 @@ class AnchorSelectionEngine:
                 )
 
                 genre_candidates = await self._score_and_create_candidates(
-                    tracks, target_features, genre, mood_prompt, genres
+                    tracks, target_features, genre, mood_prompt, genres, temporal_context
                 )
                 candidates.extend(genre_candidates)
 
@@ -478,7 +494,8 @@ class AnchorSelectionEngine:
         target_features: Dict[str, Any],
         genre: str,
         mood_prompt: str = "",
-        genre_keywords: Optional[List[str]] = None
+        genre_keywords: Optional[List[str]] = None,
+        temporal_context: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """Score tracks and create anchor candidates."""
         if not tracks:
@@ -505,7 +522,7 @@ class AnchorSelectionEngine:
 
                     candidate = self.track_processor.create_candidate_from_track(
                         track, target_features, genre, mood_prompt,
-                        genre_keywords or [], features, f"genre_{genre}"
+                        genre_keywords or [], features, f"genre_{genre}", temporal_context
                     )
                     if candidate:
                         candidates.append(candidate)
@@ -516,7 +533,8 @@ class AnchorSelectionEngine:
                 for track in tracks:
                     if track.get('id'):
                         candidate = self.track_processor.create_candidate_from_track(
-                            track, target_features, genre, mood_prompt, genre_keywords or []
+                            track, target_features, genre, mood_prompt, genre_keywords or [],
+                            temporal_context=temporal_context
                         )
                         if candidate:
                             candidates.append(candidate)
@@ -525,7 +543,8 @@ class AnchorSelectionEngine:
             for track in tracks:
                 if track.get('id'):
                     candidate = self.track_processor.create_candidate_from_track(
-                        track, target_features, genre, mood_prompt, genre_keywords or []
+                        track, target_features, genre, mood_prompt, genre_keywords or [],
+                        temporal_context=temporal_context
                     )
                     if candidate:
                         candidates.append(candidate)
