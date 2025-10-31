@@ -3,6 +3,15 @@ import { logger } from '@/lib/utils/logger';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActiveWorkflow } from '../workflow/useActiveWorkflows';
 
+export type PlaylistSortField = 'created_at' | 'name' | 'track_count';
+export type PlaylistSortOrder = 'asc' | 'desc';
+
+export interface PlaylistFilters {
+    search: string;
+    sortBy: PlaylistSortField;
+    sortOrder: PlaylistSortOrder;
+}
+
 interface UsePlaylistsReturn {
     playlists: UserPlaylist[];
     isLoading: boolean;
@@ -14,6 +23,9 @@ interface UsePlaylistsReturn {
     fetchPlaylists: (isLoadMore?: boolean) => Promise<void>;
     loadMore: () => void;
     handleDelete: (playlistId: number) => Promise<void>;
+    filters: PlaylistFilters;
+    setSearchQuery: (search: string) => void;
+    setSort: (sortBy: PlaylistSortField, sortOrder: PlaylistSortOrder) => void;
 }
 
 export function usePlaylists(): UsePlaylistsReturn {
@@ -25,7 +37,11 @@ export function usePlaylists(): UsePlaylistsReturn {
     const [hasMore, setHasMore] = useState(true);
     const [total, setTotal] = useState(0);
     const offsetRef = useRef(0);
-    const isInitialLoadRef = useRef(true);
+    const [filters, setFilters] = useState<PlaylistFilters>({
+        search: '',
+        sortBy: 'created_at',
+        sortOrder: 'desc',
+    });
 
     const fetchPlaylists = useCallback(async (isLoadMore = false) => {
         try {
@@ -34,15 +50,19 @@ export function usePlaylists(): UsePlaylistsReturn {
             } else {
                 setIsLoading(true);
                 offsetRef.current = 0;
-                isInitialLoadRef.current = false;
             }
 
             setIsUnauthorized(false);
 
+            const searchParam = filters.search.trim();
+
             const response = await playlistAPI.getUserPlaylists(
                 12,
                 offsetRef.current,
-                ['failed', 'cancelled']
+                ['failed', 'cancelled'],
+                searchParam ? searchParam : undefined,
+                filters.sortBy,
+                filters.sortOrder,
             );
 
             if (isLoadMore) {
@@ -68,7 +88,7 @@ export function usePlaylists(): UsePlaylistsReturn {
             setIsLoading(false);
             setIsLoadingMore(false);
         }
-    }, []);
+    }, [filters.search, filters.sortBy, filters.sortOrder]);
 
     const loadMore = useCallback(() => {
         if (!isLoadingMore && hasMore && !isLoading) {
@@ -115,6 +135,31 @@ export function usePlaylists(): UsePlaylistsReturn {
         };
     }, [handleWorkflowUpdate]);
 
+    const setSearchQuery = useCallback((search: string) => {
+        setFilters(prev => {
+            if (prev.search === search) {
+                return prev;
+            }
+            return {
+                ...prev,
+                search,
+            };
+        });
+    }, []);
+
+    const setSort = useCallback((sortBy: PlaylistSortField, sortOrder: PlaylistSortOrder) => {
+        setFilters(prev => {
+            if (prev.sortBy === sortBy && prev.sortOrder === sortOrder) {
+                return prev;
+            }
+            return {
+                ...prev,
+                sortBy,
+                sortOrder,
+            };
+        });
+    }, []);
+
     return {
         playlists,
         isLoading,
@@ -126,6 +171,9 @@ export function usePlaylists(): UsePlaylistsReturn {
         fetchPlaylists,
         loadMore,
         handleDelete,
+        filters,
+        setSearchQuery,
+        setSort,
     };
 }
 
