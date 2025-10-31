@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import json
 import structlog
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Type
@@ -248,7 +249,8 @@ class BaseAPITool(BaseTool, ABC):
                 error_data = {"status_code": e.response.status_code, "error": str(e)}
                 try:
                     error_data.update(e.response.json())
-                except:
+                except (ValueError, json.JSONDecodeError, AttributeError):
+                    # Response body wasn't JSON or doesn't have json() method
                     pass
 
                 if e.response.status_code >= 500 and attempt < self.max_retries - 1:
