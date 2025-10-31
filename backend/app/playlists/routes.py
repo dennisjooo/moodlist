@@ -58,7 +58,7 @@ async def get_user_playlists(
         default=None,
         description="Comma-separated list of statuses to exclude (e.g., 'failed,cancelled')",
     ),
-    search: Optional[str] = Query(default=None, description="Filter playlists by prompt or name"),
+    search: Optional[str] = Query(default=None, description="Filter playlists by prompt, name, track name, artist name, mood, or status"),
     sort_by: Literal["created_at", "name", "track_count"] = Query(default="created_at"),
     sort_order: Literal["asc", "desc"] = Query(default="desc"),
 ):
