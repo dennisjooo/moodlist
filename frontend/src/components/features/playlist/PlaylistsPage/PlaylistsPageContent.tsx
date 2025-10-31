@@ -88,8 +88,6 @@ export function PlaylistsPageContent() {
                         onSortChange={setSort}
                         viewMode={viewMode}
                         onViewModeChange={setViewMode}
-                        total={total}
-                        visibleCount={playlists.length}
                     />
                 )}
 
