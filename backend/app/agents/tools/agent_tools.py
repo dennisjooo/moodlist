@@ -248,7 +248,7 @@ class BaseAPITool(BaseTool, ABC):
                 error_data = {"status_code": e.response.status_code, "error": str(e)}
                 try:
                     error_data.update(e.response.json())
-                except:
+                except (ValueError, KeyError, AttributeError):
                     pass
 
                 if e.response.status_code >= 500 and attempt < self.max_retries - 1:

@@ -396,13 +396,9 @@ async def save_playlist_to_spotify(
     try:
         # Refresh Spotify token if expired before saving to Spotify
         # TODO: Move this to a service layer method
-        from app.core.database import get_db
-        from sqlalchemy.ext.asyncio import AsyncSession
-        db = await anext(get_db())
-        try:
+        from app.core.database import async_session_factory
+        async with async_session_factory() as db:
             current_user = await refresh_spotify_token_if_expired(current_user, db)
-        finally:
-            await db.close()
 
         # For now, we need to create a workflow manager to get workflow state
         # This is a temporary solution - ideally this logic should be moved to a service

@@ -18,17 +18,65 @@ from app.playlists.routes import router as playlist_router
 logger = structlog.get_logger(__name__)
 
 
+def validate_required_secrets():
+    """Validate all required secrets are set properly at startup."""
+    errors = []
+    weak_values = ["changeme", "secret", "password", "12345", "test", "example"]
+    
+    if not settings.JWT_SECRET_KEY:
+        errors.append("JWT_SECRET_KEY is not set")
+    elif len(settings.JWT_SECRET_KEY) < 32:
+        errors.append("JWT_SECRET_KEY must be at least 32 characters")
+    elif settings.JWT_SECRET_KEY.lower() in weak_values:
+        errors.append("JWT_SECRET_KEY is using a weak default value")
+    
+    if not settings.SESSION_SECRET_KEY:
+        errors.append("SESSION_SECRET_KEY is not set")
+    elif len(settings.SESSION_SECRET_KEY) < 32:
+        errors.append("SESSION_SECRET_KEY must be at least 32 characters")
+    elif settings.SESSION_SECRET_KEY.lower() in weak_values:
+        errors.append("SESSION_SECRET_KEY is using a weak default value")
+    
+    if not settings.SPOTIFY_CLIENT_SECRET:
+        errors.append("SPOTIFY_CLIENT_SECRET is not set")
+    elif settings.SPOTIFY_CLIENT_SECRET.lower() in weak_values:
+        errors.append("SPOTIFY_CLIENT_SECRET is using a weak default value")
+    
+    if not settings.OPENROUTER_API_KEY:
+        errors.append("OPENROUTER_API_KEY is not set")
+    
+    if not settings.GROQ_API_KEY:
+        errors.append("GROQ_API_KEY is not set")
+    
+    if not settings.CEREBRAS_API_KEY:
+        errors.append("CEREBRAS_API_KEY is not set")
+    
+    if errors:
+        for error in errors:
+            logger.error(f"Configuration error: {error}")
+        raise RuntimeError(
+            "Application started with invalid configuration. "
+            f"Found {len(errors)} error(s). Check logs for details."
+        )
+    
+    logger.info("All required secrets validated successfully")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan context manager."""
     # Startup
     logger.info("Starting application", app_name=settings.APP_NAME, environment=settings.APP_ENV)
+    
+    # Validate required secrets
+    validate_required_secrets()
 
     # Initialize cache manager with Valkey if URL is provided
+    from app.agents.core.cache import CacheManager
     global cache_manager
     if settings.REDIS_URL:
         logger.info("Initializing cache manager with Valkey", redis_url=settings.REDIS_URL)
-        cache_manager = cache_manager.__class__(settings.REDIS_URL)
+        cache_manager = CacheManager(settings.REDIS_URL)
     else:
         logger.info("No Valkey URL provided, using in-memory cache")
 

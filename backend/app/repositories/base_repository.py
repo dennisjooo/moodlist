@@ -6,7 +6,7 @@ from typing import Generic, TypeVar, List, Optional, Any, Dict
 import structlog
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, and_, desc, asc
+from sqlalchemy import select, delete, and_, desc, asc, func
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -96,8 +96,8 @@ class BaseRepository(ABC, Generic[T]):
         """Get all entities with optional filtering and pagination.
 
         Args:
-            skip: Number of records to skip
-            limit: Maximum number of records to return
+            skip: Number of records to skip (must be >= 0)
+            limit: Maximum number of records to return (max 100)
             order_by: Field to order by
             order_desc: Order descending if True
             filters: Dictionary of field filters
@@ -106,6 +106,20 @@ class BaseRepository(ABC, Generic[T]):
         Returns:
             List of entities
         """
+        MAX_LIMIT = 100
+        DEFAULT_LIMIT = 50
+        
+        if skip < 0:
+            raise ValidationException("skip must be >= 0")
+        
+        if limit is not None and limit < 1:
+            raise ValidationException("limit must be >= 1")
+        
+        if limit is None:
+            limit = DEFAULT_LIMIT
+        elif limit > MAX_LIMIT:
+            limit = MAX_LIMIT
+        
         try:
             query = select(self.model_class)
 
@@ -124,10 +138,8 @@ class BaseRepository(ABC, Generic[T]):
                 query = query.order_by(order_func(getattr(self.model_class, order_by)))
 
             # Apply pagination
-            if skip:
-                query = query.offset(skip)
-            if limit:
-                query = query.limit(limit)
+            query = query.offset(skip)
+            query = query.limit(limit)
 
             # Apply eager loading
             if load_relationships:
@@ -280,7 +292,7 @@ class BaseRepository(ABC, Generic[T]):
             Number of entities matching filters
         """
         try:
-            query = select(self.model_class)
+            query = select(func.count(self.model_class.id))
 
             if filters:
                 conditions = []
@@ -291,7 +303,7 @@ class BaseRepository(ABC, Generic[T]):
                     query = query.where(and_(*conditions))
 
             result = await self.session.execute(query)
-            count = len(result.scalars().all())
+            count = result.scalar()
 
             self.logger.debug("Entities counted", count=count, filters=filters)
             return count
