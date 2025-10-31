@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Iterable
 from datetime import datetime, timezone
 
 import structlog
-from sqlalchemy import select, and_, asc, desc, func, or_
+from sqlalchemy import select, and_, asc, desc, func, or_, String
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -51,6 +51,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
             playlist_name = func.coalesce(Playlist.playlist_data["name"].as_string(), "")
             primary_emotion = func.coalesce(Playlist.mood_analysis_data["primary_emotion"].as_string(), "")
             energy_level = func.coalesce(Playlist.mood_analysis_data["energy_level"].as_string(), "")
+            recommendations_data = func.coalesce(func.cast(Playlist.recommendations_data, String), "")
             query = query.where(
                 or_(
                     func.lower(Playlist.mood_prompt).like(search_term),
@@ -58,6 +59,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
                     func.lower(primary_emotion).like(search_term),
                     func.lower(energy_level).like(search_term),
                     func.lower(Playlist.status).like(search_term),
+                    func.lower(recommendations_data).like(search_term),
                 )
             )
 
@@ -726,6 +728,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 playlist_name = func.coalesce(Playlist.playlist_data["name"].as_string(), "")
                 primary_emotion = func.coalesce(Playlist.mood_analysis_data["primary_emotion"].as_string(), "")
                 energy_level = func.coalesce(Playlist.mood_analysis_data["energy_level"].as_string(), "")
+                recommendations_data = func.coalesce(func.cast(Playlist.recommendations_data, String), "")
                 query = query.where(
                     or_(
                         func.lower(Playlist.mood_prompt).like(search_term),
@@ -733,6 +736,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
                         func.lower(primary_emotion).like(search_term),
                         func.lower(energy_level).like(search_term),
                         func.lower(Playlist.status).like(search_term),
+                        func.lower(recommendations_data).like(search_term),
                     )
                 )
 
