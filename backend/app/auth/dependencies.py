@@ -1,3 +1,4 @@
+import hashlib
 import structlog
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -20,6 +21,18 @@ from app.dependencies import get_user_repository, get_session_repository, get_pl
 
 logger = structlog.get_logger(__name__)
 security = HTTPBearer(auto_error=False)
+
+
+def _hash_token_for_logging(token: str) -> str:
+    """Hash a token for secure logging.
+
+    Args:
+        token: The token to hash
+
+    Returns:
+        First 16 characters of SHA256 hash for logging purposes
+    """
+    return hashlib.sha256(token.encode()).hexdigest()[:16]
 
 
 async def get_current_user(
@@ -70,14 +83,14 @@ async def get_current_session(
         logger.debug("No session token found in cookies")
         return None
 
-    logger.debug("Looking up session", session_token=session_token[:10] + "...")
+    logger.debug("Looking up session", token_hash=_hash_token_for_logging(session_token))
 
     session = await session_repo.get_valid_session_by_token(session_token)
 
     if session:
         logger.debug("Session found", session_id=session.id, user_id=session.user_id, expires_at=session.expires_at)
     else:
-        logger.debug("No valid session found", session_token=session_token[:10] + "..." if session_token else "None")
+        logger.debug("No valid session found", token_hash=_hash_token_for_logging(session_token) if session_token else "None")
 
     return session
 
