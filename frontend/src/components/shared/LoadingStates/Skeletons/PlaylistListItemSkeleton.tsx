@@ -24,13 +24,17 @@ export function PlaylistListItemSkeleton() {
                 </div>
 
                 {/* Right side - Status & Actions */}
-                <div className="flex shrink-0 flex-row items-end justify-between gap-3 border-t border-border/30 pt-3 sm:border-t-0 sm:pt-0 md:min-w-[140px] md:flex-col md:border-l md:border-t-0 md:pl-6 md:pt-0">
-                    <Skeleton className="h-6 w-20 sm:h-7 sm:w-24" />
+                <div className="flex shrink-0 flex-row items-end justify-between gap-3 border-t border-border/30 pt-3 sm:border-t-0 sm:pt-0 md:min-w-[200px] md:flex-col md:border-l md:border-t-0 md:pl-6 md:pt-0">
                     
-                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                        <Skeleton className="h-8 w-16 sm:h-9 sm:w-20" />
-                        <Skeleton className="h-8 w-8 sm:h-9 sm:w-9" />
-                        <Skeleton className="h-8 w-8 sm:h-9 sm:w-9" />
+                    <div className="flex w-full flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                            <Skeleton className="flex-1 h-9" />
+                        </div>
+                        
+                        <div className="flex items-center justify-between gap-2">
+                            <Skeleton className="flex-1 h-9" />
+                            <Skeleton className="h-9 w-9" />
+                        </div>
                     </div>
                 </div>
             </div>
