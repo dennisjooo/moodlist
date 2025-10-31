@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Iterable
 from datetime import datetime, timezone
 
 import structlog
-from sqlalchemy import select, and_, desc, func
+from sqlalchemy import select, and_, asc, desc, func, or_, String
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -32,6 +32,9 @@ class PlaylistRepository(BaseRepository[Playlist]):
         limit: Optional[int] = None,
         include_deleted: bool = False,
         load_relationships: Optional[Iterable[str]] = None,
+        search_query: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: str = "desc",
     ):
         """Construct the common playlist query used by the user fetch helpers."""
 
@@ -43,12 +46,40 @@ class PlaylistRepository(BaseRepository[Playlist]):
         if status:
             query = query.where(Playlist.status == status)
 
+        if search_query:
+            search_term = f"%{search_query.lower()}%"
+            playlist_name = func.coalesce(Playlist.playlist_data["name"].as_string(), "")
+            primary_emotion = func.coalesce(Playlist.mood_analysis_data["primary_emotion"].as_string(), "")
+            energy_level = func.coalesce(Playlist.mood_analysis_data["energy_level"].as_string(), "")
+            recommendations_data = func.coalesce(func.cast(Playlist.recommendations_data, String), "")
+            query = query.where(
+                or_(
+                    func.lower(Playlist.mood_prompt).like(search_term),
+                    func.lower(playlist_name).like(search_term),
+                    func.lower(primary_emotion).like(search_term),
+                    func.lower(energy_level).like(search_term),
+                    func.lower(Playlist.status).like(search_term),
+                    func.lower(recommendations_data).like(search_term),
+                )
+            )
+
         if skip:
             query = query.offset(skip)
         if limit:
             query = query.limit(limit)
 
-        query = query.order_by(desc(Playlist.created_at))
+        # Sorting configuration
+        sort_column = Playlist.created_at
+        if sort_by == "name":
+            sort_column = func.lower(
+                func.coalesce(Playlist.playlist_data["name"].as_string(), Playlist.mood_prompt)
+            )
+        elif sort_by == "track_count":
+            sort_column = Playlist.track_count
+
+        order_func = desc if sort_order.lower() == "desc" else asc
+
+        query = query.order_by(order_func(sort_column), desc(Playlist.created_at))
 
         if load_relationships:
             for relationship in load_relationships:
@@ -85,7 +116,10 @@ class PlaylistRepository(BaseRepository[Playlist]):
         skip: int = 0,
         limit: Optional[int] = None,
         include_deleted: bool = False,
-        load_relationships: Optional[List[str]] = None
+        load_relationships: Optional[List[str]] = None,
+        search_query: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: str = "desc",
     ) -> List[Playlist]:
         """Get playlists for a specific user with optional status filtering.
 
@@ -108,6 +142,9 @@ class PlaylistRepository(BaseRepository[Playlist]):
             limit=limit,
             include_deleted=include_deleted,
             load_relationships=load_relationships,
+            search_query=search_query,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
 
         # Add exclude statuses filter if provided (case insensitive)
@@ -124,6 +161,9 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "exclude_statuses": exclude_statuses,
                 "skip": skip,
                 "limit": limit,
+                "search_query": search_query,
+                "sort_by": sort_by,
+                "sort_order": sort_order,
             },
         )
 
@@ -652,7 +692,8 @@ class PlaylistRepository(BaseRepository[Playlist]):
         user_id: int,
         status: Optional[str] = None,  # Deprecated: use exclude_statuses instead
         exclude_statuses: Optional[List[str]] = None,
-        include_deleted: bool = False
+        include_deleted: bool = False,
+        search_query: Optional[str] = None,
     ) -> int:
         """Count playlists for a user with optional status filtering.
 
@@ -682,6 +723,23 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 # Exclude cancelled playlists by default unless specifically filtering for them
                 query = query.where(Playlist.status != "cancelled")
 
+            if search_query:
+                search_term = f"%{search_query.lower()}%"
+                playlist_name = func.coalesce(Playlist.playlist_data["name"].as_string(), "")
+                primary_emotion = func.coalesce(Playlist.mood_analysis_data["primary_emotion"].as_string(), "")
+                energy_level = func.coalesce(Playlist.mood_analysis_data["energy_level"].as_string(), "")
+                recommendations_data = func.coalesce(func.cast(Playlist.recommendations_data, String), "")
+                query = query.where(
+                    or_(
+                        func.lower(Playlist.mood_prompt).like(search_term),
+                        func.lower(playlist_name).like(search_term),
+                        func.lower(primary_emotion).like(search_term),
+                        func.lower(energy_level).like(search_term),
+                        func.lower(Playlist.status).like(search_term),
+                        func.lower(recommendations_data).like(search_term),
+                    )
+                )
+
             result = await self.session.execute(query)
             count = result.scalar() or 0
 
@@ -690,7 +748,8 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 user_id=user_id,
                 status=status,
                 count=count,
-                include_deleted=include_deleted
+                include_deleted=include_deleted,
+                search_query=search_query,
             )
 
             return count
