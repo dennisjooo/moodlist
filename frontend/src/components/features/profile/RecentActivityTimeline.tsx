@@ -60,13 +60,16 @@ const formatTimeAgo = (dateString: string) => {
 };
 
 export function RecentActivityTimeline({ recentActivity, enablePagination = false, isLoading: externalIsLoading = false }: RecentActivityTimelineProps) {
-    const [activities, setActivities] = useState<RecentPlaylist[]>(() => enablePagination ? [] : recentActivity);
+    const hasInitialActivities = recentActivity.length > 0;
+    const [activities, setActivities] = useState<RecentPlaylist[]>(() => [...recentActivity]);
     const [isLoading, setIsLoading] = useState(false);
     const [hasMore, setHasMore] = useState(enablePagination);
-    const [offset, setOffset] = useState(0);
-    const [isInitialLoad, setIsInitialLoad] = useState(enablePagination);
-    const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+    const [offset, setOffset] = useState(() => enablePagination ? recentActivity.length : 0);
+    const [isInitialLoad, setIsInitialLoad] = useState(() => enablePagination && !hasInitialActivities);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const displayedActivities = activities.length > 0 ? activities : recentActivity;
+    const hasAnyActivities = displayedActivities.length > 0;
+    const isFetching = externalIsLoading || (enablePagination && (isInitialLoad || isLoading));
 
     const loadMoreActivities = useCallback(async () => {
         if (isLoading || !hasMore || !enablePagination) return;
@@ -115,22 +118,31 @@ export function RecentActivityTimeline({ recentActivity, enablePagination = fals
         }
     }, [enablePagination, isInitialLoad, loadMoreActivities]);
 
-    // Mark as loaded once when pagination initial load completes
+    // Update activities when recentActivity prop changes
     useEffect(() => {
-        if (enablePagination && !isInitialLoad && !isLoading && !hasLoadedOnce) {
-            setHasLoadedOnce(true);
-        }
-    }, [enablePagination, isInitialLoad, isLoading, hasLoadedOnce]);
+        if (enablePagination) {
+            setActivities(prev => {
+                const recentIds = new Set(recentActivity.map(activity => activity.id));
+                const mergedActivities = [...recentActivity];
 
-    // Update activities when recentActivity prop changes (for non-paginated mode)
-    useEffect(() => {
-        if (!enablePagination) {
-            setActivities(recentActivity);
-            if (!externalIsLoading && recentActivity.length >= 0) {
-                setHasLoadedOnce(true);
+                for (const activity of prev) {
+                    if (!recentIds.has(activity.id)) {
+                        mergedActivities.push(activity);
+                    }
+                }
+
+                return mergedActivities;
+            });
+
+            if (recentActivity.length > 0) {
+                setIsInitialLoad(false);
             }
+
+            setOffset(prev => Math.max(prev, recentActivity.length));
+        } else {
+            setActivities([...recentActivity]);
         }
-    }, [recentActivity, enablePagination, externalIsLoading]);
+    }, [recentActivity, enablePagination]);
 
     useEffect(() => {
         const container = scrollContainerRef.current;
@@ -141,12 +153,12 @@ export function RecentActivityTimeline({ recentActivity, enablePagination = fals
     }, [handleScroll, enablePagination]);
 
     // Show skeleton while loading
-    if (externalIsLoading || (enablePagination && isInitialLoad)) {
+    if (!hasAnyActivities && isFetching) {
         return <RecentActivitySkeleton />;
     }
 
     // Only show empty state if not loading, has loaded once, and truly no activities
-    if ((!activities || activities.length === 0) && !externalIsLoading && hasLoadedOnce) {
+    if (!hasAnyActivities && !isFetching) {
         return (
             <Card>
                 <CardHeader className="pb-3">
@@ -164,11 +176,6 @@ export function RecentActivityTimeline({ recentActivity, enablePagination = fals
         );
     }
 
-    // If we haven't loaded yet and have no activities, show skeleton
-    if ((!activities || activities.length === 0) && !hasLoadedOnce) {
-        return <RecentActivitySkeleton />;
-    }
-
     return (
         <Card className="lg:h-full flex flex-col">
             <CardHeader className="flex-shrink-0 pb-3">
@@ -182,7 +189,7 @@ export function RecentActivityTimeline({ recentActivity, enablePagination = fals
                 className="lg:flex-1 lg:overflow-y-auto lg:min-h-0 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-muted [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/30"
             >
                 <div className="space-y-4">
-                    {activities.map((playlist, index) => {
+                    {displayedActivities.map((playlist, index) => {
                         const StatusIcon = getStatusIcon(playlist.status);
 
                         return (
@@ -268,4 +275,3 @@ export function RecentActivityTimeline({ recentActivity, enablePagination = fals
         </Card>
     );
 }
-
