@@ -4,8 +4,9 @@ from typing import List, Optional
 from datetime import datetime
 
 import structlog
-from sqlalchemy import select, and_, or_, desc
+from sqlalchemy import select, and_, or_, desc, func
 from sqlalchemy.orm import selectinload
+from sqlalchemy.dialects.postgresql import insert
 
 from app.models.user import User
 from app.repositories.base_repository import BaseRepository
@@ -470,6 +471,78 @@ class UserRepository(BaseRepository[User]):
         except Exception as e:
             self.logger.error(
                 "Database error creating or updating user",
+                spotify_id=spotify_id,
+                error=str(e)
+            )
+            await self.session.rollback()
+            raise
+
+    async def upsert_user(
+        self,
+        spotify_id: str,
+        access_token: str,
+        refresh_token: str,
+        token_expires_at: datetime,
+        display_name: str,
+        email: Optional[str] = None,
+        profile_image_url: Optional[str] = None,
+    ) -> User:
+        """Create or update user in a single database operation using UPSERT.
+        
+        This is significantly faster than the get_by_spotify_id + update/create pattern.
+        Uses PostgreSQL's INSERT ... ON CONFLICT for optimal performance.
+        
+        Args:
+            spotify_id: Spotify user ID
+            access_token: Spotify access token
+            refresh_token: Spotify refresh token  
+            token_expires_at: Token expiration timestamp
+            display_name: User display name
+            email: User email (optional)
+            profile_image_url: Profile image URL (optional)
+        
+        Returns:
+            Created or updated user instance
+        """
+        try:
+            stmt = insert(User).values(
+                spotify_id=spotify_id,
+                access_token=access_token,
+                refresh_token=refresh_token,
+                token_expires_at=token_expires_at,
+                display_name=display_name,
+                email=email,
+                profile_image_url=profile_image_url,
+                is_active=True
+            ).on_conflict_do_update(
+                index_elements=['spotify_id'],
+                set_={
+                    'access_token': access_token,
+                    'refresh_token': refresh_token,
+                    'token_expires_at': token_expires_at,
+                    'display_name': display_name,
+                    'email': email,
+                    'profile_image_url': profile_image_url,
+                    'is_active': True,
+                    'updated_at': func.now()
+                }
+            ).returning(User)
+            
+            result = await self.session.execute(stmt)
+            user = result.scalar_one()
+            await self.session.flush()
+            
+            self.logger.info(
+                "User upserted successfully",
+                spotify_id=spotify_id,
+                user_id=user.id
+            )
+            
+            return user
+            
+        except Exception as e:
+            self.logger.error(
+                "Database error upserting user",
                 spotify_id=spotify_id,
                 error=str(e)
             )

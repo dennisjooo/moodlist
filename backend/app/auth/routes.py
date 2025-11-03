@@ -48,9 +48,17 @@ async def register(
 ):
     """Register a new user by fetching profile from Spotify.
     
+    OPTIMIZED VERSION with:
+    - UPSERT for user creation/update (1 query instead of 2)
+    - Atomic session replacement (1 query instead of 2)
+    - Performance timing and logging
+    
     Rate limit: 10 requests per minute per IP address.
     """
-    logger.info("Registration attempt with Spotify token")
+    import time
+    start_time = time.time()
+    
+    logger.info("Login attempt", ip=request.client.host)
     
     # Fetch user profile from Spotify using centralized client
     spotify_client = SpotifyAPIClient()
@@ -63,14 +71,17 @@ async def register(
         logger.error("Unexpected error fetching Spotify profile", error=str(e))
         raise InternalServerError("Failed to authenticate with Spotify")
     
-    logger.info("Profile fetched successfully", spotify_id=profile_data["id"])
+    spotify_fetch_time = time.time() - start_time
+    logger.debug("Spotify profile fetched", duration_ms=spotify_fetch_time * 1000)
     
-    # Create or update user
+    # Extract profile data
     profile_image_url = None
     if profile_data.get("images") and len(profile_data["images"]) > 0:
         profile_image_url = profile_data["images"][0]["url"]
     
-    user = await user_repo.create_or_update_user(
+    # OPTIMIZED: Single-query upsert
+    db_start = time.time()
+    user = await user_repo.upsert_user(
         spotify_id=profile_data["id"],
         access_token=user_data.access_token,
         refresh_token=user_data.refresh_token,
@@ -78,26 +89,25 @@ async def register(
         display_name=profile_data.get("display_name", "Unknown User"),
         email=profile_data.get("email"),
         profile_image_url=profile_image_url,
-        commit=True
     )
     
-    logger.info("User created/updated", user_id=user.id, spotify_id=user.spotify_id)
-    
-    # Create session
+    # OPTIMIZED: Atomic session replacement
     session_token = generate_session_token()
     expires_at = datetime.now(timezone.utc) + timedelta(hours=SessionConstants.EXPIRATION_HOURS)
-
-    # Clean up any existing sessions for this user to prevent conflicts
-    await session_repo.delete_user_sessions(user.id)
-
-    session = await session_repo.create_session_for_user(
+    
+    session = await session_repo.replace_user_session_atomic(
         user_id=user.id,
         session_token=session_token,
         ip_address=request.client.host,
         user_agent=request.headers.get("user-agent"),
         expires_at=expires_at,
-        commit=True
     )
+    
+    # Commit transaction
+    await session_repo.session.commit()
+    
+    db_time = time.time() - db_start
+    logger.debug("Database operations completed", duration_ms=db_time * 1000)
 
     # Set session cookie using utility
     set_session_cookie(response, session_token)
@@ -107,7 +117,15 @@ async def register(
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
     
-    logger.info("Registration successful", user_id=user.id, spotify_id=user.spotify_id)
+    total_time = time.time() - start_time
+    logger.info(
+        "Login successful",
+        user_id=user.id,
+        spotify_id=user.spotify_id,
+        total_duration_ms=total_time * 1000,
+        spotify_duration_ms=spotify_fetch_time * 1000,
+        db_duration_ms=db_time * 1000
+    )
     
     return TokenResponse(
         access_token=access_token,
