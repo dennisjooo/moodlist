@@ -146,12 +146,32 @@ class BaseAPITool(BaseTool, ABC):
             # Enable HTTP/2 for better performance
             http2=True
         )
+        self._closed = False
+
+    async def close(self):
+        """Close HTTP client and cleanup resources."""
+        if not self._closed and self.client:
+            await self.client.aclose()
+            self._closed = True
+
+    def __del__(self):
+        """Warn if client wasn't properly closed."""
+        if not self._closed and self.client:
+            import warnings
+            warnings.warn(
+                f"HTTP client for {self.__class__.__name__} was not properly closed. "
+                f"Use 'async with' or call 'await close()' explicitly.",
+                ResourceWarning,
+                stacklevel=2
+            )
 
     async def __aenter__(self):
+        """Async context manager entry."""
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.client.aclose()
+        """Async context manager exit with cleanup."""
+        await self.close()
 
     def _make_cache_key(self, method: str, endpoint: str, params: Optional[Dict[str, Any]] = None,
                        json_data: Optional[Dict[str, Any]] = None) -> str:

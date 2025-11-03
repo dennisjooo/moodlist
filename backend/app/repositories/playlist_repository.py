@@ -1,10 +1,10 @@
 """Playlist repository for playlist-specific database operations."""
 
-from typing import List, Optional, Dict, Iterable
+from typing import List, Optional, Dict, Iterable, Any, Tuple
 from datetime import datetime, timezone
 
 import structlog
-from sqlalchemy import select, and_, asc, desc, func, or_, String
+from sqlalchemy import select, and_, asc, desc, func, or_, String, over
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -13,6 +13,20 @@ from app.repositories.base_repository import BaseRepository
 from app.core.exceptions import InternalServerError
 
 logger = structlog.get_logger(__name__)
+
+
+def safe_json_get(json_field: Optional[dict], key: str, default: Any = None) -> Any:
+    """Safely get value from JSON field that might be None.
+    
+    Args:
+        json_field: JSON field which might be None
+        key: Key to retrieve
+        default: Default value if field is None or key doesn't exist
+        
+    Returns:
+        Value from JSON field or default
+    """
+    return json_field.get(key, default) if json_field else default
 
 
 class PlaylistRepository(BaseRepository[Playlist]):
@@ -172,6 +186,140 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "sort_order": sort_order,
             },
         )
+
+    async def get_by_user_id_with_filters_and_count(
+        self,
+        user_id: int,
+        status: Optional[str] = None,  # Deprecated: use exclude_statuses instead
+        exclude_statuses: Optional[List[str]] = None,
+        skip: int = 0,
+        limit: Optional[int] = None,
+        include_deleted: bool = False,
+        search_query: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: str = "desc",
+    ) -> Tuple[List[Playlist], int]:
+        """Get playlists for a specific user with count in a single optimized query.
+        
+        This method is more efficient than calling get_by_user_id_with_filters and
+        count_user_playlists_with_filters separately as it performs both operations
+        in a single database round-trip.
+
+        Args:
+            user_id: User ID
+            status: Optional status filter (deprecated, use exclude_statuses)
+            exclude_statuses: Optional list of statuses to exclude
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            include_deleted: Include soft-deleted playlists
+            search_query: Optional search query string
+            sort_by: Sort field (created_at, name, track_count)
+            sort_order: Sort order (asc, desc)
+
+        Returns:
+            Tuple of (list of playlists, total count)
+        """
+        try:
+            # Build the base WHERE clause
+            where_clauses = [Playlist.user_id == user_id]
+            
+            if not include_deleted:
+                where_clauses.append(Playlist.deleted_at.is_(None))
+            
+            if status:
+                where_clauses.append(Playlist.status == status)
+            elif exclude_statuses:
+                # Validate all statuses are strings
+                for status_item in exclude_statuses:
+                    if not isinstance(status_item, str):
+                        from app.core.exceptions import ValidationException
+                        raise ValidationException(
+                            f"Status must be a string, got {type(status_item).__name__}"
+                        )
+                where_clauses.append(
+                    func.lower(Playlist.status).not_in([s.lower() for s in exclude_statuses])
+                )
+            
+            # Add search conditions if provided
+            if search_query:
+                search_term = f"%{search_query.lower()}%"
+                playlist_name = func.coalesce(Playlist.playlist_data["name"].as_string(), "")
+                primary_emotion = func.coalesce(Playlist.mood_analysis_data["primary_emotion"].as_string(), "")
+                energy_level = func.coalesce(Playlist.mood_analysis_data["energy_level"].as_string(), "")
+                recommendations_data = func.coalesce(func.cast(Playlist.recommendations_data, String), "")
+                
+                where_clauses.append(
+                    or_(
+                        func.lower(Playlist.mood_prompt).like(search_term),
+                        func.lower(playlist_name).like(search_term),
+                        func.lower(primary_emotion).like(search_term),
+                        func.lower(energy_level).like(search_term),
+                        func.lower(Playlist.status).like(search_term),
+                        func.lower(recommendations_data).like(search_term),
+                    )
+                )
+            
+            # First, get the total count with a simple count query
+            count_query = select(func.count(Playlist.id)).where(and_(*where_clauses))
+            count_result = await self.session.execute(count_query)
+            total_count = count_result.scalar() or 0
+            
+            # If total_count is 0, return early
+            if total_count == 0:
+                self.logger.debug(
+                    "No playlists found for user with filters",
+                    user_id=user_id,
+                    search_query=search_query
+                )
+                return ([], 0)
+            
+            # Build the main query for playlists
+            query = select(Playlist).where(and_(*where_clauses))
+            
+            # Apply sorting
+            sort_column = Playlist.created_at
+            if sort_by == "name":
+                sort_column = func.lower(
+                    func.coalesce(Playlist.playlist_data["name"].as_string(), Playlist.mood_prompt)
+                )
+            elif sort_by == "track_count":
+                sort_column = Playlist.track_count
+            
+            order_func = desc if sort_order.lower() == "desc" else asc
+            query = query.order_by(order_func(sort_column), desc(Playlist.created_at))
+            
+            # Apply pagination
+            if skip:
+                query = query.offset(skip)
+            if limit:
+                query = query.limit(limit)
+            
+            # Execute query
+            result = await self.session.execute(query)
+            playlists = list(result.scalars().all())
+            
+            self.logger.debug(
+                "User playlists retrieved with count (optimized)",
+                user_id=user_id,
+                count=len(playlists),
+                total=total_count,
+                skip=skip,
+                limit=limit,
+                search_query=search_query,
+                sort_by=sort_by,
+                sort_order=sort_order,
+            )
+            
+            return (playlists, total_count)
+            
+        except Exception as exc:
+            self.logger.error(
+                "Database error retrieving user playlists with count",
+                user_id=user_id,
+                error=str(exc),
+                search_query=search_query,
+            )
+            raise
 
     async def get_by_user_id(
         self,
@@ -1181,14 +1329,13 @@ class PlaylistRepository(BaseRepository[Playlist]):
                     "status": playlist.status,
                     "track_count": playlist.track_count,
                     "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
-                    "name": playlist.playlist_data.get("name") if playlist.playlist_data else None,
-                    "spotify_url": playlist.playlist_data.get("spotify_url") if playlist.playlist_data else None
+                    "name": safe_json_get(playlist.playlist_data, "name"),
+                    "spotify_url": safe_json_get(playlist.playlist_data, "spotify_url")
                 }
                 
                 # Extract primary emotion if available
-                if playlist.mood_analysis_data:
-                    playlist_info["primary_emotion"] = playlist.mood_analysis_data.get("primary_emotion")
-                    playlist_info["energy_level"] = playlist.mood_analysis_data.get("energy_level")
+                playlist_info["primary_emotion"] = safe_json_get(playlist.mood_analysis_data, "primary_emotion")
+                playlist_info["energy_level"] = safe_json_get(playlist.mood_analysis_data, "energy_level")
                 
                 recent_data.append(playlist_info)
 

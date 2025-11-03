@@ -82,8 +82,8 @@ async def get_user_playlists(
 
         search_query = search.strip() if search else None
 
-        # Get playlists from repository with filtering
-        playlists = await playlist_service.playlist_repository.get_by_user_id_with_filters(
+        # Get playlists and count in a single optimized query
+        playlists, total_count = await playlist_service.playlist_repository.get_by_user_id_with_filters_and_count(
             user_id=current_user.id,
             exclude_statuses=exclude_status_list,
             skip=offset,
@@ -129,13 +129,6 @@ async def get_user_playlists(
                 playlist_info["color_tertiary"] = playlist.color_tertiary
 
             playlists_data.append(playlist_info)
-
-        # Get total count for pagination
-        total_count = await playlist_service.playlist_repository.count_user_playlists_with_filters(
-            user_id=current_user.id,
-            exclude_statuses=exclude_status_list,
-            search_query=search_query,
-        )
 
         return {
             "playlists": playlists_data,
