@@ -1,3 +1,5 @@
+"""Playlist API schemas for requests, responses, and data projections."""
+
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
@@ -50,6 +52,7 @@ class PlaylistResponse(BaseModel):
     user: Optional[PlaylistUser] = None
 
     class Config:
+        """Allow constructing responses from ORM objects."""
         from_attributes = True
 
 

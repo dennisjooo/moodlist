@@ -106,7 +106,7 @@ class GetMultipleTracksTool(RateLimitedTool):
         except Exception as e:
             # 404 errors are expected when Spotify IDs don't exist in RecoBeat
             if "404" in str(e):
-                logger.debug(f"Some tracks not found in RecoBeat (404) - returning empty result")
+                logger.debug("Some tracks not found in RecoBeat (404) - returning empty result")
                 return ToolResult.success_result(
                     data={"tracks": [], "total_count": 0, "requested_count": len(ids)},
                     metadata={"source": "reccobeat", "api_endpoint": "/v1/track"}

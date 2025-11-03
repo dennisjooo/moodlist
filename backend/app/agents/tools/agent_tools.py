@@ -40,7 +40,11 @@ class AgentTools:
     """Collection of tools available to agents."""
 
     def __init__(self):
-        """Initialize the tool collection."""
+        """Initialize the registry of tools available to the agent runtime.
+
+        Creates the internal mapping of tool names to instances and hooks in any
+        baseline tools required for agent execution.
+        """
         self.tools: Dict[str, BaseTool] = {}
         self._register_core_tools()
 
@@ -166,11 +170,11 @@ class BaseAPITool(BaseTool, ABC):
             )
 
     async def __aenter__(self):
-        """Async context manager entry."""
+        """Prepare the tool for use within an async context and return it."""
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit with cleanup."""
+        """Clean up resources on context exit regardless of success or failure."""
         await self.close()
 
     def _make_cache_key(self, method: str, endpoint: str, params: Optional[Dict[str, Any]] = None,
@@ -257,7 +261,7 @@ class BaseAPITool(BaseTool, ABC):
             try:
                 return await request_func()
 
-            except httpx.TimeoutException as e:
+            except httpx.TimeoutException:
                 last_exception = APIError(f"Request timeout on attempt {attempt + 1}", response_data={"error": "timeout"})
                 if attempt < self.max_retries - 1:
                     wait_time = (2 ** attempt) * 0.5  # Exponential backoff

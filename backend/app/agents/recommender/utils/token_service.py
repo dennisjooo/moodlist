@@ -7,7 +7,6 @@ from typing import Optional
 import httpx
 from sqlalchemy import select
 
-from ....core.config import settings
 from ....core.database import async_session_factory
 from ....models.user import User
 from ....clients.spotify_client import SpotifyAPIClient

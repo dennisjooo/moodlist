@@ -12,9 +12,8 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from app.core.database import engine, Base
-from app.models import User, Session, Playlist, Invocation, LLMInvocation
-import structlog
+from app.core.database import engine, Base  # noqa: E402
+import structlog  # noqa: E402
 
 logger = structlog.get_logger(__name__)
 

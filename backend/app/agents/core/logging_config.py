@@ -1,6 +1,5 @@
 """Logging configuration for the agentic system."""
 
-import json
 import logging
 import logging.config
 from typing import Dict, Any

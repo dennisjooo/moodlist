@@ -1,9 +1,8 @@
 """Spotify track search tools."""
 
 import structlog
-from typing import Any, Dict, List, Optional, Type
+from typing import Optional, Type
 
-from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from ..agent_tools import RateLimitedTool, ToolResult

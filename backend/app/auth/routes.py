@@ -95,7 +95,7 @@ async def register(
     session_token = generate_session_token()
     expires_at = datetime.now(timezone.utc) + timedelta(hours=SessionConstants.EXPIRATION_HOURS)
     
-    session = await session_repo.replace_user_session_atomic(
+    await session_repo.replace_user_session_atomic(
         user_id=user.id,
         session_token=session_token,
         ip_address=request.client.host,

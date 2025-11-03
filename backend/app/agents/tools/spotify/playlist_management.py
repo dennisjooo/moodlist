@@ -1,9 +1,8 @@
 """Spotify playlist management tools for the agentic system."""
 
 import structlog
-from typing import Any, Dict, List, Optional, Type
+from typing import List, Optional, Type
 
-from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from ..agent_tools import RateLimitedTool, ToolResult

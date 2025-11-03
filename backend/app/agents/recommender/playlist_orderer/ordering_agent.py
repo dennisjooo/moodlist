@@ -96,7 +96,7 @@ class PlaylistOrderingAgent(BaseAgent):
             state.metadata["ordering_applied"] = True
 
             logger.info(
-                f"Playlist ordering complete",
+                "Playlist ordering complete",
                 strategy=strategy.get("strategy"),
                 track_count=len(ordered_recommendations)
             )

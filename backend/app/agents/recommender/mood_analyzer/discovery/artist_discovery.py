@@ -349,7 +349,12 @@ class ArtistDiscovery:
                     artist_idx = filter_info.get('index', -1)
                     reason = filter_info.get('reason', '')
                     name = filter_info.get('name', 'Unknown')
-                    logger.info(f"LLM filtered artist '{name}': {reason}")
+                    logger.info(
+                        "LLM filtered artist",
+                        artist_index=artist_idx,
+                        artist_name=name,
+                        reason=reason,
+                    )
                 
                 # Add kept artists to validated list
                 for idx in keep_indices:

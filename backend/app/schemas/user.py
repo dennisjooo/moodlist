@@ -1,3 +1,5 @@
+"""User-facing schemas for profile data, stats, and admin responses."""
+
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr
@@ -15,6 +17,7 @@ class UserResponse(BaseModel):
     updated_at: datetime
 
     class Config:
+        """Enable ORM attribute loading for SQLAlchemy models."""
         from_attributes = True
 
 
@@ -35,6 +38,7 @@ class UserProfileResponse(BaseModel):
     last_playlist_created: Optional[datetime] = None
 
     class Config:
+        """Enable ORM attribute loading for SQLAlchemy models."""
         from_attributes = True
 
 
