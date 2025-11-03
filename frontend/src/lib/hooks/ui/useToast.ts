@@ -1,4 +1,5 @@
 import { TIMING } from '@/lib/constants';
+import { useCallback } from 'react';
 import { toast as sonnerToast } from 'sonner';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
@@ -15,33 +16,33 @@ export interface ToastOptions {
 export function useToast() {
   const defaultDuration = TIMING.TOAST_DURATION;
 
-  const success = (message: string, options?: ToastOptions) => {
+  const success = useCallback((message: string, options?: ToastOptions) => {
     return sonnerToast.success(message, {
       duration: options?.duration ?? defaultDuration,
       description: options?.description,
     });
-  };
+  }, [defaultDuration]);
 
-  const error = (message: string, options?: ToastOptions) => {
+  const error = useCallback((message: string, options?: ToastOptions) => {
     return sonnerToast.error(message, {
       duration: options?.duration ?? defaultDuration,
       description: options?.description,
     });
-  };
+  }, [defaultDuration]);
 
-  const warning = (message: string, options?: ToastOptions) => {
+  const warning = useCallback((message: string, options?: ToastOptions) => {
     return sonnerToast.warning(message, {
       duration: options?.duration ?? defaultDuration,
       description: options?.description,
     });
-  };
+  }, [defaultDuration]);
 
-  const info = (message: string, options?: ToastOptions) => {
+  const info = useCallback((message: string, options?: ToastOptions) => {
     return sonnerToast.info(message, {
       duration: options?.duration ?? defaultDuration,
       description: options?.description,
     });
-  };
+  }, [defaultDuration]);
 
   return { success, error, warning, info };
 }
