@@ -52,7 +52,7 @@ class TrackAdder:
                         track_uris.append(normalized_uri)
                         logger.debug(f"Using track_id as URI: {rec.track_id} -> {normalized_uri}")
                 else:
-                    logger.warning(f"No Spotify URI or track ID for recommendation")
+                    logger.warning("No Spotify URI or track ID for recommendation")
 
             if not track_uris:
                 logger.error("No valid Spotify URIs found in recommendations")

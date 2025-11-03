@@ -1,9 +1,8 @@
 """Spotify user data tools for the agentic system."""
 
 import structlog
-from typing import Any, Dict, List, Optional, Type
+from typing import Type
 
-from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from ..agent_tools import RateLimitedTool, ToolResult
@@ -64,7 +63,7 @@ class GetUserTopTracksTool(RateLimitedTool):
             # Make API request
             response_data = await self._make_request(
                 method="GET",
-                endpoint=f"/me/top/tracks",
+                endpoint="/me/top/tracks",
                 params={
                     "limit": limit,
                     "time_range": time_range

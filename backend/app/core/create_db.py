@@ -13,8 +13,8 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from app.core.config import settings
-import structlog
+from app.core.config import settings  # noqa: E402
+import structlog  # noqa: E402
 
 logger = structlog.get_logger(__name__)
 

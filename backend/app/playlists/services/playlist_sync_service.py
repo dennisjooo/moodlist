@@ -18,6 +18,12 @@ class PlaylistSyncService:
         spotify_client: SpotifyAPIClient,
         playlist_repository: PlaylistRepository
     ):
+        """Store dependencies for orchestrating Spotify sync operations.
+
+        Args:
+            spotify_client: Client used for invoking Spotify Web API calls.
+            playlist_repository: Repository that persists playlist state locally.
+        """
         self.spotify_client = spotify_client
         self.playlist_repository = playlist_repository
         self.logger = logger.bind(service="PlaylistSyncService")
@@ -255,4 +261,3 @@ class PlaylistSyncService:
             updated_recommendations.append(recommendation)
 
         return updated_recommendations
-

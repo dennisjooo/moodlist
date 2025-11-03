@@ -4,13 +4,13 @@ from typing import List, Optional, Dict, Iterable, Any, Tuple
 from datetime import datetime, timezone
 
 import structlog
-from sqlalchemy import select, and_, asc, desc, func, or_, String, over
+from sqlalchemy import select, and_, asc, desc, func, or_, String
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.models.playlist import Playlist
 from app.repositories.base_repository import BaseRepository
-from app.core.exceptions import InternalServerError
+from app.core.exceptions import InternalServerError, ValidationException
 
 logger = structlog.get_logger(__name__)
 
@@ -542,23 +542,6 @@ class PlaylistRepository(BaseRepository[Playlist]):
             )
             raise
 
-    async def update_status(self, playlist_id: int, status: str, error_message: Optional[str] = None) -> Playlist:
-        """Update playlist status.
-
-        Args:
-            playlist_id: Playlist ID
-            status: New status
-            error_message: Optional error message
-
-        Returns:
-            Updated playlist instance
-        """
-        update_data = {"status": status}
-        if error_message is not None:
-            update_data["error_message"] = error_message
-
-        return await self.update(playlist_id, **update_data)
-
     async def soft_delete(self, playlist_id: int) -> bool:
         """Soft delete a playlist.
 
@@ -737,7 +720,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
             from app.models.user import User
 
             # Total active users
-            users_query = select(func.count(User.id)).where(User.is_active == True)
+            users_query = select(func.count(User.id)).where(User.is_active.is_(True))
             users_result = await self.session.execute(users_query)
             total_users = users_result.scalar() or 0
 
@@ -995,45 +978,6 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 error=str(e)
             )
             raise
-
-    async def get_by_session_id(
-        self,
-        session_id: str,
-        load_relationships: Optional[List[str]] = None
-    ) -> Optional[Playlist]:
-        """Get playlist by workflow session ID.
-
-        Args:
-            session_id: Workflow session ID
-            load_relationships: List of relationship names to eagerly load
-
-        Returns:
-            Playlist instance or None if not found
-        """
-        try:
-            query = select(Playlist).where(Playlist.session_id == session_id)
-
-            if load_relationships:
-                for relationship in load_relationships:
-                    query = query.options(selectinload(getattr(Playlist, relationship)))
-
-            result = await self.session.execute(query)
-            playlist = result.scalar_one_or_none()
-
-            if playlist:
-                self.logger.debug("Playlist retrieved by session ID", session_id=session_id)
-            else:
-                self.logger.debug("Playlist not found for session ID", session_id=session_id)
-
-            return playlist
-
-        except SQLAlchemyError as e:
-            self.logger.error(
-                "Database error retrieving playlist by session ID",
-                session_id=session_id,
-                error=str(e)
-            )
-            raise InternalServerError("Failed to retrieve playlist")
 
     async def get_by_session_id_and_user(
         self,

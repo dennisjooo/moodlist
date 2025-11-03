@@ -1,7 +1,7 @@
 """Main recommendation generator agent."""
 
 import structlog
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from ....core.base_agent import BaseAgent
 from ....states.agent_state import AgentState, RecommendationStatus, TrackRecommendation

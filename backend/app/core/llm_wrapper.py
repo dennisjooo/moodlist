@@ -1,7 +1,6 @@
 """Wrapper for LangChain LLMs to log invocations to database."""
 
 import time
-import json
 from typing import Any, Dict, List, Optional, Union
 from contextvars import ContextVar
 
@@ -10,7 +9,6 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage, AIMessage
 from langchain_core.outputs import ChatResult, ChatGeneration
 from langchain_core.callbacks import CallbackManagerForLLMRun
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.llm_invocation_repository import LLMInvocationRepository
 
@@ -406,12 +404,6 @@ class LoggingChatModel(BaseChatModel):
         **kwargs: Any,
     ) -> AIMessage:
         """Invoke the LLM (sync version)."""
-        if isinstance(input, str):
-            from langchain_core.messages import HumanMessage
-            messages = [HumanMessage(content=input)]
-        else:
-            messages = self._convert_to_messages(input)
-            
         start_time = time.time()
         error = None
         result = None
@@ -440,10 +432,10 @@ class LoggingChatModel(BaseChatModel):
         """Invoke the LLM (async version)."""
         if isinstance(input, str):
             from langchain_core.messages import HumanMessage
-            messages = [HumanMessage(content=input)]
+            logged_messages: List[BaseMessage] = [HumanMessage(content=input)]
         else:
-            messages = self._convert_to_messages(input)
-            
+            logged_messages = self._convert_to_messages(input)
+
         start_time = time.time()
         error = None
         result = None
@@ -464,5 +456,4 @@ class LoggingChatModel(BaseChatModel):
                 )
             else:
                 chat_result = None
-            await self._log_invocation(messages, chat_result, latency_ms, error)
-
+            await self._log_invocation(logged_messages, chat_result, latency_ms, error)

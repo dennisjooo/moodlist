@@ -274,7 +274,7 @@ class UserRepository(BaseRepository[User]):
             search_pattern = f"%{search_term}%"
             query = select(User).where(
                 and_(
-                    User.is_active == True,
+                    User.is_active.is_(True),
                     or_(
                         User.display_name.ilike(search_pattern),
                         User.email.ilike(search_pattern)
@@ -331,7 +331,7 @@ class UserRepository(BaseRepository[User]):
             query = select(User).where(
                 and_(
                     User.spotify_id == spotify_id,
-                    User.is_active == True
+                    User.is_active.is_(True)
                 )
             )
 
@@ -371,7 +371,7 @@ class UserRepository(BaseRepository[User]):
             query = select(User).where(
                 and_(
                     User.id == user_id,
-                    User.is_active == True
+                    User.is_active.is_(True)
                 )
             )
 

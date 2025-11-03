@@ -1,6 +1,5 @@
 """Rate limiting utilities for the agentic system."""
 
-import asyncio
 import time
 from typing import Dict, Optional, Tuple
 from collections import defaultdict, deque

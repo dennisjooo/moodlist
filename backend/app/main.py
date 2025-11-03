@@ -9,7 +9,6 @@ from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.middleware import LoggingMiddleware, InvocationStatusMiddleware
 from app.core.limiter import limiter
-from app.agents.core.cache import cache_manager
 from app.auth.routes import router as auth_router
 from app.spotify.routes import router as spotify_router
 from app.agents.routes import router as agent_router

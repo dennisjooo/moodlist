@@ -1,8 +1,7 @@
 """Spotify edit service for editing playlists saved to Spotify."""
 
-import json
 import structlog
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
 
 from ...clients.spotify_client import SpotifyAPIClient
 from ...core.exceptions import SpotifyAPIException

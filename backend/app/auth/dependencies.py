@@ -9,7 +9,6 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.security import verify_token
-from app.core.database import get_db
 from app.core.exceptions import UnauthorizedException, InternalServerError, SpotifyAuthError, RateLimitException
 from app.clients import SpotifyAPIClient
 from app.models.session import Session

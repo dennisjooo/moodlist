@@ -5,7 +5,6 @@ from typing import Optional, Literal
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
-from app.core.exceptions import NotFoundException
 from app.core.llm_factory import create_logged_llm
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -564,4 +563,3 @@ async def sync_playlist_from_spotify(
     except Exception as e:
         logger.error(f"Error syncing playlist from Spotify: {str(e)}", exc_info=True)
         raise InternalServerError(f"Failed to sync playlist: {str(e)}")
-
