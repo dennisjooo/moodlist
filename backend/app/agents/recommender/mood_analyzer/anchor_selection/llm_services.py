@@ -14,7 +14,7 @@ from .prompts import (
     get_batch_track_filter_prompt,
     get_batch_artist_validation_prompt,
 )
-from .types import AnchorCandidate, AnchorSelectionStrategy
+from .types import AnchorSelectionStrategy
 
 logger = structlog.get_logger(__name__)
 

@@ -1,3 +1,5 @@
+"""Schemas for authentication workflows and user session data."""
+
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
@@ -33,6 +35,7 @@ class UserResponse(BaseModel):
     updated_at: datetime
     
     class Config:
+        """Enable ORM compatibility for SQLAlchemy models."""
         from_attributes = True
 
 
@@ -68,6 +71,7 @@ class SessionResponse(BaseModel):
     last_activity: datetime
     
     class Config:
+        """Enable ORM compatibility for SQLAlchemy models."""
         from_attributes = True
 
 
@@ -76,4 +80,3 @@ class AuthResponse(BaseModel):
     user: UserResponse
     session: Optional[SessionResponse] = None
     requires_spotify_auth: bool = False
-

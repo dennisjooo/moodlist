@@ -264,7 +264,7 @@ class PlaylistService:
                 return await self.get_playlist_by_id(playlist_id, user_id)
 
             # Update in database
-            updated_playlist = await self.playlist_repository.update(playlist_id, **update_data)
+            await self.playlist_repository.update(playlist_id, **update_data)
 
             self.logger.info(
                 "Updated playlist details",

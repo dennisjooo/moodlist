@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from langchain_core.language_models.base import BaseLanguageModel
 
-from ...states.agent_state import AgentState, RecommendationStatus
+from ...states.agent_state import AgentState
 from ...core.base_agent import BaseAgent
 from ..utils.llm_response_parser import LLMResponseParser
 from .prompts import get_strategy_decision_prompt
@@ -58,7 +58,6 @@ class ImprovementStrategy:
         
         # Fallback to rule-based compound strategy selection
         strategies = []
-        issues = quality_evaluation.get("issues", [])
         outlier_count = len(quality_evaluation.get("outlier_tracks", []))
         cohesion_score = quality_evaluation.get("cohesion_score", 0)
         recommendations_count = quality_evaluation.get("recommendations_count", 0)
@@ -304,13 +303,16 @@ class ImprovementStrategy:
             f"(current: {current_count}, target: {target_count})"
         )
 
-        # Store current recommendations temporarily
-        existing_recommendations = state.recommendations.copy()
+        previous_count = len(state.recommendations)
 
         # Generate new recommendations
         state = await self.recommendation_generator.run_with_error_handling(state)
 
-        # The recommendation generator will add to existing recommendations
+        logger.info(
+            "Generated additional recommendations",
+            previous_count=previous_count,
+            new_count=len(state.recommendations),
+        )
 
         return state
 

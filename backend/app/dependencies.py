@@ -94,7 +94,6 @@ def get_playlist_service(
     playlist_repo: PlaylistRepository = Depends(get_playlist_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     spotify_client: SpotifyAPIClient = Depends(get_spotify_client),
-    workflow_state_service: WorkflowStateService = Depends(get_workflow_state_service)
 ) -> PlaylistService:
     """Get playlist service."""
     return PlaylistService(spotify_client, playlist_repo, user_repo)

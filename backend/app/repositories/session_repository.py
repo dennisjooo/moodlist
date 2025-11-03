@@ -431,7 +431,7 @@ class SessionRepository(BaseRepository[Session]):
                     Session.expires_at > now
                 )
             ).join(Session.user).where(
-                User.is_active == True
+                User.is_active.is_(True)
             ).options(selectinload(Session.user))  # Load user in same query
 
             result = await self.session.execute(query)

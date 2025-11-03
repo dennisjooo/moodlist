@@ -1,7 +1,7 @@
 """Validation utilities for track recommendations."""
 
 import structlog
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 from ..utils import config
 

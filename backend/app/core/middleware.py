@@ -7,8 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
 import structlog
 
-from app.core.database import get_db
-from app.models.invocation import Invocation
 from app.models.user import User
 from app.auth.dependencies import get_current_user_optional
 

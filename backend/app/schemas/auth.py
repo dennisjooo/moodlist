@@ -1,3 +1,5 @@
+"""Shared authentication schemas exposed to the public API."""
+
 from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field
@@ -37,6 +39,7 @@ class SessionResponse(BaseModel):
     last_activity: datetime
 
     class Config:
+        """Enable ORM-mode serialization from SQLAlchemy models."""
         from_attributes = True
 
 

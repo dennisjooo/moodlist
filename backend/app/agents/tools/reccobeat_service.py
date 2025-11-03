@@ -90,6 +90,7 @@ class RecoBeatService:
         semaphore = asyncio.Semaphore(concurrency)
 
         async def run(item: T) -> R:
+            """Execute a single work item while respecting the concurrency limit."""
             async with semaphore:
                 return await worker(item)
 
@@ -208,7 +209,7 @@ class RecoBeatService:
             return cached_recommendations
 
         # Cache miss - fetch from API
-        logger.info(f"Cache miss for recommendations, fetching from API")
+        logger.info("Cache miss for recommendations, fetching from API")
 
         tool = self.tools.get_tool("get_track_recommendations")
         if not tool:
