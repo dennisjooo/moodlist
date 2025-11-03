@@ -9,7 +9,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Loader2, Star, Trash2 } from 'lucide-react';
 import { memo } from 'react';
-import TrackDetailsTooltip from '../PlaylistResults/TrackDetailsTooltip';
+import TrackDetailsTooltip from '../TrackDetailsTooltip';
 
 export interface TrackItemProps {
     track: Track;

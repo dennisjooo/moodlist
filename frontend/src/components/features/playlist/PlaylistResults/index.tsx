@@ -5,7 +5,7 @@ export { default as MoodAnalysisCard } from './MoodAnalysisCard';
 export { default as TrackListView } from './TrackListView';
 export { default as TrackRow } from './TrackRow';
 export { default as DeletePlaylistDialog } from './DeletePlaylistDialog';
-export { default as TrackDetailsTooltip } from './TrackDetailsTooltip';
+export { default as TrackDetailsTooltip } from '../TrackDetailsTooltip';
 
 // Default export
 export { default } from './PlaylistResults';

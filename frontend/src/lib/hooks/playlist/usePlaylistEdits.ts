@@ -35,10 +35,11 @@ export function usePlaylistEdits({ sessionId, initialTracks }: UsePlaylistEditsO
     // Search state - use existing debounced search hook
     const [searchQuery, setSearchQuery, debouncedQuery] = useDebouncedSearch('', undefined, 300);
     const [searchResults, setSearchResults] = useState<SearchTrack[]>([]);
+    const [lastSearchedQuery, setLastSearchedQuery] = useState<string>('');
     const [isSearching, setIsSearching] = useState(false);
 
     // Calculate pending state - when user is typing but debounce hasn't fired yet
-    const isSearchPending = searchQuery !== debouncedQuery;
+    const isSearchPending = searchQuery !== debouncedQuery || (debouncedQuery !== lastSearchedQuery && debouncedQuery.trim() !== '');
 
     // Sync tracks when recommendations prop changes (from context updates)
     useEffect(() => {
@@ -50,22 +51,39 @@ export function usePlaylistEdits({ sessionId, initialTracks }: UsePlaylistEditsO
         if (!debouncedQuery.trim()) {
             setSearchResults([]);
             setIsSearching(false);
+            setLastSearchedQuery('');
             return;
         }
 
         setIsSearching(true);
+        let isCancelled = false;
+        const currentQuery = debouncedQuery;
 
-        searchTracksApi(debouncedQuery)
+        searchTracksApi(currentQuery)
             .then(results => {
-                setSearchResults(results.tracks || []);
+                // Only update results if this request is still valid (not superseded by a newer search)
+                if (!isCancelled) {
+                    setSearchResults(results.tracks || []);
+                    setLastSearchedQuery(currentQuery);
+                }
             })
             .catch(error => {
-                logger.error('Search failed', error, { component: 'usePlaylistEdits' });
-                showError('Failed to search tracks');
+                if (!isCancelled) {
+                    logger.error('Search failed', error, { component: 'usePlaylistEdits' });
+                    showError('Failed to search tracks');
+                    setLastSearchedQuery(currentQuery);
+                }
             })
             .finally(() => {
-                setIsSearching(false);
+                if (!isCancelled) {
+                    setIsSearching(false);
+                }
             });
+
+        // Cleanup function to mark this request as cancelled if a new search starts
+        return () => {
+            isCancelled = true;
+        };
     }, [debouncedQuery, searchTracksApi, showError]);
 
     const reorderTrack = useCallback(async (oldIndex: number, newIndex: number) => {
