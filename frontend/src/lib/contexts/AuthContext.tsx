@@ -4,7 +4,8 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { getAuthCookies, getCookie } from '../cookies';
 import { config } from '@/lib/config';
 import { logger } from '@/lib/utils/logger';
-import { User, AuthContextType, AuthProviderProps, CachedAuthData } from '../types/auth';
+import { User, AuthContextType, AuthProviderProps } from '../types/auth';
+import { useAuthCache } from '@/lib/hooks/auth/useAuthCache';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -14,52 +15,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Track if backend verification completed
   const [isValidated, setIsValidated] = useState(false);
 
-  // Get cached auth data from SessionStorage
-  const getCachedAuth = (): CachedAuthData | null => {
-    if (typeof window === 'undefined') return null;
-    try {
-      const cached = sessionStorage.getItem(config.auth.cacheKey);
-      if (!cached) return null;
-
-      const data: CachedAuthData = JSON.parse(cached);
-      const age = Date.now() - data.timestamp;
-
-      // Check if cache is still valid (within TTL)
-      if (age > config.auth.cacheTTL) {
-        sessionStorage.removeItem(config.auth.cacheKey);
-        return null;
-      }
-
-      return data;
-    } catch (error) {
-      logger.warn('Failed to read auth cache', { component: 'AuthContext', error });
-      return null;
-    }
-  };
-
-  // Set cached auth data in SessionStorage
-  const setCachedAuth = (user: User) => {
-    if (typeof window === 'undefined') return;
-    try {
-      const data: CachedAuthData = {
-        user,
-        timestamp: Date.now(),
-      };
-      sessionStorage.setItem(config.auth.cacheKey, JSON.stringify(data));
-    } catch (error) {
-      logger.warn('Failed to write auth cache', { component: 'AuthContext', error });
-    }
-  };
-
-  // Clear cached auth data
-  const clearCachedAuth = () => {
-    if (typeof window === 'undefined') return;
-    try {
-      sessionStorage.removeItem(config.auth.cacheKey);
-    } catch (error) {
-      logger.warn('Failed to clear auth cache', { component: 'AuthContext', error });
-    }
-  };
+  // Use the extracted cache hook
+  const { getCachedAuth, setCachedAuth, clearCachedAuth } = useAuthCache();
 
   const checkAuthStatus = async (retryCount = 0, skipCache = false) => {
     try {
