@@ -29,6 +29,7 @@ from app.repositories.session_repository import SessionRepository
 from app.repositories.playlist_repository import PlaylistRepository
 from app.dependencies import get_user_repository, get_session_repository, get_playlist_repository
 from app.agents.core.cache import cache_manager
+from app.core.limiter import limiter
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -37,6 +38,7 @@ security = HTTPBearer(auto_error=False)
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def register(
     request: Request,
     user_data: UserCreate,
@@ -44,7 +46,10 @@ async def register(
     user_repo: UserRepository = Depends(get_user_repository),
     session_repo: SessionRepository = Depends(get_session_repository)
 ):
-    """Register a new user by fetching profile from Spotify."""
+    """Register a new user by fetching profile from Spotify.
+    
+    Rate limit: 10 requests per minute per IP address.
+    """
     logger.info("Registration attempt with Spotify token")
     
     # Fetch user profile from Spotify using centralized client
@@ -113,11 +118,16 @@ async def register(
 
 
 @router.post("/refresh", response_model=TokenResponse)
+@limiter.limit("20/minute")
 async def refresh_token(
+    request: Request,
     refresh_data: RefreshTokenRequest,
     user_repo: UserRepository = Depends(get_user_repository)
 ):
-    """Refresh access token using refresh token."""
+    """Refresh access token using refresh token.
+    
+    Rate limit: 20 requests per minute per IP address.
+    """
     logger.info("Token refresh attempt")
     
     # Verify refresh token

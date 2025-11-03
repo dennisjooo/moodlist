@@ -1,6 +1,6 @@
 """Playlist repository for playlist-specific database operations."""
 
-from typing import List, Optional, Dict, Iterable
+from typing import List, Optional, Dict, Iterable, Any
 from datetime import datetime, timezone
 
 import structlog
@@ -13,6 +13,20 @@ from app.repositories.base_repository import BaseRepository
 from app.core.exceptions import InternalServerError
 
 logger = structlog.get_logger(__name__)
+
+
+def safe_json_get(json_field: Optional[dict], key: str, default: Any = None) -> Any:
+    """Safely get value from JSON field that might be None.
+    
+    Args:
+        json_field: JSON field which might be None
+        key: Key to retrieve
+        default: Default value if field is None or key doesn't exist
+        
+    Returns:
+        Value from JSON field or default
+    """
+    return json_field.get(key, default) if json_field else default
 
 
 class PlaylistRepository(BaseRepository[Playlist]):
@@ -1181,14 +1195,13 @@ class PlaylistRepository(BaseRepository[Playlist]):
                     "status": playlist.status,
                     "track_count": playlist.track_count,
                     "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
-                    "name": playlist.playlist_data.get("name") if playlist.playlist_data else None,
-                    "spotify_url": playlist.playlist_data.get("spotify_url") if playlist.playlist_data else None
+                    "name": safe_json_get(playlist.playlist_data, "name"),
+                    "spotify_url": safe_json_get(playlist.playlist_data, "spotify_url")
                 }
                 
                 # Extract primary emotion if available
-                if playlist.mood_analysis_data:
-                    playlist_info["primary_emotion"] = playlist.mood_analysis_data.get("primary_emotion")
-                    playlist_info["energy_level"] = playlist.mood_analysis_data.get("energy_level")
+                playlist_info["primary_emotion"] = safe_json_get(playlist.mood_analysis_data, "primary_emotion")
+                playlist_info["energy_level"] = safe_json_get(playlist.mood_analysis_data, "energy_level")
                 
                 recent_data.append(playlist_info)
 
