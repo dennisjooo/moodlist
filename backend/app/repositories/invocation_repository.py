@@ -87,7 +87,8 @@ class InvocationRepository(BaseRepository[Invocation]):
                 invocation_id=getattr(invocation, "id", None),
                 endpoint=endpoint,
                 method=method,
-                status_code=status_code
+                status_code=status_code,
+                processing_time_ms=getattr(invocation, "processing_time_ms", None)
             )
 
             return invocation
