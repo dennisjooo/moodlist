@@ -61,7 +61,53 @@ export function shouldAcceptStatusUpdate(
  * Checks if a workflow status is in a terminal state
  */
 export function isTerminalStatus(status: string | null): boolean {
-    return status === 'completed' || status === 'failed';
+    return status === 'completed' || status === 'failed' || status === 'cancelled';
+}
+
+/**
+ * Checks if a workflow is actively running (not terminal)
+ */
+export function isActiveStatus(status: string | null): boolean {
+    return status !== null && !isTerminalStatus(status);
+}
+
+/**
+ * Checks if a workflow ended in an error state
+ */
+export function isErrorStatus(status: string | null): boolean {
+    return status === 'failed' || status === 'cancelled';
+}
+
+/**
+ * Checks if a workflow completed successfully
+ */
+export function isSuccessStatus(status: string | null): boolean {
+    return status === 'completed';
+}
+
+/**
+ * Get user-friendly status message
+ */
+export function getStatusMessage(status: string | null, currentStep?: string): string {
+    if (!status) return 'Initializing...';
+
+    const messages: Record<string, string> = {
+        pending: 'Starting workflow...',
+        analyzing_mood: 'Analyzing your mood...',
+        gathering_seeds: 'Finding seed tracks...',
+        generating_recommendations: 'Generating recommendations...',
+        evaluating_quality: 'Evaluating track quality...',
+        optimizing_recommendations: 'Optimizing playlist...',
+        ordering_playlist: 'Ordering tracks...',
+        awaiting_user_input: 'Awaiting your input...',
+        processing_edits: 'Processing your edits...',
+        creating_playlist: 'Creating playlist...',
+        completed: 'Playlist completed!',
+        failed: 'Workflow failed',
+        cancelled: 'Workflow cancelled',
+    };
+
+    return messages[status] || currentStep || status;
 }
 
 /**
