@@ -44,7 +44,7 @@ export function AlreadyAuthenticatedView() {
               You're good to go!
             </CardTitle>
             <CardDescription className="text-base text-muted-foreground">
-              You're already logged in. Redirecting you to your dashboard...
+              You're already logged in. Redirecting you to our homepage...
             </CardDescription>
           </div>
         </CardHeader>
