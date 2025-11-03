@@ -8,6 +8,7 @@
 ## 🔍 Critical Issues
 
 ### Bug: Processing Time Always Zero
+
 **File:** `backend/app/core/middleware.py:189`
 
 ```python
@@ -17,6 +18,7 @@
 **Issue:** This defeats the purpose of the X-Processing-Time header. Needs to store start_time before processing.
 
 **Fix:**
+
 ```python
 start_time = time.time()
 response = await call_next(request)
@@ -26,6 +28,7 @@ processing_time = time.time() - start_time
 ---
 
 ### Duplicate Methods in PlaylistRepository
+
 **File:** `backend/app/repositories/playlist_repository.py`
 
 - `get_by_session_id` defined **twice** (lines 236-269 and 841-878)
@@ -40,6 +43,7 @@ processing_time = time.time() - start_time
 ### 1. Unused Function Arguments
 
 #### `get_playlist_service()` - Unused Dependency
+
 **File:** `backend/app/dependencies.py:93-100`
 
 ```python
@@ -63,11 +67,13 @@ def get_playlist_service(
 ### 2. Code Duplication
 
 #### Repository Dependency Functions
+
 **File:** `backend/app/dependencies.py:32-64`
 
 **Issue:** 5 nearly identical repository dependency functions with the same structure.
 
 **Current:**
+
 ```python
 def get_user_repo(db: AsyncSession = Depends(get_db)) -> UserRepository:
     return UserRepository(db)
@@ -79,6 +85,7 @@ def get_playlist_repo(db: AsyncSession = Depends(get_db)) -> PlaylistRepository:
 ```
 
 **Suggested Refactor:**
+
 ```python
 def create_repository_dependency(repo_class):
     def get_repository(db: AsyncSession = Depends(get_db)):
@@ -93,11 +100,13 @@ get_playlist_repo = create_repository_dependency(PlaylistRepository)
 ---
 
 #### Token Creation Functions
+
 **File:** `backend/app/auth/security.py:13-32`
 
 **Issue:** `create_access_token` and `create_refresh_token` have nearly identical code.
 
 **Suggested Refactor:**
+
 ```python
 def _create_token(data: dict, expires_delta: timedelta, token_type: str) -> str:
     """Generic token creation function."""
@@ -118,11 +127,13 @@ def create_refresh_token(data: dict, expires_delta: timedelta = None) -> str:
 ---
 
 #### Get By Field Pattern
+
 **File:** `backend/app/repositories/user_repository.py:24-92`
 
 **Issue:** `get_by_spotify_id` and `get_by_email` have identical structure.
 
 **Suggested Refactor:**
+
 ```python
 async def _get_by_field(self, field_name: str, field_value: str) -> Optional[User]:
     """Generic method to get user by any field."""
@@ -143,9 +154,11 @@ async def get_by_email(self, email: str) -> Optional[User]:
 ### 3. Long Functions (>100 lines)
 
 #### `save_playlist_to_spotify()` - 153 Lines
+
 **File:** `backend/app/playlists/routes.py:380-532`
 
 **Issue:** Handles multiple responsibilities:
+
 - Token refresh
 - State loading
 - Database reconstruction
@@ -153,6 +166,7 @@ async def get_by_email(self, email: str) -> Optional[User]:
 - Error handling
 
 **Suggested Breakdown:**
+
 ```python
 async def _get_or_reconstruct_state(session_id: str, db: AsyncSession) -> dict:
     """Load or reconstruct workflow state."""
@@ -184,11 +198,13 @@ async def save_playlist_to_spotify(...):
 ---
 
 #### `get_user_dashboard_analytics()` - 100 Lines
+
 **File:** `backend/app/repositories/playlist_repository.py:1196-1295`
 
 **Issue:** Complex aggregation logic with multiple nested loops.
 
 **Suggested Breakdown:**
+
 ```python
 def _calculate_emotion_distribution(self, playlists: List[Playlist]) -> dict:
     """Calculate emotion distribution from playlists."""
@@ -221,11 +237,13 @@ async def get_user_dashboard_analytics(self, user_id: str) -> dict:
 ---
 
 #### `_log_invocation()` - 95 Lines
+
 **File:** `backend/app/core/llm_wrapper.py:244-338`
 
 **Issue:** Handles config extraction, token counting, cost calculation, and database logging.
 
 **Suggested Breakdown:**
+
 ```python
 def _extract_token_usage(self, response: Any) -> dict:
     """Extract token usage from response."""
@@ -253,6 +271,7 @@ async def _log_invocation(self, ...):
 ### 4. Magic Numbers/Strings
 
 #### Hardcoded LLM Pricing
+
 **File:** `backend/app/core/llm_wrapper.py:219-226`
 
 ```python
@@ -269,6 +288,7 @@ pricing = {
 ---
 
 #### Exponential Backoff Base
+
 **File:** `backend/app/clients/spotify_client.py:484,496`
 
 ```python
@@ -277,6 +297,7 @@ wait_time = 2 ** attempt
 ```
 
 **Suggestion:**
+
 ```python
 BACKOFF_BASE = 2
 BACKOFF_MAX_WAIT = 60
@@ -287,6 +308,7 @@ wait_time = min(BACKOFF_BASE ** attempt, BACKOFF_MAX_WAIT)
 ---
 
 #### Token Refresh Buffer
+
 **File:** `backend/app/auth/dependencies.py:132,146`
 
 ```python
@@ -295,6 +317,7 @@ buffer = 5 * 60  # seconds
 ```
 
 **Suggestion:**
+
 ```python
 TOKEN_REFRESH_BUFFER_MINUTES = 5
 buffer = TOKEN_REFRESH_BUFFER_MINUTES * 60
@@ -305,11 +328,13 @@ buffer = TOKEN_REFRESH_BUFFER_MINUTES * 60
 ### 5. Complex Nested Logic
 
 #### Spotify Request Retry Logic
+
 **File:** `backend/app/clients/spotify_client.py:415-534`
 
 **Issue:** 3 levels of nesting with retry logic intertwined with error handling.
 
 **Suggested Refactor:**
+
 ```python
 def retry_on_rate_limit(max_retries: int = 3):
     """Decorator for automatic retry with exponential backoff."""
@@ -338,11 +363,13 @@ async def _request(self, method: str, endpoint: str, **kwargs):
 ---
 
 #### Query Building in BaseRepository
+
 **File:** `backend/app/repositories/base_repository.py:87-152`
 
 **Issue:** Multiple nested conditionals for filters, ordering, pagination.
 
 **Suggested Refactor:**
+
 ```python
 def _apply_filters(self, stmt, filters: dict):
     """Apply filters to query."""
@@ -400,15 +427,18 @@ async def get_all(self, filters: dict = None, skip: int = 0, limit: int = 100, o
 
 Routes are the public-facing API and should be well-documented.
 
-#### Missing Module Docstrings:
+#### Missing Module Docstrings
+
 - `backend/app/auth/routes.py:1`
 - `backend/app/spotify/routes.py:1`
 
-#### Missing Function Docstrings:
+#### Missing Function Docstrings
+
 - `backend/app/agents/routes/recommendations.py:143` - `event_generator()`
 - `backend/app/agents/routes/recommendations.py:146` - `state_change_callback()`
 
 **Suggested Fix:**
+
 ```python
 # auth/routes.py
 """
@@ -433,7 +463,8 @@ async def event_generator():
 
 Core components are foundational and need excellent documentation.
 
-#### Missing Module Docstrings (5):
+#### Missing Module Docstrings (5)
+
 - `backend/app/core/__init__.py:1`
 - `backend/app/core/config.py:1`
 - `backend/app/core/database.py:1`
@@ -441,8 +472,10 @@ Core components are foundational and need excellent documentation.
 - `backend/app/auth/dependencies.py:1`
 - `backend/app/auth/security.py:1`
 
-#### Missing Method Docstrings - core/exceptions.py (12 `__init__` methods):
+#### Missing Method Docstrings - core/exceptions.py (12 `__init__` methods)
+
 All custom exception classes need their `__init__` methods documented:
+
 - Line 8: `NotFoundException.__init__()`
 - Line 21: `UnauthorizedException.__init__()`
 - Line 32: `ForbiddenException.__init__()`
@@ -456,22 +489,26 @@ All custom exception classes need their `__init__` methods documented:
 - Line 104: `InternalServerError.__init__()`
 - Line 114: `WorkflowException.__init__()`
 
-#### Missing Method Docstrings - Middleware (3):
+#### Missing Method Docstrings - Middleware (3)
+
 - `backend/app/core/middleware.py:189` - `InvocationStatusMiddleware.dispatch()`
 - `backend/app/core/middleware.py:197` - `DatabaseMiddleware.dispatch()`
 - `backend/app/core/middleware.py:205` - `LoggingMiddleware.dispatch()`
 
-#### Short Docstrings (2):
+#### Short Docstrings (2)
+
 - `backend/app/agents/core/cache.py:193` - `__init__()` - "Initialize cache."
 - `backend/app/agents/core/cache.py:227` - `clear()` - "Clear memory cache."
 
-#### Missing Function Docstrings (6):
+#### Missing Function Docstrings (6)
+
 - `backend/app/main.py:60` - `rate_limit_handler()`
 - `backend/app/dependencies.py:68` - `get_token_service()` (short: "Get token service.")
 - `backend/app/dependencies.py:76` - `get_auth_service()` (short: "Get auth service.")
 - `backend/app/main.py:112` - `root()` (short: "Root endpoint.")
 
 **Suggested Module Docstrings:**
+
 ```python
 # core/config.py
 """Application configuration settings loaded from environment variables."""
@@ -497,6 +534,7 @@ FastAPI application entry point with middleware, routes, and lifecycle managemen
 ```
 
 **Suggested Method Docstrings:**
+
 ```python
 # Middleware example
 async def dispatch(self, request: Request, call_next):
@@ -529,14 +567,16 @@ def __init__(self, message: str = "Resource not found"):
 
 Data models should be well-documented for database schema understanding.
 
-#### Missing Module Docstrings (5):
+#### Missing Module Docstrings (5)
+
 - `backend/app/models/__init__.py:1`
 - `backend/app/models/invocation.py:1`
 - `backend/app/models/playlist.py:1`
 - `backend/app/models/session.py:1`
 - `backend/app/models/user.py:1`
 
-#### Missing `__repr__()` Docstrings (5):
+#### Missing `__repr__()` Docstrings (5)
+
 - `backend/app/models/invocation.py:30`
 - `backend/app/models/llm_invocation.py:56`
 - `backend/app/models/playlist.py:39`
@@ -544,6 +584,7 @@ Data models should be well-documented for database schema understanding.
 - `backend/app/models/user.py:30`
 
 **Suggested:**
+
 ```python
 # models/user.py
 """
@@ -564,13 +605,15 @@ def __repr__(self):
 
 API request/response schemas need documentation for API consumers.
 
-#### Missing Module Docstrings (4):
+#### Missing Module Docstrings (4)
+
 - `backend/app/auth/schemas.py:1`
 - `backend/app/schemas/auth.py:1`
 - `backend/app/schemas/playlist.py:1`
 - `backend/app/schemas/user.py:1`
 
-#### Missing Pydantic `Config` Class Docstrings (6):
+#### Missing Pydantic `Config` Class Docstrings (6)
+
 - `backend/app/auth/schemas.py:35`
 - `backend/app/auth/schemas.py:70`
 - `backend/app/schemas/auth.py:39`
@@ -579,6 +622,7 @@ API request/response schemas need documentation for API consumers.
 - `backend/app/schemas/user.py:37`
 
 **Suggested:**
+
 ```python
 # schemas/playlist.py
 """
@@ -614,6 +658,7 @@ class Config:
 ### ✅ Well-Documented Components
 
 The following have **excellent** docstring coverage:
+
 - All repository methods (playlist_repository.py, user_repository.py, etc.)
 - Most route handlers in playlists/routes.py
 - Service layer methods in services/playlist_service.py
@@ -648,10 +693,12 @@ def encrypt_token(token: str) -> str:
 ```
 
 **Issue:**
+
 - Uses bcrypt which is one-way hashing, not encryption
 - Function name suggests reversibility (encryption) but bcrypt cannot be decrypted
 
 **Suggestion:**
+
 ```python
 def hash_token(token: str) -> str:
     """
@@ -664,6 +711,7 @@ def hash_token(token: str) -> str:
 ```
 
 Or if reversibility is needed:
+
 ```python
 from cryptography.fernet import Fernet
 
@@ -683,11 +731,13 @@ def decrypt_token(encrypted_token: str, key: bytes) -> str:
 ### Performance Issues
 
 #### Dashboard Analytics - Memory Load
+
 **File:** `backend/app/repositories/playlist_repository.py:1196-1295`
 
 **Issue:** Loads all playlists into memory for processing instead of using database aggregation.
 
 **Current Approach:**
+
 ```python
 playlists = await self.get_all_user_playlists(user_id)
 for playlist in playlists:
@@ -696,6 +746,7 @@ for playlist in playlists:
 ```
 
 **Suggested Approach:**
+
 ```python
 # Use SQL aggregation
 emotion_query = select(
@@ -712,9 +763,11 @@ emotion_distribution = dict(result.all())
 ---
 
 #### Count Method Using len() Instead of SQL COUNT
+
 **File:** `backend/app/repositories/base_repository.py:282-297`
 
 **Current:**
+
 ```python
 async def count(self, filters: dict = None) -> int:
     result = await self.db.execute(stmt)
@@ -722,6 +775,7 @@ async def count(self, filters: dict = None) -> int:
 ```
 
 **Suggested:**
+
 ```python
 from sqlalchemy import func
 
@@ -738,6 +792,7 @@ async def count(self, filters: dict = None) -> int:
 ### Poor Separation of Concerns
 
 #### Route Handler Contains Business Logic
+
 **File:** `backend/app/playlists/routes.py:380-532`
 
 **Issue:** Route contains business logic for state reconstruction, database queries, and Spotify API calls.
@@ -777,6 +832,7 @@ async def save_playlist_to_spotify(
 ---
 
 #### Dependency Function Contains Business Logic
+
 **File:** `backend/app/auth/dependencies.py:110-171`
 
 **Issue:** `refresh_spotify_token_if_expired` dependency contains token refresh logic.
@@ -840,12 +896,14 @@ async def get_spotify_tokens(
 ## 🎯 Prioritized Action Plan
 
 ### HIGH PRIORITY
+
 1. ✅ Fix processing time calculation bug in `InvocationStatusMiddleware:189`
 2. ✅ Remove duplicate `get_by_session_id` method in `PlaylistRepository`
 3. ✅ Remove duplicate `update_status` method in `PlaylistRepository`
 4. ✅ Remove unused `workflow_state_service` parameter in `get_playlist_service`
 
 ### MEDIUM PRIORITY
+
 5. 🔄 Refactor `save_playlist_to_spotify` (153 lines) into smaller functions
 6. 🔄 Refactor `get_user_dashboard_analytics` (100 lines) into smaller functions
 7. 🔄 Create generic repository dependency factory
@@ -855,6 +913,7 @@ async def get_spotify_tokens(
 11. 🔄 Improve database aggregation queries for analytics
 
 ### LOW PRIORITY - DOCUMENTATION
+
 12. 📝 Add module docstrings to core infrastructure (28 issues - see detailed section above)
     - `config.py`, `database.py`, `main.py`, `exceptions.py`, etc.
     - Add docstrings to 12 exception `__init__` methods
@@ -870,6 +929,7 @@ async def get_spotify_tokens(
     - Agent tool context manager methods
 
 ### LOW PRIORITY - CODE QUALITY
+
 16. 🔢 Extract magic numbers to named constants
 17. 🔒 Rename `encrypt_token` to `hash_token` for clarity
 18. ⚡ Optimize count queries to use SQL COUNT instead of len()
@@ -899,12 +959,23 @@ async def get_spotify_tokens(
 
 ## 🎉 PROGRESS UPDATE
 
-**Date:** 2025-10-31
-**Sprint:** Critical Bug Fixes + Quick Wins
+**Date:** 2025-11-03
+**Sprint:** HIGH Priority Issues - Complete Resolution
 
 ### ✅ Completed This Session
 
-**All 6 CRITICAL issues resolved:**
+**All 7 HIGH priority issues resolved:**
+
+- ✅ Issue #3: Cache manager race condition fixed (`backend/app/main.py`)
+- ✅ Issue #5: Exception handling specificity improved (`backend/app/auth/dependencies.py`)
+- ✅ Issue #7: JSON field None checks added (`backend/app/repositories/playlist_repository.py`)
+- ✅ Issue #12: Database indexes added (`backend/app/models/session.py`, migration script)
+- ✅ Issue #15: Rate limiting added to auth endpoints (`backend/app/auth/routes.py`)
+- ✅ Issue #20: HTTP client cleanup implemented (`backend/app/agents/tools/agent_tools.py`)
+- ✅ Issue #21: Redis connection cleanup added (`backend/app/agents/core/cache.py`, `backend/app/main.py`)
+
+**All 6 CRITICAL issues previously resolved:**
+
 - ✅ Issue #1: Database session leak fixed (`backend/app/playlists/routes.py`)
 - ✅ Issue #2: Auto-commit removed from get_db() (`backend/app/core/database.py`, `backend/app/repositories/base_repository.py`)
 - ✅ Issue #4: Bare except clause fixed (`backend/app/agents/tools/agent_tools.py`)
@@ -913,13 +984,14 @@ async def get_spotify_tokens(
 - ✅ Issue #25: Startup secret validation implemented (`backend/app/main.py`)
 
 **All 7 Quick Wins completed:**
+
 - ✅ Issue #9: Status validation added (`backend/app/repositories/playlist_repository.py`)
 - ✅ Issue #14: Session token hashing in logs (`backend/app/auth/dependencies.py`)
 - ✅ Issue #26: Renamed encrypt_token to hash_token (`backend/app/auth/security.py`)
 
-**Impact:** Critical security vulnerabilities, performance bottlenecks, resource leak issues, and quick security wins all resolved!
+**Impact:** All HIGH priority security, performance, and stability issues resolved! Database race conditions eliminated, proper resource cleanup implemented, and authentication endpoints protected against abuse.
 
-**Session Progress: 10/26 issues fixed (38%)**
+**Total Progress: 17/26 issues fixed (65%)**
 
 ---
 
@@ -930,9 +1002,11 @@ This section contains subtle bugs, race conditions, error handling issues, and p
 ## 1. 🔄 RACE CONDITIONS & CONCURRENCY ISSUES
 
 ### Issue #1: Database Session Leak via `anext()`
+
 **File:** `backend/app/playlists/routes.py:399-405`
 
 **Current Code:**
+
 ```python
 db = await anext(get_db())
 try:
@@ -944,11 +1018,13 @@ finally:
 **Problem:** Using `anext()` on an async generator bypasses the context manager's cleanup logic. The `get_db()` function has a try-except-finally block that handles rollback and ensures proper session closure. By using `anext()`, you only get the yielded session but the cleanup won't happen unless you consume the generator completely.
 
 **How It Fails:**
+
 - Connection leaks when exceptions occur
 - Transaction may not be rolled back properly
 - Database pool exhaustion under high load
 
 **Fix:**
+
 ```python
 async with async_session_factory() as db:
     current_user = await refresh_spotify_token_if_expired(current_user, db)
@@ -959,9 +1035,11 @@ async with async_session_factory() as db:
 ---
 
 ### Issue #2: Database Transaction Auto-Commit Issue
+
 **File:** `backend/app/core/database.py:32-42`
 
 **Current Code:**
+
 ```python
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_factory() as session:
@@ -976,16 +1054,19 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 **Problem:** The `get_db()` dependency ALWAYS commits transactions, even for read-only operations.
 
 **Issues:**
+
 1. Multiple operations that should be atomic are committed separately
 2. Race conditions where data is committed mid-operation
 3. Performance issues from unnecessary commits on read operations
 
 **How It Fails:**
+
 - Partial commits when a series of operations should be atomic
 - Data inconsistency in complex workflows
 - Cannot roll back after inspecting intermediate state
 
 **Fix:** Don't auto-commit; let the caller control transactions:
+
 ```python
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_factory() as session:
@@ -1002,9 +1083,11 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 ---
 
 ### Issue #3: Global Cache Manager Race Condition
+
 **File:** `backend/app/main.py:28-31`
 
 **Current Code:**
+
 ```python
 global cache_manager
 if settings.REDIS_URL:
@@ -1015,11 +1098,13 @@ if settings.REDIS_URL:
 **Problem:** Reassigning a global singleton during startup without synchronization can cause race conditions if multiple workers/threads start simultaneously.
 
 **How It Fails:**
+
 - Some requests use old cache manager, others use new one
 - Cache misses due to inconsistent cache backends
 - Potential data corruption if both memory and Redis caches are used simultaneously
 
 **Fix:** Use a factory pattern or ensure single-threaded startup:
+
 ```python
 from threading import Lock
 
@@ -1042,9 +1127,11 @@ def get_cache_manager():
 ## 2. ⚠️ ERROR HANDLING GREMLINS
 
 ### Issue #4: Bare Except Clause Swallows All Exceptions
+
 **File:** `backend/app/agents/tools/agent_tools.py:249-252`
 
 **Current Code:**
+
 ```python
 try:
     error_data.update(e.response.json())
@@ -1055,11 +1142,13 @@ except:  # ← BARE EXCEPT
 **Problem:** Bare `except:` catches ALL exceptions including `SystemExit`, `KeyboardInterrupt`, and `asyncio.CancelledError`, which should propagate.
 
 **How It Fails:**
+
 - Application won't shutdown cleanly
 - Asyncio task cancellations are silently ignored
 - Debugging becomes impossible when unexpected errors are swallowed
 
 **Fix:**
+
 ```python
 try:
     error_data.update(e.response.json())
@@ -1072,9 +1161,11 @@ except (ValueError, json.JSONDecodeError, AttributeError):
 ---
 
 ### Issue #5: Generic Exception Handling Hides Root Causes
+
 **File:** `backend/app/auth/dependencies.py:53-60`
 
 **Current Code:**
+
 ```python
 try:
     payload = verify_token(credentials.credentials)
@@ -1088,12 +1179,14 @@ except Exception:  # ← Too broad
 **Problem:** Catching all exceptions and returning `None` hides database errors, network issues, and other problems that should be surfaced.
 
 **How It Fails:**
+
 - Database connectivity issues appear as "user not found"
 - No logging of actual errors
 - Silent failures make debugging impossible
 - Production issues are invisible
 
 **Fix:**
+
 ```python
 try:
     payload = verify_token(credentials.credentials)
@@ -1113,9 +1206,11 @@ except Exception as e:
 ---
 
 ### Issue #6: Error Message Leaks Sensitive Information
+
 **File:** `backend/app/auth/routes.py:314-316`
 
 **Current Code:**
+
 ```python
 except Exception as e:
     logger.error(f"Error getting dashboard data: {str(e)}", exc_info=True)
@@ -1123,17 +1218,20 @@ except Exception as e:
 ```
 
 **Problem:** Returning raw exception messages to users can leak:
+
 - Database schema details
 - File paths
 - Internal service names
 - Stack traces
 
 **How It Fails:**
+
 - Security information disclosure
 - Helps attackers understand system architecture
 - Compliance violations (OWASP, PCI-DSS)
 
 **Fix:**
+
 ```python
 except Exception as e:
     logger.error(f"Error getting dashboard data: {str(e)}", exc_info=True)
@@ -1147,11 +1245,13 @@ except Exception as e:
 ## 3. 💥 NULL/NONE ISSUES
 
 ### Issue #7: Missing None Check on JSON Fields
+
 **File:** `backend/app/repositories/playlist_repository.py:111-121`
 
 **Problem:** While some places check for None on JSON fields (`playlist.playlist_data`), many other locations access these fields directly without checking.
 
 **Examples:**
+
 ```python
 # Line 111-121: Direct access without None check
 playlist_name = playlist.playlist_data.get("name")  # ← Will fail if playlist_data is None
@@ -1161,16 +1261,19 @@ playlist_name = playlist.playlist_data.get("name")  # ← Will fail if playlist_
 ```
 
 **How It Fails:**
+
 - `AttributeError: 'NoneType' object has no attribute 'get'`
 - API returns 500 instead of handling gracefully
 - Crashes when processing incomplete data
 
 **Fix:** Always check for None:
+
 ```python
 playlist_name = playlist.playlist_data.get("name") if playlist.playlist_data else None
 ```
 
 **Better Fix:** Use a helper method:
+
 ```python
 def safe_json_get(json_field: Optional[dict], key: str, default=None):
     """Safely get value from JSON field that might be None."""
@@ -1185,9 +1288,11 @@ playlist_name = safe_json_get(playlist.playlist_data, "name")
 ---
 
 ### Issue #8: Optional Field Handling in Token Refresh
+
 **File:** `backend/app/auth/dependencies.py:126-130`
 
 **Current Code:**
+
 ```python
 token_expires_at = user.token_expires_at
 if token_expires_at.tzinfo is None:
@@ -1197,11 +1302,13 @@ if token_expires_at.tzinfo is None:
 **Problem:** If `user.token_expires_at` is None (which shouldn't happen but isn't validated), this will raise `AttributeError`.
 
 **How It Fails:**
+
 - Crashes when accessing `.tzinfo` on None
 - Silent data corruption if None is written to DB
 - User locked out because token refresh fails
 
 **Fix:**
+
 ```python
 token_expires_at = user.token_expires_at
 if not token_expires_at:
@@ -1219,9 +1326,11 @@ if token_expires_at.tzinfo is None:
 ## 4. 🔢 TYPE & VALIDATION ISSUES
 
 ### Issue #9: String/Int Confusion in Status Filtering
+
 **File:** `backend/app/repositories/playlist_repository.py:149-150`
 
 **Current Code:**
+
 ```python
 if exclude_statuses:
     query = query.where(func.lower(Playlist.status).not_in([status.lower() for status in exclude_statuses]))
@@ -1230,11 +1339,13 @@ if exclude_statuses:
 **Problem:** If `exclude_statuses` contains non-string values (ints, None, etc.), calling `.lower()` will raise `AttributeError`.
 
 **How It Fails:**
+
 - 500 error when API receives malformed input
 - No validation at the route level
 - Runtime crash on bad data
 
 **Fix:** Add input validation:
+
 ```python
 if exclude_statuses:
     # Validate all statuses are strings
@@ -1248,6 +1359,7 @@ if exclude_statuses:
 ```
 
 **Better:** Validate at API level using Pydantic:
+
 ```python
 class PlaylistFilterRequest(BaseModel):
     exclude_statuses: Optional[List[str]] = None
@@ -1264,9 +1376,11 @@ class PlaylistFilterRequest(BaseModel):
 ---
 
 ### Issue #10: JWT Token Type Confusion
+
 **File:** `backend/app/auth/security.py:35-45`
 
 **Current Code:**
+
 ```python
 def verify_token(token: str, expected_type: str = "access") -> Optional[Dict[str, Any]]:
     try:
@@ -1283,11 +1397,13 @@ def verify_token(token: str, expected_type: str = "access") -> Optional[Dict[str
 **Problem:** Returns `None` for all failure cases (expired, invalid, wrong type). Callers can't distinguish between "token expired" and "token invalid".
 
 **How It Fails:**
+
 - Frontend gets generic "unauthorized" instead of "token expired, please refresh"
 - Poor user experience
 - Cannot implement proper token refresh flow
 
 **Fix:** Return structured result or raise specific exceptions:
+
 ```python
 class TokenVerificationResult:
     def __init__(self, payload: Optional[dict] = None, error: Optional[str] = None):
@@ -1314,11 +1430,13 @@ def verify_token(token: str, expected_type: str = "access") -> TokenVerification
 ## 5. 🗄️ SQL & DATABASE ISSUES
 
 ### Issue #11: N+1 Query Problem Potential
+
 **File:** `backend/app/playlists/routes.py:86-94`
 
 **Status:** Currently handled well with `load_relationships` parameter, but watch for new code that doesn't use it.
 
 **Pattern to Watch:**
+
 ```python
 # BAD: N+1 queries
 playlists = await repo.get_all()
@@ -1336,9 +1454,11 @@ for playlist in playlists:
 ---
 
 ### Issue #12: Missing Index on `session_token`
+
 **File:** `backend/app/repositories/session_repository.py:384-388`
 
 **Current Query:**
+
 ```python
 query = select(Session).where(
     and_(
@@ -1351,11 +1471,13 @@ query = select(Session).where(
 **Problem:** Queries by `session_token` happen on EVERY authenticated request, but there's likely no index on this column.
 
 **How It Fails:**
+
 - Slow authentication checks (full table scan)
 - Poor performance as user base grows
 - Database CPU spikes under load
 
 **Fix:** Add database migration:
+
 ```sql
 CREATE INDEX idx_session_token ON sessions(session_token);
 CREATE INDEX idx_session_expires_at ON sessions(expires_at);
@@ -1368,10 +1490,12 @@ CREATE INDEX idx_session_token_expires ON sessions(session_token, expires_at);
 ---
 
 ### Issue #13: Inefficient Count Using `len(scalars().all())`
+
 **File:** `backend/app/repositories/session_repository.py:347-348`
 **Also:** `backend/app/repositories/base_repository.py:282-297`
 
 **Current Code:**
+
 ```python
 result = await self.session.execute(query)
 count = len(result.scalars().all())  # ❌ Loads ALL records
@@ -1380,12 +1504,14 @@ count = len(result.scalars().all())  # ❌ Loads ALL records
 **Problem:** Fetches ALL matching rows into memory just to count them instead of using SQL COUNT().
 
 **How It Fails:**
+
 - Memory exhaustion with large datasets
 - Extremely slow on large tables
 - Unnecessary database load
 - OOM crashes on production
 
 **Fix:**
+
 ```python
 from sqlalchemy import func
 
@@ -1402,9 +1528,11 @@ count = result.scalar()  # ✅ Fast database-level count
 ## 6. 🔐 AUTHENTICATION/AUTHORIZATION BUGS
 
 ### Issue #14: Session Token Logged in Plain Text
+
 **File:** `backend/app/auth/dependencies.py:73`
 
 **Current Code:**
+
 ```python
 logger.debug("Looking up session", session_token=session_token[:10] + "...")
 ```
@@ -1412,11 +1540,13 @@ logger.debug("Looking up session", session_token=session_token[:10] + "...")
 **Problem:** While truncated, logging session tokens (even partially) can aid session hijacking if logs are compromised.
 
 **How It Fails:**
+
 - Session hijacking if logs leak
 - Compliance violations (PCI-DSS, SOC2, GDPR)
 - Insider threats can reconstruct tokens
 
 **Fix:**
+
 ```python
 import hashlib
 
@@ -1429,9 +1559,11 @@ logger.debug("Looking up session", token_hash=token_hash)
 ---
 
 ### Issue #15: No Rate Limiting on Token Refresh
+
 **File:** `backend/app/auth/routes.py:115-146`
 
 **Current Code:**
+
 ```python
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(...):
@@ -1439,16 +1571,19 @@ async def refresh_token(...):
 ```
 
 **Problem:** Token refresh endpoint has no rate limiting, allowing:
+
 - Token brute-forcing
 - Denial of service attacks
 - Token enumeration
 
 **How It Fails:**
+
 - Account takeover via token guessing
 - Service degradation from spam
 - API abuse
 
 **Fix:**
+
 ```python
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -1466,9 +1601,11 @@ async def refresh_token(...):
 ---
 
 ### Issue #16: Potential CSRF Vulnerability
+
 **File:** `backend/app/auth/routes.py:149-172`
 
 **Current Code:**
+
 ```python
 @router.post("/logout")
 async def logout(...):
@@ -1478,11 +1615,13 @@ async def logout(...):
 **Problem:** POST endpoint with no CSRF protection using cookie-based authentication. An attacker can logout users via malicious sites.
 
 **How It Fails:**
+
 - User is logged out when visiting attacker's page
 - Session hijacking vector
 - Poor user experience
 
 **Fix:**
+
 ```python
 # Option 1: Use SameSite cookie attribute
 response.set_cookie(
@@ -1509,9 +1648,11 @@ async def logout(csrf_protect: CsrfProtect = Depends(), ...):
 ## 7. 🧮 LOGIC ERRORS & EDGE CASES
 
 ### Issue #17: Integer Overflow in Cache Statistics
+
 **File:** `backend/app/agents/core/cache.py:77-78`
 
 **Current Code:**
+
 ```python
 total_requests = self.hit_count + self.miss_count
 hit_rate = self.hit_count / total_requests if total_requests > 0 else 0
@@ -1520,11 +1661,13 @@ hit_rate = self.hit_count / total_requests if total_requests > 0 else 0
 **Problem:** Counters will overflow after ~2^63 requests (for signed 64-bit integers), though this is unlikely in practice.
 
 **How It Fails:**
+
 - Stats become negative
 - Hit rate calculation becomes invalid
 - Monitoring alerts fire incorrectly
 
 **Fix:**
+
 ```python
 from threading import Lock
 
@@ -1552,9 +1695,11 @@ class CacheStats:
 ---
 
 ### Issue #18: Timezone-Naive vs Timezone-Aware Datetime
+
 **File:** `backend/app/auth/dependencies.py:127-130`
 
 **Current Code:**
+
 ```python
 token_expires_at = user.token_expires_at
 if token_expires_at.tzinfo is None:
@@ -1564,11 +1709,13 @@ if token_expires_at.tzinfo is None:
 **Problem:** The fact that this check is needed suggests database models allow timezone-naive datetimes, causing subtle bugs elsewhere.
 
 **How It Fails:**
+
 - Tokens expire at wrong times
 - Comparison failures between naive and aware datetimes
 - Users in different timezones experience different behavior
 
 **Fix:** Enforce at model level:
+
 ```python
 from sqlalchemy import DateTime
 from sqlalchemy.types import TypeDecorator
@@ -1595,9 +1742,11 @@ class User(Base):
 ---
 
 ### Issue #19: No Pagination Bounds Checking
+
 **File:** `backend/app/repositories/base_repository.py:87-108`
 
 **Current Code:**
+
 ```python
 async def get_all(self, skip: int = 0, limit: Optional[int] = None, ...):
     # No validation of skip or limit values
@@ -1606,11 +1755,13 @@ async def get_all(self, skip: int = 0, limit: Optional[int] = None, ...):
 **Problem:** No bounds checking on pagination parameters.
 
 **How It Fails:**
+
 - Offset beyond available data returns empty results
 - No indication to client that offset is invalid
 - Negative offsets could cause errors
 
 **Fix:**
+
 ```python
 async def get_all(
     self,
@@ -1628,9 +1779,11 @@ async def get_all(
 ## 8. 💧 RESOURCE LEAKS
 
 ### Issue #20: HTTP Client Never Closed
+
 **File:** `backend/app/agents/tools/agent_tools.py:138-147`
 
 **Current Code:**
+
 ```python
 self.client = httpx.AsyncClient(
     timeout=httpx.Timeout(timeout, connect=10.0),
@@ -1646,12 +1799,14 @@ self.client = httpx.AsyncClient(
 **Problem:** HTTP client created but never explicitly closed. While `__aexit__` exists, tools may not always be used as context managers.
 
 **How It Fails:**
+
 - Connection leaks
 - Resource exhaustion
 - "Too many open files" errors
 - Memory leaks
 
 **Fix:**
+
 ```python
 class BaseAPITool:
     def __init__(self, ...):
@@ -1686,9 +1841,11 @@ class BaseAPITool:
 ---
 
 ### Issue #21: Redis Connection Never Closed
+
 **File:** `backend/app/agents/core/cache.py:196-200`
 
 **Current Code:**
+
 ```python
 async def _get_client(self) -> redis.Redis:
     if self.redis_client is None:
@@ -1699,12 +1856,14 @@ async def _get_client(self) -> redis.Redis:
 **Problem:** Redis client created but never closed. No `close()` or `aclose()` method in the class.
 
 **How It Fails:**
+
 - Connection leaks
 - Redis connection limit exceeded
 - Application slowdown
 - Cannot restart Redis without app restart
 
 **Fix:**
+
 ```python
 class CacheManager:
     async def close(self):
@@ -1736,9 +1895,11 @@ async def lifespan(app: FastAPI):
 ## 9. 🔌 API DESIGN ISSUES
 
 ### Issue #22: Unbounded Query Limit
+
 **File:** `backend/app/repositories/base_repository.py:87-108`
 
 **Current Code:**
+
 ```python
 async def get_all(
     self,
@@ -1751,6 +1912,7 @@ async def get_all(
 **Problem:** `limit` parameter has no maximum value. A client can request `limit=9999999` and DOS the database.
 
 **How It Fails:**
+
 - Memory exhaustion
 - Database overload
 - API timeouts
@@ -1758,6 +1920,7 @@ async def get_all(
 - Service disruption
 
 **Fix:**
+
 ```python
 from fastapi import Query
 
@@ -1778,6 +1941,7 @@ async def get_all(
 ---
 
 ### Issue #23: Inconsistent Error Response Format
+
 **Files:** Multiple files across the codebase
 
 **Problem:** Different error handlers return different response formats:
@@ -1794,11 +1958,13 @@ async def get_all(
 ```
 
 **How It Fails:**
+
 - Frontend error handling breaks
 - Inconsistent user experience
 - More frontend code to handle variations
 
 **Fix:** Standardize all error responses:
+
 ```python
 class StandardErrorResponse(BaseModel):
     error: str  # Error type
@@ -1825,9 +1991,11 @@ async def standard_exception_handler(request: Request, exc: Exception):
 ## 10. 🔒 SECURITY VULNERABILITIES
 
 ### Issue #24: SQL Injection via LIKE Wildcards
+
 **File:** `backend/app/repositories/playlist_repository.py:51-61`
 
 **Current Code:**
+
 ```python
 if search_query:
     search_term = f"%{search_query.lower()}%"
@@ -1843,12 +2011,14 @@ if search_query:
 **Problem:** While SQLAlchemy parameterizes the value, special characters like `%` and `_` in `search_query` are wildcards.
 
 **How It Fails:**
+
 - Search for "%" returns everything (slow, expensive)
 - Attacker can cause expensive queries: `%%%%%`
 - Database CPU exhaustion
 - Denial of service
 
 **Fix:** Escape LIKE wildcards:
+
 ```python
 def escape_like_pattern(pattern: str) -> str:
     """Escape special characters in LIKE patterns."""
@@ -1870,17 +2040,20 @@ if search_query:
 ---
 
 ### Issue #25: No Validation of Secret Keys at Startup
+
 **File:** `backend/app/auth/security.py` (used throughout)
 
 **Problem:** No validation that required secrets (JWT_SECRET_KEY, etc.) are actually set. If JWT_SECRET_KEY is empty/default, all tokens are invalid or predictable.
 
 **How It Fails:**
+
 - Application starts with default/weak keys
 - All JWTs can be forged
 - Complete security bypass
 - Account takeover
 
 **Fix:** Add startup validation in `main.py`:
+
 ```python
 def validate_required_secrets():
     """Validate all required secrets are set properly."""
@@ -1916,9 +2089,11 @@ async def startup():
 ---
 
 ### Issue #26: Token "Encryption" Is Actually Hashing
+
 **File:** `backend/app/auth/security.py:58-64`
 
 **Current Code:**
+
 ```python
 def encrypt_token(token: str) -> str:
     """Encrypt a token using bcrypt for storage."""
@@ -1929,17 +2104,20 @@ def encrypt_token(token: str) -> str:
 ```
 
 **Problem:**
+
 - Using bcrypt for "encryption" is incorrect - bcrypt is one-way hashing
 - Function name misleads about reversibility
 - Cannot retrieve original token
 - Confusion about security model
 
 **How It Fails:**
+
 - If tokens need to be retrieved, this won't work
 - Misleading API causes incorrect usage
 - Security assumptions may be wrong
 
 **Fix:** Rename and document, or use actual encryption:
+
 ```python
 # Option 1: Rename to reflect reality
 def hash_token(token: str) -> str:
@@ -1984,11 +2162,11 @@ def decrypt_token(encrypted_token: str, key: bytes) -> str:
 | Severity | Count | Status | Issues |
 |----------|-------|--------|--------|
 | 🔴 **CRITICAL** | 6 | ✅ **6/6 FIXED** | #1, #2, #4, #13, #22, #25 |
-| 🟠 **HIGH** | 7 | 0/7 Fixed | #3, #5, #7, #12, #15, #20, #21 |
+| 🟠 **HIGH** | 7 | ✅ **7/7 FIXED** | #3, #5, #7, #12, #15, #20, #21 |
 | 🟡 **MEDIUM** | 11 | ✅ **4/11 Fixed** | ✅#9, ✅#14, ✅#19, ✅#26, #6, #8, #10, #16, #18, #23, #24 |
 | ⚪ **LOW** | 2 | 0/2 Fixed | #17, #11 (monitoring) |
 
-**Overall Progress: 10/26 issues fixed (38%)**
+**Overall Progress: 17/26 issues fixed (65%)**
 
 ### Issues by Category
 
@@ -2043,15 +2221,15 @@ def decrypt_token(encrypted_token: str, key: bytes) -> str:
 
 **ALL CRITICAL ISSUES RESOLVED! ✅**
 
-### 🟠 HIGH - Fix This Sprint/Next Sprint
+### 🟠 HIGH - COMPLETED ✅
 
-7. **Issue #3**: Fix cache manager race condition
-8. **Issue #5**: Improve exception handling specificity
-9. **Issue #7**: Add None checks on JSON fields
-10. **Issue #12**: Add database indexes on `session_token`
-11. **Issue #15**: Add rate limiting to auth endpoints
-12. **Issue #20**: Close HTTP clients properly
-13. **Issue #21**: Close Redis connections on shutdown
+7. ✅ **Issue #3**: Cache manager race condition fixed - Factory pattern implemented
+8. ✅ **Issue #5**: Exception handling specificity improved - Specific JWT exceptions caught
+9. ✅ **Issue #7**: JSON field None checks added - `safe_json_get()` helper function created
+10. ✅ **Issue #12**: Database indexes added - Migration script and model updated
+11. ✅ **Issue #15**: Rate limiting added to auth endpoints - Login: 10/min, Refresh: 20/min
+12. ✅ **Issue #20**: HTTP clients properly closed - Cleanup logic and warnings added
+13. ✅ **Issue #21**: Redis connections closed on shutdown - Lifespan cleanup implemented
 
 ### 🟡 MEDIUM - Next Sprint
 
@@ -2082,14 +2260,16 @@ These can be fixed quickly with high impact:
 
 ## 📝 Monitoring & Prevention
 
-### Add Tests For:
+### Add Tests For
+
 - Database transaction boundaries
 - Error handling edge cases
 - None/null safety on JSON fields
 - Rate limiting enforcement
 - Resource cleanup (connections, files)
 
-### Add Linting Rules:
+### Add Linting Rules
+
 ```python
 # .pylintrc or ruff.toml
 [tool.ruff.lint]
@@ -2111,7 +2291,8 @@ select = [
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
 ```
 
-### Add Pre-commit Hooks:
+### Add Pre-commit Hooks
+
 ```yaml
 # .pre-commit-config.yaml
 repos:
@@ -2146,3 +2327,5 @@ This deep dive uncovered **26 additional issues** beyond the initial refactoring
 Prioritize the 6 critical issues first, as they represent the highest risk to production stability and security.
 
 **Total Issues Across Both Analyses: 52+ identified problems**
+
+**HIGH Priority Issues Status: ✅ COMPLETE - All 7 resolved**

@@ -199,6 +199,21 @@ class RedisCache(Cache):
             self.redis_client = redis.from_url(self.redis_url)
         return self.redis_client
 
+    async def close(self):
+        """Close Redis connection and cleanup resources."""
+        if self.redis_client:
+            await self.redis_client.close()
+            await self.redis_client.connection_pool.disconnect()
+            self.redis_client = None
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit with cleanup."""
+        await self.close()
+
     def _make_key(self, key: str) -> str:
         """Create namespaced key.
 

@@ -1,5 +1,6 @@
 import hashlib
 import structlog
+import jwt
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -69,8 +70,14 @@ async def get_current_user_optional(
             return None
         
         return await user_repo.get_active_user_by_spotify_id(payload["sub"])
-    except Exception:
+    except (ValueError, KeyError, jwt.JWTError) as e:
+        # Expected JWT validation failures - these are normal
+        logger.debug("Token validation failed", error=str(e))
         return None
+    except Exception as e:
+        # Unexpected errors (e.g., database failures) should be logged and re-raised
+        logger.error("Unexpected error in get_current_user_optional", error=str(e), exc_info=True)
+        raise
 
 
 async def get_current_session(
@@ -136,8 +143,13 @@ async def refresh_spotify_token_if_expired(user: User, db: AsyncSession) -> User
     # Check if token is expired or will expire in the next 5 minutes
     now = datetime.now(timezone.utc)
     
-    # Handle both timezone-aware and naive datetimes
+    # Validate token expiration exists
     token_expires_at = user.token_expires_at
+    if not token_expires_at:
+        logger.error("User has no token expiration time", user_id=user.id)
+        raise SpotifyAuthError("Invalid token state. Please log in again.")
+    
+    # Handle both timezone-aware and naive datetimes
     if token_expires_at.tzinfo is None:
         token_expires_at = token_expires_at.replace(tzinfo=timezone.utc)
     
@@ -180,8 +192,9 @@ async def refresh_spotify_token_if_expired(user: User, db: AsyncSession) -> User
     except Exception as e:
         logger.error("Unexpected error refreshing Spotify token",
                     user_id=user.id,
-                    error=str(e))
-        raise InternalServerError(f"Failed to refresh token: {str(e)}")
+                    error=str(e),
+                    exc_info=True)
+        raise InternalServerError("Failed to refresh token. Please try again later.")
 
 
 async def check_playlist_creation_rate_limit(
