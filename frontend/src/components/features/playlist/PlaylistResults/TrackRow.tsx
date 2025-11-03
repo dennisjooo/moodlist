@@ -6,7 +6,7 @@ import { Track } from '@/lib/types/track';
 import { cn } from '@/lib/utils';
 import { Star } from 'lucide-react';
 import { memo } from 'react';
-import TrackDetailsTooltip from './TrackDetailsTooltip';
+import TrackDetailsTooltip from '../TrackDetailsTooltip';
 
 interface TrackRowProps {
   track: Track;

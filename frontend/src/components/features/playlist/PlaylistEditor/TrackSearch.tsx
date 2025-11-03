@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { Check, ChevronDown, ChevronUp, Loader2, Plus, Search } from 'lucide-react';
 import Image from 'next/image';
 import { useState } from 'react';
-import TrackDetailsTooltip from '../PlaylistResults/TrackDetailsTooltip';
+import TrackDetailsTooltip from '../TrackDetailsTooltip';
 
 export interface TrackSearchProps {
     searchQuery: string;
@@ -150,27 +150,25 @@ export function TrackSearch({
                             </div>
                         )}
 
-                        {(isSearching || isSearchPending) && searchResults.length === 0 && (
-                            <div className="flex items-center justify-center py-8">
-                                <div className="flex flex-col items-center gap-2">
-                                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                                    <p className="text-sm text-muted-foreground">Searching...</p>
-                                </div>
-                            </div>
-                        )}
-
-                        {!isSearching && !isSearchPending && searchResults.length === 0 && searchQuery && searchQuery.length >= 2 && (
-                            <div className="text-center py-8 text-muted-foreground">
-                                <p className="text-sm">No results found for &quot;{searchQuery}&quot;</p>
-                            </div>
-                        )}
-
-                        {!searchQuery && (
+                        {!searchQuery ? (
                             <div className="text-center py-8 text-muted-foreground">
                                 <Search className="w-12 h-12 mx-auto mb-3 opacity-20" />
                                 <p className="text-sm">Start typing to search for tracks</p>
                             </div>
-                        )}
+                        ) : (isSearching || isSearchPending) ? (
+                            searchResults.length === 0 ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <div className="flex flex-col items-center gap-2">
+                                        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                                        <p className="text-sm text-muted-foreground">Searching...</p>
+                                    </div>
+                                </div>
+                            ) : null
+                        ) : searchResults.length === 0 && searchQuery.length >= 2 ? (
+                            <div className="text-center py-8 text-muted-foreground">
+                                <p className="text-sm">No results found for &quot;{searchQuery}&quot;</p>
+                            </div>
+                        ) : null}
                     </CardContent>
                 </div>
             </div>
