@@ -3,6 +3,7 @@
 import { Music, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { WorkflowState } from '@/lib/types/workflow';
+import { isTerminalStatus } from '@/lib/utils/workflow';
 
 interface WorkflowInsightsProps {
     status: WorkflowState['status'];
@@ -36,8 +37,8 @@ export function WorkflowInsights({ status, moodAnalysis, recommendations, metada
         return () => clearInterval(interval);
     }, []);
 
-    // Don't show if completed, failed, or has error
-    if (!status || status === 'completed' || status === 'failed' || error) {
+    // Don't show if terminal status or has error
+    if (!status || isTerminalStatus(status) || error) {
         return null;
     }
 

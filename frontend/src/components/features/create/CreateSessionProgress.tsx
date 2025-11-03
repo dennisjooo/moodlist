@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { CreateSessionLayout, createSessionCardClassName } from '@/components/features/create/CreateSessionLayout';
 import WorkflowProgress from '@/components/WorkflowProgress';
 import { ArrowLeft, Sparkles } from 'lucide-react';
+import { isTerminalStatus } from '@/lib/utils/workflow';
 
 interface ColorScheme {
     primary: string;
@@ -25,7 +26,7 @@ export function CreateSessionProgress({
     isCancelling,
     onBack,
 }: CreateSessionProgressProps) {
-    const isTerminalStatus = status === 'completed' || status === 'failed' || status === 'cancelled';
+    const isTerminal = isTerminalStatus(status);
 
     return (
         <CreateSessionLayout colorScheme={colorScheme} dimmed={isCancelling}>
@@ -40,7 +41,7 @@ export function CreateSessionProgress({
             </Button>
 
             <div className={`${createSessionCardClassName} space-y-6`}>
-                {status && !isTerminalStatus && (
+                {status && !isTerminal && (
                     <div className="space-y-3 text-center">
                         <Badge
                             variant="outline"
