@@ -15,7 +15,7 @@ export interface AuthCallbackState {
 
 function deriveRedirectLabel(path: string | null) {
   if (!path || path === "/") {
-    return "your dashboard";
+    return "our homepage";
   }
 
   try {
@@ -23,7 +23,7 @@ function deriveRedirectLabel(path: string | null) {
       typeof window !== "undefined" ? window.location.origin : "https://moodlist.app";
     const url = new URL(path, base);
     if (!url.pathname || url.pathname === "/") {
-      return "your dashboard";
+      return "our homepage";
     }
     return url.pathname;
   } catch {
