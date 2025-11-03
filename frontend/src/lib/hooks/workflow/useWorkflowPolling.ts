@@ -5,6 +5,7 @@ import { pollingManager } from '@/lib/pollingManager';
 import { workflowAPI } from '@/lib/api/workflow';
 import type { WorkflowStatus, WorkflowResults } from '@/lib/api/workflow';
 import { logger } from '@/lib/utils/logger';
+import { isTerminalStatus } from '@/lib/utils/workflow';
 
 interface PollingCallbacks {
     onStatus?: (status: WorkflowStatus) => void | Promise<void>;
@@ -42,8 +43,7 @@ export function useWorkflowPolling(
         }
 
         // Check if workflow is in a terminal state
-        const isTerminalState = status === 'completed' || status === 'failed';
-        if (isTerminalState) {
+        if (isTerminalStatus(status)) {
             logger.debug('Workflow in terminal state, stopping polling', {
                 component: 'useWorkflowPolling',
                 sessionId

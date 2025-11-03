@@ -3,6 +3,7 @@
 import { config } from '@/lib/config';
 import { logger } from '@/lib/utils/logger';
 import { WorkflowStatus } from './workflowApi';
+import { isTerminalStatus } from '@/lib/utils/workflow';
 
 export interface PollingConfig {
   interval: number;        // Base polling interval in ms
@@ -122,7 +123,7 @@ export class PollingManager {
   }
 
   private shouldStopPolling(status: string): boolean {
-    return status === 'completed' || status === 'failed';
+    return isTerminalStatus(status);
   }
 
   private schedulePoll(
