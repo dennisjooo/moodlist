@@ -509,6 +509,65 @@ class SessionRepository(BaseRepository[Session]):
             await self.session.rollback()
             raise
 
+    async def replace_user_session_atomic(
+        self,
+        user_id: int,
+        session_token: str,
+        ip_address: str,
+        user_agent: Optional[str],
+        expires_at: datetime,
+    ) -> Session:
+        """Replace all user sessions with a new one in a single transaction.
+        
+        This is more efficient than separate delete + create operations.
+        Both operations happen atomically within the same transaction.
+        
+        Args:
+            user_id: User ID
+            session_token: New session token
+            ip_address: Client IP address
+            user_agent: User agent string
+            expires_at: Session expiration timestamp
+        
+        Returns:
+            Created session instance
+        """
+        try:
+            # Delete all existing sessions for this user
+            delete_stmt = delete(Session).where(Session.user_id == user_id)
+            delete_result = await self.session.execute(delete_stmt)
+            deleted_count = delete_result.rowcount
+            
+            # Create new session
+            session = Session(
+                user_id=user_id,
+                session_token=session_token,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                expires_at=expires_at
+            )
+            
+            self.session.add(session)
+            await self.session.flush()
+            
+            self.logger.info(
+                "Session replaced atomically",
+                user_id=user_id,
+                deleted_count=deleted_count,
+                new_session_id=session.id
+            )
+            
+            return session
+            
+        except Exception as e:
+            self.logger.error(
+                "Database error replacing user session",
+                user_id=user_id,
+                error=str(e)
+            )
+            await self.session.rollback()
+            raise
+
     async def delete_by_token(self, session_token: str) -> bool:
         """Delete session by token.
 
