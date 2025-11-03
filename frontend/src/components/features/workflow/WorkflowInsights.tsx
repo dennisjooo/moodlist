@@ -3,6 +3,8 @@
 import { Music, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { WorkflowState } from '@/lib/types/workflow';
+import { isTerminalStatus } from '@/lib/utils/workflow';
+import { MUSIC_FACTS } from '@/lib/constants/music';
 
 interface WorkflowInsightsProps {
     status: WorkflowState['status'];
@@ -11,19 +13,6 @@ interface WorkflowInsightsProps {
     metadata?: WorkflowState['metadata'];
     error: string | null;
 }
-
-const MUSIC_FACTS = [
-    "Spotify has over 100 million tracks in its library!",
-    "The average person listens to about 18 hours of music per week.",
-    "Music can reduce stress and improve your mood instantly.",
-    "Your heartbeat can sync to the rhythm of music you're listening to.",
-    "Studies show music helps you focus and be more productive.",
-    "The fastest tempo in classical music can reach over 200 BPM!",
-    "Listening to music releases dopamine, the 'feel-good' hormone.",
-    "90% of people report music helps them deal with emotions.",
-    "Your music taste is as unique as your fingerprint.",
-    "The right playlist can make your workout feel 15% easier!",
-];
 
 export function WorkflowInsights({ status, moodAnalysis, recommendations, metadata, error }: WorkflowInsightsProps) {
     const [currentFactIndex, setCurrentFactIndex] = useState(0);
@@ -36,8 +25,8 @@ export function WorkflowInsights({ status, moodAnalysis, recommendations, metada
         return () => clearInterval(interval);
     }, []);
 
-    // Don't show if completed, failed, or has error
-    if (!status || status === 'completed' || status === 'failed' || error) {
+    // Don't show if terminal status or has error
+    if (!status || isTerminalStatus(status) || error) {
         return null;
     }
 
