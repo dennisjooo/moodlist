@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { arrayMove } from '@dnd-kit/sortable';
 import { useToast } from '../ui/useToast';
+import { useDebouncedSearch } from '../ui/useDebouncedSearch';
 import { logger } from '@/lib/utils/logger';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import type { Track, SearchTrack } from '@/lib/types/workflow';
@@ -31,28 +32,41 @@ export function usePlaylistEdits({ sessionId, initialTracks }: UsePlaylistEditsO
     const [removingTracks, setRemovingTracks] = useState<Set<string>>(new Set());
     const [addingTracks, setAddingTracks] = useState<Set<string>>(new Set());
 
-    // Search state
-    const [searchQuery, setSearchQuery] = useState('');
+    // Search state - use existing debounced search hook
+    const [searchQuery, setSearchQuery, debouncedQuery] = useDebouncedSearch('', undefined, 300);
     const [searchResults, setSearchResults] = useState<SearchTrack[]>([]);
     const [isSearching, setIsSearching] = useState(false);
-    const [isSearchPending, setIsSearchPending] = useState(false);
 
-    const latestSearchQueryRef = useRef<string>('');
-    const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    // Calculate pending state - when user is typing but debounce hasn't fired yet
+    const isSearchPending = searchQuery !== debouncedQuery;
 
     // Sync tracks when recommendations prop changes (from context updates)
     useEffect(() => {
         setTracks(deduplicatedTracks);
     }, [deduplicatedTracks]);
 
-    // Cleanup search timeout on unmount
+    // Effect to perform search when debounced query changes
     useEffect(() => {
-        return () => {
-            if (searchTimeoutRef.current) {
-                clearTimeout(searchTimeoutRef.current);
-            }
-        };
-    }, []);
+        if (!debouncedQuery.trim()) {
+            setSearchResults([]);
+            setIsSearching(false);
+            return;
+        }
+
+        setIsSearching(true);
+
+        searchTracksApi(debouncedQuery)
+            .then(results => {
+                setSearchResults(results.tracks || []);
+            })
+            .catch(error => {
+                logger.error('Search failed', error, { component: 'usePlaylistEdits' });
+                showError('Failed to search tracks');
+            })
+            .finally(() => {
+                setIsSearching(false);
+            });
+    }, [debouncedQuery, searchTracksApi, showError]);
 
     const reorderTrack = useCallback(async (oldIndex: number, newIndex: number) => {
         if (oldIndex === -1 || newIndex === -1) return;
@@ -134,55 +148,6 @@ export function usePlaylistEdits({ sessionId, initialTracks }: UsePlaylistEditsO
         }
     }, [applyCompletedEdit, showError]);
 
-    const searchTracks = useCallback((query: string) => {
-        setSearchQuery(query);
-
-        // Clear any existing timeout
-        if (searchTimeoutRef.current) {
-            clearTimeout(searchTimeoutRef.current);
-        }
-
-        // Store the latest query in ref to prevent race conditions
-        latestSearchQueryRef.current = query;
-
-        if (!query.trim()) {
-            setSearchResults([]);
-            setIsSearching(false);
-            setIsSearchPending(false);
-            return;
-        }
-
-        // Set pending state immediately when user types
-        setIsSearchPending(true);
-
-        // Debounce search - wait 300ms after user stops typing
-        searchTimeoutRef.current = setTimeout(async () => {
-            const currentSearchQuery = query;
-            setIsSearching(true);
-            setIsSearchPending(false);
-
-            try {
-                const results = await searchTracksApi(query);
-
-                // Only update results if this is still the latest search
-                if (latestSearchQueryRef.current === currentSearchQuery) {
-                    setSearchResults(results.tracks || []);
-                }
-            } catch (error) {
-                logger.error('Search failed', error, { component: 'usePlaylistEdits' });
-                // Only show error if this is still the latest search
-                if (latestSearchQueryRef.current === currentSearchQuery) {
-                    showError('Failed to search tracks');
-                }
-            } finally {
-                // Only update loading state if this is still the latest search
-                if (latestSearchQueryRef.current === currentSearchQuery) {
-                    setIsSearching(false);
-                }
-            }
-        }, 300);
-    }, [searchTracksApi, showError]);
-
     const resetTracks = useCallback(() => {
         setTracks(deduplicatedTracks);
     }, [deduplicatedTracks]);
@@ -206,7 +171,7 @@ export function usePlaylistEdits({ sessionId, initialTracks }: UsePlaylistEditsO
         searchResults,
         isSearching,
         isSearchPending,
-        searchTracks,
+        searchTracks: setSearchQuery, // Simplified interface - just set the query, debouncing handled by hook
     };
 }
 
