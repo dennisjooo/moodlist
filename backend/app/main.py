@@ -74,6 +74,23 @@ def validate_required_secrets():
     logger.info("All required secrets validated successfully")
 
 
+def _initialize_cache_manager():
+    """Initialize cache manager singleton based on configuration.
+    
+    Returns:
+        CacheManager: Initialized cache manager instance
+    """
+    from app.agents.core.cache import CacheManager
+    
+    if settings.REDIS_URL:
+        logger.info("Initializing cache manager with Valkey", redis_url=settings.REDIS_URL)
+        return CacheManager(settings.REDIS_URL)
+    else:
+        logger.info("No Valkey URL provided, using in-memory cache")
+        from app.agents.core.cache import cache_manager as default_cache
+        return default_cache
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan context manager."""
@@ -83,13 +100,9 @@ async def lifespan(app: FastAPI):
     # Validate required secrets before proceeding
     validate_required_secrets()
 
-    # Initialize cache manager with Valkey if URL is provided
+    # Initialize cache manager - replace global singleton
     global cache_manager
-    if settings.REDIS_URL:
-        logger.info("Initializing cache manager with Valkey", redis_url=settings.REDIS_URL)
-        cache_manager = cache_manager.__class__(settings.REDIS_URL)
-    else:
-        logger.info("No Valkey URL provided, using in-memory cache")
+    cache_manager = _initialize_cache_manager()
 
     # Create database tables
     async with engine.begin() as conn:
@@ -99,6 +112,11 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down application", app_name=settings.APP_NAME)
+    
+    # Close cache manager connection
+    if hasattr(cache_manager, 'close'):
+        logger.info("Closing cache manager connection")
+        await cache_manager.close()
 
 
 def create_application() -> FastAPI:

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -35,6 +35,16 @@ class Playlist(Base):
     user = relationship("User", back_populates="playlists")
     invocations = relationship("Invocation", back_populates="playlist", cascade="all, delete-orphan")
     llm_invocations = relationship("LLMInvocation", back_populates="playlist", cascade="all, delete-orphan")
+    
+    # Composite indexes for common query patterns
+    __table_args__ = (
+        # Index for getting user's active playlists ordered by creation date
+        Index('ix_playlist_user_active_created', 'user_id', 'deleted_at', 'created_at'),
+        # Index for filtering by user and status with sorting by creation date
+        Index('ix_playlist_user_status_created', 'user_id', 'status', 'deleted_at', 'created_at'),
+        # Index for sorting by track count
+        Index('ix_playlist_user_track_count', 'user_id', 'deleted_at', 'track_count'),
+    )
     
     def __repr__(self):
         return f"<Playlist(id={self.id}, user_id={self.user_id}, mood_prompt={self.mood_prompt[:50]}...)>"
