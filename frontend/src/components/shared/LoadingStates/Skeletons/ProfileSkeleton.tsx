@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft } from 'lucide-react';
+import { RecentActivitySkeleton } from './RecentActivitySkeleton';
 
 export function ProfileSkeleton() {
     return (
@@ -43,7 +44,7 @@ export function ProfileSkeleton() {
                 </div>
 
                 {/* Dashboard Grid */}
-                <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-2 sm:gap-3 overflow-hidden min-h-0">
+                <div className="flex-shrink-0 grid grid-cols-1 lg:grid-cols-3 gap-2 sm:gap-3 overflow-hidden min-h-0">
                     {/* Mobile: Scrollable */}
                     <div className="lg:hidden overflow-y-auto min-h-0 space-y-2 sm:space-y-3">
                         <Card>
@@ -57,22 +58,7 @@ export function ProfileSkeleton() {
                             </CardContent>
                         </Card>
 
-                        <Card>
-                            <CardHeader className="pb-3">
-                                <Skeleton className="h-5 w-32" />
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                                {Array.from({ length: 3 }).map((_, i) => (
-                                    <div key={i} className="flex gap-3">
-                                        <Skeleton className="w-6 h-6 rounded-full flex-shrink-0" />
-                                        <div className="flex-1 space-y-2">
-                                            <Skeleton className="h-4 w-3/4" />
-                                            <Skeleton className="h-3 w-full" />
-                                        </div>
-                                    </div>
-                                ))}
-                            </CardContent>
-                        </Card>
+                        <RecentActivitySkeleton />
 
                         <Card>
                             <CardHeader className="pb-3">
@@ -91,23 +77,9 @@ export function ProfileSkeleton() {
 
                     {/* Desktop: Left Column */}
                     <div className="hidden lg:flex lg:col-span-2 flex-col gap-3">
-                        <Card className="flex-1">
-                            <CardHeader className="pb-3">
-                                <Skeleton className="h-5 w-32" />
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                                {Array.from({ length: 4 }).map((_, i) => (
-                                    <div key={i} className="flex gap-3">
-                                        <Skeleton className="w-6 h-6 rounded-full flex-shrink-0" />
-                                        <div className="flex-1 space-y-2">
-                                            <Skeleton className="h-4 w-3/4" />
-                                            <Skeleton className="h-3 w-full" />
-                                            <Skeleton className="h-3 w-1/2" />
-                                        </div>
-                                    </div>
-                                ))}
-                            </CardContent>
-                        </Card>
+                        <div className="flex-1 min-h-0">
+                            <RecentActivitySkeleton />
+                        </div>
 
                         <Card>
                             <CardHeader className="pb-3">
