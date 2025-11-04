@@ -12,7 +12,7 @@ export function AboutLayout() {
             <AboutHero />
 
             {/* Main Content */}
-            <main className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 sm:pt-24">
+            <main className="relative z-10 max-w-3xl mx-auto px-8 pt-16 sm:pt-24">
                 {/* Blog Content */}
                 <article className="space-y-16 sm:space-y-20">
                     <AboutInspiration />
