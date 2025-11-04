@@ -9,6 +9,18 @@ import { useAuthCache } from '@/lib/hooks/auth/useAuthCache';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Helper to compare user objects and check if they're meaningfully different
+function isUserDifferent(user1: User | null, user2: User | null): boolean {
+  if (user1 === null && user2 === null) return false;
+  if (user1 === null || user2 === null) return true;
+
+  // Compare key properties that would affect UI
+  return user1.id !== user2.id ||
+    user1.display_name !== user2.display_name ||
+    user1.email !== user2.email ||
+    user1.profile_image_url !== user2.profile_image_url;
+}
+
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -56,7 +68,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const data = await response.json();
         if (data.user) {
           logger.info('Auth verification successful', { component: 'AuthContext', display_name: data.user.display_name });
-          setUser(data.user);
+
+          // Only update state if user data actually changed
+          if (isUserDifferent(user, data.user)) {
+            logger.debug('User data changed, updating state', { component: 'AuthContext' });
+            setUser(data.user);
+          } else {
+            logger.debug('User data unchanged, skipping re-render', { component: 'AuthContext' });
+          }
+
           setCachedAuth(data.user);
           setIsValidated(true);
 
