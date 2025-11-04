@@ -1,5 +1,6 @@
 import time
 import json
+import jwt
 from typing import Callable, Optional, Dict, Any
 from fastapi import Request, Response, HTTPException
 from fastapi.responses import JSONResponse
@@ -8,7 +9,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 import structlog
 
 from app.models.user import User
-from app.auth.dependencies import get_current_user_optional
+from app.auth.security import verify_token
+from app.repositories.user_repository import UserRepository
 
 logger = structlog.get_logger(__name__)
 
@@ -25,13 +27,9 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         # Get current user if available
         user: Optional[User] = None
         try:
-            # Try to get user from JWT token
-            user = await get_current_user_optional(
-                credentials=getattr(request.state, 'credentials', None),
-                db=getattr(request.state, 'db', None)
-            )
-        except Exception:
-            pass
+            user = await self._get_current_user(request)
+        except Exception as e:
+            logger.debug("Failed to extract user from request", error=str(e))
         
         # Process request
         try:
@@ -109,6 +107,82 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             "status_code": response.status_code,
             "headers": dict(response.headers)
         }
+    
+    async def _get_current_user(self, request: Request) -> Optional[User]:
+        """Extract authenticated user from request.
+        
+        Tries to extract user from JWT token in Authorization header or session cookie.
+        
+        Returns:
+            User object if authenticated, None otherwise
+        """
+        user = None
+        
+        # Try JWT token first
+        try:
+            auth_header = request.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                token = auth_header.replace("Bearer ", "")
+                payload = verify_token(token)
+                if payload:
+                    logger.debug("Token verified, extracting user", spotify_id=payload.get("sub"))
+                    user = await self._get_user_by_spotify_id(request, payload["sub"])
+                    if user:
+                        logger.debug("User found via JWT", user_id=user.id)
+                        return user
+        except (ValueError, KeyError, jwt.JWTError) as e:
+            logger.debug("JWT validation failed in middleware", error=str(e))
+        except Exception as e:
+            logger.error("Unexpected error validating JWT in middleware", error=str(e))
+        
+        # Try session cookie if JWT didn't work
+        try:
+            session_token = request.cookies.get("session_token")
+            if session_token:
+                logger.debug("Found session token, looking up session")
+                user = await self._get_user_by_session_token(request, session_token)
+                if user:
+                    logger.debug("User found via session", user_id=user.id)
+                    return user
+        except Exception as e:
+            logger.error("Unexpected error validating session in middleware", error=str(e))
+        
+        logger.debug("No user found via JWT or session")
+        return None
+    
+    async def _get_user_by_spotify_id(self, request: Request, spotify_id: str) -> Optional[User]:
+        """Get user by Spotify ID from database."""
+        db: Optional[AsyncSession] = getattr(request.state, 'db', None)
+        if not db:
+            from app.core.database import async_session_factory
+            async with async_session_factory() as session:
+                user_repo = UserRepository(session)
+                return await user_repo.get_active_user_by_spotify_id(spotify_id)
+        else:
+            user_repo = UserRepository(db)
+            return await user_repo.get_active_user_by_spotify_id(spotify_id)
+    
+    async def _get_user_by_session_token(self, request: Request, session_token: str) -> Optional[User]:
+        """Get user by session token from database."""
+        from app.repositories.session_repository import SessionRepository
+        
+        db: Optional[AsyncSession] = getattr(request.state, 'db', None)
+        if not db:
+            from app.core.database import async_session_factory
+            async with async_session_factory() as session:
+                session_repo = SessionRepository(session)
+                user_session = await session_repo.get_valid_session_by_token(session_token)
+                if user_session:
+                    user_repo = UserRepository(session)
+                    return await user_repo.get_active_user_by_id(user_session.user_id)
+        else:
+            session_repo = SessionRepository(db)
+            user_session = await session_repo.get_valid_session_by_token(session_token)
+            if user_session:
+                user_repo = UserRepository(db)
+                return await user_repo.get_active_user_by_id(user_session.user_id)
+        
+        return None
     
     async def _log_to_database(
         self,
