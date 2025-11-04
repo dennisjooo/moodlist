@@ -5,8 +5,9 @@ from typing import List, Optional, Type
 
 from pydantic import BaseModel, Field
 
-from ..agent_tools import RateLimitedTool, ToolResult
 from ...states.agent_state import TrackRecommendation
+from ...core.seed_guardrails import SeedGuardrails
+from ..agent_tools import RateLimitedTool, ToolResult
 
 
 logger = structlog.get_logger(__name__)
@@ -227,15 +228,27 @@ class TrackRecommendationsTool(RateLimitedTool):
             ToolResult with recommendations or error
         """
         try:
-            # PHASE 1: Validate parameters to short-circuit known-bad combinations
-            validation_error = self._validate_parameters(seeds, negative_seeds, size)
-            if validation_error:
-                logger.warning(f"Invalid recommendation parameters: {validation_error}")
-                return ToolResult.error_result(
-                    f"Invalid parameters: {validation_error}",
-                    error_type="ValidationError",
-                    skip_retry=True  # Don't retry validation failures
-                )
+            # PHASE 3: Validate with guardrails and auto-balancing
+            is_valid, validation_error, suggested_params = await SeedGuardrails.validate_and_auto_balance(
+                seeds, negative_seeds, size
+            )
+
+            if not is_valid:
+                # Check if we have a suggested fallback
+                if suggested_params:
+                    logger.info(f"Auto-balancing parameters: {validation_error}")
+                    # Retry with suggested parameters
+                    seeds = suggested_params.get("seeds", seeds)
+                    negative_seeds = suggested_params.get("negative_seeds", negative_seeds)
+                    size = suggested_params.get("size", size)
+                else:
+                    # No fallback available, fail fast
+                    logger.warning(f"Invalid recommendation parameters: {validation_error}")
+                    return ToolResult.error_result(
+                        f"Invalid parameters: {validation_error}",
+                        error_type="ValidationError",
+                        skip_retry=True
+                    )
             # Build query parameters
             params = {
                 "seeds": seeds,
@@ -264,6 +277,18 @@ class TrackRecommendationsTool(RateLimitedTool):
             for param_name, param_value in optional_params.items():
                 if param_value is not None:
                     params[param_name] = param_value
+
+            # Collect feature params for guardrails tracking
+            feature_params = {
+                "acousticness": acousticness,
+                "danceability": danceability,
+                "energy": energy,
+                "instrumentalness": instrumentalness,
+                "valence": valence,
+                "tempo": tempo
+            }
+            # Remove None values
+            feature_params = {k: v for k, v in feature_params.items() if v is not None}
 
             logger.info(f"Getting {size} recommendations for {len(seeds)} seeds")
 
@@ -366,8 +391,20 @@ class TrackRecommendationsTool(RateLimitedTool):
             )
 
         except Exception as e:
-            logger.error(f"Error getting track recommendations: {str(e)}", exc_info=True)
+            error_message = str(e)
+            logger.error(f"Error getting track recommendations: {error_message}", exc_info=True)
+
+            # PHASE 3: Add to deny list if it's a permanent error
+            if SeedGuardrails.should_skip_retry(error_message):
+                await SeedGuardrails.add_to_deny_list(
+                    seeds=seeds,
+                    negative_seeds=negative_seeds,
+                    feature_params=feature_params if 'feature_params' in locals() else None,
+                    reason=error_message
+                )
+
             return ToolResult.error_result(
-                f"Failed to get track recommendations: {str(e)}",
-                error_type=type(e).__name__
+                f"Failed to get track recommendations: {error_message}",
+                error_type=type(e).__name__,
+                skip_retry=SeedGuardrails.should_skip_retry(error_message)
             )

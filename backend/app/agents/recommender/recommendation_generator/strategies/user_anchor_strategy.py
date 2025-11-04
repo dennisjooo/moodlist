@@ -128,10 +128,17 @@ class UserAnchorStrategy(RecommendationStrategy):
             logger.warning("No access token for user anchor strategy")
             return []
 
+        # Track which track IDs we've already added to prevent duplicates
+        added_track_ids = set()
+
         # PART 0: ALWAYS include the actual user-mentioned tracks themselves!
         if user_mentioned_tracks_full:
             user_track_recs = self._add_user_mentioned_tracks(user_mentioned_tracks_full, temporal_context)
             recommendations.extend(user_track_recs)
+            # Track the IDs we just added
+            for rec in user_track_recs:
+                if rec.get("track_id"):
+                    added_track_ids.add(rec["track_id"])
 
         # PART 1: Get artists from user-mentioned tracks and fetch their top tracks
         if user_mentioned_track_ids:
@@ -139,9 +146,14 @@ class UserAnchorStrategy(RecommendationStrategy):
                 user_mentioned_tracks_full,
                 access_token,
                 target_count // 2 if user_mentioned_artists else target_count,
-                temporal_context
+                temporal_context,
+                exclude_track_ids=added_track_ids  # Pass exclusion set
             )
             recommendations.extend(track_based_recs)
+            # Track newly added IDs
+            for rec in track_based_recs:
+                if rec.get("track_id"):
+                    added_track_ids.add(rec["track_id"])
             logger.info(f"Got {len(track_based_recs)} tracks from user-mentioned track artists")
 
         # PART 2: Get top tracks from user-mentioned artists
@@ -150,7 +162,8 @@ class UserAnchorStrategy(RecommendationStrategy):
                 user_mentioned_artists,
                 access_token,
                 target_count // 2 if user_mentioned_track_ids else target_count,
-                temporal_context
+                temporal_context,
+                exclude_track_ids=added_track_ids  # Pass exclusion set
             )
             recommendations.extend(artist_based_recs)
             
@@ -260,7 +273,8 @@ class UserAnchorStrategy(RecommendationStrategy):
         user_mentioned_tracks: List[Dict[str, Any]],
         access_token: str,
         limit: int,
-        temporal_context: Optional[Dict[str, Any]] = None
+        temporal_context: Optional[Dict[str, Any]] = None,
+        exclude_track_ids: Optional[set] = None
     ) -> List[Dict[str, Any]]:
         """Get top tracks from artists of user-mentioned tracks.
 
@@ -269,6 +283,7 @@ class UserAnchorStrategy(RecommendationStrategy):
             access_token: Spotify access token
             limit: Maximum number of tracks
             temporal_context: Temporal context for filtering
+            exclude_track_ids: Set of track IDs to exclude (to prevent duplicates)
 
         Returns:
             List of recommendation dictionaries
@@ -293,7 +308,8 @@ class UserAnchorStrategy(RecommendationStrategy):
                 artist_ids_seen,
                 access_token,
                 tracks_per_artist,
-                temporal_context
+                temporal_context,
+                exclude_track_ids=exclude_track_ids
             )
 
             return recommendations[:limit]
@@ -328,7 +344,8 @@ class UserAnchorStrategy(RecommendationStrategy):
         artist_ids: set,
         access_token: str,
         tracks_per_artist: int,
-        temporal_context: Optional[Dict[str, Any]] = None
+        temporal_context: Optional[Dict[str, Any]] = None,
+        exclude_track_ids: Optional[set] = None
     ) -> List[Dict[str, Any]]:
         """Fetch top tracks for a set of artist IDs.
 
@@ -337,11 +354,14 @@ class UserAnchorStrategy(RecommendationStrategy):
             access_token: Spotify access token
             tracks_per_artist: Number of tracks to fetch per artist
             temporal_context: Temporal context for filtering
+            exclude_track_ids: Set of track IDs to exclude (to prevent duplicates)
 
         Returns:
             List of recommendation dictionaries
         """
         recommendations = []
+        exclude_track_ids = exclude_track_ids or set()
+        skipped_duplicates = 0
 
         for artist_id in artist_ids:
             try:
@@ -352,6 +372,14 @@ class UserAnchorStrategy(RecommendationStrategy):
 
                 for track in top_tracks[:tracks_per_artist]:
                     if not track.get("id"):
+                        continue
+
+                    # Skip if this track was already added
+                    if track["id"] in exclude_track_ids:
+                        skipped_duplicates += 1
+                        logger.debug(
+                            f"Skipping duplicate track: '{track.get('name')}' (already added as user-mentioned track)"
+                        )
                         continue
 
                     # CRITICAL: Apply temporal filtering BEFORE marking as protected
@@ -390,6 +418,9 @@ class UserAnchorStrategy(RecommendationStrategy):
                 logger.error(f"Error getting tracks for artist {artist_id}: {e}")
                 continue
 
+        if skipped_duplicates > 0:
+            logger.info(f"Skipped {skipped_duplicates} duplicate tracks that were already user-mentioned")
+
         return recommendations
 
     async def _get_top_tracks_from_artists(
@@ -397,7 +428,8 @@ class UserAnchorStrategy(RecommendationStrategy):
         artist_names: List[str],
         access_token: str,
         limit: int,
-        temporal_context: Optional[Dict[str, Any]] = None
+        temporal_context: Optional[Dict[str, Any]] = None,
+        exclude_track_ids: Optional[set] = None
     ) -> List[Dict[str, Any]]:
         """Get top tracks from user-mentioned artists.
 
@@ -406,6 +438,7 @@ class UserAnchorStrategy(RecommendationStrategy):
             access_token: Spotify access token
             limit: Maximum number of tracks to return
             temporal_context: Temporal context for filtering
+            exclude_track_ids: Set of track IDs to exclude (to prevent duplicates)
 
         Returns:
             List of recommendation dictionaries
@@ -421,7 +454,8 @@ class UserAnchorStrategy(RecommendationStrategy):
                         artist_name,
                         access_token,
                         tracks_per_artist,
-                        temporal_context
+                        temporal_context,
+                        exclude_track_ids=exclude_track_ids
                     )
                     recommendations.extend(artist_recs)
 
@@ -439,7 +473,8 @@ class UserAnchorStrategy(RecommendationStrategy):
         artist_name: str,
         access_token: str,
         tracks_per_artist: int,
-        temporal_context: Optional[Dict[str, Any]] = None
+        temporal_context: Optional[Dict[str, Any]] = None,
+        exclude_track_ids: Optional[set] = None
     ) -> List[Dict[str, Any]]:
         """Get top tracks for a single artist by name.
 
@@ -448,11 +483,13 @@ class UserAnchorStrategy(RecommendationStrategy):
             access_token: Spotify access token
             tracks_per_artist: Number of tracks to fetch
             temporal_context: Temporal context for filtering
+            exclude_track_ids: Set of track IDs to exclude (to prevent duplicates)
 
         Returns:
             List of recommendation dictionaries
         """
         recommendations = []
+        exclude_track_ids = exclude_track_ids or set()
 
         # Search for the artist (get 3 results to find best match)
         artist_results = await self.spotify_service.search_spotify_artists(
@@ -481,8 +518,17 @@ class UserAnchorStrategy(RecommendationStrategy):
         # Add top tracks (limited per artist)
         track_count = 0
         filtered_count = 0
+        skipped_duplicates = 0
         for track in top_tracks[:tracks_per_artist]:
             if not track.get("id"):
+                continue
+
+            # Skip if this track was already added
+            if track["id"] in exclude_track_ids:
+                skipped_duplicates += 1
+                logger.debug(
+                    f"Skipping duplicate track: '{track.get('name')}' (already added)"
+                )
                 continue
 
             # CRITICAL: Apply temporal filtering BEFORE marking as protected
@@ -518,7 +564,7 @@ class UserAnchorStrategy(RecommendationStrategy):
 
         logger.info(
             f"✓ Got {track_count} top tracks from user-mentioned artist: {artist_name} "
-            f"(filtered {filtered_count}, marked as source='anchor_track', protected=True)"
+            f"(filtered {filtered_count}, skipped {skipped_duplicates} duplicates, marked as source='anchor_track', protected=True)"
         )
 
         return recommendations

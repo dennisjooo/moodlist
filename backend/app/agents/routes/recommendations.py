@@ -28,6 +28,9 @@ from ...repositories.playlist_repository import PlaylistRepository
 from ...models.playlist import Playlist
 from ...models.user import User
 from ...services.quota_service import QuotaService
+from ..core.cache import cache_manager
+from ..tools.spotify_service import SpotifyService
+from ..tools.reccobeat_service import RecoBeatService
 from ..workflows.workflow_manager import WorkflowManager
 from .dependencies import get_llm, get_workflow_manager
 from .serializers import serialize_playlist_status, serialize_workflow_state
@@ -382,3 +385,51 @@ async def get_playlist_details(
     except Exception as exc:
         logger.error("Error getting playlist details", error=str(exc), exc_info=True)
         raise InternalServerError(f"Failed to get playlist details: {exc}") from exc
+
+
+@router.post("/recommendations/prefetch-cache")
+@limiter.limit(settings.RATE_LIMITS.get("cache_prefetch", "5/minute"))
+async def prefetch_user_cache(
+    request: Request,
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """Prefetch and warm up user's cache for faster playlist generation.
+
+    Phase 3 Optimization: Triggered when user loads dashboard to hydrate
+    cache with top tracks, artists, and audio features in the background.
+    """
+    try:
+        logger.info("Starting cache prefetch", user_id=current_user.id)
+
+        # Refresh token if needed
+        current_user = await refresh_spotify_token_if_expired(current_user, db)
+
+        # Initialize services (these would normally be injected)
+        spotify_service = SpotifyService()
+        reccobeat_service = RecoBeatService()
+
+        # Launch background cache warming (fire-and-forget)
+        asyncio.create_task(
+            cache_manager.warm_user_cache(
+                user_id=str(current_user.id),
+                spotify_service=spotify_service,
+                reccobeat_service=reccobeat_service,
+                access_token=current_user.access_token
+            )
+        )
+
+        return {
+            "status": "prefetch_started",
+            "message": "Cache warming initiated in background",
+            "user_id": current_user.id
+        }
+
+    except Exception as exc:
+        logger.error("Error starting cache prefetch", error=str(exc), exc_info=True)
+        # Don't fail the request - cache prefetch is best-effort
+        return {
+            "status": "prefetch_failed",
+            "message": "Cache prefetch could not be started",
+            "error": str(exc)
+        }

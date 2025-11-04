@@ -9,8 +9,9 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from ...core.base_agent import BaseAgent
 from ...states.agent_state import AgentState, TrackRecommendation, RecommendationStatus
-from ..utils.llm_response_parser import LLMResponseParser
 from ..utils.config import config
+from ..utils.llm_response_parser import LLMResponseParser
+from ..utils.track_deduplicator import deduplicate_track_recommendations
 from .prompts import (
     get_track_energy_analysis_system_prompt,
     get_track_energy_analysis_user_prompt,
@@ -73,6 +74,16 @@ class PlaylistOrderingAgent(BaseAgent):
             if len(state.recommendations) < 3:
                 logger.info(f"Only {len(state.recommendations)} tracks - skipping ordering")
                 return state
+
+            # CRITICAL: Remove any duplicates that somehow made it through
+            # This is a safety measure to ensure clean input for ordering
+            original_count = len(state.recommendations)
+            state.recommendations = self._remove_duplicates(state.recommendations)
+            if len(state.recommendations) < original_count:
+                logger.warning(
+                    f"Found and removed {original_count - len(state.recommendations)} duplicate tracks "
+                    f"before ordering (this should not happen - duplicates should be removed earlier)"
+                )
 
             # Step 1: Analyze track energy characteristics and attach to recommendations
             track_analyses = await self._analyze_track_energies(state)
@@ -315,3 +326,26 @@ class PlaylistOrderingAgent(BaseAgent):
                 logger.info(f"Phase '{phase}': {len(sorted_phase)} tracks")
 
         return ordered_recommendations
+
+    def _remove_duplicates(
+        self,
+        recommendations: List[TrackRecommendation]
+    ) -> List[TrackRecommendation]:
+        """Remove duplicate tracks from recommendations.
+
+        Args:
+            recommendations: List of track recommendations
+
+        Returns:
+            List with duplicates removed, preserving order and keeping first occurrence
+        """
+        unique_recommendations, _ = deduplicate_track_recommendations(
+            recommendations,
+            on_duplicate=lambda rec: logger.debug(
+                "duplicate_found_ordering_agent",
+                track_id=rec.track_id,
+                track_name=rec.track_name,
+                artists=rec.artists,
+            ),
+        )
+        return unique_recommendations
