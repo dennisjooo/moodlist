@@ -1,7 +1,6 @@
-import { Button } from '@/components/ui/button';
+import { BackButton } from '@/components/shared';
 import { CreateSessionLayout, createSessionCardClassName } from '@/components/features/create/CreateSessionLayout';
 import type { Track } from '@/lib/types/workflow';
-import { ArrowLeft } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
 const PlaylistEditorComponent = dynamic(() => import('@/components/PlaylistEditor'), {
@@ -34,14 +33,11 @@ export function CreateSessionEditor({
 }: CreateSessionEditorProps) {
     return (
         <CreateSessionLayout colorScheme={colorScheme}>
-            <Button
-                variant="ghost"
+            <BackButton
                 onClick={onBack}
-                className="w-fit gap-2"
-            >
-                <ArrowLeft className="w-4 h-4" />
-                Back
-            </Button>
+                animated
+                className="w-fit"
+            />
 
             <div className={`${createSessionCardClassName} space-y-6 sm:space-y-8`}>
                 <PlaylistEditorComponent

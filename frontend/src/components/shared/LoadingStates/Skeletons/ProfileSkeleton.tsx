@@ -1,7 +1,6 @@
-import { Button } from '@/components/ui/button';
+import { BackButton } from '@/components/shared';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft } from 'lucide-react';
 import { RecentActivitySkeleton } from './RecentActivitySkeleton';
 
 export function ProfileSkeleton() {
@@ -11,9 +10,7 @@ export function ProfileSkeleton() {
                 {/* Compact Header */}
                 <div className="flex items-center justify-between mb-2 sm:mb-3">
                     <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled>
-                            <ArrowLeft className="w-4 h-4" />
-                        </Button>
+                        <BackButton size="sm" iconOnly animated className="h-8 w-8 p-0" disabled />
                         <div className="flex items-center space-x-2 min-w-0">
                             <Skeleton className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0" />
                             <div className="min-w-0">
