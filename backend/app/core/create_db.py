@@ -32,7 +32,7 @@ async def create_database():
         if parsed.query:
             postgres_conn_string += f"?{parsed.query}"
         
-        logger.info(f"Connecting to PostgreSQL instance")
+        logger.info("Connecting to PostgreSQL instance")
         
         # Connect to the default 'postgres' database first
         conn = await asyncpg.connect(postgres_conn_string)
