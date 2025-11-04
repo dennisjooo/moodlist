@@ -12,6 +12,7 @@ from app.repositories.invocation_repository import InvocationRepository
 from app.repositories.llm_invocation_repository import LLMInvocationRepository
 from app.clients.spotify_client import SpotifyAPIClient
 from app.services.playlist_service import PlaylistService
+from app.services.quota_service import QuotaService
 from app.services.token_service import TokenService
 from app.services.workflow_state_service import WorkflowStateService
 from app.services.auth_service import AuthService
@@ -97,3 +98,10 @@ def get_playlist_service(
 ) -> PlaylistService:
     """Get playlist service."""
     return PlaylistService(spotify_client, playlist_repo, user_repo)
+
+
+def get_quota_service(
+    playlist_repo: PlaylistRepository = Depends(get_playlist_repository),
+) -> QuotaService:
+    """Get quota service."""
+    return QuotaService(playlist_repo)

@@ -23,9 +23,10 @@ from ...core.exceptions import (
     ValidationException,
 )
 from ...core.limiter import limiter
-from ...dependencies import get_playlist_repository
+from ...dependencies import get_playlist_repository, get_quota_service
 from ...models.playlist import Playlist
 from ...models.user import User
+from ...services.quota_service import QuotaService
 from ..workflows.workflow_manager import WorkflowManager
 from .dependencies import get_llm, get_workflow_manager
 from .serializers import serialize_playlist_status, serialize_workflow_state
@@ -43,6 +44,7 @@ async def start_recommendation(
     current_user: User = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
     playlist_repo=Depends(get_playlist_repository),
+    quota_service: QuotaService = Depends(get_quota_service),
     _rate_limit_check: None = Depends(check_playlist_creation_rate_limit),
     llm: Any = Depends(get_llm),
     workflow_manager: WorkflowManager = Depends(get_workflow_manager),
@@ -82,6 +84,7 @@ async def start_recommendation(
         )
 
         logger.info("Created playlist record", playlist_id=playlist.id, session_id=session_id)
+        await quota_service.increment_daily_usage(current_user.id)
 
         return {
             "session_id": session_id,
