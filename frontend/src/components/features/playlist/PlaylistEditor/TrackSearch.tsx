@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import type { Track } from '@/lib/types/track';
 import type { SearchTrack } from '@/lib/types/workflow';
 import { cn } from '@/lib/utils';
@@ -65,8 +66,8 @@ export function TrackSearch({
             >
                 <div className="overflow-hidden">
                     <CardContent className="space-y-4">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <div className="relative px-3 mt-1">
+                            <Search className="absolute left-6 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                             <Input
                                 placeholder="Search for tracks to add..."
                                 value={searchQuery}
@@ -77,11 +78,12 @@ export function TrackSearch({
 
                         {searchResults.length > 0 && (
                             <div className="relative">
-                                <div className={cn(
-                                    "space-y-2 max-h-[600px] overflow-y-auto pr-2 transition-all duration-200",
+                                <ScrollArea className={cn(
+                                    "h-[600px] transition-all duration-200",
                                     isSearching && "blur-sm opacity-50 pointer-events-none"
                                 )}>
-                                    {searchResults.map((track) => {
+                                    <div className="space-y-2 pb-2 px-3">
+                                        {searchResults.map((track) => {
                                         const isAlreadyAdded = currentTracks.some(t => t.track_id === track.track_id);
                                         const isAdding = addingTracks.has(track.spotify_uri);
 
@@ -137,7 +139,8 @@ export function TrackSearch({
                                             </div>
                                         );
                                     })}
-                                </div>
+                                    </div>
+                                </ScrollArea>
 
                                 {isSearching && (
                                     <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm rounded-lg">
