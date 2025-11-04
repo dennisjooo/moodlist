@@ -22,31 +22,35 @@ logger = structlog.get_logger(__name__)
 async def create_database():
     """Create the database if it doesn't exist."""
     try:
-        logger.info(f"Connecting to RDS instance at {settings.RDS_HOST}")
+        # Parse connection string to get database name and construct postgres db connection string
+        import urllib.parse
+        parsed = urllib.parse.urlparse(settings.POSTGRES_CONN_STRING)
+        db_name = parsed.path.lstrip('/')
+        
+        # Build connection string to 'postgres' database
+        postgres_conn_string = f"{parsed.scheme}://{parsed.netloc}/postgres"
+        if parsed.query:
+            postgres_conn_string += f"?{parsed.query}"
+        
+        logger.info(f"Connecting to PostgreSQL instance")
         
         # Connect to the default 'postgres' database first
-        conn = await asyncpg.connect(
-            host=settings.RDS_HOST,
-            port=settings.RDS_PORT,
-            user=settings.RDS_USERNAME,
-            password=settings.RDS_PASSWORD,
-            database='postgres'  # Connect to default postgres database
-        )
+        conn = await asyncpg.connect(postgres_conn_string)
         
-        logger.info("Connected to RDS instance successfully")
+        logger.info("Connected to PostgreSQL instance successfully")
         
         # Check if database exists
         result = await conn.fetchval(
             "SELECT 1 FROM pg_database WHERE datname = $1",
-            settings.RDS_DATABASE
+            db_name
         )
         
         if result:
-            logger.info(f"Database '{settings.RDS_DATABASE}' already exists!")
+            logger.info(f"Database '{db_name}' already exists!")
         else:
             # Create the database
-            await conn.execute(f'CREATE DATABASE "{settings.RDS_DATABASE}"')
-            logger.info(f"Database '{settings.RDS_DATABASE}' created successfully!")
+            await conn.execute(f'CREATE DATABASE "{db_name}"')
+            logger.info(f"Database '{db_name}' created successfully!")
         
         await conn.close()
         return True
@@ -59,28 +63,32 @@ async def create_database():
 async def drop_database():
     """Drop the database (use with extreme caution)."""
     try:
-        logger.warning(f"Attempting to drop database '{settings.RDS_DATABASE}'")
+        # Parse connection string to get database name and construct postgres db connection string
+        import urllib.parse
+        parsed = urllib.parse.urlparse(settings.POSTGRES_CONN_STRING)
+        db_name = parsed.path.lstrip('/')
+        
+        # Build connection string to 'postgres' database
+        postgres_conn_string = f"{parsed.scheme}://{parsed.netloc}/postgres"
+        if parsed.query:
+            postgres_conn_string += f"?{parsed.query}"
+        
+        logger.warning(f"Attempting to drop database '{db_name}'")
         
         # Connect to the default 'postgres' database
-        conn = await asyncpg.connect(
-            host=settings.RDS_HOST,
-            port=settings.RDS_PORT,
-            user=settings.RDS_USERNAME,
-            password=settings.RDS_PASSWORD,
-            database='postgres'
-        )
+        conn = await asyncpg.connect(postgres_conn_string)
         
         # Terminate all connections to the database
         await conn.execute(f"""
             SELECT pg_terminate_backend(pg_stat_activity.pid)
             FROM pg_stat_activity
-            WHERE pg_stat_activity.datname = '{settings.RDS_DATABASE}'
+            WHERE pg_stat_activity.datname = '{db_name}'
               AND pid <> pg_backend_pid()
         """)
         
         # Drop the database
-        await conn.execute(f'DROP DATABASE IF EXISTS "{settings.RDS_DATABASE}"')
-        logger.info(f"Database '{settings.RDS_DATABASE}' dropped successfully!")
+        await conn.execute(f'DROP DATABASE IF EXISTS "{db_name}"')
+        logger.info(f"Database '{db_name}' dropped successfully!")
         
         await conn.close()
         return True
@@ -124,7 +132,10 @@ if __name__ == "__main__":
     async def main():
         if args.drop:
             # Ask for confirmation before dropping
-            response = input(f"Are you sure you want to drop database '{settings.RDS_DATABASE}'? This cannot be undone! (yes/no): ")
+            import urllib.parse
+            parsed = urllib.parse.urlparse(settings.POSTGRES_CONN_STRING)
+            db_name = parsed.path.lstrip('/')
+            response = input(f"Are you sure you want to drop database '{db_name}'? This cannot be undone! (yes/no): ")
             if response.lower() == 'yes':
                 success = await drop_database()
             else:
