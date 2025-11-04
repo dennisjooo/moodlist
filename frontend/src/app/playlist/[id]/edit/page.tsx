@@ -4,11 +4,11 @@ import { AuthGuard } from '@/components/AuthGuard';
 import Navigation from '@/components/Navigation';
 import { PlaylistEditorSkeleton } from '@/components/shared/LoadingStates';
 import MoodBackground from '@/components/shared/MoodBackground';
+import { BackButton } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { cn } from '@/lib/utils';
-import { ArrowLeft } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -141,14 +141,13 @@ function EditPlaylistPageContent() {
 
             <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 {/* Back Button */}
-                <Button
-                    variant="ghost"
+                <BackButton
                     onClick={handleCancel}
-                    className="mb-8 gap-2 hover:gap-3 transition-all group animate-in fade-in slide-in-from-left-4 duration-500"
+                    animated
+                    className="mb-8"
                 >
-                    <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                     Back to Playlist
-                </Button>
+                </BackButton>
 
                 <PlaylistEditor
                     sessionId={workflowState.sessionId}

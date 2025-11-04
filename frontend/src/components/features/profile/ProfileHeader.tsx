@@ -1,8 +1,8 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
+import { BackButton } from '@/components/shared';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { ArrowLeft, MapPin, User, Users } from 'lucide-react';
+import { MapPin, User, Users } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { type SpotifyProfile } from '@/lib/api/spotify';
@@ -22,14 +22,13 @@ export function ProfileHeader({ spotifyProfile }: ProfileHeaderProps) {
     return (
         <div className="flex items-center justify-between mb-2 sm:mb-3">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                <Button
-                    variant="ghost"
-                    size="sm"
+                <BackButton
                     onClick={handleBack}
+                    size="sm"
+                    iconOnly
+                    animated
                     className="h-8 w-8 sm:h-10 sm:w-10 p-0 flex-shrink-0"
-                >
-                    <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-                </Button>
+                />
                 {spotifyProfile?.images?.[0]?.url ? (
                     <Image
                         src={spotifyProfile.images[0].url}
