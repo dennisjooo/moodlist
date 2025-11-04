@@ -2,11 +2,13 @@
 
 from typing import List, Optional, Dict, Iterable, Any, Tuple
 from datetime import datetime, timezone
+from dataclasses import dataclass
 
 import structlog
-from sqlalchemy import select, and_, asc, desc, func, or_, String
+from sqlalchemy import select, and_, asc, desc, func, or_, String, literal, cast
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.playlist import Playlist
 from app.repositories.base_repository import BaseRepository
@@ -27,6 +29,22 @@ def safe_json_get(json_field: Optional[dict], key: str, default: Any = None) -> 
         Value from JSON field or default
     """
     return json_field.get(key, default) if json_field else default
+
+
+@dataclass
+class PlaylistSessionSnapshot:
+    """Lightweight projection of playlist/session data for quick lookups."""
+
+    status: str
+    mood_prompt: Optional[str]
+    mood_analysis_data: Optional[Dict[str, Any]]
+    spotify_playlist_id: Optional[str]
+    playlist_data: Optional[Dict[str, Any]]
+    recommendations_data: Optional[List[Dict[str, Any]]]
+    recommendation_count: int
+    error_message: Optional[str]
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
 
 
 class PlaylistRepository(BaseRepository[Playlist]):
@@ -659,7 +677,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
             raise InternalServerError("Failed to retrieve playlist")
 
     async def get_user_playlist_stats(self, user_id: int) -> Dict[str, int]:
-        """Get comprehensive playlist statistics for a user.
+        """Get comprehensive playlist statistics for a user with a single query.
 
         Args:
             user_id: User ID
@@ -668,35 +686,25 @@ class PlaylistRepository(BaseRepository[Playlist]):
             Dictionary with total_playlists, playlists saved to Spotify, and total_tracks
         """
         try:
-            # Total playlists - exclude soft-deleted
-            total_query = select(func.count(Playlist.id)).where(
-                Playlist.user_id == user_id,
-                Playlist.deleted_at.is_(None)
+            stmt = (
+                select(
+                    func.count(Playlist.id).label("total_playlists"),
+                    func.count(Playlist.spotify_playlist_id).label("saved_playlists"),
+                    func.coalesce(func.sum(Playlist.track_count), 0).label("total_tracks"),
+                )
+                .where(
+                    Playlist.user_id == user_id,
+                    Playlist.deleted_at.is_(None),
+                )
             )
-            total_result = await self.session.execute(total_query)
-            total = total_result.scalar() or 0
 
-            # Saved to Spotify playlists - exclude soft-deleted
-            completed_query = select(func.count(Playlist.id)).where(
-                Playlist.user_id == user_id,
-                Playlist.spotify_playlist_id.is_not(None),
-                Playlist.deleted_at.is_(None)
-            )
-            completed_result = await self.session.execute(completed_query)
-            saved_to_spotify = completed_result.scalar() or 0
-
-            # Total tracks - exclude soft-deleted
-            tracks_query = select(func.sum(Playlist.track_count)).where(
-                Playlist.user_id == user_id,
-                Playlist.deleted_at.is_(None)
-            )
-            tracks_result = await self.session.execute(tracks_query)
-            total_tracks = tracks_result.scalar() or 0
+            result = await self.session.execute(stmt)
+            row = result.one()
 
             stats = {
-                "total_playlists": total,
-                "saved_playlists": saved_to_spotify,
-                "total_tracks": total_tracks
+                "total_playlists": row.total_playlists or 0,
+                "saved_playlists": row.saved_playlists or 0,
+                "total_tracks": row.total_tracks or 0,
             }
 
             self.logger.debug("User playlist stats retrieved", user_id=user_id, **stats)
@@ -707,6 +715,109 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "Database error retrieving user playlist stats",
                 user_id=user_id,
                 error=str(e)
+            )
+            raise
+
+    async def get_session_status_snapshot(self, session_id: str) -> Optional[PlaylistSessionSnapshot]:
+        """Return lightweight playlist data needed for status polling.
+
+        Args:
+            session_id: Workflow session ID
+        """
+        try:
+            recommendation_count_expr = func.coalesce(
+                func.jsonb_array_length(cast(Playlist.recommendations_data, JSONB)), 0
+            ).label("recommendation_count")
+
+            stmt = (
+                select(
+                    Playlist.status,
+                    Playlist.mood_prompt,
+                    Playlist.mood_analysis_data,
+                    Playlist.spotify_playlist_id,
+                    Playlist.error_message,
+                    Playlist.created_at,
+                    Playlist.updated_at,
+                    recommendation_count_expr,
+                )
+                .where(
+                    Playlist.session_id == session_id,
+                    Playlist.deleted_at.is_(None),
+                )
+            )
+
+            result = await self.session.execute(stmt)
+            row = result.one_or_none()
+            if not row:
+                return None
+
+            return PlaylistSessionSnapshot(
+                status=row.status,
+                mood_prompt=row.mood_prompt,
+                mood_analysis_data=row.mood_analysis_data,
+                spotify_playlist_id=row.spotify_playlist_id,
+                playlist_data=None,  # defer heavy JSON for status polling
+                recommendations_data=None,
+                recommendation_count=row.recommendation_count or 0,
+                error_message=row.error_message,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            )
+
+        except Exception as e:
+            self.logger.error(
+                "Database error retrieving session status snapshot",
+                session_id=session_id,
+                error=str(e),
+            )
+            raise
+
+    async def get_session_results_snapshot(self, session_id: str) -> Optional[PlaylistSessionSnapshot]:
+        """Return playlist data required to build final workflow results."""
+        try:
+            stmt = (
+                select(
+                    Playlist.status,
+                    Playlist.mood_prompt,
+                    Playlist.mood_analysis_data,
+                    Playlist.spotify_playlist_id,
+                    Playlist.playlist_data,
+                    Playlist.recommendations_data,
+                    Playlist.error_message,
+                    Playlist.created_at,
+                    Playlist.updated_at,
+                )
+                .where(
+                    Playlist.session_id == session_id,
+                    Playlist.deleted_at.is_(None),
+                )
+            )
+
+            result = await self.session.execute(stmt)
+            row = result.one_or_none()
+            if not row:
+                return None
+
+            recommendations = row.recommendations_data or []
+
+            return PlaylistSessionSnapshot(
+                status=row.status,
+                mood_prompt=row.mood_prompt,
+                mood_analysis_data=row.mood_analysis_data,
+                spotify_playlist_id=row.spotify_playlist_id,
+                playlist_data=row.playlist_data,
+                recommendations_data=recommendations,
+                recommendation_count=len(recommendations),
+                error_message=row.error_message,
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+            )
+
+        except Exception as e:
+            self.logger.error(
+                "Database error retrieving session results snapshot",
+                session_id=session_id,
+                error=str(e),
             )
             raise
 
@@ -1251,7 +1362,15 @@ class PlaylistRepository(BaseRepository[Playlist]):
         """
         try:
             query = (
-                select(Playlist)
+                select(
+                    Playlist.id,
+                    Playlist.mood_prompt,
+                    Playlist.status,
+                    Playlist.track_count,
+                    Playlist.created_at,
+                    Playlist.playlist_data,
+                    Playlist.mood_analysis_data,
+                )
                 .where(
                     and_(
                         Playlist.user_id == user_id,
@@ -1263,23 +1382,31 @@ class PlaylistRepository(BaseRepository[Playlist]):
             )
 
             result = await self.session.execute(query)
-            playlists = result.scalars().all()
+            playlists = result.all()
 
             recent_data = []
-            for playlist in playlists:
+            for (
+                playlist_id,
+                mood_prompt,
+                status,
+                track_count,
+                created_at,
+                playlist_data,
+                mood_analysis_data,
+            ) in playlists:
                 playlist_info = {
-                    "id": playlist.id,
-                    "mood_prompt": playlist.mood_prompt,
-                    "status": playlist.status,
-                    "track_count": playlist.track_count,
-                    "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
-                    "name": safe_json_get(playlist.playlist_data, "name"),
-                    "spotify_url": safe_json_get(playlist.playlist_data, "spotify_url")
+                    "id": playlist_id,
+                    "mood_prompt": mood_prompt,
+                    "status": status,
+                    "track_count": track_count,
+                    "created_at": created_at.isoformat() if created_at else None,
+                    "name": safe_json_get(playlist_data, "name"),
+                    "spotify_url": safe_json_get(playlist_data, "spotify_url")
                 }
                 
                 # Extract primary emotion if available
-                playlist_info["primary_emotion"] = safe_json_get(playlist.mood_analysis_data, "primary_emotion")
-                playlist_info["energy_level"] = safe_json_get(playlist.mood_analysis_data, "energy_level")
+                playlist_info["primary_emotion"] = safe_json_get(mood_analysis_data, "primary_emotion")
+                playlist_info["energy_level"] = safe_json_get(mood_analysis_data, "energy_level")
                 
                 recent_data.append(playlist_info)
 
@@ -1304,84 +1431,89 @@ class PlaylistRepository(BaseRepository[Playlist]):
             Dictionary with mood distribution, audio insights, and status breakdown
         """
         try:
-            # Get all user playlists with mood analysis
-            query = select(Playlist).where(
-                and_(
-                    Playlist.user_id == user_id,
-                    Playlist.deleted_at.is_(None)
-                )
-            )
-            result = await self.session.execute(query)
-            playlists = result.scalars().all()
+            filters = [
+                Playlist.user_id == user_id,
+                Playlist.deleted_at.is_(None),
+            ]
 
-            # Analyze mood distribution
-            emotion_counts = {}
-            energy_counts = {"high": 0, "medium": 0, "low": 0}
-            
-            # Audio feature aggregation
-            avg_energy = []
-            avg_valence = []
-            avg_danceability = []
-            
-            # Status breakdown
+            # Status breakdown using GROUP BY
+            status_stmt = (
+                select(Playlist.status, func.count(Playlist.id))
+                .where(*filters)
+                .group_by(Playlist.status)
+            )
+            status_rows = await self.session.execute(status_stmt)
             status_counts = {"pending": 0, "completed": 0, "failed": 0}
-            
-            for playlist in playlists:
-                # Count statuses
-                if playlist.status in status_counts:
-                    status_counts[playlist.status] += 1
-                
-                # Process mood analysis
-                if playlist.mood_analysis_data:
-                    # Primary emotions
-                    emotion = playlist.mood_analysis_data.get("primary_emotion", "Unknown")
-                    emotion_counts[emotion] = emotion_counts.get(emotion, 0) + 1
-                    
-                    # Energy levels
-                    energy = playlist.mood_analysis_data.get("energy_level", "").lower()
-                    if "high" in energy or "intense" in energy:
+            for status, count in status_rows:
+                if status in status_counts:
+                    status_counts[status] = count or 0
+
+            # Mood distribution
+            emotion_expr = func.coalesce(
+                cast(Playlist.mood_analysis_data["primary_emotion"], String),
+                literal("Unknown"),
+            ).label("emotion")
+            mood_stmt = (
+                select(emotion_expr, func.count(Playlist.id).label("count"))
+                .where(*filters)
+                .group_by(emotion_expr)
+                .order_by(func.count(Playlist.id).desc())
+            )
+            mood_rows = await self.session.execute(mood_stmt)
+            mood_distribution = [
+                {"emotion": emotion or "Unknown", "count": count or 0}
+                for emotion, count in mood_rows
+            ][:5]
+
+            # Energy distribution and audio feature averages
+            energy_stmt = (
+                select(
+                    cast(Playlist.mood_analysis_data["energy_level"], String),
+                    cast(Playlist.mood_analysis_data["target_features"], JSONB),
+                )
+                .where(*filters)
+            )
+            energy_rows = await self.session.execute(energy_stmt)
+
+            energy_counts = {"high": 0, "medium": 0, "low": 0}
+            avg_energy: List[float] = []
+            avg_valence: List[float] = []
+            avg_danceability: List[float] = []
+
+            for energy_level, target_features in energy_rows:
+                if energy_level:
+                    normalized = energy_level.lower()
+                    if "high" in normalized or "intense" in normalized:
                         energy_counts["high"] += 1
-                    elif "low" in energy or "calm" in energy or "mellow" in energy:
+                    elif "low" in normalized or "calm" in normalized or "mellow" in normalized:
                         energy_counts["low"] += 1
                     else:
                         energy_counts["medium"] += 1
-                    
-                    # Audio features
-                    target_features = playlist.mood_analysis_data.get("target_features", {})
-                    if "energy" in target_features:
-                        # Take average of [min, max] range
-                        energy_range = target_features["energy"]
-                        if isinstance(energy_range, list) and len(energy_range) == 2:
-                            avg_energy.append(sum(energy_range) / 2)
-                    
-                    if "valence" in target_features:
-                        valence_range = target_features["valence"]
-                        if isinstance(valence_range, list) and len(valence_range) == 2:
-                            avg_valence.append(sum(valence_range) / 2)
-                    
-                    if "danceability" in target_features:
-                        dance_range = target_features["danceability"]
-                        if isinstance(dance_range, list) and len(dance_range) == 2:
-                            avg_danceability.append(sum(dance_range) / 2)
 
-            # Convert emotion counts to distribution list
-            mood_distribution = [
-                {"emotion": emotion, "count": count}
-                for emotion, count in sorted(emotion_counts.items(), key=lambda x: x[1], reverse=True)
-            ]
+                if isinstance(target_features, dict):
+                    energy_range = target_features.get("energy")
+                    if isinstance(energy_range, list) and len(energy_range) == 2:
+                        avg_energy.append(sum(energy_range) / 2)
 
-            # Calculate audio insights
+                    valence_range = target_features.get("valence")
+                    if isinstance(valence_range, list) and len(valence_range) == 2:
+                        avg_valence.append(sum(valence_range) / 2)
+
+                    dance_range = target_features.get("danceability")
+                    if isinstance(dance_range, list) and len(dance_range) == 2:
+                        avg_danceability.append(sum(dance_range) / 2)
+
             audio_insights = {
                 "avg_energy": sum(avg_energy) / len(avg_energy) if avg_energy else 0,
                 "avg_valence": sum(avg_valence) / len(avg_valence) if avg_valence else 0,
                 "avg_danceability": sum(avg_danceability) / len(avg_danceability) if avg_danceability else 0,
-                "energy_distribution": energy_counts
+                "energy_distribution": energy_counts,
             }
 
             analytics = {
-                "mood_distribution": mood_distribution[:5],  # Top 5 emotions
+                "mood_distribution": mood_distribution,
                 "audio_insights": audio_insights,
-                "status_breakdown": status_counts
+                "status_breakdown": status_counts,
             }
 
             self.logger.debug("Dashboard analytics retrieved", user_id=user_id)

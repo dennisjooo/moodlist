@@ -63,7 +63,9 @@ def serialize_playlist_status(
 ) -> Dict[str, Any]:
     """Serialize persisted playlist details when workflow state is unavailable."""
 
-    recommendation_count = len(playlist.recommendations_data or [])
+    recommendation_count = getattr(playlist, "recommendation_count", None)
+    if recommendation_count is None:
+        recommendation_count = len(playlist.recommendations_data or [])
 
     payload = {
         "session_id": session_id,
