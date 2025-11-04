@@ -6,8 +6,8 @@ repeating failing seed combinations and provides intelligent fallback strategies
 
 import hashlib
 import structlog
-from typing import Dict, List, Optional, Set, Tuple
-from datetime import datetime, timezone, timedelta
+from typing import Dict, List, Optional, Tuple
+from datetime import datetime, timezone
 
 from .cache import cache_manager
 
@@ -205,7 +205,7 @@ class SeedGuardrails:
             fallback["seeds"] = seeds[:3]
             fallback["negative_seeds"] = None  # Also drop negatives when reducing seeds
             fallback["reason"] = f"Reduced seeds from {len(seeds)} to 3"
-            logger.info(f"Suggesting fallback: reduce seeds to 3")
+            logger.info("Suggesting fallback: reduce seeds to 3")
             return fallback
 
         # Strategy 4: Try without any negative seeds as last resort
@@ -289,7 +289,7 @@ class SeedGuardrails:
                         "size": size
                     }
                     logger.info("Auto-balancing: removed all negative seeds (all overlapped with seeds)")
-                    return False, f"Auto-balanced: removed overlapping negative seeds", suggested
+                    return False, "Auto-balanced: removed overlapping negative seeds", suggested
                 else:
                     suggested = {
                         "seeds": seeds,
