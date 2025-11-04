@@ -25,14 +25,17 @@ _reccobeat_semaphore: Optional[asyncio.Semaphore] = None
 
 def get_reccobeat_semaphore() -> asyncio.Semaphore:
     """Get or create the global RecoBeat API semaphore.
-    
+
+    Phase 2 Optimization: Increased from 5 to 10 concurrent requests now that
+    Phase 1 caching reduces actual API load.
+
     Returns:
         Semaphore limiting concurrent RecoBeat API requests
     """
     global _reccobeat_semaphore
     if _reccobeat_semaphore is None:
-        # Allow max 5 concurrent requests to RecoBeat API
-        _reccobeat_semaphore = asyncio.Semaphore(5)
+        # Phase 2: Increased to 10 concurrent requests (from 5) with Phase 1 caching
+        _reccobeat_semaphore = asyncio.Semaphore(10)
     return _reccobeat_semaphore
 
 
@@ -503,8 +506,20 @@ class RateLimitedTool(BaseAPITool):
         use_cache: bool = False,
         cache_ttl: int = 300
     ) -> Dict[str, Any]:
-        """Internal method to make a rate-limited HTTP request."""
-        # Check minimum interval since last request
+        """Internal method to make a rate-limited HTTP request.
+
+        Phase 1 Optimization: Check cache BEFORE applying rate limits to avoid
+        unnecessary sleeping on cache hits.
+        """
+        # PHASE 1: Check cache first to bypass rate limiting on cache hits
+        if use_cache:
+            cache_key = self._make_cache_key(method, endpoint, params, json_data)
+            cached_response = await self._get_cached_response(cache_key)
+            if cached_response is not None:
+                logger.debug(f"Cache hit for {self.name} - bypassing rate limiter")
+                return cached_response
+
+        # Check minimum interval since last request (only for cache misses)
         if hasattr(self, '_last_request_time') and self._last_request_time and self.min_request_interval > 0:
             elapsed = (datetime.now(timezone.utc) - self._last_request_time).total_seconds()
             if elapsed < self.min_request_interval:
@@ -517,7 +532,13 @@ class RateLimitedTool(BaseAPITool):
         # Format parameters (convert lists to appropriate format)
         formatted_params = self._format_params(params)
 
-        response = await super()._make_request(method, endpoint, formatted_params, json_data, headers, use_cache, cache_ttl)
+        # Make the actual request (pass use_cache=False since we handled caching above)
+        response = await super()._make_request(method, endpoint, formatted_params, json_data, headers, use_cache=False, cache_ttl=cache_ttl)
+
+        # Cache the response if caching was requested
+        if use_cache:
+            cache_key = self._make_cache_key(method, endpoint, params, json_data)
+            await self._cache_response(cache_key, response, cache_ttl)
 
         self._last_request_time = datetime.now(timezone.utc)  # Track request time
         await self._record_request()
