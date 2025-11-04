@@ -14,12 +14,7 @@ class Settings(BaseSettings):
     
     # Database
     DATABASE_URL: str = Field(env="DATABASE_URL")
-    AWS_REGION: str = Field(default="us-east-1", env="AWS_REGION")
-    RDS_HOST: Optional[str] = Field(default=None, env="RDS_HOST")
-    RDS_PORT: int = Field(default=5432, env="RDS_PORT")
-    RDS_DATABASE: str = Field(default="moodlist_db", env="RDS_DATABASE")
-    RDS_USERNAME: str = Field(default=None, env="RDS_USERNAME")
-    RDS_PASSWORD: str = Field(default=None, env="RDS_PASSWORD")
+    POSTGRES_CONNECTION_STRING: str = Field(default=None, env="POSTGRES_CONNECTION_STRING")
     
     # JWT
     JWT_SECRET_KEY: str = Field(env="JWT_SECRET_KEY")
@@ -96,10 +91,7 @@ class Settings(BaseSettings):
     
     def get_database_url(self) -> str:
         """Get the appropriate database URL based on environment."""
-        return (
-            f"postgresql://{self.RDS_USERNAME}:{self.RDS_PASSWORD}"
-            f"@{self.RDS_HOST}:{self.RDS_PORT}/{self.RDS_DATABASE}"
-        )
+        return self.POSTGRES_CONNECTION_STRING
         
     class Config:
         env_file = ".env"
