@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 
 // Lazy load below-the-fold components for better initial load performance
 const FeaturedMoodShowcase = dynamic(() => import('@/components/FeaturedMoodShowcase'), {
-    loading: () => <div className="h-[420px]" />,
+  loading: () => <div className="h-[420px]" />,
 });
 
 const SampleMoods = dynamic(() => import('@/components/SampleMoods'), {
@@ -41,44 +41,46 @@ export default async function Home() {
   const isLoggedIn = Boolean(cookieStore.get('session_token'));
 
   return (
-    <div className="min-h-screen bg-background relative overflow-x-hidden">
-      {/* Fixed Dot Pattern Background */}
-      <div className="fixed inset-0 z-0 opacity-0 animate-[fadeIn_1s_ease-in-out_forwards] overflow-hidden">
-        <DotPattern
-          className={cn(
-            "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-          )}
-        />
-      </div>
-
-      {/* Navigation - Always render */}
+    <>
+      {/* Navigation - Always render - Outside to ensure sticky works */}
       <Navigation />
 
-      {/* Main Content - Render immediately (optimistic) */}
-      <main className="relative z-10 overflow-x-hidden">
-        {/* Hero Section */}
-        <HeroSection
-          isLoggedIn={isLoggedIn}
-        />
+      <div className="min-h-screen bg-background relative overflow-x-hidden">
+        {/* Fixed Dot Pattern Background */}
+        <div className="fixed inset-0 z-0 opacity-0 animate-[fadeIn_1s_ease-in-out_forwards] overflow-hidden">
+          <DotPattern
+            className={cn(
+              "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
+            )}
+          />
+        </div>
 
-        {/* Featured Mood Walkthrough */}
-        <FeaturedMoodShowcase />
+        {/* Main Content - Render immediately (optimistic) */}
+        <main className="relative z-10 overflow-x-hidden">
+          {/* Hero Section */}
+          <HeroSection
+            isLoggedIn={isLoggedIn}
+          />
 
-        {/* Sample Moods */}
-        <SampleMoods />
+          {/* Featured Mood Walkthrough */}
+          <FeaturedMoodShowcase />
 
-        {/* Features */}
-        <FeaturesSection />
+          {/* Sample Moods */}
+          <SampleMoods />
 
-        {/* Frequently Asked Questions */}
-        <FAQSection />
+          {/* Features */}
+          <FeaturesSection />
 
-        {/* Call to Action */}
-        <CTASection isLoggedIn={isLoggedIn} />
+          {/* Frequently Asked Questions */}
+          <FAQSection />
 
-        {/* Social Proof */}
-        <SocialProof />
-      </main>
-    </div>
+          {/* Call to Action */}
+          <CTASection isLoggedIn={isLoggedIn} />
+
+          {/* Social Proof */}
+          <SocialProof />
+        </main>
+      </div>
+    </>
   );
 }
