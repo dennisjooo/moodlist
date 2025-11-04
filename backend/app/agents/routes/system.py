@@ -1,6 +1,6 @@
 """System monitoring endpoints for agent workflows."""
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, Query
@@ -9,6 +9,7 @@ from ...core.exceptions import InternalServerError
 from ..tools.reccobeat_service import RecoBeatService
 from ..tools.spotify_service import SpotifyService
 from ..workflows.workflow_manager import WorkflowManager
+from ..core.profiling import PerformanceProfiler
 from .dependencies import (
     get_agents,
     get_reccobeat_service,
@@ -87,3 +88,60 @@ async def list_recent_workflows(
     except Exception as exc:
         logger.error("Error listing recent workflows", error=str(exc), exc_info=True)
         raise InternalServerError(f"Failed to list recent workflows: {exc}") from exc
+
+
+@router.get("/system/profiling/metrics")
+async def get_profiling_metrics(
+    metric_name: Optional[str] = Query(None, description="Specific metric name to retrieve"),
+):
+    """Get performance profiling metrics.
+
+    Phase 3 Optimization: Continuous profiling endpoint for monitoring
+    performance and detecting regressions.
+    """
+    try:
+        if metric_name:
+            # Get specific metric stats
+            stats = PerformanceProfiler.get_metric_stats(metric_name)
+            return {
+                "metric": metric_name,
+                "stats": stats
+            }
+        else:
+            # Get all metrics
+            all_metrics = PerformanceProfiler.list_all_metrics()
+            stats_by_metric = {
+                metric: PerformanceProfiler.get_metric_stats(metric)
+                for metric in all_metrics
+            }
+            return {
+                "metrics": all_metrics,
+                "stats": stats_by_metric,
+                "total_metrics": len(all_metrics)
+            }
+
+    except Exception as exc:
+        logger.error("Error retrieving profiling metrics", error=str(exc), exc_info=True)
+        raise InternalServerError(f"Failed to get profiling metrics: {exc}") from exc
+
+
+@router.get("/system/profiling/samples/{metric_name}")
+async def get_profiling_samples(
+    metric_name: str,
+    limit: int = Query(default=10, le=100, description="Number of recent samples to return"),
+):
+    """Get recent samples for a specific metric.
+
+    Phase 3 Optimization: Retrieve detailed profiling samples for analysis.
+    """
+    try:
+        samples = PerformanceProfiler.get_metrics(metric_name, limit)
+        return {
+            "metric_name": metric_name,
+            "samples": samples,
+            "count": len(samples)
+        }
+
+    except Exception as exc:
+        logger.error("Error retrieving profiling samples", error=str(exc), exc_info=True)
+        raise InternalServerError(f"Failed to get profiling samples: {exc}") from exc
