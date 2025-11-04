@@ -40,10 +40,10 @@ export const TrackItem = memo(function TrackItem({ track, index, onRemove, isRem
             ref={setNodeRef}
             style={style}
             className={cn(
-                "flex items-center gap-4 p-4 rounded-lg border bg-card",
+                "flex items-center gap-4 p-4 rounded-lg border-2 bg-card group",
                 prefersReducedMotion ? "transition-none" : "transition-all duration-200",
-                isDragging && "shadow-lg scale-105 z-50 bg-accent",
-                !isDragging && "hover:bg-accent/50"
+                isDragging && "shadow-2xl scale-105 z-50 bg-accent border-primary/50 ring-2 ring-primary/20",
+                !isDragging && "hover:bg-accent/50 hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5"
             )}
         >
             {/* Drag Handle */}
@@ -53,11 +53,11 @@ export const TrackItem = memo(function TrackItem({ track, index, onRemove, isRem
                 className="flex-shrink-0 cursor-grab active:cursor-grabbing touch-none"
                 style={{ touchAction: 'none' }}
             >
-                <GripVertical className="w-5 h-5 text-muted-foreground hover:text-foreground transition-colors" />
+                <GripVertical className="w-5 h-5 text-muted-foreground group-hover:text-foreground group-hover:scale-110 transition-all" />
             </div>
 
             {/* Track Number */}
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 group-hover:from-primary/30 group-hover:to-primary/20 flex items-center justify-center text-sm font-semibold transition-all">
                 {index + 1}
             </div>
 
