@@ -16,8 +16,12 @@ from app.models.user import User
 from app.core.config import settings
 from app.repositories.user_repository import UserRepository
 from app.repositories.session_repository import SessionRepository
-from app.repositories.playlist_repository import PlaylistRepository
-from app.dependencies import get_user_repository, get_session_repository, get_playlist_repository
+from app.services.quota_service import QuotaService
+from app.dependencies import (
+    get_user_repository,
+    get_session_repository,
+    get_quota_service,
+)
 
 logger = structlog.get_logger(__name__)
 security = HTTPBearer(auto_error=False)
@@ -198,13 +202,13 @@ async def refresh_spotify_token_if_expired(user: User, db: AsyncSession) -> User
 
 async def check_playlist_creation_rate_limit(
     current_user: User = Depends(require_auth),
-    playlist_repo: PlaylistRepository = Depends(get_playlist_repository)
+    quota_service: QuotaService = Depends(get_quota_service),
 ) -> None:
     """Check if user has exceeded daily playlist creation limit.
 
     Args:
         current_user: Authenticated user (injected via dependency)
-        playlist_repo: Playlist repository
+        quota_service: Cached quota service
 
     Raises:
         RateLimitException: If user has exceeded daily limit
@@ -212,7 +216,7 @@ async def check_playlist_creation_rate_limit(
     if settings.APP_ENV == "development":
         return
     
-    count = await playlist_repo.count_user_playlists_created_today(current_user.id)
+    count = await quota_service.get_daily_usage(current_user.id)
     
     if count >= settings.DAILY_PLAYLIST_CREATION_LIMIT:
         raise RateLimitException(
