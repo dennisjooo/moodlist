@@ -58,9 +58,13 @@ export function TrackList({ tracks, onReorder, onRemove, removingTracks }: Track
 
     if (tracks.length === 0) {
         return (
-            <div className="text-center py-12 text-muted-foreground">
-                <Music className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                <p>No tracks remaining. Try resetting or creating a new playlist.</p>
+            <div className="text-center py-16 text-muted-foreground">
+                <div className="relative inline-block">
+                    <Music className="w-16 h-16 mx-auto mb-4 opacity-20 animate-pulse" />
+                    <div className="absolute inset-0 w-16 h-16 mx-auto bg-primary/5 rounded-full blur-xl animate-pulse" />
+                </div>
+                <p className="text-base font-medium">No tracks remaining</p>
+                <p className="text-sm mt-1">Try resetting or creating a new playlist</p>
             </div>
         );
     }

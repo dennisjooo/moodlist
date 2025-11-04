@@ -36,13 +36,13 @@ export function TrackSearch({
     const [isCollapsed, setIsCollapsed] = useState(false);
 
     return (
-        <Card className="lg:sticky lg:top-20 h-fit">
-            <CardHeader>
+        <Card className="lg:sticky lg:top-20 h-fit border-2 shadow-lg hover:shadow-xl transition-shadow duration-300">
+            <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-3">
                     <div className="flex-1">
                         <CardTitle className="text-lg">Add Tracks</CardTitle>
                         <p className="text-sm text-muted-foreground mt-1">
-                            Search Spotify to find and add songs to your playlist
+                            Search Spotify to find and add songs
                         </p>
                     </div>
                     <button
@@ -58,31 +58,31 @@ export function TrackSearch({
                     </button>
                 </div>
             </CardHeader>
-            <div
-                className={cn(
-                    "grid transition-all duration-300 ease-in-out",
-                    isCollapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
-                )}
-            >
-                <div className="overflow-hidden">
-                    <CardContent className="space-y-4">
-                        <div className="relative px-3 mt-1">
-                            <Search className="absolute left-6 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search for tracks to add..."
-                                value={searchQuery}
-                                onChange={(e) => onSearchChange(e.target.value)}
-                                className="pl-10"
-                            />
-                        </div>
+            <CardContent className="space-y-4">
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Search for tracks..."
+                        value={searchQuery}
+                        onChange={(e) => onSearchChange(e.target.value)}
+                        className="pl-10 h-11"
+                    />
+                </div>
 
+                <div
+                    className={cn(
+                        "grid transition-all duration-300 ease-in-out",
+                        isCollapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
+                    )}
+                >
+                    <div className="overflow-hidden">
                         {searchResults.length > 0 && (
                             <div className="relative">
                                 <ScrollArea className={cn(
                                     "h-[600px] transition-all duration-200",
                                     isSearching && "blur-sm opacity-50 pointer-events-none"
                                 )}>
-                                    <div className="space-y-2 pb-2 px-3">
+                                    <div className="space-y-2 p-2 pr-4">
                                         {searchResults.map((track) => {
                                         const isAlreadyAdded = currentTracks.some(t => t.track_id === track.track_id);
                                         const isAdding = addingTracks.has(track.spotify_uri);
@@ -90,7 +90,7 @@ export function TrackSearch({
                                         return (
                                             <div
                                                 key={track.track_id}
-                                                className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent/50 transition-colors"
+                                                className="flex items-center gap-3 p-3 rounded-lg border-2 hover:bg-accent/50 hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5 transition-all duration-200 group"
                                             >
                                                 {track.album_image && (
                                                     <Image
@@ -98,7 +98,7 @@ export function TrackSearch({
                                                         alt={track.album || 'Album cover'}
                                                         width={48}
                                                         height={48}
-                                                        className="w-12 h-12 rounded"
+                                                        className="w-12 h-12 rounded shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all"
                                                     />
                                                 )}
                                                 <div className="flex-1 min-w-0">
@@ -110,16 +110,19 @@ export function TrackSearch({
                                                 <div className="flex items-center gap-2 flex-shrink-0">
                                                     <TrackDetailsTooltip spotifyUri={track.spotify_uri} />
                                                     {isAlreadyAdded ? (
-                                                        <div className="flex items-center gap-1 text-green-600">
-                                                            <Check className="w-4 h-4" />
+                                                        <div className="flex items-center gap-1 text-green-600 animate-in fade-in zoom-in duration-300">
+                                                            <div className="relative">
+                                                                <Check className="w-4 h-4" />
+                                                                <div className="absolute inset-0 bg-green-500/20 rounded-full blur-md" />
+                                                            </div>
                                                         </div>
                                                     ) : (
                                                         <Button
                                                             size="sm"
                                                             onClick={() => onAddTrack(track.spotify_uri, track)}
                                                             className={cn(
-                                                                "flex items-center gap-1",
-                                                                isAdding ? "bg-green-600 hover:bg-green-700 text-white" : ""
+                                                                "flex items-center gap-1 transition-all",
+                                                                isAdding ? "bg-green-600 hover:bg-green-700 text-white scale-105" : "hover:scale-105"
                                                             )}
                                                         >
                                                             {isAdding ? (
@@ -154,9 +157,13 @@ export function TrackSearch({
                         )}
 
                         {!searchQuery ? (
-                            <div className="text-center py-8 text-muted-foreground">
-                                <Search className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                                <p className="text-sm">Start typing to search for tracks</p>
+                            <div className="text-center py-12 text-muted-foreground">
+                                <div className="relative inline-block">
+                                    <Search className="w-14 h-14 mx-auto mb-4 opacity-20" />
+                                    <div className="absolute inset-0 w-14 h-14 mx-auto bg-primary/5 rounded-full blur-xl" />
+                                </div>
+                                <p className="text-base font-medium">Search for tracks</p>
+                                <p className="text-sm mt-1">Start typing to find songs to add</p>
                             </div>
                         ) : (isSearching || isSearchPending) ? (
                             searchResults.length === 0 ? (
@@ -168,13 +175,18 @@ export function TrackSearch({
                                 </div>
                             ) : null
                         ) : searchResults.length === 0 && searchQuery.length >= 2 ? (
-                            <div className="text-center py-8 text-muted-foreground">
-                                <p className="text-sm">No results found for &quot;{searchQuery}&quot;</p>
+                            <div className="text-center py-12 text-muted-foreground">
+                                <div className="relative inline-block">
+                                    <Search className="w-14 h-14 mx-auto mb-4 opacity-20" />
+                                    <div className="absolute inset-0 w-14 h-14 mx-auto bg-destructive/5 rounded-full blur-xl" />
+                                </div>
+                                <p className="text-base font-medium">No results found</p>
+                                <p className="text-sm mt-1">Try searching for &quot;{searchQuery.slice(0, 30)}&quot; differently</p>
                             </div>
                         ) : null}
-                    </CardContent>
+                    </div>
                 </div>
-            </div>
+            </CardContent>
         </Card>
     );
 }
