@@ -1,12 +1,14 @@
 'use client';
 
+import { useAuth } from '@/lib/contexts/AuthContext';
 import type { User as UserType } from '@/lib/types/auth';
 import { logger } from '@/lib/utils/logger';
-import { LogOut, User } from 'lucide-react';
-import Image from 'next/image';
+import { AnimatePresence, motion } from '@/components/ui/lazy-motion';
+import { ChevronDown, LogOut, User } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
-import { useAuth } from '@/lib/contexts/AuthContext';
+import { UserAvatar } from '@/components/ui/UserAvatar';
+import { SUBTLE_BUTTON_MOTION_PROPS, DROPDOWN_VARIANTS, SPRING_TRANSITIONS } from '@/lib/constants/animations';
 
 interface AuthMenuProps {
     user: UserType;
@@ -28,76 +30,80 @@ export function AuthMenu({ user }: AuthMenuProps) {
 
     return (
         <div className="relative">
-            <button
+            <motion.button
                 onClick={() => setIsOpen(!isOpen)}
-                className="hidden lg:flex items-center space-x-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+                className="hidden lg:flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium text-foreground hover:bg-accent/50 transition-colors"
+                {...SUBTLE_BUTTON_MOTION_PROPS}
             >
-                {user.profile_image_url ? (
-                    <Image
-                        src={user.profile_image_url}
-                        alt={user.display_name}
-                        width={32}
-                        height={32}
-                        className="w-8 h-8 rounded-full"
-                    />
-                ) : (
-                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                        <User className="w-4 h-4 text-primary" />
-                    </div>
-                )}
+                <UserAvatar user={user} size="md" withMotion />
                 <span className="hidden sm:block max-w-24 truncate" title={user.display_name}>
                     {user.display_name}
                 </span>
-            </button>
+                <motion.div
+                    animate={{ rotate: isOpen ? 180 : 0 }}
+                    transition={{ duration: 0.2 }}
+                >
+                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                </motion.div>
+            </motion.button>
 
             {/* Mobile - Non-clickable profile picture */}
             <div className="lg:hidden flex items-center">
-                {user.profile_image_url ? (
-                    <Image
-                        src={user.profile_image_url}
-                        alt={user.display_name}
-                        width={32}
-                        height={32}
-                        className="w-8 h-8 rounded-full"
-                    />
-                ) : (
-                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                        <User className="w-4 h-4 text-primary" />
-                    </div>
-                )}
+                <UserAvatar user={user} size="md" />
             </div>
 
             {/* Dropdown Menu */}
-            {isOpen && (
-                <div className="absolute right-0 top-full mt-2 w-48 bg-background border rounded-lg shadow-lg z-50">
-                    <div className="p-2">
-                        <Link
-                            href="/profile"
-                            onClick={() => setIsOpen(false)}
-                            className="w-full flex items-center space-x-2 px-3 py-2 text-sm text-foreground hover:bg-accent rounded-md transition-colors"
+            <AnimatePresence>
+                {isOpen && (
+                    <>
+                        <motion.div
+                            variants={DROPDOWN_VARIANTS}
+                            initial="closed"
+                            animate="open"
+                            exit="closed"
+                            className="absolute right-0 top-full mt-2 w-56 bg-background/95 backdrop-blur-xl border rounded-xl shadow-2xl z-50 overflow-hidden"
                         >
-                            <User className="w-4 h-4" />
-                            <span>View Profile</span>
-                        </Link>
-                        <hr className="my-1" />
-                        <button
-                            onClick={handleLogout}
-                            className="w-full flex items-center justify-center space-x-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                        >
-                            <LogOut className="w-4 h-4" />
-                            <span>Sign Out</span>
-                        </button>
-                    </div>
-                </div>
-            )}
+                            {/* User Info Header */}
+                            <div className="px-4 py-3 border-b bg-accent/50">
+                                <p className="text-sm font-semibold text-foreground truncate">
+                                    {user.display_name}
+                                </p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                    {user.email}
+                                </p>
+                            </div>
 
-            {/* Click outside to close */}
-            {isOpen && (
-                <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setIsOpen(false)}
-                />
-            )}
+                            {/* Menu Items */}
+                            <div className="p-2">
+                                <Link
+                                    href="/profile"
+                                    onClick={() => setIsOpen(false)}
+                                    className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm font-medium text-foreground hover:bg-accent rounded-lg transition-all group"
+                                >
+                                    <User className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                                    <span>View Profile</span>
+                                </Link>
+
+                                <div className="my-1 border-t" />
+
+                                <button
+                                    onClick={handleLogout}
+                                    className="w-full flex items-center space-x-3 px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-all group"
+                                >
+                                    <LogOut className="w-4 h-4" />
+                                    <span>Sign Out</span>
+                                </button>
+                            </div>
+                        </motion.div>
+
+                        {/* Click outside to close */}
+                        <div
+                            className="fixed inset-0 z-40"
+                            onClick={() => setIsOpen(false)}
+                        />
+                    </>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
