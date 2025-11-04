@@ -4,7 +4,12 @@ import { SpotifyLoginButton } from '@/components/features/auth/SpotifyLoginButto
 import { WorkflowNotificationIndicator } from '@/components/features/workflow/WorkflowNotificationIndicator';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/lib/contexts/AuthContext';
+import { config } from '@/lib/config';
+import { getCookie } from '@/lib/cookies';
 import { NavItem } from '@/lib/types/navigation';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useEffect, useState } from 'react';
+import { LOGIN_BUTTON_CLASSES } from './constants';
 import { AuthMenu } from './AuthMenu';
 import { Brand } from './Brand';
 import { DesktopLinks } from './DesktopLinks';
@@ -17,8 +22,28 @@ interface NavigationProps {
     extraItems?: NavItem[];
 }
 
-export default function Navigation({ extraItems = [] }: NavigationProps) {
-    const { user, isAuthenticated } = useAuth();
+// Skeleton loader for auth section to prevent layout shift
+function AuthSkeleton() {
+    return (
+        <Skeleton shimmer={false} className="h-9 sm:h-10 w-32 sm:w-40 rounded-lg bg-accent/50" />
+    );
+}
+
+export default function Navigation({ extraItems = [], logoHref }: NavigationProps) {
+    const { user, isAuthenticated, isLoading } = useAuth();
+    const [mounted, setMounted] = useState(false);
+    const [hasAuthData, setHasAuthData] = useState<boolean | null>(null);
+
+    useEffect(() => {
+        setMounted(true);
+
+        // Check if there's any auth data (session cookie or cache)
+        // This helps us show login button immediately if user is definitely logged out
+        const sessionCookie = getCookie(config.auth.sessionCookieName);
+        const cachedAuth = typeof window !== 'undefined' ? sessionStorage.getItem(config.auth.cacheKey) : null;
+
+        setHasAuthData(Boolean(sessionCookie || cachedAuth));
+    }, []);
 
     const defaultNavItems: NavItem[] = [
         { name: 'Home', href: '/' },
@@ -35,7 +60,7 @@ export default function Navigation({ extraItems = [] }: NavigationProps) {
                 <div className="flex justify-between items-center h-16 lg:justify-center lg:relative">
                     {/* Logo - Left Side */}
                     <div className="lg:absolute lg:left-0">
-                        <Brand />
+                        <Brand href={logoHref} />
                     </div>
 
                     {/* Desktop Navigation Links - Center */}
@@ -47,11 +72,17 @@ export default function Navigation({ extraItems = [] }: NavigationProps) {
                         <WorkflowNotificationIndicator />
 
                         {/* Auth/Profile - Shows before burger on mobile */}
-                        <div className="order-1 lg:order-none">
+                        <div className="order-1 lg:order-none flex items-center">
                             {isAuthenticated && user ? (
                                 <AuthMenu user={user} />
+                            ) : hasAuthData === false ? (
+                                // No auth data at all - show login button immediately
+                                <SpotifyLoginButton className={LOGIN_BUTTON_CLASSES} />
+                            ) : !mounted || isLoading || hasAuthData === null ? (
+                                // Still loading or has auth data but user not loaded yet
+                                <AuthSkeleton />
                             ) : (
-                                <SpotifyLoginButton className="bg-[#1DB954] hover:bg-[#1ed760] text-white h-9 px-4 text-sm rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg hover:scale-105 sm:h-10 sm:px-6" />
+                                <SpotifyLoginButton className={LOGIN_BUTTON_CLASSES} />
                             )}
                         </div>
 
@@ -61,7 +92,7 @@ export default function Navigation({ extraItems = [] }: NavigationProps) {
                         </div>
 
                         {/* Mobile Menu Button - Shows last on mobile (right side) */}
-                        <div className="lg:hidden order-2">
+                        <div className="lg:hidden order-2 flex items-center">
                             <MobileMenu items={navItems} user={user} />
                         </div>
                     </div>

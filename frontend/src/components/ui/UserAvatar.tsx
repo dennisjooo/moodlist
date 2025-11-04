@@ -1,10 +1,10 @@
 'use client';
 
-import { motion } from '@/components/ui/lazy-motion';
 import type { User as UserType } from '@/lib/types/auth';
 import { cn } from '@/lib/utils';
 import { User } from 'lucide-react';
 import Image from 'next/image';
+import { useEffect, useState } from 'react';
 
 interface UserAvatarProps {
     user: UserType;
@@ -19,50 +19,94 @@ const AVATAR_SIZES = {
     lg: 'w-12 h-12',
 } as const;
 
+const SIZE_PX = {
+    sm: 24,
+    md: 32,
+    lg: 48,
+} as const;
+
 const ICON_SIZES = {
     sm: 'w-3 h-3',
     md: 'w-4 h-4',
     lg: 'w-6 h-6',
 } as const;
 
+const loadedImages = new Set<string>();
+
 export function UserAvatar({ user, size = 'md', withMotion = false, className }: UserAvatarProps) {
+    const src = user.profile_image_url;
+    const [imageLoaded, setImageLoaded] = useState(() => Boolean(src && loadedImages.has(src)));
+    const [imageError, setImageError] = useState(false);
+
     const sizeClass = AVATAR_SIZES[size];
     const iconSize = ICON_SIZES[size];
+    const sizePx = SIZE_PX[size];
+    const containerClasses = cn(
+        sizeClass,
+        'relative rounded-full ring-2 ring-primary/20 hover:ring-primary/40 transition-all',
+        withMotion && 'transition-transform duration-200 hover:scale-110',
+        className
+    );
 
-    const avatarContent = user.profile_image_url ? (
-        <Image
-            src={user.profile_image_url}
-            alt={user.display_name}
-            width={size === 'sm' ? 24 : size === 'md' ? 32 : 48}
-            height={size === 'sm' ? 24 : size === 'md' ? 32 : 48}
-            className={cn(
-                sizeClass,
-                'rounded-full ring-2 ring-primary/20 hover:ring-primary/40 transition-all',
-                className
-            )}
-        />
-    ) : (
+    useEffect(() => {
+        if (!src) {
+            setImageLoaded(false);
+            setImageError(false);
+            return;
+        }
+
+        const cached = loadedImages.has(src);
+        setImageLoaded(cached);
+        setImageError(false);
+    }, [src]);
+
+    const fallback = (
         <div
             className={cn(
-                sizeClass,
-                'bg-gradient-to-br from-primary/20 to-primary/10 rounded-full flex items-center justify-center ring-2 ring-primary/20',
-                className
+                containerClasses,
+                'bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center'
             )}
         >
             <User className={cn(iconSize, 'text-primary')} />
         </div>
     );
 
-    if (withMotion && user.profile_image_url) {
-        return (
-            <motion.div
-                whileHover={{ scale: 1.1 }}
-                transition={{ type: "spring", stiffness: 400, damping: 17 }}
-            >
-                {avatarContent}
-            </motion.div>
-        );
+    if (!src || imageError) {
+        return fallback;
     }
 
-    return avatarContent;
+    // Wrapper to maintain consistent size and prevent layout shift
+    return (
+        <div className={containerClasses}>
+            {/* Loading skeleton - fades out as image loads */}
+            <div className={cn(
+                'absolute inset-0 bg-accent/50 rounded-full transition-opacity duration-200 pointer-events-none',
+                imageLoaded ? 'opacity-0' : 'opacity-100 animate-pulse'
+            )} />
+
+            <Image
+                src={src}
+                alt={user.display_name}
+                width={sizePx}
+                height={sizePx}
+                className={cn(
+                    'rounded-full object-cover relative z-10 transition-opacity duration-200',
+                    imageLoaded ? 'opacity-100' : 'opacity-0'
+                )}
+                priority={size === 'md'} // Prioritize medium size (navigation)
+                onLoadingComplete={() => {
+                    if (src) {
+                        loadedImages.add(src);
+                    }
+                    setImageLoaded(true);
+                }}
+                onError={() => {
+                    if (src) {
+                        loadedImages.delete(src);
+                    }
+                    setImageError(true);
+                }}
+            />
+        </div>
+    );
 }

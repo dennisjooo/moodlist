@@ -8,7 +8,8 @@ import { ChevronDown, LogOut, User } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { UserAvatar } from '@/components/ui/UserAvatar';
-import { SUBTLE_BUTTON_MOTION_PROPS, DROPDOWN_VARIANTS, SPRING_TRANSITIONS } from '@/lib/constants/animations';
+import { DROPDOWN_VARIANTS } from '@/lib/constants/animations';
+import { cn } from '@/lib/utils';
 
 interface AuthMenuProps {
     user: UserType;
@@ -30,25 +31,23 @@ export function AuthMenu({ user }: AuthMenuProps) {
 
     return (
         <div className="relative">
-            <motion.button
-                onClick={() => setIsOpen(!isOpen)}
-                className="hidden lg:flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium text-foreground hover:bg-accent/50 transition-colors"
-                {...SUBTLE_BUTTON_MOTION_PROPS}
+            <button
+                onClick={() => setIsOpen((prev) => !prev)}
+                className="hidden lg:flex items-center space-x-2 px-3 h-10 rounded-lg text-sm font-medium text-foreground hover:bg-accent/50 transition-all active:scale-95"
             >
                 <UserAvatar user={user} size="md" withMotion />
                 <span className="hidden sm:block max-w-24 truncate" title={user.display_name}>
                     {user.display_name}
                 </span>
-                <motion.div
-                    animate={{ rotate: isOpen ? 180 : 0 }}
-                    transition={{ duration: 0.2 }}
+                <div
+                    className={cn('transition-transform duration-200', isOpen ? 'rotate-180' : 'rotate-0')}
                 >
                     <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                </motion.div>
-            </motion.button>
+                </div>
+            </button>
 
             {/* Mobile - Non-clickable profile picture */}
-            <div className="lg:hidden flex items-center">
+            <div className="lg:hidden h-9 sm:h-10 flex items-center">
                 <UserAvatar user={user} size="md" />
             </div>
 
