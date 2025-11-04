@@ -4,5 +4,6 @@ __all__ = [
     "TokenService",
     "PlaylistService",
     "WorkflowStateService",
-    "AuthService"
+    "AuthService",
+    "QuotaService",
 ]

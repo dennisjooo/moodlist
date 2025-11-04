@@ -27,7 +27,13 @@ from app.auth.schemas import (
 from app.repositories.user_repository import UserRepository
 from app.repositories.session_repository import SessionRepository
 from app.repositories.playlist_repository import PlaylistRepository
-from app.dependencies import get_user_repository, get_session_repository, get_playlist_repository
+from app.services.quota_service import QuotaService
+from app.dependencies import (
+    get_user_repository,
+    get_session_repository,
+    get_playlist_repository,
+    get_quota_service,
+)
 from app.agents.core.cache import cache_manager
 from app.core.limiter import limiter
 
@@ -347,13 +353,13 @@ async def get_user_dashboard(
 @router.get("/quota")
 async def get_user_quota(
     current_user: User = Depends(require_auth),
-    playlist_repo: PlaylistRepository = Depends(get_playlist_repository),
+    quota_service: QuotaService = Depends(get_quota_service),
 ):
     """Get user's daily playlist creation quota status.
     
     Args:
         current_user: Authenticated user
-        playlist_repo: Playlist repository
+        quota_service: Quota usage service
     
     Returns:
         Quota information with usage and limit
@@ -362,7 +368,7 @@ async def get_user_quota(
         from app.core.config import settings
         
         # Get count of playlists created today
-        used = await playlist_repo.count_user_playlists_created_today(current_user.id)
+        used = await quota_service.get_daily_usage(current_user.id)
         limit = settings.DAILY_PLAYLIST_CREATION_LIMIT
         remaining = max(0, limit - used)
         
