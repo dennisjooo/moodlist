@@ -181,6 +181,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$BACKEND_DIR"
 
+# Activate virtual environment if it exists and isn't already activated
+if [[ -z "$VIRTUAL_ENV" && -d ".venv" ]]; then
+    echo "Activating virtual environment..."
+    source .venv/bin/activate
+fi
+
 # Run uvicorn
 if [[ -n "$LOG_FILE" ]]; then
     echo "Logging output to file: $LOG_FILE"
