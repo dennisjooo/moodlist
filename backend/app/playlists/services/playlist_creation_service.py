@@ -1,5 +1,6 @@
 """Playlist creation service for creating and managing Spotify playlists."""
 
+import asyncio
 import structlog
 from typing import Optional
 
@@ -65,11 +66,11 @@ class PlaylistCreationService:
             if not state.recommendations:
                 raise ValidationException("No recommendations available for playlist creation")
 
-            # Generate playlist name
-            playlist_name = await self.playlist_namer.generate_name(state.mood_prompt, len(state.recommendations))
-
-            # Generate playlist description
-            playlist_description = await self.playlist_describer.generate_description(state.mood_prompt, len(state.recommendations))
+            # Generate playlist name and description in parallel (they don't depend on each other)
+            playlist_name, playlist_description = await asyncio.gather(
+                self.playlist_namer.generate_name(state.mood_prompt, len(state.recommendations)),
+                self.playlist_describer.generate_description(state.mood_prompt, len(state.recommendations))
+            )
 
             # Create playlist on Spotify
             access_token = state.metadata.get("spotify_access_token")

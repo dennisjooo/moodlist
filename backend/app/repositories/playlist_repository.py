@@ -913,6 +913,8 @@ class PlaylistRepository(BaseRepository[Playlist]):
             updated = result.rowcount > 0
 
             if updated:
+                # Commit the transaction to persist the changes
+                await self.session.commit()
                 self.logger.info(
                     "Playlist updated with Spotify info",
                     session_id=session_id,
