@@ -1,8 +1,8 @@
 'use client';
 
 import { SpotifyLoginButton } from '@/components/features/auth/SpotifyLoginButton';
-import { ThemeToggle } from '@/components/ThemeToggle';
 import { WorkflowNotificationIndicator } from '@/components/features/workflow/WorkflowNotificationIndicator';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { NavItem } from '@/lib/types/navigation';
 import { AuthMenu } from './AuthMenu';
@@ -30,7 +30,7 @@ export default function Navigation({ extraItems = [] }: NavigationProps) {
     const navItems = [...defaultNavItems, ...extraItems];
 
     return (
-        <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
+        <nav className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 shadow-sm">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex justify-between items-center h-16 lg:justify-center lg:relative">
                     {/* Logo - Left Side */}
@@ -42,7 +42,7 @@ export default function Navigation({ extraItems = [] }: NavigationProps) {
                     <DesktopLinks items={navItems} />
 
                     {/* Right Side - Profile & Mobile Menu Button */}
-                    <div className="flex items-center space-x-2 sm:space-x-4 lg:absolute lg:right-0">
+                    <div className="flex items-center space-x-2 sm:space-x-3 lg:absolute lg:right-0">
                         {/* Workflow Notification Indicator */}
                         <WorkflowNotificationIndicator />
 
@@ -51,7 +51,7 @@ export default function Navigation({ extraItems = [] }: NavigationProps) {
                             {isAuthenticated && user ? (
                                 <AuthMenu user={user} />
                             ) : (
-                                <SpotifyLoginButton className="bg-[#1DB954] hover:bg-[#1ed760] text-white h-8 px-3 text-sm rounded-md font-medium transition-all duration-200 flex items-center gap-1.5 shadow-md hover:shadow-lg sm:h-10 sm:px-6 sm:text-base sm:gap-2" />
+                                <SpotifyLoginButton className="bg-[#1DB954] hover:bg-[#1ed760] text-white h-9 px-4 text-sm rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg hover:scale-105 sm:h-10 sm:px-6" />
                             )}
                         </div>
 

@@ -1,14 +1,17 @@
 'use client';
 
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { AnimatePresence, motion } from '@/components/ui/lazy-motion';
+import { BUTTON_MOTION_PROPS, MENU_ITEM_VARIANTS, MOBILE_MENU_VARIANTS, SPRING_TRANSITIONS } from '@/lib/constants/animations';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { initiateSpotifyAuth, isSpotifyAuthConfigured } from '@/lib/spotifyAuth';
 import type { User as UserType } from '@/lib/types/auth';
 import { NavItem } from '@/lib/types/navigation';
 import { logger } from '@/lib/utils/logger';
 import { LogOut, Menu, User, X } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface MobileMenuProps {
     items: NavItem[];
@@ -18,7 +21,13 @@ interface MobileMenuProps {
 
 export function MobileMenu({ items, user, onProfileClick }: MobileMenuProps) {
     const [isOpen, setIsOpen] = useState(false);
+    const [mounted, setMounted] = useState(false);
     const { logout } = useAuth();
+    const pathname = usePathname();
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const handleLogout = async () => {
         try {
@@ -30,133 +39,133 @@ export function MobileMenu({ items, user, onProfileClick }: MobileMenuProps) {
     };
 
     return (
-        <div className="relative">
+        <>
             {/* Mobile Menu Button */}
-            <button
+            <motion.button
                 onClick={() => setIsOpen(!isOpen)}
-                className="lg:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                className="lg:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
                 aria-label="Toggle menu"
+                {...BUTTON_MOTION_PROPS}
             >
-                {isOpen ? (
-                    <X className="w-5 h-5" />
-                ) : (
-                    <Menu className="w-5 h-5" />
-                )}
-            </button>
+                <AnimatePresence mode="wait" initial={false}>
+                    <motion.div
+                        key={isOpen ? 'close' : 'open'}
+                        initial={{ rotate: -90, opacity: 0 }}
+                        animate={{ rotate: 0, opacity: 1 }}
+                        exit={{ rotate: 90, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                    >
+                        {isOpen ? (
+                            <X className="w-5 h-5" />
+                        ) : (
+                            <Menu className="w-5 h-5" />
+                        )}
+                    </motion.div>
+                </AnimatePresence>
+            </motion.button>
 
-            {/* Mobile Menu Dropdown */}
-            <div className={`lg:hidden absolute right-0 top-full mt-2 w-64 border rounded-lg shadow-lg bg-background/95 backdrop-blur overflow-hidden transition-all duration-300 ease-in-out z-50 ${isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
-                <div className="px-2 pt-2 pb-3 space-y-1">
-                    {items.map((item, index) => (
-                        <Link
-                            key={item.name}
-                            href={item.href}
-                            className={`block px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-all duration-200 transform ${isOpen
-                                ? 'translate-x-0 opacity-100'
-                                : '-translate-x-4 opacity-0'
-                                }`}
-                            style={{
-                                transitionDelay: isOpen ? `${index * 50}ms` : '0ms'
-                            }}
-                            onClick={() => setIsOpen(false)}
-                        >
-                            {item.name}
-                        </Link>
-                    ))}
-
-                    {/* Profile Link in Mobile Menu */}
-                    {user ? (
+            {/* Mobile Menu Dropdown - Rendered via Portal */}
+            {mounted && createPortal(
+                <AnimatePresence>
+                    {isOpen && (
                         <>
-                            <Link
-                                href="/profile"
-                                className={`block px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-accent transition-all duration-200 transform ${isOpen
-                                    ? 'translate-x-0 opacity-100'
-                                    : '-translate-x-4 opacity-0'
-                                    }`}
-                                style={{
-                                    transitionDelay: isOpen ? `${items.length * 50}ms` : '0ms'
-                                }}
-                                onClick={() => {
-                                    setIsOpen(false);
-                                    onProfileClick?.();
-                                }}
-                            >
-                                <div className="flex items-center space-x-2">
-                                    <User className="w-4 h-4" />
-                                    <span>View Profile</span>
-                                </div>
-                            </Link>
+                            {/* Backdrop */}
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="fixed inset-0 bg-black/20 z-40 lg:hidden"
+                                onClick={() => setIsOpen(false)}
+                                aria-hidden="true"
+                            />
 
-                            {/* Logout Button */}
-                            <button
-                                onClick={handleLogout}
-                                className={`w-full text-left block px-3 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all duration-200 transform ${isOpen
-                                    ? 'translate-x-0 opacity-100'
-                                    : '-translate-x-4 opacity-0'
-                                    }`}
-                                style={{
-                                    transitionDelay: isOpen ? `${(items.length + 1) * 50}ms` : '0ms'
-                                }}
+                            <motion.div
+                                variants={MOBILE_MENU_VARIANTS}
+                                initial="closed"
+                                animate="open"
+                                exit="closed"
+                                className="lg:hidden fixed right-4 top-[4.5rem] w-72 border rounded-xl shadow-2xl bg-background/95 backdrop-blur-xl overflow-hidden z-50"
                             >
-                                <div className="flex items-center space-x-2">
-                                    <LogOut className="w-4 h-4" />
-                                    <span>Sign Out</span>
-                                </div>
-                            </button>
-                        </>
-                    ) : (
-                        <button
-                            onClick={() => {
-                                if (!isSpotifyAuthConfigured()) {
-                                    return;
-                                }
-                                initiateSpotifyAuth();
-                                setIsOpen(false);
-                            }}
-                            className={`w-full text-left block px-3 py-2 rounded-md text-sm font-medium text-foreground hover:bg-accent transition-all duration-200 transform ${isOpen
-                                ? 'translate-x-0 opacity-100'
-                                : '-translate-x-4 opacity-0'
-                                }`}
-                            style={{
-                                transitionDelay: isOpen ? `${(items.length - 1) * 50}ms` : '0ms'
-                            }}
-                        >
-                            <div className="flex items-center space-x-2">
-                                <svg
-                                    className="w-4 h-4"
-                                    viewBox="0 0 24 24"
-                                    fill="currentColor"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                >
-                                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.42 1.56-.299.421-1.02.599-1.559.3z" />
-                                </svg>
-                                <span>Login</span>
+                            <div className="p-2">
+                                {/* Navigation Links */}
+                                {items.map((item) => {
+                                    const isActive = pathname === item.href;
+                                    return (
+                                        <motion.div key={item.name} variants={MENU_ITEM_VARIANTS}>
+                                            <Link
+                                                href={item.href}
+                                                className={`relative flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors group overflow-hidden ${isActive
+                                                    ? 'text-foreground bg-accent/50'
+                                                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                                                    }`}
+                                                onClick={() => setIsOpen(false)}
+                                            >
+                                                <span className="relative z-10">{item.name}</span>
+                                                {isActive && (
+                                                    <motion.div
+                                                        className="absolute left-1 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-full"
+                                                        layoutId="activeMobileTab"
+                                                        transition={SPRING_TRANSITIONS.snappy}
+                                                    />
+                                                )}
+                                            </Link>
+                                        </motion.div>
+                                    );
+                                })}
+
+                                {/* Divider */}
+                                {user && (
+                                    <motion.div variants={MENU_ITEM_VARIANTS} className="my-2 border-t" />
+                                )}
+
+                                {/* User Actions */}
+                                {user && (
+                                    <>
+                                        <motion.div variants={MENU_ITEM_VARIANTS}>
+                                            <Link
+                                                href="/profile"
+                                                className="flex items-center space-x-3 px-4 py-2.5 rounded-lg text-sm font-medium text-foreground hover:bg-accent/50 transition-colors group"
+                                                onClick={() => {
+                                                    setIsOpen(false);
+                                                    onProfileClick?.();
+                                                }}
+                                            >
+                                                <User className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                                                <span>View Profile</span>
+                                            </Link>
+                                        </motion.div>
+
+                                        <motion.div variants={MENU_ITEM_VARIANTS}>
+                                            <button
+                                                onClick={handleLogout}
+                                                className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors group"
+                                            >
+                                                <LogOut className="w-4 h-4" />
+                                                <span>Sign Out</span>
+                                            </button>
+                                        </motion.div>
+                                    </>
+                                )}
+
+                                {/* Theme Toggle */}
+                                <motion.div variants={MENU_ITEM_VARIANTS} className="mt-2 pt-2 border-t">
+                                    <div className="px-4 py-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm font-medium text-muted-foreground">
+                                                Theme
+                                            </span>
+                                            <ThemeToggle />
+                                        </div>
+                                    </div>
+                                </motion.div>
                             </div>
-                        </button>
-                    )}
-
-                    {/* Theme Toggle in Mobile Menu */}
-                    <div className={`transform ${isOpen
-                        ? 'translate-x-0 opacity-100'
-                        : '-translate-x-4 opacity-0'
-                        }`}
-                        style={{
-                            transitionDelay: isOpen ? `${items.length * 50}ms` : '0ms'
-                        }}>
-                        <div className="px-3 py-2">
-                            <ThemeToggle />
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Click outside to close */}
-            {isOpen && (
-                <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setIsOpen(false)}
-                />
-            )}
-        </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>,
+            document.body
+        )}
+        </>
     );
 }
