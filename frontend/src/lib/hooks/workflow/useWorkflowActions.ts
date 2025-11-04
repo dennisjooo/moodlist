@@ -302,16 +302,8 @@ export function useWorkflowActions({
     }, [api, workflowState.sessionId, setWorkflowData]);
 
     const searchTracks = useCallback(async (query: string, limit: number = 20) => {
-        try {
-            return await api.searchTracks(query, limit);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to search tracks';
-            setWorkflowData({
-                error: errorMessage,
-            });
-            throw error;
-        }
-    }, [api, setWorkflowData]);
+        return await api.searchTracks(query, limit);
+    }, [api]);
 
     return {
         startWorkflow,
