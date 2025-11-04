@@ -139,14 +139,14 @@ function EditPlaylistPageContent() {
 
             <Navigation />
 
-            <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+            <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
                 {/* Back Button */}
                 <Button
                     variant="ghost"
                     onClick={handleCancel}
-                    className="mb-6 gap-2"
+                    className="mb-8 gap-2 hover:gap-3 transition-all group animate-in fade-in slide-in-from-left-4 duration-500"
                 >
-                    <ArrowLeft className="w-4 h-4" />
+                    <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                     Back to Playlist
                 </Button>
 
