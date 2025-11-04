@@ -4,6 +4,7 @@ import { AuthGuard } from '@/components/AuthGuard';
 import Navigation from '@/components/Navigation';
 import { PlaylistResultsSkeleton } from '@/components/shared/LoadingStates';
 import MoodBackground from '@/components/shared/MoodBackground';
+import { BackButton } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { useAuth } from '@/lib/contexts/AuthContext';
@@ -11,7 +12,6 @@ import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { workflowEvents } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
-import { ArrowLeft } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -119,14 +119,11 @@ function PlaylistPageContent() {
                 <Navigation />
 
                 <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                    <Button
-                        variant="ghost"
+                    <BackButton
                         onClick={handleBack}
-                        className="mb-6 gap-2"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back
-                    </Button>
+                        animated
+                        className="mb-6"
+                    />
 
                     <PlaylistResultsSkeleton />
                 </main>
@@ -149,14 +146,11 @@ function PlaylistPageContent() {
                 <Navigation />
 
                 <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                    <Button
-                        variant="ghost"
+                    <BackButton
                         onClick={handleBack}
-                        className="mb-6 gap-2"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back
-                    </Button>
+                        animated
+                        className="mb-6"
+                    />
 
                     <div className="flex items-center justify-center min-h-[60vh]">
                         <div className="text-center">
@@ -196,14 +190,11 @@ function PlaylistPageContent() {
             <Navigation />
 
             <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                <Button
-                    variant="ghost"
+                <BackButton
                     onClick={handleBack}
-                    className="mb-6 gap-2"
-                >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back
-                </Button>
+                    animated
+                    className="mb-6"
+                />
 
                 <PlaylistResults />
             </main>

@@ -1,8 +1,8 @@
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { BackButton } from '@/components/shared';
 import { CreateSessionLayout, createSessionCardClassName } from '@/components/features/create/CreateSessionLayout';
 import WorkflowProgress from '@/components/WorkflowProgress';
-import { ArrowLeft, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { isTerminalStatus } from '@/lib/utils/workflow';
 
 interface ColorScheme {
@@ -30,15 +30,14 @@ export function CreateSessionProgress({
 
     return (
         <CreateSessionLayout colorScheme={colorScheme} dimmed={isCancelling}>
-            <Button
-                variant="ghost"
+            <BackButton
                 onClick={onBack}
                 disabled={isCancelling}
-                className="w-fit gap-2"
+                animated
+                className="w-fit"
             >
-                <ArrowLeft className="w-4 h-4" />
                 {isCancelling ? 'Cancelling...' : 'Back'}
-            </Button>
+            </BackButton>
 
             <div className={`${createSessionCardClassName} space-y-6`}>
                 {status && !isTerminal && (

@@ -1,7 +1,6 @@
 import { WorkflowProgressSkeleton } from '@/components/shared/LoadingStates';
-import { Button } from '@/components/ui/button';
+import { BackButton } from '@/components/shared';
 import { CreateSessionLayout, createSessionCardClassName } from '@/components/features/create/CreateSessionLayout';
-import { ArrowLeft } from 'lucide-react';
 
 interface ColorScheme {
     primary: string;
@@ -22,14 +21,11 @@ export function CreateSessionError({
 }: CreateSessionErrorProps) {
     return (
         <CreateSessionLayout colorScheme={colorScheme}>
-            <Button
-                variant="ghost"
+            <BackButton
                 onClick={onBack}
-                className="w-fit gap-2"
-            >
-                <ArrowLeft className="w-4 h-4" />
-                Back
-            </Button>
+                animated
+                className="w-fit"
+            />
 
             <div className={`${createSessionCardClassName} flex min-h-[280px] items-center justify-center text-center`}>
                 {error ? (
