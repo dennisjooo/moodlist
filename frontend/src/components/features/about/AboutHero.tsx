@@ -20,7 +20,7 @@ export function AboutHero() {
             <Navigation />
 
             {/* Hero Section */}
-            <div className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 sm:pt-24">
+            <div className="relative z-10 max-w-3xl mx-auto px-8 pt-16 sm:pt-24">
                 <FeatureBadge icon={Music} className="mb-6">
                     The Story Behind MoodList
                 </FeatureBadge>
