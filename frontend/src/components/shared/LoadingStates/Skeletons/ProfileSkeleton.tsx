@@ -1,23 +1,16 @@
-import { BackButton } from '@/components/shared';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RecentActivitySkeleton } from './RecentActivitySkeleton';
 
 export function ProfileSkeleton() {
     return (
-        <div className="h-screen p-2 sm:p-3 overflow-hidden">
+        <div className="h-screen pt-2 sm:pt-3 px-2 sm:px-3 overflow-hidden">
             <div className="h-full max-w-7xl mx-auto flex flex-col">
                 {/* Compact Header */}
                 <div className="flex items-center justify-between mb-2 sm:mb-3">
-                    <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
-                        <BackButton size="sm" iconOnly animated className="h-8 w-8 p-0" disabled />
-                        <div className="flex items-center space-x-2 min-w-0">
-                            <Skeleton className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0" />
-                            <div className="min-w-0">
-                                <Skeleton className="h-4 sm:h-5 w-24 sm:w-32 mb-1" />
-                                <Skeleton className="h-3 w-16 sm:w-20 hidden sm:block" />
-                            </div>
-                        </div>
+                    <div className="min-w-0">
+                        <Skeleton className="h-4 sm:h-5 w-24 sm:w-32 mb-1" />
+                        <Skeleton className="h-3 w-32 sm:w-40 hidden sm:block" />
                     </div>
                     <div className="hidden sm:flex gap-3">
                         <Skeleton className="h-4 w-16" />

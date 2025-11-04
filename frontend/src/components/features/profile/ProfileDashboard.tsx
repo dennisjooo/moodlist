@@ -30,7 +30,7 @@ export function ProfileDashboard({ dashboardData, isDashboardLoading, spotifyPro
 
             {/* Desktop: Left Column - Takes 2/3 width */}
             <div className="hidden lg:flex lg:col-span-2 flex-col gap-3 overflow-hidden min-h-0">
-                <div className="flex-shrink-0 min-h-0">
+                <div className="flex-1 min-h-0">
                     <RecentActivityTimeline
                         recentActivity={dashboardData?.recent_activity || []}
                         enablePagination={true}
