@@ -93,6 +93,51 @@ class TrackRecommendationsTool(RateLimitedTool):
         """Get the input schema for this tool."""
         return TrackRecommendationsInput
 
+    def _validate_parameters(
+        self,
+        seeds: List[str],
+        negative_seeds: Optional[List[str]] = None,
+        size: int = 20
+    ) -> Optional[str]:
+        """Validate recommendation parameters to detect known-bad combinations.
+
+        Phase 1 Optimization: Detect invalid parameter combinations early to avoid
+        expensive API calls and retry loops.
+
+        Args:
+            seeds: List of seed track IDs
+            negative_seeds: Optional list of negative seed track IDs
+            size: Number of recommendations requested
+
+        Returns:
+            Error message if validation fails, None if parameters are valid
+        """
+        # Validate seeds are not empty strings
+        if not seeds or any(not s or not s.strip() for s in seeds):
+            return "Seeds contain empty or whitespace-only IDs"
+
+        # Validate negative seeds if provided
+        if negative_seeds:
+            if any(not s or not s.strip() for s in negative_seeds):
+                return "Negative seeds contain empty or whitespace-only IDs"
+
+            # RecoBeat API fails when negative seeds >= positive seeds
+            if len(negative_seeds) >= len(seeds):
+                return f"Too many negative seeds ({len(negative_seeds)}) relative to positive seeds ({len(seeds)})"
+
+            # Check for overlap between seeds and negative seeds
+            seed_set = set(seeds)
+            negative_set = set(negative_seeds)
+            overlap = seed_set & negative_set
+            if overlap:
+                return f"Seeds and negative seeds contain overlapping IDs: {overlap}"
+
+        # Validate size is reasonable
+        if size < 1 or size > 100:
+            return f"Invalid recommendation size: {size} (must be 1-100)"
+
+        return None
+
     async def _get_track_details(self, track_ids: List[str]) -> dict[str, int]:
         """Get track details including duration_ms from /v1/track endpoint.
 
@@ -182,6 +227,15 @@ class TrackRecommendationsTool(RateLimitedTool):
             ToolResult with recommendations or error
         """
         try:
+            # PHASE 1: Validate parameters to short-circuit known-bad combinations
+            validation_error = self._validate_parameters(seeds, negative_seeds, size)
+            if validation_error:
+                logger.warning(f"Invalid recommendation parameters: {validation_error}")
+                return ToolResult.error_result(
+                    f"Invalid parameters: {validation_error}",
+                    error_type="ValidationError",
+                    skip_retry=True  # Don't retry validation failures
+                )
             # Build query parameters
             params = {
                 "seeds": seeds,

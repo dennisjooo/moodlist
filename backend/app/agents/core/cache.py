@@ -1,5 +1,6 @@
 """Caching utilities for the agentic system."""
 
+import asyncio
 import hashlib
 import pickle
 from datetime import datetime, timedelta, timezone
@@ -402,6 +403,88 @@ class CacheManager:
         ttl = self.default_ttl["top_tracks"]
         await self.cache.set(key, tracks, ttl)
 
+    async def get_user_top_artists(
+        self,
+        user_id: str,
+        time_range: str = "medium_term",
+        limit: int = 20
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Get cached user top artists.
+
+        Phase 1 Optimization: Cache user's top artists to avoid repeated fetches.
+
+        Args:
+            user_id: User ID
+            time_range: Time range for artists
+            limit: Number of artists
+
+        Returns:
+            Top artists or None if not cached
+        """
+        key = self._make_cache_key("top_artists", user_id, time_range, limit)
+        return await self.cache.get(key)
+
+    async def set_user_top_artists(
+        self,
+        user_id: str,
+        artists: List[Dict[str, Any]],
+        time_range: str = "medium_term",
+        limit: int = 20
+    ) -> None:
+        """Cache user top artists.
+
+        Phase 1 Optimization: Cache user's top artists to avoid repeated fetches.
+
+        Args:
+            user_id: User ID
+            artists: Top artists data
+            time_range: Time range for artists
+            limit: Number of artists
+        """
+        key = self._make_cache_key("top_artists", user_id, time_range, limit)
+        ttl = self.default_ttl["top_artists"]
+        await self.cache.set(key, artists, ttl)
+
+    async def get_anchor_tracks(
+        self,
+        user_id: str,
+        mood_prompt: str
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Get cached anchor tracks for a user and mood.
+
+        Phase 1 Optimization: Cache anchor track selections to avoid repeated
+        expensive searches and filtering.
+
+        Args:
+            user_id: User ID
+            mood_prompt: Mood prompt used for anchor selection
+
+        Returns:
+            Anchor tracks or None if not cached
+        """
+        key = self._make_cache_key("anchor_tracks", user_id, mood_prompt)
+        return await self.cache.get(key)
+
+    async def set_anchor_tracks(
+        self,
+        user_id: str,
+        mood_prompt: str,
+        anchor_tracks: List[Dict[str, Any]]
+    ) -> None:
+        """Cache anchor tracks for a user and mood.
+
+        Phase 1 Optimization: Cache anchor track selections to avoid repeated
+        expensive searches and filtering.
+
+        Args:
+            user_id: User ID
+            mood_prompt: Mood prompt used for anchor selection
+            anchor_tracks: Selected anchor tracks
+        """
+        key = self._make_cache_key("anchor_tracks", user_id, mood_prompt)
+        # Cache anchor tracks for 15 minutes (they should be recomputed periodically)
+        await self.cache.set(key, anchor_tracks, ttl=900)
+
     async def get_mood_analysis(self, mood_prompt: str) -> Optional[Dict[str, Any]]:
         """Get cached mood analysis.
 
@@ -495,6 +578,61 @@ class CacheManager:
             "cache_stats": self.cache.get_stats(),
             "default_ttl": self.default_ttl
         }
+
+    async def warm_user_cache(
+        self,
+        user_id: str,
+        spotify_service,
+        reccobeat_service,
+        access_token: str
+    ) -> None:
+        """Proactively warm cache with user data in background.
+
+        Phase 2 Optimization: Fire-and-forget cache warming to pre-populate
+        frequently accessed data.
+
+        Args:
+            user_id: User ID
+            spotify_service: Spotify service for fetching data
+            reccobeat_service: RecoBeat service for fetching data
+            access_token: Spotify access token
+        """
+        async def warm_cache_background():
+            """Background task to warm cache."""
+            try:
+                logger.info(f"Warming cache for user {user_id}")
+
+                # Warm top tracks cache
+                top_tracks = await spotify_service.get_user_top_tracks(
+                    access_token=access_token,
+                    limit=20,
+                    time_range="medium_term",
+                    user_id=user_id
+                )
+
+                # Warm top artists cache
+                top_artists = await spotify_service.get_user_top_artists(
+                    access_token=access_token,
+                    limit=15,
+                    time_range="medium_term",
+                    user_id=user_id
+                )
+
+                # Warm audio features cache for top tracks
+                if top_tracks and reccobeat_service:
+                    track_ids = [track.get('id') for track in top_tracks if track.get('id')]
+                    if track_ids:
+                        await reccobeat_service.get_tracks_audio_features(track_ids)
+
+                logger.info(f"Successfully warmed cache for user {user_id}: "
+                           f"{len(top_tracks)} tracks, {len(top_artists)} artists")
+
+            except Exception as e:
+                logger.warning(f"Error warming cache for user {user_id}: {e}")
+
+        # Fire and forget - don't await
+        asyncio.create_task(warm_cache_background())
+        logger.info(f"Started background cache warming for user {user_id}")
 
 
 # Global cache manager - will be initialized with Valkey when available

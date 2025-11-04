@@ -302,7 +302,8 @@ class RecoBeatService:
 
         # Execute all chunks in parallel
         try:
-            chunk_results = await self._bounded_gather(chunks, process_chunk, concurrency=5)
+            # Phase 2: Increased concurrency from 5 to 8 with Phase 1 caching
+            chunk_results = await self._bounded_gather(chunks, process_chunk, concurrency=8)
 
             # Combine results from all chunks
             for chunk_result in chunk_results:
@@ -393,10 +394,11 @@ class RecoBeatService:
 
         # Execute all fetches in parallel
         try:
+            # Phase 2: Increased concurrency from 10 to 15 with Phase 1 caching
             results = await self._bounded_gather(
                 tracks_needing_fetch,
                 fetch_single_track_features,
-                concurrency=10,
+                concurrency=15,
             )
 
             # Combine results

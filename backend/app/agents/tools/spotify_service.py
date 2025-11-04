@@ -3,6 +3,7 @@
 import structlog
 from typing import Dict, List, Optional, Any
 
+from ..core.cache import cache_manager
 from .agent_tools import AgentTools
 from .spotify.user_data import GetUserTopTracksTool, GetUserTopArtistsTool
 from .spotify.playlist_management import CreatePlaylistTool, AddTracksToPlaylistTool
@@ -47,18 +48,35 @@ class SpotifyService:
         self,
         access_token: str,
         limit: int = 20,
-        time_range: str = "medium_term"
+        time_range: str = "medium_term",
+        user_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Get user's top tracks.
+        """Get user's top tracks with caching.
+
+        Phase 1 Optimization: Cache top tracks to avoid repeated API calls
+        for identical requests.
 
         Args:
             access_token: Spotify access token
             limit: Number of tracks to return
             time_range: Time range for analysis
+            user_id: Optional user ID for caching (recommended)
 
         Returns:
             List of user's top tracks
         """
+        # Try to get from cache if user_id is provided
+        if user_id:
+            cached_tracks = await cache_manager.get_user_top_tracks(
+                user_id=user_id,
+                time_range=time_range,
+                limit=limit
+            )
+            if cached_tracks is not None:
+                logger.info(f"Cache hit for user {user_id} top tracks")
+                return cached_tracks
+
+        # Cache miss - fetch from API
         tool = self.tools.get_tool("get_user_top_tracks")
         if not tool:
             raise ValueError("User top tracks tool not available")
@@ -73,24 +91,53 @@ class SpotifyService:
             logger.error(f"Failed to get user top tracks: {result.error}")
             return []
 
-        return result.data.get("tracks", [])
+        tracks = result.data.get("tracks", [])
+
+        # Cache the result if user_id is provided
+        if user_id and tracks:
+            await cache_manager.set_user_top_tracks(
+                user_id=user_id,
+                tracks=tracks,
+                time_range=time_range,
+                limit=limit
+            )
+            logger.info(f"Cached top tracks for user {user_id}")
+
+        return tracks
 
     async def get_user_top_artists(
         self,
         access_token: str,
         limit: int = 20,
-        time_range: str = "medium_term"
+        time_range: str = "medium_term",
+        user_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Get user's top artists.
+        """Get user's top artists with caching.
+
+        Phase 1 Optimization: Cache top artists to avoid repeated API calls
+        for identical requests.
 
         Args:
             access_token: Spotify access token
             limit: Number of artists to return
             time_range: Time range for analysis
+            user_id: Optional user ID for caching (recommended)
 
         Returns:
             List of user's top artists
         """
+        # Try to get from cache if user_id is provided
+        if user_id:
+            cached_artists = await cache_manager.get_user_top_artists(
+                user_id=user_id,
+                time_range=time_range,
+                limit=limit
+            )
+            if cached_artists is not None:
+                logger.info(f"Cache hit for user {user_id} top artists")
+                return cached_artists
+
+        # Cache miss - fetch from API
         tool = self.tools.get_tool("get_user_top_artists")
         if not tool:
             raise ValueError("User top artists tool not available")
@@ -105,7 +152,19 @@ class SpotifyService:
             logger.error(f"Failed to get user top artists: {result.error}")
             return []
 
-        return result.data.get("artists", [])
+        artists = result.data.get("artists", [])
+
+        # Cache the result if user_id is provided
+        if user_id and artists:
+            await cache_manager.set_user_top_artists(
+                user_id=user_id,
+                artists=artists,
+                time_range=time_range,
+                limit=limit
+            )
+            logger.info(f"Cached top artists for user {user_id}")
+
+        return artists
 
     async def get_user_profile(self, access_token: str) -> Optional[Dict[str, Any]]:
         """Get user's Spotify profile.

@@ -1,5 +1,6 @@
 """Artist processing utilities for anchor track selection."""
 
+import asyncio
 import structlog
 from typing import Any, Dict, List, Optional
 
@@ -119,7 +120,9 @@ class ArtistProcessor:
         mentioned_artists: List[str],
         access_token: str
     ) -> List[Dict[str, Any]]:
-        """Search for artists on Spotify and return validated artist info.
+        """Search for artists on Spotify in parallel and return validated artist info.
+
+        Phase 2 Optimization: Parallel artist searches to reduce latency.
 
         Args:
             artists_to_process: List of artist names to search
@@ -129,9 +132,8 @@ class ArtistProcessor:
         Returns:
             List of dicts with 'info', 'name', and 'is_mentioned' keys
         """
-        artist_infos = []
-        
-        for artist_name in artists_to_process[:8]:  # Limit to 8 artists total
+        async def search_single_artist(artist_name: str) -> Optional[Dict[str, Any]]:
+            """Search for a single artist and return info if found."""
             try:
                 logger.info(f"Searching for artist: {artist_name}")
 
@@ -142,7 +144,7 @@ class ArtistProcessor:
                 )
 
                 if not artists:
-                    continue
+                    return None
 
                 # Find the artist with exact name match (case-insensitive)
                 artist_info = None
@@ -150,25 +152,43 @@ class ArtistProcessor:
                     if artist_result.get('name', '').lower() == artist_name.lower():
                         artist_info = artist_result
                         break
-                
+
                 # If no exact match, fall back to first result
                 if not artist_info:
                     logger.warning(f"No exact match for '{artist_name}', using closest match: {artists[0].get('name')}")
                     artist_info = artists[0]
-                
+
                 artist_id = artist_info.get('id')
                 if artist_id:
                     is_mentioned_check = artist_name in mentioned_artists
-                    artist_infos.append({
+                    return {
                         'info': artist_info,
                         'name': artist_name,
                         'is_mentioned': is_mentioned_check
-                    })
+                    }
+
+                return None
 
             except Exception as e:
                 logger.warning(f"Failed to search for artist '{artist_name}': {e}")
-                continue
+                return None
 
+        # Phase 2: Search all artists concurrently (limit to 8 artists)
+        artists_to_search = artists_to_process[:8]
+        logger.info(f"Searching for {len(artists_to_search)} artists in parallel")
+
+        search_results = await asyncio.gather(
+            *[search_single_artist(artist_name) for artist_name in artists_to_search],
+            return_exceptions=True
+        )
+
+        # Filter out None results and exceptions
+        artist_infos = []
+        for result in search_results:
+            if result and not isinstance(result, Exception):
+                artist_infos.append(result)
+
+        logger.info(f"Found {len(artist_infos)} artists out of {len(artists_to_search)} searches")
         return artist_infos
 
     async def _fetch_artist_tracks(
@@ -179,7 +199,9 @@ class ArtistProcessor:
         access_token: str,
         temporal_context: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
-        """Fetch top tracks for each artist and create anchor candidates.
+        """Fetch top tracks for each artist in parallel and create anchor candidates.
+
+        Phase 2 Optimization: Parallel artist track fetching to reduce latency.
 
         Args:
             artist_infos: List of validated artist info dicts
@@ -191,12 +213,12 @@ class ArtistProcessor:
         Returns:
             List of anchor candidate dictionaries
         """
-        candidates = []
-
-        for artist_data in artist_infos:
+        async def fetch_tracks_for_artist(artist_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+            """Fetch and process tracks for a single artist."""
             artist_info = artist_data['info']
             artist_name = artist_data['name']
             artist_id = artist_info.get('id')
+            artist_candidates = []
 
             try:
                 tracks = await self.spotify_service.get_artist_top_tracks(
@@ -205,7 +227,7 @@ class ArtistProcessor:
                 )
 
                 if not tracks:
-                    continue
+                    return []
 
                 # Take top 5 tracks per artist for mentioned artists, 3 for others
                 limit_per_artist = 5 if artist_name in mentioned_artists else 3
@@ -217,12 +239,50 @@ class ArtistProcessor:
                         track, artist_name, artist_data['is_mentioned'], target_features, temporal_context
                     )
                     if candidate:
-                        candidates.append(candidate)
+                        artist_candidates.append(candidate)
+
+                return artist_candidates
 
             except Exception as e:
                 logger.warning(f"Failed to get tracks for artist '{artist_name}': {e}")
-                continue
+                return []
 
+        # Phase 2: Fetch tracks for all artists concurrently
+        logger.info(f"Fetching top tracks for {len(artist_infos)} artists in parallel")
+
+        results = await asyncio.gather(
+            *[fetch_tracks_for_artist(artist_data) for artist_data in artist_infos],
+            return_exceptions=True
+        )
+
+        # Flatten results and filter out exceptions
+        candidates = []
+        for result in results:
+            if isinstance(result, list):
+                candidates.extend(result)
+            elif isinstance(result, Exception):
+                logger.warning(f"Exception in artist track fetching: {result}")
+
+        # Phase 2 Optimization: Batch fetch all audio features at once
+        if candidates and self.reccobeat_service:
+            track_ids = [c['track']['id'] for c in candidates if c.get('track', {}).get('id')]
+            if track_ids:
+                try:
+                    logger.info(f"Batch fetching audio features for {len(track_ids)} tracks")
+                    features_map = await self.reccobeat_service.get_tracks_audio_features(track_ids)
+
+                    # Update candidates with batched features
+                    for candidate in candidates:
+                        track_id = candidate.get('track', {}).get('id')
+                        if track_id and track_id in features_map:
+                            candidate['track']['audio_features'] = features_map[track_id]
+                            candidate['features'] = features_map[track_id]
+
+                    logger.info(f"Successfully enriched {len([c for c in candidates if c.get('features')])} candidates with audio features")
+                except Exception as e:
+                    logger.warning(f"Failed to batch fetch audio features: {e}")
+
+        logger.info(f"Created {len(candidates)} anchor candidates from {len(artist_infos)} artists")
         return candidates
 
     async def _create_artist_candidate(
@@ -234,6 +294,9 @@ class ArtistProcessor:
         temporal_context: Optional[Dict[str, Any]] = None
     ) -> Optional[Dict[str, Any]]:
         """Create an anchor candidate from an artist track.
+
+        Phase 2 Optimization: Audio features are now batch fetched after all candidates
+        are collected, so this method no longer fetches them individually.
 
         Args:
             track: Track dictionary from Spotify
@@ -261,15 +324,9 @@ class ArtistProcessor:
             )
             return None
 
-        # Get audio features if available
+        # Phase 2: Audio features will be batch fetched after all candidates are collected
+        # Initialize with empty features dict
         features = {}
-        if self.reccobeat_service:
-            try:
-                features_map = await self.reccobeat_service.get_tracks_audio_features([track['id']])
-                features = features_map.get(track['id'], {})
-                track['audio_features'] = features
-            except Exception as e:
-                logger.warning(f"Failed to get features for artist track: {e}")
 
         # Mark as artist-based anchor
         track['user_mentioned'] = is_mentioned  # Mentioned artists get high priority
