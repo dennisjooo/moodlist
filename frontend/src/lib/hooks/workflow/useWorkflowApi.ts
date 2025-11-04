@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { workflowAPI } from '@/lib/api/workflow';
 import type { StartRecommendationRequest, WorkflowStatus, WorkflowResults } from '@/lib/api/workflow';
 import { logger } from '@/lib/utils/logger';
@@ -89,7 +90,7 @@ export function useWorkflowApi() {
         return await workflowAPI.cancelWorkflow(sessionId);
     };
 
-    return {
+    return useMemo(() => ({
         startWorkflow,
         loadWorkflowStatus,
         loadWorkflowResults,
@@ -98,6 +99,6 @@ export function useWorkflowApi() {
         applyEdit,
         searchTracks,
         cancelWorkflow,
-    };
+    }), []);
 }
 
