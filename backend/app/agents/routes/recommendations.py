@@ -24,6 +24,7 @@ from ...core.exceptions import (
 )
 from ...core.limiter import limiter
 from ...dependencies import get_playlist_repository, get_quota_service
+from ...repositories.playlist_repository import PlaylistRepository
 from ...models.playlist import Playlist
 from ...models.user import User
 from ...services.quota_service import QuotaService
@@ -120,7 +121,7 @@ async def get_workflow_status(
             return serialize_workflow_state(session_id, state, session_cost_summary)
 
         playlist_repo = PlaylistRepository(db)
-        playlist = await playlist_repo.get_by_session_id(session_id)
+        playlist = await playlist_repo.get_session_status_snapshot(session_id)
 
         if not playlist:
             raise NotFoundException("Workflow", session_id)
@@ -269,11 +270,8 @@ async def get_workflow_results(
 ):
     """Get the final results of a completed recommendation workflow."""
     try:
-        from sqlalchemy import select
-
-        query = select(Playlist).where(Playlist.session_id == session_id)
-        result = await db.execute(query)
-        playlist = result.scalar_one_or_none()
+        playlist_repo = PlaylistRepository(db)
+        playlist = await playlist_repo.get_session_results_snapshot(session_id)
 
         if playlist and playlist.recommendations_data:
             return {
