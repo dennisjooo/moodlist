@@ -8,6 +8,7 @@ from typing import Dict, Iterable, List
 import structlog
 
 from ...states.agent_state import TrackRecommendation
+from ..utils.track_deduplicator import deduplicate_track_recommendations
 
 logger = structlog.get_logger(__name__)
 
@@ -28,34 +29,20 @@ class RecommendationProcessor:
         Returns:
             List with duplicates removed, preserving order and keeping first occurrence
         """
-        seen_track_ids = set()
-        seen_spotify_uris = set()
-        unique_recommendations = []
+        unique_recommendations, duplicates_removed = deduplicate_track_recommendations(
+            recommendations,
+            on_duplicate=lambda rec: logger.debug(
+                "duplicate_removed",
+                track_id=rec.track_id,
+                track_name=rec.track_name,
+                artists=rec.artists,
+            ),
+        )
 
-        for rec in recommendations:
-            # Check if track is already seen by ID or Spotify URI
-            is_duplicate = (
-                rec.track_id in seen_track_ids or 
-                rec.spotify_uri in seen_spotify_uris
-            )
-            
-            if not is_duplicate:
-                seen_track_ids.add(rec.track_id)
-                if rec.spotify_uri:
-                    seen_spotify_uris.add(rec.spotify_uri) # There are tracks that might not have a spotify_uri
-                unique_recommendations.append(rec)
-            else:
-                logger.debug(
-                    "duplicate_removed",
-                    track_id=rec.track_id,
-                    track_name=rec.track_name,
-                    artists=rec.artists,
-                )
-
-        if len(unique_recommendations) < len(recommendations):
+        if duplicates_removed:
             logger.info(
                 "duplicates_removed",
-                removed=len(recommendations) - len(unique_recommendations),
+                removed=duplicates_removed,
                 before=len(recommendations),
                 after=len(unique_recommendations),
             )

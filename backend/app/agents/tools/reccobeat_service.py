@@ -10,6 +10,7 @@ from .reccobeat.track_recommendations import TrackRecommendationsTool
 from .reccobeat.track_info import GetMultipleTracksTool, GetTrackAudioFeaturesTool
 from .reccobeat.artist_info import SearchArtistTool, GetMultipleArtistsTool, GetArtistTracksTool
 from ..core.cache import cache_manager
+from ..core.seed_guardrails import SeedGuardrails
 
 
 logger = structlog.get_logger(__name__)
@@ -221,10 +222,41 @@ class RecoBeatService:
         else:
             api_params = kwargs
 
+        # PHASE 3: Try with original parameters first
         result = await tool._run(seeds=seeds, size=size, **api_params)
 
+        # PHASE 3: If failed and we have negative_seeds, try contextual fallbacks
         if not result.success:
-            logger.error(f"Failed to get recommendations: {result.error}")
+            negative_seeds = api_params.get("negative_seeds")
+            fallback = SeedGuardrails.suggest_fallback_strategy(
+                seeds=seeds,
+                negative_seeds=negative_seeds,
+                error_reason=result.error
+            )
+
+            if fallback:
+                logger.info(
+                    f"Attempting fallback strategy: {fallback['strategy']} - {fallback['reason']}"
+                )
+                # Update params with fallback strategy
+                fallback_params = api_params.copy()
+                if "negative_seeds" in fallback_params:
+                    fallback_params["negative_seeds"] = fallback["negative_seeds"]
+
+                # Retry with fallback
+                result = await tool._run(
+                    seeds=fallback["seeds"],
+                    size=size,
+                    **fallback_params
+                )
+
+                if result.success:
+                    logger.info(f"Fallback strategy succeeded: {fallback['strategy']}")
+                else:
+                    logger.warning(f"Fallback strategy also failed: {result.error}")
+
+        if not result.success:
+            logger.error(f"Failed to get recommendations after fallback attempts: {result.error}")
             return []
 
         recommendations = result.data.get("recommendations", [])

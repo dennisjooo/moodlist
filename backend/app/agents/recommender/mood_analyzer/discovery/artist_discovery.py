@@ -96,25 +96,31 @@ class ArtistDiscovery:
 
             logger.info(f"Found {len(unique_artists)} unique artists from search")
 
+            # PHASE 3: Apply heuristic pruning BEFORE LLM to reduce cost and latency
+            pruned_artists = self._heuristic_prune_artists(
+                unique_artists, mood_analysis
+            )
+            logger.info(f"After heuristic pruning: {len(pruned_artists)} artists (from {len(unique_artists)})")
+
             # Use LLM to filter artists based on cultural/genre relevance
-            if self.llm and len(unique_artists) > 10:
+            if self.llm and len(pruned_artists) > 10:
                 # Use batch LLM validation for efficiency and better context
                 filtered_artists = await self._llm_batch_validate_artists(
-                    unique_artists, state.mood_prompt, mood_analysis
+                    pruned_artists, state.mood_prompt, mood_analysis
                 )
                 logger.info(f"After LLM batch validation: {len(filtered_artists)} artists")
-                
+
                 # If LLM returns too few, fall back to the original LLM filtering method
                 if len(filtered_artists) < 5:
                     logger.warning("LLM batch validation returned too few artists, using fallback")
                     filtered_artists = await self._llm_filter_artists(
-                        unique_artists, state.mood_prompt, mood_analysis
+                        pruned_artists, state.mood_prompt, mood_analysis
                     )
             else:
                 # Take more artists sorted by popularity for diversity
                 # Mix of popular and less popular for variety
                 filtered_artists = sorted(
-                    unique_artists,
+                    pruned_artists,
                     key=lambda x: x.get("popularity") or 0,
                     reverse=True
                 )[:20]  # Increased from 8 to 20 for maximum diversity
@@ -373,3 +379,72 @@ class ArtistDiscovery:
             logger.error(f"LLM batch artist validation failed: {e}")
             # Fallback to returning all artists on error
             return artists
+
+    def _heuristic_prune_artists(
+        self,
+        artists: List[Dict[str, Any]],
+        mood_analysis: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Apply heuristic rules to prune artists BEFORE LLM filtering.
+
+        Phase 3 Optimization: Reduces the artist list using simple rules to minimize
+        expensive LLM calls while preserving quality.
+
+        Args:
+            artists: List of candidate artists
+            mood_analysis: Mood analysis containing genre keywords
+
+        Returns:
+            Pruned list of artists
+        """
+        if len(artists) <= 15:
+            # Not enough artists to warrant pruning
+            return artists
+
+        pruned = []
+        genre_keywords = set(g.lower() for g in mood_analysis.get("genre_keywords", []))
+
+        for artist in artists:
+            # Rule 1: Filter out artists with very low popularity (< 15)
+            # These are likely obscure or have data quality issues
+            popularity = artist.get("popularity")
+            if popularity is None:
+                popularity = 0
+            if popularity < 15:
+                logger.debug(f"Filtered artist {artist.get('name')} - low popularity: {popularity}")
+                continue
+
+            # Rule 2: Filter out artists with no genre information
+            # These are likely incomplete/stale data
+            artist_genres = artist.get("genres", [])
+            if not artist_genres:
+                logger.debug(f"Filtered artist {artist.get('name')} - no genres")
+                continue
+
+            # Rule 3: If we have genre keywords from mood analysis, prioritize matches
+            # but don't exclude non-matches (keep for diversity)
+            artist_genres_lower = set(g.lower() for g in artist_genres)
+            has_genre_match = bool(genre_keywords & artist_genres_lower)
+
+            # Add artist with metadata about genre match for prioritization
+            artist_copy = artist.copy()
+            artist_copy["_genre_match"] = has_genre_match
+            pruned.append(artist_copy)
+
+        # Sort by: genre match first, then popularity
+        pruned.sort(key=lambda a: (a.get("_genre_match", False), a.get("popularity", 0)), reverse=True)
+
+        # Remove the temporary _genre_match field
+        for artist in pruned:
+            artist.pop("_genre_match", None)
+
+        # Take top 30 after heuristic pruning (down from potentially 50+)
+        # This gives LLM a more manageable list while preserving variety
+        pruned = pruned[:30]
+
+        logger.info(
+            f"Heuristic pruning: {len(artists)} → {len(pruned)} artists "
+            f"(filtered {len(artists) - len(pruned)} low-quality/irrelevant)"
+        )
+
+        return pruned
