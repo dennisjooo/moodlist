@@ -102,6 +102,20 @@ class SeedGathererAgent(BaseAgent):
             # Get intent analysis from state (set by IntentAnalyzerAgent)
             intent_analysis = state.metadata.get("intent_analysis", {})
 
+            # Phase 4 Optimization: Try to reuse workflow artifacts from previous runs
+            cached_artifacts = await cache_manager.get_workflow_artifacts(
+                user_id=state.user_id,
+                mood_prompt=state.mood_prompt
+            )
+
+            if cached_artifacts:
+                logger.info("Found cached workflow artifacts, reusing data")
+                state.metadata["cached_artists"] = cached_artifacts.get("artists", [])
+                state.metadata["cached_anchor_tracks"] = cached_artifacts.get("anchor_tracks", [])
+                state.metadata["reused_artifacts"] = True
+            else:
+                state.metadata["reused_artifacts"] = False
+
             # Phase 2 STEP 1: Search for user-mentioned tracks
             step_start = time.time()
             await self._search_user_mentioned_tracks(state, intent_analysis, access_token)
@@ -172,6 +186,23 @@ class SeedGathererAgent(BaseAgent):
             # Store timing metrics in state for analysis
             state.metadata["seed_gathering_timing"] = timing_metrics
 
+            # Phase 4 Optimization: Save workflow artifacts for future reuse
+            if not state.metadata.get("reused_artifacts"):
+                workflow_artifacts = {
+                    "artists": state.metadata.get("validated_artists", []),
+                    "anchor_tracks": state.metadata.get("anchor_track_ids", []),
+                    "audio_features": state.metadata.get("cached_audio_features", {}),
+                    "computed_at": time.time()
+                }
+
+                await cache_manager.set_workflow_artifacts(
+                    user_id=state.user_id,
+                    mood_prompt=state.mood_prompt,
+                    artifacts=workflow_artifacts
+                )
+
+                logger.info("Saved workflow artifacts for future reuse")
+
         except Exception as e:
             logger.error(f"Error in seed gathering: {str(e)}", exc_info=True)
             state.set_error(f"Seed gathering failed: {str(e)}")
@@ -231,6 +262,13 @@ class SeedGathererAgent(BaseAgent):
         await self._notify_progress(state)
 
         try:
+            # Phase 4 Optimization: Try to reuse anchor tracks from workflow artifacts
+            cached_anchor_ids = state.metadata.get("cached_anchor_tracks", [])
+            if cached_anchor_ids:
+                logger.info(f"Reusing {len(cached_anchor_ids)} anchor tracks from workflow artifacts")
+                state.metadata["anchor_track_ids"] = cached_anchor_ids
+                return
+
             # Phase 1 Optimization: Check cache for anchor tracks
             cached_anchors = await cache_manager.get_anchor_tracks(
                 user_id=state.user_id,
@@ -356,6 +394,13 @@ class SeedGathererAgent(BaseAgent):
         await self._notify_progress(state)
 
         try:
+            # Phase 4 Optimization: Try to reuse artists from workflow artifacts
+            cached_artists = state.metadata.get("cached_artists", [])
+            if cached_artists:
+                logger.info(f"Reusing {len(cached_artists)} artists from workflow artifacts")
+                state.metadata["validated_artists"] = cached_artists
+                return
+
             mood_analysis = state.mood_analysis or {}
             
             # Discover artists using mood analysis

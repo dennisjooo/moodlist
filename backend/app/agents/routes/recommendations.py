@@ -29,6 +29,7 @@ from ...models.playlist import Playlist
 from ...models.user import User
 from ...services.quota_service import QuotaService
 from ..core.cache import cache_manager
+from ..core.background_tasks import background_task_manager
 from ..tools.spotify_service import SpotifyService
 from ..tools.reccobeat_service import RecoBeatService
 from ..workflows.workflow_manager import WorkflowManager
@@ -431,5 +432,52 @@ async def prefetch_user_cache(
         return {
             "status": "prefetch_failed",
             "message": "Cache prefetch could not be started",
+            "error": str(exc)
+        }
+
+
+@router.post("/recommendations/precompute-popular-moods")
+@limiter.limit("1/hour")
+async def precompute_popular_moods(
+    request: Request,
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+    workflow_manager: WorkflowManager = Depends(get_workflow_manager),
+    llm: Any = Depends(get_llm),
+):
+    """Precompute recommendations for popular moods.
+
+    Phase 4 Optimization: Background task to warm cache with popular mood
+    recommendations. This is rate-limited to once per hour and intended
+    for off-peak usage or admin triggers.
+    """
+    try:
+        logger.info("Starting background mood precomputation", user_id=current_user.id)
+
+        current_user = await refresh_spotify_token_if_expired(current_user, db)
+
+        spotify_service = SpotifyService()
+        reccobeat_service = RecoBeatService()
+
+        background_task_manager.start_background_precomputation(
+            workflow_manager=workflow_manager,
+            spotify_service=spotify_service,
+            reccobeat_service=reccobeat_service,
+            llm=llm,
+            access_token=current_user.access_token,
+            user_id=str(current_user.id)
+        )
+
+        return {
+            "status": "precomputation_started",
+            "message": "Popular mood precomputation initiated in background",
+            "moods": background_task_manager.popular_moods
+        }
+
+    except Exception as exc:
+        logger.error("Error starting mood precomputation", error=str(exc), exc_info=True)
+        return {
+            "status": "precomputation_failed",
+            "message": "Mood precomputation could not be started",
             "error": str(exc)
         }

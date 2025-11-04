@@ -634,6 +634,128 @@ class CacheManager:
         asyncio.create_task(warm_cache_background())
         logger.info(f"Started background cache warming for user {user_id}")
 
+    async def get_workflow_artifacts(
+        self,
+        user_id: str,
+        mood_prompt: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get cached workflow artifacts for reuse across iterations.
+
+        Phase 4 Optimization: Retrieve previously computed workflow artifacts
+        (artist lists, validated seeds, audio features) to avoid recomputation
+        when prompts are similar.
+
+        Args:
+            user_id: User ID
+            mood_prompt: Mood prompt for artifact retrieval
+
+        Returns:
+            Workflow artifacts or None if not cached
+        """
+        key = self._make_cache_key("workflow_artifacts", user_id, mood_prompt)
+        return await self.cache.get(key)
+
+    async def set_workflow_artifacts(
+        self,
+        user_id: str,
+        mood_prompt: str,
+        artifacts: Dict[str, Any]
+    ) -> None:
+        """Cache workflow artifacts for reuse.
+
+        Phase 4 Optimization: Store workflow artifacts with 1-hour TTL
+        so subsequent runs can reuse artist lists, validated seeds, etc.
+
+        Args:
+            user_id: User ID
+            mood_prompt: Mood prompt used in workflow
+            artifacts: Workflow artifacts to cache (artists, seeds, features, etc.)
+        """
+        key = self._make_cache_key("workflow_artifacts", user_id, mood_prompt)
+        await self.cache.set(key, artifacts, ttl=3600)
+
+    async def get_invalid_reccobeat_ids(self) -> Optional[set]:
+        """Get set of Spotify IDs known to be absent in RecoBeat.
+
+        Phase 4 Optimization: Pre-validated ID registry to skip futile
+        API calls for tracks not in RecoBeat.
+
+        Returns:
+            Set of invalid Spotify IDs or None if not cached
+        """
+        key = self._make_cache_key("invalid_reccobeat_ids")
+        return await self.cache.get(key)
+
+    async def add_invalid_reccobeat_id(self, spotify_id: str) -> None:
+        """Add a Spotify ID to the invalid RecoBeat ID registry.
+
+        Phase 4 Optimization: Track IDs that don't exist in RecoBeat
+        with 7-day TTL.
+
+        Args:
+            spotify_id: Spotify track ID that's not in RecoBeat
+        """
+        key = self._make_cache_key("invalid_reccobeat_ids")
+        invalid_ids = await self.cache.get(key)
+
+        if invalid_ids is None:
+            invalid_ids = set()
+
+        invalid_ids.add(spotify_id)
+
+        # Store with 7-day TTL (IDs might be added to RecoBeat later)
+        await self.cache.set(key, invalid_ids, ttl=604800)
+        logger.debug(f"Added {spotify_id} to invalid RecoBeat ID registry")
+
+    async def is_invalid_reccobeat_id(self, spotify_id: str) -> bool:
+        """Check if Spotify ID is known to be invalid in RecoBeat.
+
+        Phase 4 Optimization: Quick check to skip API calls.
+
+        Args:
+            spotify_id: Spotify track ID to check
+
+        Returns:
+            True if ID is known to be invalid
+        """
+        key = self._make_cache_key("invalid_reccobeat_ids")
+        invalid_ids = await self.cache.get(key)
+
+        if invalid_ids is None:
+            return False
+
+        return spotify_id in invalid_ids
+
+    async def get_popular_mood_cache(self, mood_key: str) -> Optional[Dict[str, Any]]:
+        """Get cached recommendations for popular moods.
+
+        Phase 4 Optimization: Precomputed recommendations for common moods.
+
+        Args:
+            mood_key: Normalized mood key (e.g., "happy_energetic")
+
+        Returns:
+            Cached mood recommendations or None
+        """
+        key = self._make_cache_key("popular_mood", mood_key)
+        return await self.cache.get(key)
+
+    async def set_popular_mood_cache(
+        self,
+        mood_key: str,
+        recommendations: Dict[str, Any]
+    ) -> None:
+        """Cache recommendations for popular moods.
+
+        Phase 4 Optimization: Store precomputed recommendations with 24-hour TTL.
+
+        Args:
+            mood_key: Normalized mood key
+            recommendations: Recommendation data to cache
+        """
+        key = self._make_cache_key("popular_mood", mood_key)
+        await self.cache.set(key, recommendations, ttl=86400)
+
 
 # Global cache manager - will be initialized with Valkey when available
 cache_manager = CacheManager()

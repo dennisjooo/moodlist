@@ -275,6 +275,8 @@ class RecoBeatService:
     ) -> Dict[str, str]:
         """Convert Spotify track IDs to RecoBeat IDs using batch lookup with parallel processing.
 
+        Phase 4 Optimization: Skip known-invalid IDs to avoid futile API calls.
+
         Args:
             spotify_track_ids: List of Spotify track IDs
 
@@ -286,6 +288,24 @@ class RecoBeatService:
 
         id_mapping = {}
 
+        # Phase 4: Filter out known-invalid IDs before making API calls
+        valid_track_ids = []
+        skipped_count = 0
+
+        for track_id in spotify_track_ids:
+            if await cache_manager.is_invalid_reccobeat_id(track_id):
+                skipped_count += 1
+                logger.debug(f"Skipping known-invalid RecoBeat ID: {track_id}")
+            else:
+                valid_track_ids.append(track_id)
+
+        if skipped_count > 0:
+            logger.info(f"Skipped {skipped_count} known-invalid RecoBeat IDs")
+
+        if not valid_track_ids:
+            logger.info("All track IDs are known-invalid, skipping API call")
+            return {}
+
         # Get multiple tracks tool
         tracks_tool = self.tools.get_tool("get_multiple_tracks")
         if not tracks_tool:
@@ -294,7 +314,7 @@ class RecoBeatService:
 
         # Process in chunks of 40 (API limit) with parallel processing
         chunk_size = 40
-        chunks = [spotify_track_ids[i:i + chunk_size] for i in range(0, len(spotify_track_ids), chunk_size)]
+        chunks = [valid_track_ids[i:i + chunk_size] for i in range(0, len(valid_track_ids), chunk_size)]
 
         async def process_chunk(chunk: List[str]) -> Dict[str, str]:
             """Process a single chunk of track IDs."""
@@ -343,6 +363,13 @@ class RecoBeatService:
 
         except Exception as e:
             logger.error(f"Error in parallel track ID conversion: {e}")
+
+        # Phase 4: Track IDs that couldn't be converted (not in RecoBeat)
+        missing_ids = set(valid_track_ids) - set(id_mapping.keys())
+        if missing_ids:
+            logger.debug(f"Found {len(missing_ids)} IDs not in RecoBeat, adding to invalid registry")
+            for missing_id in missing_ids:
+                await cache_manager.add_invalid_reccobeat_id(missing_id)
 
         logger.info(f"Converted {len(id_mapping)}/{len(spotify_track_ids)} Spotify track IDs to RecoBeat IDs")
         return id_mapping
