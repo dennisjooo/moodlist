@@ -126,6 +126,15 @@ export interface PlaylistDetails {
     created_at: string;
 }
 
+export interface WorkflowCostSummary {
+    session_id: string;
+    invocation_count: number;
+    total_llm_cost_usd: number;
+    total_prompt_tokens: number;
+    total_completion_tokens: number;
+    total_tokens: number;
+}
+
 class WorkflowAPI {
     private async request<T>(
         endpoint: string,
@@ -201,6 +210,10 @@ class WorkflowAPI {
 
     async getPlaylistDetails(sessionId: string): Promise<PlaylistDetails> {
         return this.request<PlaylistDetails>(`/api/agents/recommendations/${sessionId}/playlist`);
+    }
+
+    async getWorkflowCost(sessionId: string): Promise<WorkflowCostSummary> {
+        return this.request<WorkflowCostSummary>(`/api/agents/recommendations/${sessionId}/cost`);
     }
 
     async saveToSpotify(sessionId: string): Promise<{
@@ -311,4 +324,3 @@ class WorkflowAPI {
 }
 
 export const workflowAPI = new WorkflowAPI();
-
