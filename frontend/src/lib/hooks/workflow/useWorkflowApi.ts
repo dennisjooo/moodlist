@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { workflowAPI } from '@/lib/api/workflow';
-import type { StartRecommendationRequest, WorkflowStatus, WorkflowResults } from '@/lib/api/workflow';
+import type { StartRecommendationRequest, WorkflowStatus, WorkflowResults, WorkflowCostSummary } from '@/lib/api/workflow';
 import { logger } from '@/lib/utils/logger';
 
 /**
@@ -37,6 +37,14 @@ export function useWorkflowApi() {
             sessionId
         });
         return await workflowAPI.getWorkflowResults(sessionId);
+    };
+
+    const loadWorkflowCost = async (sessionId: string): Promise<WorkflowCostSummary> => {
+        logger.debug('Fetching workflow cost summary', {
+            component: 'useWorkflowApi',
+            sessionId
+        });
+        return await workflowAPI.getWorkflowCost(sessionId);
     };
 
     const saveToSpotify = async (sessionId: string) => {
@@ -94,6 +102,7 @@ export function useWorkflowApi() {
         startWorkflow,
         loadWorkflowStatus,
         loadWorkflowResults,
+        loadWorkflowCost,
         saveToSpotify,
         syncFromSpotify,
         applyEdit,
@@ -101,4 +110,3 @@ export function useWorkflowApi() {
         cancelWorkflow,
     }), []);
 }
-

@@ -12,17 +12,43 @@ interface UseWorkflowActionsProps {
 
 export function useWorkflowActions({
     workflowState,
-    setLoading,
-    setWorkflowData
+   setLoading,
+   setWorkflowData
 }: UseWorkflowActionsProps) {
     const api = useWorkflowApi();
     const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const loadWorkflowCost = useCallback(async (sessionId: string) => {
+        if (!sessionId) {
+            return;
+        }
+
+        try {
+            const costSummary = await api.loadWorkflowCost(sessionId);
+            setWorkflowData({
+                totalLLMCost: costSummary.total_llm_cost_usd,
+                totalPromptTokens: costSummary.total_prompt_tokens,
+                totalCompletionTokens: costSummary.total_completion_tokens,
+                totalTokens: costSummary.total_tokens,
+            });
+        } catch (error) {
+            logger.warn('Failed to load workflow cost summary', {
+                component: 'useWorkflowActions',
+                sessionId,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }, [api, setWorkflowData]);
 
     const startWorkflow = useCallback(async (moodPrompt: string, genreHint?: string) => {
         setWorkflowData({
             isLoading: true,
             error: null,
             moodPrompt,
+            totalLLMCost: 0,
+            totalPromptTokens: 0,
+            totalCompletionTokens: 0,
+            totalTokens: 0,
         });
 
         try {
@@ -32,6 +58,10 @@ export function useWorkflowActions({
                 sessionId: response.session_id,
                 status: response.status,
                 isLoading: true, // Keep loading true so redirect happens
+                totalLLMCost: 0,
+                totalPromptTokens: 0,
+                totalCompletionTokens: 0,
+                totalTokens: 0,
             });
 
             // Dispatch workflow started event asynchronously to avoid setState during render
@@ -112,10 +142,10 @@ export function useWorkflowActions({
                 playlist: results?.playlist,
                 awaitingInput: status.awaiting_input,
                 error: status.error || null,
-                totalLLMCost: status.total_llm_cost_usd,
-                totalPromptTokens: status.total_prompt_tokens,
-                totalCompletionTokens: status.total_completion_tokens,
-                totalTokens: status.total_tokens,
+                totalLLMCost: status.total_llm_cost_usd ?? workflowState.totalLLMCost ?? 0,
+                totalPromptTokens: status.total_prompt_tokens ?? workflowState.totalPromptTokens ?? 0,
+                totalCompletionTokens: status.total_completion_tokens ?? workflowState.totalCompletionTokens ?? 0,
+                totalTokens: status.total_tokens ?? workflowState.totalTokens ?? 0,
                 metadata: status.metadata || workflowState.metadata,
                 isLoading: false,
             });
@@ -134,6 +164,8 @@ export function useWorkflowActions({
                 }, 0);
             }
 
+            await loadWorkflowCost(sessionId);
+
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to load workflow';
             setWorkflowData({
@@ -142,7 +174,7 @@ export function useWorkflowActions({
             });
             logger.error('Failed to load workflow for session', error, { component: 'useWorkflowActions', sessionId });
         }
-    }, [api, workflowState, setLoading, setWorkflowData]);
+    }, [api, workflowState, setLoading, setWorkflowData, loadWorkflowCost]);
 
     const stopWorkflow = useCallback(() => {
         // Dispatch workflow-removed event to clean up active workflows tracking
@@ -163,6 +195,10 @@ export function useWorkflowActions({
             error: null,
             isLoading: false,
             awaitingInput: false,
+            totalLLMCost: 0,
+            totalPromptTokens: 0,
+            totalCompletionTokens: 0,
+            totalTokens: 0,
         });
     }, [workflowState.sessionId, setWorkflowData]);
 
@@ -186,6 +222,7 @@ export function useWorkflowActions({
                 playlist: results.playlist,
                 isLoading: false,
             });
+            await loadWorkflowCost(workflowState.sessionId);
             logger.info('Results fetched successfully', { component: 'useWorkflowActions', sessionId: workflowState.sessionId });
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to refresh results';
@@ -195,7 +232,7 @@ export function useWorkflowActions({
             });
             logger.error('Failed to fetch results', error, { component: 'useWorkflowActions', sessionId: workflowState.sessionId });
         }
-    }, [api, workflowState, setLoading, setWorkflowData]);
+    }, [api, workflowState, setLoading, setWorkflowData, loadWorkflowCost]);
 
     const saveToSpotify = useCallback(async () => {
         if (!workflowState.sessionId) {
@@ -308,6 +345,7 @@ export function useWorkflowActions({
     return {
         startWorkflow,
         loadWorkflow,
+        loadWorkflowCost,
         stopWorkflow,
         refreshResults,
         saveToSpotify,
