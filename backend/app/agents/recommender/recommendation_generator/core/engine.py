@@ -1,5 +1,6 @@
 """Recommendation generation engine."""
 
+import asyncio
 import structlog
 from typing import Any, Dict, List
 
@@ -43,6 +44,8 @@ class RecommendationEngine:
         - 15% Seed-Based
         - 5%  RecoBeat fallback
 
+        Phase 5: Parallel strategy execution for improved performance
+
         Args:
             state: Current agent state
 
@@ -54,16 +57,30 @@ class RecommendationEngine:
         # Calculate target splits based on user mentions
         self._calculate_target_splits(state)
 
-        # Phase 2: Generate from user anchor strategy FIRST (highest priority)
-        user_anchor_recs = await self._generate_from_user_anchors(state)
+        # Phase 5: Execute all three strategies in parallel for maximum throughput
+        logger.info("Executing recommendation strategies in parallel (Phase 5 optimization)")
+
+        user_anchor_recs, artist_recs, seed_recs = await asyncio.gather(
+            self._generate_from_user_anchors(state),
+            self.artist_generator.generate_recommendations(state),
+            self.seed_generator.generate_recommendations(state),
+            return_exceptions=True  # Continue if one strategy fails
+        )
+
+        # Handle exceptions from parallel execution
+        if isinstance(user_anchor_recs, Exception):
+            logger.error(f"User anchor strategy failed: {user_anchor_recs}")
+            user_anchor_recs = []
+        if isinstance(artist_recs, Exception):
+            logger.error(f"Artist strategy failed: {artist_recs}")
+            artist_recs = []
+        if isinstance(seed_recs, Exception):
+            logger.error(f"Seed strategy failed: {seed_recs}")
+            seed_recs = []
+
+        # Combine all recommendations
         all_recommendations.extend(user_anchor_recs)
-
-        # Generate from discovered artists
-        artist_recs = await self.artist_generator.generate_recommendations(state)
         all_recommendations.extend(artist_recs)
-
-        # Generate from seed tracks
-        seed_recs = await self.seed_generator.generate_recommendations(state)
         all_recommendations.extend(seed_recs)
 
         # Include anchor tracks from genre search
@@ -75,7 +92,7 @@ class RecommendationEngine:
         state.metadata.pop("_temp_user_anchor_target", None)
 
         logger.info(
-            f"Generated {len(all_recommendations)} total recommendations "
+            f"Generated {len(all_recommendations)} total recommendations in parallel "
             f"({len(user_anchor_recs)} user anchor, {len(artist_recs)} artists, {len(seed_recs)} seeds)"
         )
 
