@@ -95,9 +95,10 @@ def get_playlist_service(
     playlist_repo: PlaylistRepository = Depends(get_playlist_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     spotify_client: SpotifyAPIClient = Depends(get_spotify_client),
+    llm_invocation_repo: LLMInvocationRepository = Depends(get_llm_invocation_repository),
 ) -> PlaylistService:
     """Get playlist service."""
-    return PlaylistService(spotify_client, playlist_repo, user_repo)
+    return PlaylistService(spotify_client, playlist_repo, user_repo, llm_invocation_repo)
 
 
 def get_quota_service(

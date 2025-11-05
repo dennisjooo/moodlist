@@ -112,16 +112,12 @@ async def get_workflow_status(
 ):
     """Get the current status of a recommendation workflow."""
     try:
-        from ...repositories.llm_invocation_repository import LLMInvocationRepository
         from ...repositories.playlist_repository import PlaylistRepository
-
-        llm_invocation_repo = LLMInvocationRepository(db)
-        session_cost_summary = await llm_invocation_repo.get_session_cost_summary(session_id)
 
         state = workflow_manager.get_workflow_state(session_id)
 
         if state:
-            return serialize_workflow_state(session_id, state, session_cost_summary)
+            return serialize_workflow_state(session_id, state)
 
         playlist_repo = PlaylistRepository(db)
         playlist = await playlist_repo.get_session_status_snapshot(session_id)
@@ -129,7 +125,7 @@ async def get_workflow_status(
         if not playlist:
             raise NotFoundException("Workflow", session_id)
 
-        return serialize_playlist_status(session_id, playlist, session_cost_summary)
+        return serialize_playlist_status(session_id, playlist)
 
     except NotFoundException:
         raise
@@ -341,6 +337,41 @@ async def get_workflow_results(
     except Exception as exc:
         logger.error("Error getting workflow results", error=str(exc), exc_info=True)
         raise InternalServerError(f"Failed to get workflow results: {exc}") from exc
+
+
+@router.get("/recommendations/{session_id}/cost")
+async def get_workflow_cost(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get aggregate LLM cost metrics for a workflow session."""
+    try:
+        from ...repositories.llm_invocation_repository import LLMInvocationRepository
+
+        llm_invocation_repo = LLMInvocationRepository(db)
+        summary = await llm_invocation_repo.get_session_cost_summary(session_id)
+
+        if not summary:
+            summary = {
+                "invocation_count": 0,
+                "total_cost_usd": 0.0,
+                "total_prompt_tokens": 0,
+                "total_completion_tokens": 0,
+                "total_tokens": 0,
+            }
+
+        return {
+            "session_id": session_id,
+            "invocation_count": summary.get("invocation_count", 0),
+            "total_llm_cost_usd": summary.get("total_cost_usd", 0.0),
+            "total_prompt_tokens": summary.get("total_prompt_tokens", 0),
+            "total_completion_tokens": summary.get("total_completion_tokens", 0),
+            "total_tokens": summary.get("total_tokens", 0),
+        }
+
+    except Exception as exc:
+        logger.error("Error getting workflow cost summary", error=str(exc), exc_info=True)
+        raise InternalServerError(f"Failed to get workflow cost: {exc}") from exc
 
 
 @router.get("/recommendations/{session_id}/playlist")

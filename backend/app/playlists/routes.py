@@ -194,7 +194,7 @@ async def get_playlist_by_session(
         if not playlist:
             raise NotFoundException("Playlist", session_id)
 
-        return {
+        playlist_data = {
             "id": playlist.id,
             "session_id": playlist.session_id,
             "mood_prompt": playlist.mood_prompt,
@@ -212,6 +212,12 @@ async def get_playlist_by_session(
             "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
             "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
         }
+
+        cost_summary = await playlist_service.get_cost_summary_for_session(playlist.session_id)
+        if cost_summary:
+            playlist_data.update(cost_summary)
+
+        return playlist_data
 
     except NotFoundException:
         raise
