@@ -312,61 +312,72 @@ class RecoBeatService:
             logger.warning("Multiple tracks tool not available for ID conversion")
             return id_mapping
 
-        # Process in chunks of 40 (API limit) with parallel processing
-        chunk_size = 40
+        # Phase 5: Increased batch size from 40 to 100 for better throughput
+        chunk_size = 100
         chunks = [ids_to_check[i:i + chunk_size] for i in range(0, len(ids_to_check), chunk_size)]
 
         async def process_chunk(chunk: List[str]) -> Dict[str, str]:
-            """Process a single chunk of track IDs."""
+            """Process a single chunk of track IDs with retry logic.
 
-            try:
-                result = await tracks_tool._run(ids=chunk)
+            Phase 5: Added retry logic for transient failures.
+            """
+            max_retries = 3
+            retry_delay = 1  # seconds
 
-                if result.success:
-                    tracks = result.data.get("tracks", [])
-                    chunk_mapping = {}
-                    found_ids = set()
+            for attempt in range(max_retries):
+                try:
+                    result = await tracks_tool._run(ids=chunk)
 
-                    for track in tracks:
-                        reccobeat_id = track.get("id")
-                        spotify_uri = track.get("spotify_uri", "")
+                    if result.success:
+                        tracks = result.data.get("tracks", [])
+                        chunk_mapping = {}
+                        found_ids = set()
 
-                        # Extract Spotify ID from URI
-                        if spotify_uri and "spotify:track:" in spotify_uri:
-                            spotify_id = spotify_uri.replace("spotify:track:", "")
-                        elif "/" in spotify_uri:
-                            spotify_id = spotify_uri.split("/")[-1]
-                        else:
-                            # Assume the input ID matches
-                            for orig_id in chunk:
-                                if orig_id not in chunk_mapping:
-                                    spotify_id = orig_id
-                                    break
+                        for track in tracks:
+                            reccobeat_id = track.get("id")
+                            spotify_uri = track.get("spotify_uri", "")
 
-                        if reccobeat_id and spotify_id:
-                            chunk_mapping[spotify_id] = reccobeat_id
-                            found_ids.add(spotify_id)
-                            # Mark successful conversions in registry
-                            await RecoBeatIDRegistry.mark_validated(spotify_id, reccobeat_id)
-                    
-                    # Mark missing IDs in registry
-                    for orig_id in chunk:
-                        if orig_id not in found_ids:
-                            await RecoBeatIDRegistry.mark_missing(
-                                orig_id,
-                                reason="ID not found in RecoBeat response"
-                            )
+                            # Extract Spotify ID from URI
+                            if spotify_uri and "spotify:track:" in spotify_uri:
+                                spotify_id = spotify_uri.replace("spotify:track:", "")
+                            elif "/" in spotify_uri:
+                                spotify_id = spotify_uri.split("/")[-1]
+                            else:
+                                # Assume the input ID matches
+                                for orig_id in chunk:
+                                    if orig_id not in chunk_mapping:
+                                        spotify_id = orig_id
+                                        break
 
-                    return chunk_mapping
+                            if reccobeat_id and spotify_id:
+                                chunk_mapping[spotify_id] = reccobeat_id
+                                found_ids.add(spotify_id)
+                                # Mark successful conversions in registry
+                                await RecoBeatIDRegistry.mark_validated(spotify_id, reccobeat_id)
 
-            except Exception as e:
-                logger.debug(f"Error converting track IDs chunk: {e}")
+                        # Mark missing IDs in registry
+                        for orig_id in chunk:
+                            if orig_id not in found_ids:
+                                await RecoBeatIDRegistry.mark_missing(
+                                    orig_id,
+                                    reason="ID not found in RecoBeat response"
+                                )
+
+                        return chunk_mapping
+
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        logger.debug(f"Error converting track IDs chunk (attempt {attempt + 1}/{max_retries}): {e}, retrying...")
+                        await asyncio.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                    else:
+                        logger.warning(f"Failed to convert track IDs chunk after {max_retries} attempts: {e}")
 
             return {}
 
         # Execute all chunks in parallel
         try:
-            chunk_results = await self._bounded_gather(chunks, process_chunk, concurrency=8)
+            # Phase 5: Increased from 8 to 20 concurrent requests
+            chunk_results = await self._bounded_gather(chunks, process_chunk, concurrency=20)
 
             # Combine results from all chunks
             for chunk_result in chunk_results:
@@ -462,11 +473,11 @@ class RecoBeatService:
 
         # Execute all fetches in parallel
         try:
-            # Phase 2: Increased concurrency from 10 to 15 with Phase 1 caching
+            # Phase 5: Increased concurrency from 15 to 30 for faster batch processing
             results = await self._bounded_gather(
                 tracks_needing_fetch,
                 fetch_single_track_features,
-                concurrency=15,
+                concurrency=30,
             )
 
             # Combine results
