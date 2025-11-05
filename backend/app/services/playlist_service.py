@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 import structlog
 
 from app.clients.spotify_client import SpotifyAPIClient
+from app.repositories.llm_invocation_repository import LLMInvocationRepository
 from app.repositories.playlist_repository import PlaylistRepository
 from app.repositories.user_repository import UserRepository
 from app.core.exceptions import NotFoundException, ValidationException
@@ -20,7 +21,8 @@ class PlaylistService:
         self,
         spotify_client: SpotifyAPIClient,
         playlist_repository: PlaylistRepository,
-        user_repository: UserRepository
+        user_repository: UserRepository,
+        llm_invocation_repository: Optional[LLMInvocationRepository] = None,
     ):
         """Initialize the playlist service.
 
@@ -28,11 +30,46 @@ class PlaylistService:
             spotify_client: Spotify API client
             playlist_repository: Playlist repository
             user_repository: User repository
+            llm_invocation_repository: Repository for LLM invocation analytics
         """
         self.spotify_client = spotify_client
         self.playlist_repository = playlist_repository
         self.user_repository = user_repository
+        self.llm_invocation_repository = llm_invocation_repository
         self.logger = logger.bind(service="PlaylistService")
+
+    @staticmethod
+    def _format_cost_summary(cost_summary: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Normalize cost summary payload for API responses."""
+        if cost_summary is None:
+            return None
+
+        return {
+            "total_llm_cost_usd": cost_summary.get("total_cost_usd", 0.0),
+            "total_prompt_tokens": cost_summary.get("total_prompt_tokens", 0),
+            "total_completion_tokens": cost_summary.get("total_completion_tokens", 0),
+            "total_tokens": cost_summary.get("total_tokens", 0),
+        }
+
+    async def _get_session_cost_summary(self, session_id: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Fetch aggregated LLM cost metrics for a workflow session."""
+        if not session_id or not self.llm_invocation_repository:
+            return None
+
+        try:
+            return await self.llm_invocation_repository.get_session_cost_summary(session_id)
+        except Exception as exc:
+            self.logger.error(
+                "Failed to retrieve session cost summary",
+                session_id=session_id,
+                error=str(exc),
+            )
+            return None
+
+    async def get_cost_summary_for_session(self, session_id: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Public helper to retrieve formatted cost summary data for a session."""
+        summary = await self._get_session_cost_summary(session_id)
+        return self._format_cost_summary(summary)
 
     async def create_playlist(
         self,
@@ -197,7 +234,9 @@ class PlaylistService:
             if not playlist:
                 raise NotFoundException("Playlist", str(playlist_id))
 
-            return {
+            cost_summary = await self.get_cost_summary_for_session(playlist.session_id)
+
+            playlist_data = {
                 "id": playlist.id,
                 "session_id": playlist.session_id,
                 "mood_prompt": playlist.mood_prompt,
@@ -212,6 +251,11 @@ class PlaylistService:
                 "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
                 "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
             }
+
+            if cost_summary:
+                playlist_data.update(cost_summary)
+
+            return playlist_data
 
         except NotFoundException:
             raise
