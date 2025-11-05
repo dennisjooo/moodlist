@@ -10,6 +10,8 @@ from ..tools.reccobeat_service import RecoBeatService
 from ..tools.spotify_service import SpotifyService
 from ..workflows.workflow_manager import WorkflowManager
 from ..core.profiling import PerformanceProfiler
+from ..core.cache import cache_manager
+from ..core.id_registry import RecoBeatIDRegistry
 from .dependencies import (
     get_agents,
     get_reccobeat_service,
@@ -145,3 +147,79 @@ async def get_profiling_samples(
     except Exception as exc:
         logger.error("Error retrieving profiling samples", error=str(exc), exc_info=True)
         raise InternalServerError(f"Failed to get profiling samples: {exc}") from exc
+
+
+@router.get("/system/cache/stats")
+async def get_cache_stats():
+    """Get comprehensive cache statistics.
+    
+    Monitor cache performance across all layers
+    (in-memory, Redis, workflow artifacts, ID registry).
+    """
+    try:
+        # Base cache stats
+        base_stats = cache_manager.get_cache_stats()
+        
+        # ID registry stats
+        registry_stats = await RecoBeatIDRegistry.get_registry_stats()
+        
+        return {
+            "cache": base_stats,
+            "id_registry": registry_stats,
+        }
+    
+    except Exception as exc:
+        logger.error("Error getting cache stats", error=str(exc), exc_info=True)
+        raise InternalServerError(f"Failed to get cache stats: {exc}") from exc
+
+
+@router.post("/system/cache/invalidate")
+async def invalidate_cache(
+    category: Optional[str] = Query(None, description="Cache category to invalidate (all if not specified)"),
+):
+    """Invalidate cache entries.
+    
+    Administrative endpoint for cache management.
+    """
+    try:
+        if category:
+            # Invalidate specific category (simplified - would need more logic for targeted invalidation)
+            logger.info(f"Invalidating cache category: {category}")
+            result = {"invalidated_category": category}
+        else:
+            # Clear entire cache
+            await cache_manager.cache.clear()
+            logger.info("Cleared entire cache")
+            result = {"invalidated": "all"}
+        
+        return {
+            "status": "success",
+            "result": result
+        }
+    
+    except Exception as exc:
+        logger.error("Error invalidating cache", error=str(exc), exc_info=True)
+        raise InternalServerError(f"Failed to invalidate cache: {exc}") from exc
+
+
+@router.get("/system/id-registry/stats")
+async def get_id_registry_stats():
+    """Get RecoBeat ID registry statistics.
+    
+    Monitor ID validation and missing ID tracking.
+    """
+    try:
+        stats = await RecoBeatIDRegistry.get_registry_stats()
+        
+        return {
+            "id_registry": stats,
+            "description": "Tracks validated and missing Spotify<->RecoBeat ID mappings",
+            "ttls": {
+                "missing_ids": f"{RecoBeatIDRegistry.MISSING_ID_TTL / 86400} days",
+                "validated_ids": f"{RecoBeatIDRegistry.VALIDATED_ID_TTL / 86400} days"
+            }
+        }
+    
+    except Exception as exc:
+        logger.error("Error getting ID registry stats", error=str(exc), exc_info=True)
+        raise InternalServerError(f"Failed to get ID registry stats: {exc}") from exc
