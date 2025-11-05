@@ -322,7 +322,11 @@ class CacheManager:
             "recommendations": 900,  # 15 minutes
             "mood_analysis": 3600,  # 1 hour
             "workflow_state": 300,  # 5 minutes
-            "track_details": 3600   # 1 hour - track details don't change often
+            "track_details": 3600,  # 1 hour - track details don't change often
+            "workflow_artifacts": 1800,  # 30 minutes - workflow artifacts
+            "validated_seeds": 3600,  # 1 hour - validated seed lists
+            "artist_enrichment": 1800,  # 30 minutes - enriched artist data
+            "popular_mood_cache": 7200,  # 2 hours - popular mood recommendations
         }
 
     def _make_cache_key(self, category: str, *args) -> str:
@@ -567,6 +571,15 @@ class CacheManager:
         # For now, we'll rely on TTL expiration
         # In a production system, you might implement key tagging
 
+    async def close(self):
+        """Close cache connections gracefully.
+        
+        Proper cleanup for distributed cache connections.
+        """
+        if isinstance(self.cache, RedisCache):
+            await self.cache.close()
+            logger.info("Closed Redis/Valkey cache connection")
+    
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get comprehensive cache statistics.
 
@@ -578,6 +591,93 @@ class CacheManager:
             "cache_stats": self.cache.get_stats(),
             "default_ttl": self.default_ttl
         }
+
+    async def get_workflow_artifacts(
+        self,
+        user_id: str,
+        mood_prompt: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get cached workflow artifacts for reuse across iterations.
+        
+        Persist workflow artifacts so similar prompts can reuse validated
+        seeds, artist lists, and audio features.
+        
+        Args:
+            user_id: User ID
+            mood_prompt: Mood prompt (used as cache key)
+            
+        Returns:
+            Cached workflow artifacts or None
+        """
+        key = self._make_cache_key("workflow_artifacts", user_id, mood_prompt)
+        return await self.cache.get(key)
+    
+    async def set_workflow_artifacts(
+        self,
+        user_id: str,
+        mood_prompt: str,
+        artifacts: Dict[str, Any]
+    ) -> None:
+        """Cache workflow artifacts for reuse.
+        
+        Store validated seeds, artist lists, audio features
+        to avoid recomputation on similar prompts.
+        
+        Args:
+            user_id: User ID
+            mood_prompt: Mood prompt (used as cache key)
+            artifacts: Workflow artifacts to cache (seeds, artists, features, etc.)
+        """
+        key = self._make_cache_key("workflow_artifacts", user_id, mood_prompt)
+        ttl = self.default_ttl["workflow_artifacts"]
+        
+        # Add timestamp for diffing later
+        artifacts["cached_at"] = datetime.now(timezone.utc).isoformat()
+        
+        await self.cache.set(key, artifacts, ttl)
+        logger.info(
+            f"Cached workflow artifacts for user {user_id}",
+            artifact_keys=list(artifacts.keys())
+        )
+    
+    async def get_artist_enrichment(
+        self,
+        artist_ids: List[str]
+    ) -> Optional[Dict[str, Any]]:
+        """Get cached enriched artist data.
+        
+        Cache artist enrichment (top tracks, audio features)
+        to avoid repeated fetches.
+        
+        Args:
+            artist_ids: List of artist IDs (sorted for consistent caching)
+            
+        Returns:
+            Cached artist enrichment data or None
+        """
+        sorted_ids = sorted(artist_ids)
+        key = self._make_cache_key("artist_enrichment", *sorted_ids)
+        return await self.cache.get(key)
+    
+    async def set_artist_enrichment(
+        self,
+        artist_ids: List[str],
+        enrichment_data: Dict[str, Any]
+    ) -> None:
+        """Cache enriched artist data.
+        
+        Store artist top tracks and audio features
+        for reuse across workflows.
+        
+        Args:
+            artist_ids: List of artist IDs (sorted for consistent caching)
+            enrichment_data: Enriched artist data with tracks and audio features
+        """
+        sorted_ids = sorted(artist_ids)
+        key = self._make_cache_key("artist_enrichment", *sorted_ids)
+        ttl = self.default_ttl["artist_enrichment"]
+        await self.cache.set(key, enrichment_data, ttl)
+        logger.info(f"Cached enrichment data for {len(artist_ids)} artists")
 
     async def warm_user_cache(
         self,
