@@ -32,8 +32,8 @@ export function PlaylistListItemSkeleton() {
                         </div>
                         
                         <div className="flex items-center justify-between gap-2">
-                            <Skeleton className="flex-1 h-9" />
                             <Skeleton className="h-9 w-9" />
+                            <Skeleton className="flex-1 h-9" />
                         </div>
                     </div>
                 </div>

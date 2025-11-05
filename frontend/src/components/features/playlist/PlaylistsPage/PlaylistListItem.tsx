@@ -115,6 +115,18 @@ export function PlaylistListItem({ playlist, onDelete, formatDate }: PlaylistLis
                             </div>
 
                             <div className="flex items-center justify-between gap-2">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleDeleteClick}
+                                    disabled={isDeleting}
+                                    className="h-9 w-9 p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
+                                    aria-label="Delete playlist"
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+
                                 {hasSpotifyUrl ? (
                                     <Button
                                         asChild
@@ -136,18 +148,6 @@ export function PlaylistListItem({ playlist, onDelete, formatDate }: PlaylistLis
                                 ) : (
                                     <div className="flex-1" />
                                 )}
-
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={handleDeleteClick}
-                                    disabled={isDeleting}
-                                    className="h-9 w-9 p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
-                                    aria-label="Delete playlist"
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
                             </div>
                         </div>
                     </div>
