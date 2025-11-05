@@ -11,6 +11,7 @@ from .reccobeat.track_info import GetMultipleTracksTool, GetTrackAudioFeaturesTo
 from .reccobeat.artist_info import SearchArtistTool, GetMultipleArtistsTool, GetArtistTracksTool
 from ..core.cache import cache_manager
 from ..core.seed_guardrails import SeedGuardrails
+from ..core.id_registry import RecoBeatIDRegistry
 
 
 logger = structlog.get_logger(__name__)
@@ -275,6 +276,9 @@ class RecoBeatService:
     ) -> Dict[str, str]:
         """Convert Spotify track IDs to RecoBeat IDs using batch lookup with parallel processing.
 
+        Uses pre-validated ID registry to skip known-missing IDs and return
+        cached conversions without API calls.
+
         Args:
             spotify_track_ids: List of Spotify track IDs
 
@@ -286,15 +290,31 @@ class RecoBeatService:
 
         id_mapping = {}
 
+        # Check cache for validated IDs first
+        cached_mappings = await RecoBeatIDRegistry.bulk_get_validated(spotify_track_ids)
+        id_mapping.update(cached_mappings)
+        
+        # Filter out known-missing IDs and already-validated IDs
+        remaining_ids = [sid for sid in spotify_track_ids if sid not in id_mapping]
+        ids_to_check, known_missing = await RecoBeatIDRegistry.bulk_check_missing(remaining_ids)
+        
+        if not ids_to_check:
+            logger.info(
+                "All IDs resolved from cache/registry",
+                cached={len(cached_mappings)},
+                known_missing={len(known_missing)}
+            )
+            return id_mapping
+
         # Get multiple tracks tool
         tracks_tool = self.tools.get_tool("get_multiple_tracks")
         if not tracks_tool:
             logger.warning("Multiple tracks tool not available for ID conversion")
-            return {}
+            return id_mapping
 
         # Process in chunks of 40 (API limit) with parallel processing
         chunk_size = 40
-        chunks = [spotify_track_ids[i:i + chunk_size] for i in range(0, len(spotify_track_ids), chunk_size)]
+        chunks = [ids_to_check[i:i + chunk_size] for i in range(0, len(ids_to_check), chunk_size)]
 
         async def process_chunk(chunk: List[str]) -> Dict[str, str]:
             """Process a single chunk of track IDs."""
@@ -305,6 +325,7 @@ class RecoBeatService:
                 if result.success:
                     tracks = result.data.get("tracks", [])
                     chunk_mapping = {}
+                    found_ids = set()
 
                     for track in tracks:
                         reccobeat_id = track.get("id")
@@ -322,8 +343,19 @@ class RecoBeatService:
                                     spotify_id = orig_id
                                     break
 
-                        if reccobeat_id:
+                        if reccobeat_id and spotify_id:
                             chunk_mapping[spotify_id] = reccobeat_id
+                            found_ids.add(spotify_id)
+                            # Mark successful conversions in registry
+                            await RecoBeatIDRegistry.mark_validated(spotify_id, reccobeat_id)
+                    
+                    # Mark missing IDs in registry
+                    for orig_id in chunk:
+                        if orig_id not in found_ids:
+                            await RecoBeatIDRegistry.mark_missing(
+                                orig_id,
+                                reason="ID not found in RecoBeat response"
+                            )
 
                     return chunk_mapping
 
@@ -334,7 +366,6 @@ class RecoBeatService:
 
         # Execute all chunks in parallel
         try:
-            # Phase 2: Increased concurrency from 5 to 8 with Phase 1 caching
             chunk_results = await self._bounded_gather(chunks, process_chunk, concurrency=8)
 
             # Combine results from all chunks
@@ -344,7 +375,12 @@ class RecoBeatService:
         except Exception as e:
             logger.error(f"Error in parallel track ID conversion: {e}")
 
-        logger.info(f"Converted {len(id_mapping)}/{len(spotify_track_ids)} Spotify track IDs to RecoBeat IDs")
+        logger.info(
+            f"Converted {len(id_mapping)}/{len(spotify_track_ids)} Spotify track IDs to RecoBeat IDs",
+            cached={len(cached_mappings)},
+            newly_converted={len(id_mapping) - len(cached_mappings)},
+            known_missing={len(known_missing)}
+        )
         return id_mapping
 
     async def get_tracks_audio_features(self, track_ids: List[str]) -> Dict[str, Dict[str, Any]]:
