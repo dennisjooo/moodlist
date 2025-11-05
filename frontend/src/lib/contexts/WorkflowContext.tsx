@@ -27,6 +27,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
   const {
     startWorkflow,
     loadWorkflow,
+    loadWorkflowCost,
     stopWorkflow,
     refreshResults,
     saveToSpotify,
@@ -50,8 +51,14 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     {
       enabled: shouldStream,
       callbacks: {
-        onStatus: handleStatusUpdate,
-        onTerminal: handleTerminalUpdate,
+        onStatus: async status => {
+          await handleStatusUpdate(status);
+          await loadWorkflowCost(status.session_id);
+        },
+        onTerminal: async (status, results) => {
+          await handleTerminalUpdate(status, results);
+          await loadWorkflowCost(status.session_id);
+        },
         onError: handleError,
         onAwaitingInput: handleAwaitingInput,
       },
@@ -94,6 +101,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     workflowState,
     startWorkflow,
     loadWorkflow,
+    loadWorkflowCost,
     stopWorkflow,
     resetWorkflow,
     applyCompletedEdit,

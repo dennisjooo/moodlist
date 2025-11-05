@@ -16,6 +16,10 @@ const initialWorkflowState: WorkflowState = {
     error: null,
     isLoading: false,
     awaitingInput: false,
+    totalLLMCost: 0,
+    totalPromptTokens: 0,
+    totalCompletionTokens: 0,
+    totalTokens: 0,
 };
 
 export function useWorkflowState() {

@@ -54,6 +54,7 @@ export interface WorkflowContextType {
     workflowState: WorkflowState;
     startWorkflow: (moodPrompt: string, genreHint?: string) => Promise<void>;
     loadWorkflow: (sessionId: string) => Promise<void>;
+    loadWorkflowCost: (sessionId: string) => Promise<void>;
     stopWorkflow: () => void;
     resetWorkflow: () => void;
     applyCompletedEdit: (
