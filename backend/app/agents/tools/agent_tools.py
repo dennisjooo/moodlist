@@ -26,16 +26,15 @@ _reccobeat_semaphore: Optional[asyncio.Semaphore] = None
 def get_reccobeat_semaphore() -> asyncio.Semaphore:
     """Get or create the global RecoBeat API semaphore.
 
-    Increased from 5 to 10 concurrent requests now that caching reduces
-    actual API load.
+    Reduced to 5 concurrent requests to be more conservative with rate limits.
 
     Returns:
         Semaphore limiting concurrent RecoBeat API requests
     """
     global _reccobeat_semaphore
     if _reccobeat_semaphore is None:
-        # Increased to 10 concurrent requests (from 5) while relying on caching
-        _reccobeat_semaphore = asyncio.Semaphore(10)
+        # Reduced to 5 concurrent requests to avoid rate limit issues
+        _reccobeat_semaphore = asyncio.Semaphore(5)
     return _reccobeat_semaphore
 
 

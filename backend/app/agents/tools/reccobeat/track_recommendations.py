@@ -49,8 +49,8 @@ class TrackRecommendationsTool(RateLimitedTool):
             name="get_track_recommendations",
             description="Get track recommendations from RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=120,   # More conservative rate limit
-            min_request_interval=1.0,   # 1s between requests to avoid rate limiting
+            rate_limit_per_minute=60,   # More conservative rate limit to respect API quota
+            min_request_interval=1.2,   # Slightly longer interval between requests
             use_global_semaphore=True   # Use global semaphore to limit concurrent requests
         )
 
@@ -138,52 +138,6 @@ class TrackRecommendationsTool(RateLimitedTool):
             return f"Invalid recommendation size: {size} (must be 1-100)"
 
         return None
-
-    async def _get_track_details(self, track_ids: List[str]) -> dict[str, int]:
-        """Get track details including duration_ms from /v1/track endpoint.
-
-        Args:
-            track_ids: List of RecoBeat track IDs
-
-        Returns:
-            Dictionary mapping track_id to duration_ms
-        """
-        if not track_ids:
-            return {}
-
-        try:
-            # Make API request to get track details with caching (30 minutes TTL for track details)
-            response_data = await self._make_request(
-                method="GET",
-                endpoint="/v1/track",
-                params={"ids": track_ids},
-                use_cache=True,
-                cache_ttl=1800  # 30 minutes
-            )
-
-            # Validate response structure
-            if not self._validate_response(response_data, ["content"]):
-                logger.warning("Invalid response structure from track details API")
-                return {}
-
-            # Parse track details
-            track_details = {}
-            for track_data in response_data["content"]:
-                try:
-                    track_id = track_data.get("id")
-                    duration_ms = track_data.get("durationMs")
-                    if track_id and duration_ms:
-                        track_details[track_id] = duration_ms
-                except Exception as e:
-                    logger.warning(f"Failed to parse track detail: {track_data}, error: {e}")
-                    continue
-
-            logger.info(f"Successfully retrieved details for {len(track_details)} tracks")
-            return track_details
-
-        except Exception as e:
-            logger.error(f"Error getting track details: {str(e)}", exc_info=True)
-            return {}
 
     async def _run(
         self,
@@ -292,13 +246,13 @@ class TrackRecommendationsTool(RateLimitedTool):
 
             logger.info(f"Getting {size} recommendations for {len(seeds)} seeds")
 
-            # Make API request with caching (5 minutes TTL for recommendations)
+            # Make API request with caching (10 minutes TTL for recommendations)
             response_data = await self._make_request(
                 method="GET",
                 endpoint="/v1/track/recommendation",
                 params=params,
                 use_cache=True,
-                cache_ttl=300  # 5 minutes - recommendations can change but not too frequently
+                cache_ttl=600  # 10 minutes - longer TTL to reduce API calls
             )
 
             # Validate response structure
@@ -308,26 +262,10 @@ class TrackRecommendationsTool(RateLimitedTool):
                     api_response=response_data
                 )
 
-            # Extract track IDs from recommendations for getting duration_ms from track endpoint
-            track_ids = []
-            recommendation_data = []
-            for track_data in response_data["content"]:
-                try:
-                    track_id = track_data.get("id")
-                    if track_id:
-                        track_ids.append(track_id)
-                        recommendation_data.append(track_data)
-                except Exception as e:
-                    logger.warning(f"Failed to extract track ID: {track_data}, error: {e}")
-                    continue
-
-            # Get track details including duration_ms from /v1/track endpoint
-            track_details = await self._get_track_details(track_ids)
-            logger.info(f"Retrieved duration_ms for {len(track_details)} tracks from track endpoint")
-
-            # Parse recommendations using duration_ms from track endpoint
+            # Parse recommendations directly from response (no need for additional API call)
+            # The recommendation endpoint already includes duration_ms
             recommendations = []
-            for track_data in recommendation_data:
+            for track_data in response_data["content"]:
                 try:
                     # Extract track information
                     track_id = track_data.get("id")
@@ -349,8 +287,8 @@ class TrackRecommendationsTool(RateLimitedTool):
                         1.0
                     )
 
-                    # Get duration_ms from track endpoint, fallback to recommendations response
-                    duration_ms = track_details.get(track_id, track_data.get("durationMs"))
+                    # Get duration_ms directly from recommendations response (no additional API call needed)
+                    duration_ms = track_data.get("durationMs")
 
                     # Create recommendation object
                     recommendation = TrackRecommendation(

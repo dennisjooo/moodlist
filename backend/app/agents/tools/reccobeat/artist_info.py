@@ -33,8 +33,8 @@ class SearchArtistTool(RateLimitedTool):
             name="search_artists",
             description="Search artists on RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=120,   # More conservative rate limit
-            min_request_interval=1.0,   # 1s between requests to avoid rate limiting
+            rate_limit_per_minute=60,   # Align with stricter RecoBeat rate limits
+            min_request_interval=1.2,   # Slightly longer interval between requests
             use_global_semaphore=True   # Use global semaphore to limit concurrent requests
         )
 
@@ -61,7 +61,7 @@ class SearchArtistTool(RateLimitedTool):
         try:
             logger.info(f"Searching for artists: '{search_text}' (page {page}, size {size})")
 
-            # Make API request with caching (10 minutes TTL for search results)
+            # Make API request with caching (30 minutes TTL for search results)
             response_data = await self._make_request(
                 method="GET",
                 endpoint="/v1/artist/search",
@@ -71,7 +71,7 @@ class SearchArtistTool(RateLimitedTool):
                     "size": size
                 },
                 use_cache=True,
-                cache_ttl=600  # 10 minutes - search results can change as new artists are added
+                cache_ttl=1800  # 30 minutes - search results change slowly
             )
 
             # Validate response structure
@@ -149,8 +149,8 @@ class GetMultipleArtistsTool(RateLimitedTool):
             name="get_multiple_artists",
             description="Get multiple artists from RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=60,   # More conservative rate limit
-            min_request_interval=1.0,   # 1s between requests to avoid rate limiting
+            rate_limit_per_minute=60,   # Align with stricter RecoBeat rate limits
+            min_request_interval=1.2,   # Slightly longer interval between requests
             use_global_semaphore=True   # Use global semaphore to limit concurrent requests
         )
 
@@ -246,8 +246,8 @@ class GetArtistTracksTool(RateLimitedTool):
             name="get_artist_tracks",
             description="Get artist's tracks from RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=60,   # More conservative rate limit
-            min_request_interval=1.0,   # 1s between requests to avoid rate limiting
+            rate_limit_per_minute=45,   # Artist catalog endpoint is more strict
+            min_request_interval=1.5,   # Longer interval between requests to prevent rate limiting
             use_global_semaphore=True   # Use global semaphore to limit concurrent requests
         )
 
@@ -274,7 +274,7 @@ class GetArtistTracksTool(RateLimitedTool):
         try:
             logger.info(f"Getting tracks for artist {artist_id} (page {page}, size {size})")
 
-            # Make API request with caching (15 minutes TTL for artist tracks)
+            # Make API request with caching (1 hour TTL for artist tracks)
             response_data = await self._make_request(
                 method="GET",
                 endpoint=f"/v1/artist/{artist_id}/track",
@@ -283,7 +283,7 @@ class GetArtistTracksTool(RateLimitedTool):
                     "size": size
                 },
                 use_cache=True,
-                cache_ttl=900  # 15 minutes - artist discographies change occasionally
+                cache_ttl=3600  # 1 hour - artist discographies don't change often
             )
 
             # Validate response structure

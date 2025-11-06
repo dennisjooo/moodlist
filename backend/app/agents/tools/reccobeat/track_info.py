@@ -32,8 +32,8 @@ class GetMultipleTracksTool(RateLimitedTool):
             name="get_multiple_tracks",
             description="Get multiple tracks from RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=120,   # More conservative rate limit
-            min_request_interval=1.0,   # 1s between requests to avoid rate limiting
+            rate_limit_per_minute=60,   # Align with stricter RecoBeat rate limits
+            min_request_interval=1.2,   # Slightly longer interval between requests
             use_global_semaphore=True   # Use global semaphore to limit concurrent requests
         )
 
@@ -53,13 +53,13 @@ class GetMultipleTracksTool(RateLimitedTool):
         try:
             logger.info(f"Getting {len(ids)} tracks from RecoBeat")
 
-            # Make API request with caching (30 minutes TTL for track details)
+            # Make API request with caching (2 hours TTL for track details - they don't change often)
             response_data = await self._make_request(
                 method="GET",
                 endpoint="/v1/track",
                 params={"ids": ids},
                 use_cache=True,
-                cache_ttl=1800  # 30 minutes
+                cache_ttl=7200  # 2 hours
             )
 
             # Validate response structure

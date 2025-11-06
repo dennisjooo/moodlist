@@ -109,8 +109,9 @@ class SeedBasedGenerator:
                 chunk_recommendations = await self._process_chunk(chunk, reccobeat_params, state)
                 all_recommendations.extend(chunk_recommendations)
 
-                # Add some delay between API calls to respect rate limits
-                await asyncio.sleep(0.1)
+                # Add delay between API calls to respect strict rate limits
+                # Increased from 0.1s to 1.5s to be more conservative
+                await asyncio.sleep(1.5)
 
             except Exception as e:
                 logger.error(f"Error generating recommendations for seed chunk {chunk}: {e}")

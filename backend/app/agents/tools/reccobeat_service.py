@@ -28,6 +28,10 @@ class RecoBeatService:
         """Initialize the RecoBeat service."""
         self.tools = AgentTools()
 
+        # Track in-flight recommendation requests to prevent duplicate calls
+        self._inflight_recommendation_requests: Dict[str, asyncio.Task] = {}
+        self._inflight_lock = asyncio.Lock()
+
         # Register all RecoBeat tools
         self._register_tools()
 
@@ -127,7 +131,7 @@ class RecoBeatService:
             dict(kwargs),
         )
 
-        # Try to get from cache (15 minute TTL for recommendations)
+        # Try to get from cache (1 hour TTL for recommendations)
         cached_result = await cache_manager.cache.get(cache_key)
         if cached_result:
             logger.info(f"Cache hit for track recommendations (key: {cache_key[:8]}...)")
@@ -159,14 +163,14 @@ class RecoBeatService:
             dict(kwargs),
         )
 
-        # Cache with 15 minute TTL
+        # Cache with 1 hour TTL (recommendations don't change frequently)
         cache_data = {
             "recommendations": recommendations,
             "cached_at": asyncio.get_running_loop().time(),
             "parameters": metadata,
         }
 
-        await cache_manager.cache.set(cache_key, cache_data, ttl=1800)  # 30 minutes
+        await cache_manager.cache.set(cache_key, cache_data, ttl=3600)  # 1 hour
         logger.debug(f"Cached track recommendations (key: {cache_key[:8]}...)")
 
     def _register_tools(self):
@@ -192,6 +196,8 @@ class RecoBeatService:
     ) -> List[Dict[str, Any]]:
         """Get track recommendations with mood-based features.
 
+        Implements request deduplication to prevent duplicate API calls for identical requests.
+
         Args:
             seeds: List of track IDs to use as seeds
             size: Number of recommendations to return
@@ -210,7 +216,53 @@ class RecoBeatService:
             logger.info(f"Returning {len(cached_recommendations)} cached recommendations")
             return cached_recommendations
 
-        # Cache miss - fetch from API
+        # Cache miss - check if there's already an in-flight request for the same parameters
+        cache_key, _ = self._build_recommendation_cache_key(seeds, size, mood_features, dict(kwargs))
+
+        task: Optional[asyncio.Task]
+        created_task = False
+        async with self._inflight_lock:
+            existing_task = self._inflight_recommendation_requests.get(cache_key)
+            if existing_task and not existing_task.done():
+                task = existing_task
+                logger.info(f"Reusing in-flight recommendation request (key: {cache_key[:8]}...)")
+            else:
+                # Either no task or the previous one has completed; create a new task
+                task = asyncio.create_task(
+                    self._fetch_recommendations_internal(seeds, size, mood_features, **kwargs)
+                )
+                self._inflight_recommendation_requests[cache_key] = task
+                created_task = True
+                logger.info(f"Dispatching new recommendation request (key: {cache_key[:8]}...)")
+
+        try:
+            return await task
+        finally:
+            if created_task:
+                # Clean up the in-flight request tracking
+                async with self._inflight_lock:
+                    existing = self._inflight_recommendation_requests.get(cache_key)
+                    if existing is task:
+                        self._inflight_recommendation_requests.pop(cache_key, None)
+    
+    async def _fetch_recommendations_internal(
+        self,
+        seeds: List[str],
+        size: int,
+        mood_features: Optional[Dict[str, float]],
+        **kwargs
+    ) -> List[Dict[str, Any]]:
+        """Internal method to fetch recommendations from API.
+
+        Args:
+            seeds: List of track IDs to use as seeds
+            size: Number of recommendations to return
+            mood_features: Optional mood-based audio features
+            **kwargs: Additional parameters for the API
+
+        Returns:
+            List of track recommendations
+        """
         logger.info("Cache miss for recommendations, fetching from API")
 
         tool = self.tools.get_tool("get_track_recommendations")
@@ -376,8 +428,8 @@ class RecoBeatService:
 
         # Execute all chunks in parallel
         try:
-            # Increased from 8 to 20 concurrent requests
-            chunk_results = await self._bounded_gather(chunks, process_chunk, concurrency=20)
+            # Limit concurrency to 6 to stay well within the strict RecoBeat rate limit
+            chunk_results = await self._bounded_gather(chunks, process_chunk, concurrency=6)
 
             # Combine results from all chunks
             for chunk_result in chunk_results:
@@ -425,7 +477,7 @@ class RecoBeatService:
 
             reccobeat_id = id_mapping[track_id]
 
-            # Try cache first for individual track features
+            # Try cache first for individual track features (increased TTL to 24 hours)
             cache_key = self._make_cache_key("track_audio_features", reccobeat_id)
             cached_features = await cache_manager.cache.get(cache_key)
 
@@ -452,9 +504,9 @@ class RecoBeatService:
             try:
                 result = await features_tool._run(track_id=reccobeat_id)
                 if result.success:
-                    # Cache individual track features for 1 hour
+                    # Cache individual track features for 24 hours
                     cache_key = self._make_cache_key("track_audio_features", reccobeat_id)
-                    await cache_manager.cache.set(cache_key, result.data, ttl=3600)
+                    await cache_manager.cache.set(cache_key, result.data, ttl=86400)
                     logger.debug(f"Cached audio features for track {reccobeat_id}")
                     return track_id, result.data
                 # 404 errors are common - track might not exist in RecoBeat
@@ -473,11 +525,11 @@ class RecoBeatService:
 
         # Execute all fetches in parallel
         try:
-            # Increased concurrency from 15 to 30 for faster batch processing
+            # Limit concurrency to 8 to avoid overwhelming RecoBeat API with rate-limited requests
             results = await self._bounded_gather(
                 tracks_needing_fetch,
                 fetch_single_track_features,
-                concurrency=30,
+                concurrency=8,
             )
 
             # Combine results
@@ -553,7 +605,7 @@ class RecoBeatService:
         if not track_ids:
             return []
 
-        # Try to get from cache first (30 min TTL for track lookups)
+        # Try to get from cache first (2 hour TTL for track lookups - tracks rarely change)
         cache_key = self._make_cache_key("tracks_by_ids", str(sorted(track_ids)))
         cached_result = await cache_manager.cache.get(cache_key)
 
@@ -602,14 +654,14 @@ class RecoBeatService:
             logger.error(f"Error in parallel track fetching: {e}")
             all_tracks = []
 
-        # Cache the successful result for 30 minutes
+        # Cache the successful result for 2 hours
         if all_tracks:
             cache_data = {
                 "tracks": all_tracks,
                 "cached_at": asyncio.get_running_loop().time(),
                 "track_ids": track_ids
             }
-            await cache_manager.cache.set(cache_key, cache_data, ttl=1800)  # 30 minutes
+            await cache_manager.cache.set(cache_key, cache_data, ttl=7200)  # 2 hours
             logger.debug(f"Cached track lookup result (key: {cache_key[:8]}...)")
 
         return all_tracks
