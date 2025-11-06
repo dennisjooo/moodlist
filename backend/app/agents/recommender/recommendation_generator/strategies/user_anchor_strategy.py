@@ -360,12 +360,18 @@ class UserAnchorStrategy(RecommendationStrategy):
 
         for artist_id in artist_ids:
             try:
-                top_tracks = await self.spotify_service.get_artist_top_tracks(
+                # Use hybrid strategy favoring top tracks for user-mentioned artists
+                # Users explicitly requested these artists, so favor their popular/recognizable tracks
+                top_tracks = await self.spotify_service.get_artist_hybrid_tracks(
                     artist_id=artist_id,
-                    access_token=access_token
+                    access_token=access_token,
+                    max_popularity=95,  # Allow popular tracks (users want hits from mentioned artists)
+                    min_popularity=30,  # Ensure decent quality
+                    target_count=tracks_per_artist,
+                    top_tracks_ratio=0.7  # Popular-focused: 70% top tracks, 30% album tracks
                 )
 
-                for track in top_tracks[:tracks_per_artist]:
+                for track in top_tracks:
                     if not track.get("id"):
                         continue
 
@@ -504,17 +510,22 @@ class UserAnchorStrategy(RecommendationStrategy):
             logger.warning(f"Found artist '{artist_name}' in search but no artist ID available")
             return []
 
-        # Get artist's top tracks
-        top_tracks = await self.spotify_service.get_artist_top_tracks(
+        # Get artist's tracks using hybrid strategy favoring top tracks
+        # Users explicitly mentioned this artist, so favor their popular/recognizable tracks
+        top_tracks = await self.spotify_service.get_artist_hybrid_tracks(
             artist_id=artist_id,
-            access_token=access_token
+            access_token=access_token,
+            max_popularity=95,  # Allow popular tracks (users want hits from mentioned artists)
+            min_popularity=30,  # Ensure decent quality
+            target_count=tracks_per_artist,
+            top_tracks_ratio=0.7  # Popular-focused: 70% top tracks, 30% album tracks
         )
 
-        # Add top tracks (limited per artist)
+        # Add top tracks (already limited by hybrid strategy)
         track_count = 0
         filtered_count = 0
         skipped_duplicates = 0
-        for track in top_tracks[:tracks_per_artist]:
+        for track in top_tracks:
             if not track.get("id"):
                 continue
 

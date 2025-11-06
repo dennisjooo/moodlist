@@ -267,14 +267,19 @@ class ArtistRecommendationPipeline:
                 return []
 
         logger.info(
-            f"Fetching top tracks for artist {artist_index+1}/{min(total_artists, 20)}: {artist_id}"
+            f"Fetching hybrid tracks for artist {artist_index+1}/{min(total_artists, 20)}: {artist_id}"
         )
 
-        # Get top tracks from Spotify
-        artist_tracks = await self.spotify_service.get_artist_top_tracks(
+        # Get diverse tracks using hybrid strategy (top tracks + album deep cuts)
+        # For mood-based discovery, favor album diversity (30% top tracks, 70% album tracks)
+        artist_tracks = await self.spotify_service.get_artist_hybrid_tracks(
             access_token=access_token,
             artist_id=artist_id,
-            market="US"
+            market="US",
+            max_popularity=80,  # Exclude mega-hits (tracks > 80 popularity)
+            min_popularity=20,  # Ensure minimum quality
+            target_count=tracks_per_artist,
+            top_tracks_ratio=0.3  # Discovery-focused: 30% top tracks, 70% album tracks
         )
 
         if not artist_tracks:
