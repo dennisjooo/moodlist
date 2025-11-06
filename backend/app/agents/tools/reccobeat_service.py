@@ -312,8 +312,8 @@ class RecoBeatService:
             logger.warning("Multiple tracks tool not available for ID conversion")
             return id_mapping
 
-        # Increased batch size from 40 to 100 for better throughput
-        chunk_size = 100
+        # Optimized batch size: 50 IDs per chunk balances throughput and API stability
+        chunk_size = 50
         chunks = [ids_to_check[i:i + chunk_size] for i in range(0, len(ids_to_check), chunk_size)]
 
         async def process_chunk(chunk: List[str]) -> Dict[str, str]:
@@ -321,8 +321,8 @@ class RecoBeatService:
 
             Includes retry logic for transient failures.
             """
-            max_retries = 3
-            retry_delay = 1  # seconds
+            max_retries = 2  # Reduced retries, rely on caching instead
+            retry_delay = 1.5  # seconds
 
             for attempt in range(max_retries):
                 try:
@@ -374,10 +374,10 @@ class RecoBeatService:
 
             return {}
 
-        # Execute all chunks in parallel
+        # Execute all chunks in parallel with reduced concurrency to respect rate limits
         try:
-            # Increased from 8 to 20 concurrent requests
-            chunk_results = await self._bounded_gather(chunks, process_chunk, concurrency=20)
+            # Reduced to 4 concurrent chunk requests to respect strict rate limits
+            chunk_results = await self._bounded_gather(chunks, process_chunk, concurrency=4)
 
             # Combine results from all chunks
             for chunk_result in chunk_results:
@@ -473,11 +473,11 @@ class RecoBeatService:
 
         # Execute all fetches in parallel
         try:
-            # Increased concurrency from 15 to 30 for faster batch processing
+            # Reduce concurrency to protect against rate limits
             results = await self._bounded_gather(
                 tracks_needing_fetch,
                 fetch_single_track_features,
-                concurrency=30,
+                concurrency=10,
             )
 
             # Combine results
@@ -570,8 +570,8 @@ class RecoBeatService:
             logger.warning("Multiple tracks tool not available")
             return []
 
-        # Process chunks in parallel with concurrency limit
-        semaphore = asyncio.Semaphore(8)  # Max 8 concurrent chunk requests
+        # Process chunks in parallel with tighter concurrency to respect rate limits
+        semaphore = asyncio.Semaphore(4)  # Max 4 concurrent chunk requests
 
         async def process_track_chunk(chunk: List[str]) -> List[Dict[str, Any]]:
             """Process a single chunk of track IDs."""

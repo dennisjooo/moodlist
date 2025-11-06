@@ -49,9 +49,9 @@ class TrackRecommendationsTool(RateLimitedTool):
             name="get_track_recommendations",
             description="Get track recommendations from RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=120,   # More conservative rate limit
-            min_request_interval=1.0,   # 1s between requests to avoid rate limiting
-            use_global_semaphore=True   # Use global semaphore to limit concurrent requests
+            rate_limit_per_minute=80,    # Conservative limit to avoid 429 responses
+            min_request_interval=0.75,   # Spread calls more evenly across the minute
+            use_global_semaphore=True    # Use global semaphore to limit concurrent requests
         )
 
     def _normalize_spotify_uri(self, href: str, track_id: str) -> str:
@@ -292,13 +292,14 @@ class TrackRecommendationsTool(RateLimitedTool):
 
             logger.info(f"Getting {size} recommendations for {len(seeds)} seeds")
 
-            # Make API request with caching (5 minutes TTL for recommendations)
+            # Make API request with aggressive caching (15 minutes TTL for recommendations)
+            # Recommendations are stable for the same params, so longer cache helps rate limiting
             response_data = await self._make_request(
                 method="GET",
                 endpoint="/v1/track/recommendation",
                 params=params,
                 use_cache=True,
-                cache_ttl=300  # 5 minutes - recommendations can change but not too frequently
+                cache_ttl=900  # 15 minutes - stable recommendations, helps avoid rate limits
             )
 
             # Validate response structure
