@@ -138,13 +138,19 @@ class GetArtistTopTracksInput(BaseModel):
 
 
 class GetArtistTopTracksTool(RateLimitedTool):
-    """Tool for getting an artist's top tracks from Spotify API."""
+    """Tool for getting an artist's top tracks from Spotify API.
+
+    Supports hybrid track fetching strategy that combines:
+    - Top tracks (filtered to avoid mega-hits)
+    - Album deep cuts for diversity
+    """
 
     name: str = "get_artist_top_tracks"
     description: str = """
     Get an artist's top tracks from Spotify.
     Use this to fetch the most popular tracks from a specific artist.
     Returns up to 10 top tracks with full track metadata.
+    Supports hybrid mode for better track diversity.
     """
 
     def __init__(self):
@@ -414,6 +420,291 @@ class GetArtistTopTracksTool(RateLimitedTool):
                 f"Failed search fallback: {str(e)}",
                 error_type=type(e).__name__
             )
+
+    async def get_hybrid_tracks(
+        self,
+        access_token: str,
+        artist_id: str,
+        market: str = "US",
+        max_popularity: int = 80,
+        min_popularity: int = 20,
+        target_count: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Get diverse tracks using hybrid strategy: top tracks + album deep cuts.
+
+        This method combines:
+        1. Filtered top tracks (excluding mega-hits with popularity > max_popularity)
+        2. Album tracks for diversity (sampling from multiple albums)
+
+        Args:
+            access_token: Spotify access token
+            artist_id: Spotify artist ID
+            market: ISO 3166-1 alpha-2 country code
+            max_popularity: Maximum popularity threshold (default: 80)
+            min_popularity: Minimum popularity threshold (default: 20)
+            target_count: Target number of tracks to return (default: 10)
+
+        Returns:
+            List of diverse track dictionaries
+        """
+        all_tracks = []
+        track_ids_seen = set()
+
+        # Step 1: Get top tracks (filtered)
+        logger.info(f"Fetching top tracks for artist {artist_id} (max_popularity: {max_popularity})")
+        top_tracks_result = await self._run(
+            access_token=access_token,
+            artist_id=artist_id,
+            market=market
+        )
+
+        if top_tracks_result.success:
+            top_tracks = top_tracks_result.data.get("tracks", [])
+            # Filter top tracks by popularity range
+            filtered_top_tracks = [
+                track for track in top_tracks
+                if min_popularity <= track.get("popularity", 50) <= max_popularity
+            ]
+            logger.info(
+                f"Filtered top tracks: {len(filtered_top_tracks)}/{len(top_tracks)} "
+                f"within popularity range {min_popularity}-{max_popularity}"
+            )
+
+            # Take first 3-5 filtered top tracks
+            for track in filtered_top_tracks[:5]:
+                track_id = track.get("id")
+                if track_id and track_id not in track_ids_seen:
+                    all_tracks.append(track)
+                    track_ids_seen.add(track_id)
+
+        # Step 2: Get album tracks for diversity
+        logger.info(f"Fetching albums for artist {artist_id}")
+        albums = await self._get_artist_albums(
+            access_token=access_token,
+            artist_id=artist_id,
+            market=market,
+            limit=10  # Get recent 10 albums
+        )
+
+        if albums:
+            logger.info(f"Found {len(albums)} albums, sampling tracks for diversity")
+            # Sample tracks from albums
+            album_tracks = await self._sample_album_tracks(
+                access_token=access_token,
+                albums=albums,
+                market=market,
+                max_tracks=target_count,
+                track_ids_seen=track_ids_seen,
+                min_popularity=min_popularity,
+                max_popularity=max_popularity
+            )
+            all_tracks.extend(album_tracks)
+
+        # Deduplicate and limit
+        unique_tracks = []
+        final_ids_seen = set()
+        for track in all_tracks:
+            track_id = track.get("id")
+            if track_id and track_id not in final_ids_seen:
+                unique_tracks.append(track)
+                final_ids_seen.add(track_id)
+                if len(unique_tracks) >= target_count:
+                    break
+
+        logger.info(
+            f"Hybrid strategy returned {len(unique_tracks)} diverse tracks "
+            f"(top: {len([t for t in unique_tracks[:5]])}, album: {len(unique_tracks[5:])})"
+        )
+
+        return unique_tracks
+
+    async def _get_artist_albums(
+        self,
+        access_token: str,
+        artist_id: str,
+        market: str = "US",
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Get artist's albums.
+
+        Args:
+            access_token: Spotify access token
+            artist_id: Spotify artist ID
+            market: ISO 3166-1 alpha-2 country code
+            limit: Maximum number of albums to return
+
+        Returns:
+            List of album dictionaries
+        """
+        try:
+            response_data = await self._make_request(
+                method="GET",
+                endpoint=f"/artists/{artist_id}/albums",
+                params={
+                    "market": market,
+                    "limit": limit,
+                    "include_groups": "album,single"  # Include albums and singles
+                },
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+
+            if not self._validate_response(response_data, ["items"]):
+                logger.warning(f"Invalid response structure for albums of artist {artist_id}")
+                return []
+
+            albums = response_data.get("items", [])
+            logger.info(f"Retrieved {len(albums)} albums for artist {artist_id}")
+            return albums
+
+        except Exception as e:
+            logger.warning(f"Error fetching albums for artist {artist_id}: {e}")
+            return []
+
+    async def _sample_album_tracks(
+        self,
+        access_token: str,
+        albums: List[Dict[str, Any]],
+        market: str,
+        max_tracks: int,
+        track_ids_seen: set,
+        min_popularity: int = 20,
+        max_popularity: int = 80
+    ) -> List[Dict[str, Any]]:
+        """Sample tracks from multiple albums for diversity.
+
+        Args:
+            access_token: Spotify access token
+            albums: List of album dictionaries
+            market: ISO 3166-1 alpha-2 country code
+            max_tracks: Maximum tracks to sample
+            track_ids_seen: Set of track IDs already included
+            min_popularity: Minimum popularity threshold
+            max_popularity: Maximum popularity threshold
+
+        Returns:
+            List of sampled track dictionaries
+        """
+        import random
+
+        sampled_tracks = []
+        tracks_per_album = max(1, max_tracks // min(len(albums), 5))  # Sample from up to 5 albums
+
+        # Prioritize albums (newer albums first, but with some randomness)
+        albums_to_sample = albums[:10]  # Consider recent 10 albums
+        random.shuffle(albums_to_sample)  # Add randomness
+
+        for album in albums_to_sample[:5]:  # Sample from up to 5 albums
+            album_id = album.get("id")
+            if not album_id:
+                continue
+
+            try:
+                # Get tracks from this album
+                response_data = await self._make_request(
+                    method="GET",
+                    endpoint=f"/albums/{album_id}/tracks",
+                    params={"market": market, "limit": 50},
+                    headers={"Authorization": f"Bearer {access_token}"}
+                )
+
+                if not self._validate_response(response_data, ["items"]):
+                    continue
+
+                album_tracks = response_data.get("items", [])
+
+                # We need to get full track info (including popularity) via separate API call
+                # For now, randomly sample tracks from the album
+                if album_tracks:
+                    # Sample random tracks from middle/end of album (avoid lead singles)
+                    if len(album_tracks) > 3:
+                        # Skip first track (usually the single) and sample from the rest
+                        sample_pool = album_tracks[1:]
+                        sampled = random.sample(sample_pool, min(tracks_per_album, len(sample_pool)))
+                    else:
+                        sampled = album_tracks
+
+                    # Convert simplified tracks to full track format
+                    for track in sampled:
+                        track_id = track.get("id")
+                        if track_id and track_id not in track_ids_seen:
+                            # Fetch full track info to get popularity
+                            full_track = await self._get_track_info(
+                                access_token=access_token,
+                                track_id=track_id,
+                                market=market
+                            )
+
+                            if full_track:
+                                popularity = full_track.get("popularity", 50)
+                                # Apply popularity filter
+                                if min_popularity <= popularity <= max_popularity:
+                                    sampled_tracks.append(full_track)
+                                    track_ids_seen.add(track_id)
+
+                                    if len(sampled_tracks) >= max_tracks:
+                                        return sampled_tracks
+
+            except Exception as e:
+                logger.warning(f"Error sampling tracks from album {album_id}: {e}")
+                continue
+
+        return sampled_tracks
+
+    async def _get_track_info(
+        self,
+        access_token: str,
+        track_id: str,
+        market: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get full track information including popularity.
+
+        Args:
+            access_token: Spotify access token
+            track_id: Spotify track ID
+            market: ISO 3166-1 alpha-2 country code
+
+        Returns:
+            Track dictionary or None if failed
+        """
+        try:
+            response_data = await self._make_request(
+                method="GET",
+                endpoint=f"/tracks/{track_id}",
+                params={"market": market},
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+
+            if not response_data.get("id"):
+                return None
+
+            return {
+                "id": response_data.get("id"),
+                "name": response_data.get("name"),
+                "spotify_uri": response_data.get("uri"),
+                "duration_ms": response_data.get("duration_ms"),
+                "popularity": response_data.get("popularity", 50),
+                "explicit": response_data.get("explicit", False),
+                "preview_url": response_data.get("preview_url"),
+                "track_number": response_data.get("track_number"),
+                "artists": [
+                    {
+                        "id": artist.get("id"),
+                        "name": artist.get("name"),
+                        "uri": artist.get("uri")
+                    }
+                    for artist in response_data.get("artists", [])
+                ],
+                "album": {
+                    "id": response_data.get("album", {}).get("id"),
+                    "name": response_data.get("album", {}).get("name"),
+                    "uri": response_data.get("album", {}).get("uri"),
+                    "release_date": response_data.get("album", {}).get("release_date")
+                } if response_data.get("album") else None
+            }
+
+        except Exception as e:
+            logger.warning(f"Error fetching track info for {track_id}: {e}")
+            return None
 
 
 class GetSeveralSpotifyArtistsInput(BaseModel):
