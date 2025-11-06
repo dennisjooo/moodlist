@@ -351,7 +351,7 @@ class AnchorSelectionEngine:
                     logger.warning(f"Failed to get features for user-mentioned track: {e}")
 
             # Mark track metadata for protection
-            # NOTE: Phase 2 change - these are anchor candidates from LLM extraction,
+            # NOTE: These are anchor candidates from LLM extraction,
             # NOT user-mentioned tracks from explicit intent analysis
             # Only the IntentAnalyzer + SeedGatherer should mark tracks as user_mentioned
             track['user_mentioned'] = False  # These are LLM-discovered anchors, not explicit user mentions

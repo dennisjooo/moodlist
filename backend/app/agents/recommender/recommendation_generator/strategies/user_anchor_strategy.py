@@ -1,7 +1,4 @@
-"""User anchor strategy for recommendations based on user-mentioned tracks.
-
-Phase 2: New strategy that prioritizes tracks/artists explicitly mentioned by the user.
-"""
+"""User anchor strategy for recommendations based on user-mentioned tracks."""
 
 import structlog
 from typing import Any, Dict, List, Optional
@@ -14,8 +11,6 @@ logger = structlog.get_logger(__name__)
 
 class UserAnchorStrategy(RecommendationStrategy):
     """Strategy that generates recommendations based on user-mentioned tracks and artists.
-    
-    Phase 2: Prioritizes tracks that the user explicitly mentioned.
     
     This strategy:
     1. Gets user-mentioned tracks from SeedGathererAgent
