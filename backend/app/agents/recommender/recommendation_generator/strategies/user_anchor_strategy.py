@@ -360,12 +360,16 @@ class UserAnchorStrategy(RecommendationStrategy):
 
         for artist_id in artist_ids:
             try:
-                top_tracks = await self.spotify_service.get_artist_top_tracks(
+                # Use hybrid strategy for better diversity (filtered top tracks + album deep cuts)
+                top_tracks = await self.spotify_service.get_artist_hybrid_tracks(
                     artist_id=artist_id,
-                    access_token=access_token
+                    access_token=access_token,
+                    max_popularity=80,  # Exclude mega-hits
+                    min_popularity=20,  # Ensure quality
+                    target_count=tracks_per_artist
                 )
 
-                for track in top_tracks[:tracks_per_artist]:
+                for track in top_tracks:
                     if not track.get("id"):
                         continue
 
@@ -504,17 +508,20 @@ class UserAnchorStrategy(RecommendationStrategy):
             logger.warning(f"Found artist '{artist_name}' in search but no artist ID available")
             return []
 
-        # Get artist's top tracks
-        top_tracks = await self.spotify_service.get_artist_top_tracks(
+        # Get artist's tracks using hybrid strategy (filtered top tracks + album deep cuts)
+        top_tracks = await self.spotify_service.get_artist_hybrid_tracks(
             artist_id=artist_id,
-            access_token=access_token
+            access_token=access_token,
+            max_popularity=80,  # Exclude mega-hits
+            min_popularity=20,  # Ensure quality
+            target_count=tracks_per_artist
         )
 
-        # Add top tracks (limited per artist)
+        # Add top tracks (already limited by hybrid strategy)
         track_count = 0
         filtered_count = 0
         skipped_duplicates = 0
-        for track in top_tracks[:tracks_per_artist]:
+        for track in top_tracks:
             if not track.get("id"):
                 continue
 
