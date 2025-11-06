@@ -1,7 +1,7 @@
 """Spotify artist search and discovery tools."""
 
 import structlog
-from typing import List, Type
+from typing import List, Type, Dict, Any, Optional
 
 from pydantic import BaseModel, Field
 
