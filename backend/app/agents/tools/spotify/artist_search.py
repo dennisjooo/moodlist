@@ -428,13 +428,16 @@ class GetArtistTopTracksTool(RateLimitedTool):
         market: str = "US",
         max_popularity: int = 80,
         min_popularity: int = 20,
-        target_count: int = 10
+        target_count: int = 10,
+        top_tracks_ratio: float = 0.4
     ) -> List[Dict[str, Any]]:
         """Get diverse tracks using hybrid strategy: top tracks + album deep cuts.
 
         This method combines:
         1. Filtered top tracks (excluding mega-hits with popularity > max_popularity)
         2. Album tracks for diversity (sampling from multiple albums)
+
+        The ratio between top tracks and album tracks is controlled by top_tracks_ratio.
 
         Args:
             access_token: Spotify access token
@@ -443,6 +446,9 @@ class GetArtistTopTracksTool(RateLimitedTool):
             max_popularity: Maximum popularity threshold (default: 80)
             min_popularity: Minimum popularity threshold (default: 20)
             target_count: Target number of tracks to return (default: 10)
+            top_tracks_ratio: Ratio of top tracks vs album tracks (default: 0.4)
+                            - 0.4 = 40% top tracks, 60% album tracks (discovery-focused)
+                            - 0.7 = 70% top tracks, 30% album tracks (popular-focused)
 
         Returns:
             List of diverse track dictionaries
@@ -450,8 +456,16 @@ class GetArtistTopTracksTool(RateLimitedTool):
         all_tracks = []
         track_ids_seen = set()
 
+        # Calculate how many tracks to get from each source
+        top_tracks_count = max(1, int(target_count * top_tracks_ratio))
+        album_tracks_count = target_count - top_tracks_count
+
         # Step 1: Get top tracks (filtered)
-        logger.info(f"Fetching top tracks for artist {artist_id} (max_popularity: {max_popularity})")
+        logger.info(
+            f"Fetching top tracks for artist {artist_id} "
+            f"(max_popularity: {max_popularity}, ratio: {top_tracks_ratio:.1%}, "
+            f"target: {top_tracks_count} top + {album_tracks_count} album = {target_count} total)"
+        )
         top_tracks_result = await self._run(
             access_token=access_token,
             artist_id=artist_id,
@@ -470,35 +484,36 @@ class GetArtistTopTracksTool(RateLimitedTool):
                 f"within popularity range {min_popularity}-{max_popularity}"
             )
 
-            # Take first 3-5 filtered top tracks
-            for track in filtered_top_tracks[:5]:
+            # Take the calculated number of filtered top tracks
+            for track in filtered_top_tracks[:top_tracks_count]:
                 track_id = track.get("id")
                 if track_id and track_id not in track_ids_seen:
                     all_tracks.append(track)
                     track_ids_seen.add(track_id)
 
-        # Step 2: Get album tracks for diversity
-        logger.info(f"Fetching albums for artist {artist_id}")
-        albums = await self._get_artist_albums(
-            access_token=access_token,
-            artist_id=artist_id,
-            market=market,
-            limit=10  # Get recent 10 albums
-        )
-
-        if albums:
-            logger.info(f"Found {len(albums)} albums, sampling tracks for diversity")
-            # Sample tracks from albums
-            album_tracks = await self._sample_album_tracks(
+        # Step 2: Get album tracks for diversity (if ratio allows)
+        if album_tracks_count > 0:
+            logger.info(f"Fetching albums for artist {artist_id}")
+            albums = await self._get_artist_albums(
                 access_token=access_token,
-                albums=albums,
+                artist_id=artist_id,
                 market=market,
-                max_tracks=target_count,
-                track_ids_seen=track_ids_seen,
-                min_popularity=min_popularity,
-                max_popularity=max_popularity
+                limit=10  # Get recent 10 albums
             )
-            all_tracks.extend(album_tracks)
+
+            if albums:
+                logger.info(f"Found {len(albums)} albums, sampling tracks for diversity")
+                # Sample tracks from albums
+                album_tracks = await self._sample_album_tracks(
+                    access_token=access_token,
+                    albums=albums,
+                    market=market,
+                    max_tracks=album_tracks_count,
+                    track_ids_seen=track_ids_seen,
+                    min_popularity=min_popularity,
+                    max_popularity=max_popularity
+                )
+                all_tracks.extend(album_tracks)
 
         # Deduplicate and limit
         unique_tracks = []
@@ -511,9 +526,13 @@ class GetArtistTopTracksTool(RateLimitedTool):
                 if len(unique_tracks) >= target_count:
                     break
 
+        # Count actual top vs album tracks
+        actual_top_count = min(len(unique_tracks), top_tracks_count)
+        actual_album_count = len(unique_tracks) - actual_top_count
+
         logger.info(
             f"Hybrid strategy returned {len(unique_tracks)} diverse tracks "
-            f"(top: {len([t for t in unique_tracks[:5]])}, album: {len(unique_tracks[5:])})"
+            f"(ratio: {top_tracks_ratio:.1%}, top: {actual_top_count}, album: {actual_album_count})"
         )
 
         return unique_tracks
