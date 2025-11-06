@@ -27,7 +27,7 @@ class WorkflowExecutor:
     async def execute_intent_analysis(self, state: AgentState) -> AgentState:
         """Execute intent analysis step.
 
-        Phase 2: New step to analyze user intent before mood analysis.
+        Adds a dedicated step to analyze user intent before mood analysis.
 
         Args:
             state: Current workflow state
@@ -194,4 +194,3 @@ class WorkflowExecutor:
             logger.error(f"Failed to refresh Spotify token: {str(e)}", exc_info=True)
 
         return state
-

@@ -44,6 +44,17 @@ class Playlist(Base):
         Index('ix_playlist_user_status_created', 'user_id', 'status', 'deleted_at', 'created_at'),
         # Index for sorting by track count
         Index('ix_playlist_user_track_count', 'user_id', 'deleted_at', 'track_count'),
+
+        # Optimization: GIN indexes for JSONB fields to improve search performance
+        # These indexes significantly speed up JSON field searches and full-text queries
+        Index('ix_playlist_data_gin', 'playlist_data', postgresql_using='gin'),
+        Index('ix_mood_analysis_data_gin', 'mood_analysis_data', postgresql_using='gin'),
+        Index('ix_recommendations_data_gin', 'recommendations_data', postgresql_using='gin'),
+
+        # Specific indexes for frequently accessed JSON fields
+        Index('ix_playlist_data_name', func.text("(playlist_data->>'name')")),
+        Index('ix_mood_analysis_primary_emotion', func.text("(mood_analysis_data->>'primary_emotion')")),
+        Index('ix_mood_analysis_energy_level', func.text("(mood_analysis_data->>'energy_level')")),
     )
     
     def __repr__(self):

@@ -180,10 +180,13 @@ class MemoryCache(Cache):
 
 
 class RedisCache(Cache):
-    """Redis-based cache implementation."""
+    """Redis-based cache implementation with connection pooling.
+
+    Optimized with a persistent connection pool for better performance.
+    """
 
     def __init__(self, redis_url: str = "redis://localhost:6379", prefix: str = "agentic:"):
-        """Initialize Redis cache.
+        """Initialize Redis cache with connection pooling.
 
         Args:
             redis_url: Redis connection URL
@@ -193,11 +196,29 @@ class RedisCache(Cache):
         self.redis_url = redis_url
         self.prefix = prefix
         self.redis_client = None
+        self._pool_initialized = False
 
     async def _get_client(self) -> redis.Redis:
-        """Get or create Redis client."""
+        """Get or create Redis client with optimized connection pool.
+
+        Uses persistent connection pool with tuned parameters for better performance
+        under high concurrency.
+        """
         if self.redis_client is None:
-            self.redis_client = redis.from_url(self.redis_url)
+            # Create connection pool with optimized settings
+            connection_pool = redis.ConnectionPool.from_url(
+                self.redis_url,
+                max_connections=50,  # Increased from default 10
+                socket_keepalive=True,
+                socket_connect_timeout=5,
+                socket_timeout=5,
+                retry_on_timeout=True,
+                health_check_interval=30,  # Health check every 30 seconds
+                decode_responses=False,  # We use pickle, so keep as bytes
+            )
+            self.redis_client = redis.Redis(connection_pool=connection_pool)
+            self._pool_initialized = True
+            logger.info("Initialized Redis connection pool with 50 max connections")
         return self.redis_client
 
     async def close(self):
@@ -415,7 +436,7 @@ class CacheManager:
     ) -> Optional[List[Dict[str, Any]]]:
         """Get cached user top artists.
 
-        Phase 1 Optimization: Cache user's top artists to avoid repeated fetches.
+        Caches user top artists to avoid repeated fetches.
 
         Args:
             user_id: User ID
@@ -437,7 +458,7 @@ class CacheManager:
     ) -> None:
         """Cache user top artists.
 
-        Phase 1 Optimization: Cache user's top artists to avoid repeated fetches.
+        Caches user top artists to avoid repeated fetches.
 
         Args:
             user_id: User ID
@@ -456,8 +477,8 @@ class CacheManager:
     ) -> Optional[List[Dict[str, Any]]]:
         """Get cached anchor tracks for a user and mood.
 
-        Phase 1 Optimization: Cache anchor track selections to avoid repeated
-        expensive searches and filtering.
+        Caches anchor track selections to avoid repeated expensive searches
+        and filtering.
 
         Args:
             user_id: User ID
@@ -477,8 +498,8 @@ class CacheManager:
     ) -> None:
         """Cache anchor tracks for a user and mood.
 
-        Phase 1 Optimization: Cache anchor track selections to avoid repeated
-        expensive searches and filtering.
+        Caches anchor track selections to avoid repeated expensive searches
+        and filtering.
 
         Args:
             user_id: User ID
@@ -688,8 +709,7 @@ class CacheManager:
     ) -> None:
         """Proactively warm cache with user data in background.
 
-        Phase 2 Optimization: Fire-and-forget cache warming to pre-populate
-        frequently accessed data.
+        Fire-and-forget cache warming to pre-populate frequently accessed data.
 
         Args:
             user_id: User ID

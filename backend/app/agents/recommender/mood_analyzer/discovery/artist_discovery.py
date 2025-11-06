@@ -387,8 +387,8 @@ class ArtistDiscovery:
     ) -> List[Dict[str, Any]]:
         """Apply heuristic rules to prune artists BEFORE LLM filtering.
 
-        Phase 3 Optimization: Reduces the artist list using simple rules to minimize
-        expensive LLM calls while preserving quality.
+        Reduces the artist list using simple rules to minimize expensive LLM calls
+        while preserving quality.
 
         Args:
             artists: List of candidate artists

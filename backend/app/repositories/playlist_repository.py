@@ -3,6 +3,7 @@
 from typing import List, Optional, Dict, Iterable, Any, Tuple
 from datetime import datetime, timezone
 from dataclasses import dataclass
+import hashlib
 
 import structlog
 from sqlalchemy import select, and_, asc, desc, func, or_, String, literal, cast
@@ -13,6 +14,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 from app.models.playlist import Playlist
 from app.repositories.base_repository import BaseRepository
 from app.core.exceptions import InternalServerError, ValidationException
+
+# Import cache manager for query result caching
+from app.agents.core.cache import cache_manager
 
 logger = structlog.get_logger(__name__)
 
@@ -679,12 +683,21 @@ class PlaylistRepository(BaseRepository[Playlist]):
     async def get_user_playlist_stats(self, user_id: int) -> Dict[str, int]:
         """Get comprehensive playlist statistics for a user with a single query.
 
+        Uses caching to reduce database load for frequently accessed stats.
+
         Args:
             user_id: User ID
 
         Returns:
             Dictionary with total_playlists, playlists saved to Spotify, and total_tracks
         """
+        # Check cache first
+        cache_key = f"user_playlist_stats:{user_id}"
+        cached_stats = await cache_manager.cache.get(cache_key)
+        if cached_stats:
+            self.logger.debug("Cache hit for user playlist stats", user_id=user_id)
+            return cached_stats
+
         try:
             stmt = (
                 select(
@@ -707,7 +720,10 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "total_tracks": row.total_tracks or 0,
             }
 
-            self.logger.debug("User playlist stats retrieved", user_id=user_id, **stats)
+            # Cache the stats for 5 minutes
+            await cache_manager.cache.set(cache_key, stats, ttl=300)
+
+            self.logger.debug("User playlist stats retrieved and cached", user_id=user_id, **stats)
             return stats
 
         except Exception as e:
@@ -824,9 +840,18 @@ class PlaylistRepository(BaseRepository[Playlist]):
     async def get_public_playlist_stats(self) -> Dict[str, int]:
         """Get public platform statistics.
 
+        Uses caching to reduce load for the public stats endpoint.
+
         Returns:
             Dictionary with total_users, total_playlists, and completed_playlists
         """
+        # Check cache first (5 minute TTL for public stats)
+        cache_key = "public_playlist_stats"
+        cached_stats = await cache_manager.cache.get(cache_key)
+        if cached_stats:
+            self.logger.debug("Cache hit for public playlist stats")
+            return cached_stats
+
         try:
             from app.models.user import User
 
@@ -851,7 +876,10 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "completed_playlists": completed_playlists
             }
 
-            self.logger.debug("Public playlist stats retrieved", **stats)
+            # Cache for 5 minutes
+            await cache_manager.cache.set(cache_key, stats, ttl=300)
+
+            self.logger.debug("Public playlist stats retrieved and cached", **stats)
             return stats
 
         except Exception as e:
