@@ -1,5 +1,6 @@
 """Recommendation generation engine."""
 
+import asyncio
 import structlog
 from typing import Any, Dict, List
 
@@ -16,7 +17,7 @@ logger = structlog.get_logger(__name__)
 class RecommendationEngine:
     """Engine for generating track recommendations from various sources.
     
-    Refactored in Phase 2 to use specialized generators for better separation of concerns.
+    Uses specialized generators for better separation of concerns.
     """
 
     def __init__(self, reccobeat_service: RecoBeatService, spotify_service: SpotifyService):
@@ -37,11 +38,13 @@ class RecommendationEngine:
     async def _generate_mood_based_recommendations(self, state: AgentState) -> List[Dict[str, Any]]:
         """Generate recommendations based on mood analysis, seeds, and discovered artists.
 
-        Phase 2: New recommendation mix with User Anchor Strategy:
+        Recommendation mix with User Anchor Strategy:
         - 40% User Anchor Strategy (if user mentioned tracks/artists)
         - 40% Artist Discovery
         - 15% Seed-Based
         - 5%  RecoBeat fallback
+
+        Executes strategies in parallel for improved performance.
 
         Args:
             state: Current agent state
@@ -54,16 +57,30 @@ class RecommendationEngine:
         # Calculate target splits based on user mentions
         self._calculate_target_splits(state)
 
-        # Phase 2: Generate from user anchor strategy FIRST (highest priority)
-        user_anchor_recs = await self._generate_from_user_anchors(state)
+        # Execute all three strategies in parallel for maximum throughput
+        logger.info("Executing recommendation strategies in parallel")
+
+        user_anchor_recs, artist_recs, seed_recs = await asyncio.gather(
+            self._generate_from_user_anchors(state),
+            self.artist_generator.generate_recommendations(state),
+            self.seed_generator.generate_recommendations(state),
+            return_exceptions=True  # Continue if one strategy fails
+        )
+
+        # Handle exceptions from parallel execution
+        if isinstance(user_anchor_recs, Exception):
+            logger.error(f"User anchor strategy failed: {user_anchor_recs}")
+            user_anchor_recs = []
+        if isinstance(artist_recs, Exception):
+            logger.error(f"Artist strategy failed: {artist_recs}")
+            artist_recs = []
+        if isinstance(seed_recs, Exception):
+            logger.error(f"Seed strategy failed: {seed_recs}")
+            seed_recs = []
+
+        # Combine all recommendations
         all_recommendations.extend(user_anchor_recs)
-
-        # Generate from discovered artists
-        artist_recs = await self.artist_generator.generate_recommendations(state)
         all_recommendations.extend(artist_recs)
-
-        # Generate from seed tracks
-        seed_recs = await self.seed_generator.generate_recommendations(state)
         all_recommendations.extend(seed_recs)
 
         # Include anchor tracks from genre search
@@ -75,7 +92,7 @@ class RecommendationEngine:
         state.metadata.pop("_temp_user_anchor_target", None)
 
         logger.info(
-            f"Generated {len(all_recommendations)} total recommendations "
+            f"Generated {len(all_recommendations)} total recommendations in parallel "
             f"({len(user_anchor_recs)} user anchor, {len(artist_recs)} artists, {len(seed_recs)} seeds)"
         )
 
@@ -103,7 +120,7 @@ class RecommendationEngine:
             target_seed_recs = int(target_count * 0.15)
 
             logger.info(
-                f"Phase 2 split WITH user mentions: {target_user_anchor_recs} user anchor, "
+                f"Split WITH user mentions: {target_user_anchor_recs} user anchor, "
                 f"{target_artist_recs} artists, {target_seed_recs} seeds (total: {target_count})"
             )
         else:
@@ -113,7 +130,7 @@ class RecommendationEngine:
             target_seed_recs = int(target_count * 0.35)
 
             logger.info(
-                f"Phase 2 split WITHOUT user mentions: {target_artist_recs} artists, "
+                f"Split WITHOUT user mentions: {target_artist_recs} artists, "
                 f"{target_seed_recs} seeds (total: {target_count})"
             )
 
@@ -124,8 +141,6 @@ class RecommendationEngine:
 
     async def _generate_from_user_anchors(self, state: AgentState) -> List[Dict[str, Any]]:
         """Generate recommendations using the user anchor strategy.
-
-        Phase 2: New method for user-mentioned tracks/artists.
 
         Args:
             state: Current agent state

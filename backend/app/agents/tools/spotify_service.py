@@ -53,8 +53,7 @@ class SpotifyService:
     ) -> List[Dict[str, Any]]:
         """Get user's top tracks with caching.
 
-        Phase 1 Optimization: Cache top tracks to avoid repeated API calls
-        for identical requests.
+        Caches top tracks to avoid repeated API calls for identical requests.
 
         Args:
             access_token: Spotify access token
@@ -114,8 +113,7 @@ class SpotifyService:
     ) -> List[Dict[str, Any]]:
         """Get user's top artists with caching.
 
-        Phase 1 Optimization: Cache top artists to avoid repeated API calls
-        for identical requests.
+        Caches top artists to avoid repeated API calls for identical requests.
 
         Args:
             access_token: Spotify access token

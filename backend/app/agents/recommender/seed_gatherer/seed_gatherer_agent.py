@@ -1,6 +1,6 @@
 """Seed gatherer agent for collecting user preference data.
 
-Phase 2 Refactor: This agent now handles:
+This agent handles:
 - Searching for user-mentioned tracks (from intent analyzer)
 - Selecting anchor tracks (moved from MoodAnalyzerAgent)
 - Discovering and validating artists (moved from MoodAnalyzerAgent)
@@ -29,10 +29,7 @@ logger = structlog.get_logger(__name__)
 
 
 class SeedGathererAgent(BaseAgent):
-    """Agent for gathering seed tracks and artists from user data.
-    
-    Phase 2: Enhanced with anchor selection and artist discovery.
-    """
+    """Agent for gathering seed tracks and artists from user data."""
 
     def __init__(
         self,
@@ -65,7 +62,7 @@ class SeedGathererAgent(BaseAgent):
         self.llm_seed_selector = LLMSeedSelector(llm)
         self.user_track_searcher = UserTrackSearcher(spotify_service)
 
-        # Phase 2: Components moved from MoodAnalyzerAgent
+        # Components moved from MoodAnalyzerAgent
         self.anchor_track_selector = AnchorTrackSelector(
             spotify_service=spotify_service,
             reccobeat_service=reccobeat_service,
@@ -77,7 +74,7 @@ class SeedGathererAgent(BaseAgent):
         )
 
     async def execute(self, state: AgentState) -> AgentState:
-        """Execute seed gathering with Phase 2 enhancements.
+        """Execute seed gathering workflow.
 
         Args:
             state: Current agent state
@@ -85,12 +82,12 @@ class SeedGathererAgent(BaseAgent):
         Returns:
             Updated agent state with seed data
         """
-        # Phase 1 Optimization: Track timing metrics for seed gathering
+        # Optimization: Track timing metrics for seed gathering
         start_time = time.time()
         timing_metrics = {}
 
         try:
-            logger.info(f"Gathering seeds for user {state.user_id} (Phase 2)")
+            logger.info(f"Gathering seeds for user {state.user_id}")
 
             # Check if we have Spotify access token
             if not hasattr(state, 'access_token') or not state.access_token:
@@ -102,17 +99,17 @@ class SeedGathererAgent(BaseAgent):
             # Get intent analysis from state (set by IntentAnalyzerAgent)
             intent_analysis = state.metadata.get("intent_analysis", {})
 
-            # Phase 2 STEP 1: Search for user-mentioned tracks
+            # STEP 1: Search for user-mentioned tracks
             step_start = time.time()
             await self._search_user_mentioned_tracks(state, intent_analysis, access_token)
             timing_metrics["search_user_tracks"] = time.time() - step_start
 
-            # Phase 2 STEP 2: Select anchor tracks
+            # STEP 2: Select anchor tracks
             step_start = time.time()
             await self._select_anchor_tracks(state, intent_analysis, access_token)
             timing_metrics["select_anchor_tracks"] = time.time() - step_start
 
-            # Phase 2 STEP 3: Discover and validate artists
+            # STEP 3: Discover and validate artists
             step_start = time.time()
             await self._discover_and_validate_artists(state, intent_analysis, access_token)
             timing_metrics["discover_artists"] = time.time() - step_start
@@ -121,7 +118,7 @@ class SeedGathererAgent(BaseAgent):
             state.current_step = "gathering_seeds_fetching_top_tracks"
             await self._notify_progress(state)
 
-            # Phase 1 Optimization: Pass user_id to enable caching
+            # Optimization: Pass user_id to enable caching
             step_start = time.time()
             top_tracks = await self.spotify_service.get_user_top_tracks(
                 access_token=access_token,
@@ -135,7 +132,7 @@ class SeedGathererAgent(BaseAgent):
             state.current_step = "gathering_seeds_fetching_top_artists"
             await self._notify_progress(state)
 
-            # Phase 1 Optimization: Pass user_id to enable caching
+            # Optimization: Pass user_id to enable caching
             step_start = time.time()
             top_artists = await self.spotify_service.get_user_top_artists(
                 access_token=access_token,
@@ -154,12 +151,12 @@ class SeedGathererAgent(BaseAgent):
             state.current_step = "seeds_gathered"
             state.status = RecommendationStatus.GATHERING_SEEDS
 
-            # Phase 1 Optimization: Log timing metrics
+            # Optimization: Log timing metrics
             total_time = time.time() - start_time
             timing_metrics["total"] = total_time
 
             logger.info(
-                "Seed gathering completed (Phase 2)",
+                "Seed gathering completed",
                 total_time_seconds=f"{total_time:.2f}",
                 search_user_tracks_seconds=f"{timing_metrics.get('search_user_tracks', 0):.2f}",
                 select_anchors_seconds=f"{timing_metrics.get('select_anchor_tracks', 0):.2f}",
@@ -185,8 +182,6 @@ class SeedGathererAgent(BaseAgent):
         access_token: str
     ) -> None:
         """Search for tracks explicitly mentioned by the user.
-
-        Phase 2: New functionality to find user-mentioned tracks.
 
         Args:
             state: Current agent state
@@ -219,8 +214,6 @@ class SeedGathererAgent(BaseAgent):
     ) -> None:
         """Select anchor tracks using mood analysis and genre keywords.
 
-        Phase 2: Moved from MoodAnalyzerAgent.
-
         Args:
             state: Current agent state
             intent_analysis: Intent analysis
@@ -231,7 +224,7 @@ class SeedGathererAgent(BaseAgent):
         await self._notify_progress(state)
 
         try:
-            # Phase 1 Optimization: Check cache for anchor tracks
+            # Optimization: Check cache for anchor tracks
             cached_anchors = await cache_manager.get_anchor_tracks(
                 user_id=state.user_id,
                 mood_prompt=state.mood_prompt
@@ -255,7 +248,7 @@ class SeedGathererAgent(BaseAgent):
             state.metadata["anchor_tracks"] = anchor_tracks
             state.metadata["anchor_track_ids"] = anchor_ids
 
-            # Phase 1 Optimization: Cache the anchor tracks
+            # Optimization: Cache the anchor tracks
             if anchor_tracks:
                 await cache_manager.set_anchor_tracks(
                     user_id=state.user_id,
@@ -343,8 +336,6 @@ class SeedGathererAgent(BaseAgent):
         access_token: str
     ) -> None:
         """Discover and validate artists for the mood.
-        
-        Phase 2: Moved from MoodAnalyzerAgent, with validation added.
         
         Args:
             state: Current agent state

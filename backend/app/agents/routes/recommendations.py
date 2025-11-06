@@ -427,8 +427,8 @@ async def prefetch_user_cache(
 ):
     """Prefetch and warm up user's cache for faster playlist generation.
 
-    Phase 3 Optimization: Triggered when user loads dashboard to hydrate
-    cache with top tracks, artists, and audio features in the background.
+    Triggered when the user loads the dashboard to hydrate cache with top tracks,
+    artists, and audio features in the background.
     """
     try:
         logger.info("Starting cache prefetch", user_id=current_user.id)
