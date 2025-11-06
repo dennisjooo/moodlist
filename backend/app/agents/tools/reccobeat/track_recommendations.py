@@ -102,8 +102,8 @@ class TrackRecommendationsTool(RateLimitedTool):
     ) -> Optional[str]:
         """Validate recommendation parameters to detect known-bad combinations.
 
-        Phase 1 Optimization: Detect invalid parameter combinations early to avoid
-        expensive API calls and retry loops.
+        Detects invalid parameter combinations early to avoid expensive API calls
+        and retry loops.
 
         Args:
             seeds: List of seed track IDs

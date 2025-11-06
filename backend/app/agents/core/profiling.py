@@ -1,7 +1,7 @@
 """Performance profiling utilities for monitoring and regression detection.
 
-Phase 3 Optimization: Provides continuous profiling capabilities to track
-performance over time and detect regressions.
+Provides continuous profiling capabilities to track performance over time
+and detect regressions.
 """
 
 import asyncio
