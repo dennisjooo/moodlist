@@ -348,6 +348,69 @@ class SpotifyService:
 
         return result.data.get("tracks", [])
 
+    async def get_artist_hybrid_tracks(
+        self,
+        access_token: str,
+        artist_id: str,
+        market: str = "US",
+        max_popularity: int = 80,
+        min_popularity: int = 20,
+        target_count: int = 10,
+        top_tracks_ratio: float = 0.4
+    ) -> List[Dict[str, Any]]:
+        """Get diverse tracks using hybrid strategy (top tracks + album deep cuts).
+
+        This method provides better track diversity by combining:
+        1. Filtered top tracks (avoiding mega-hits with popularity > max_popularity)
+        2. Album tracks sampled from multiple albums
+
+        The balance between top tracks and album tracks is controlled by top_tracks_ratio.
+
+        Args:
+            access_token: Spotify access token
+            artist_id: Spotify artist ID
+            market: ISO 3166-1 alpha-2 country code
+            max_popularity: Maximum popularity threshold (default: 80, filters mega-hits)
+            min_popularity: Minimum popularity threshold (default: 20, ensures quality)
+            target_count: Target number of tracks to return (default: 10)
+            top_tracks_ratio: Ratio of top tracks vs album tracks (default: 0.4)
+                            - 0.4 = 40% top tracks, 60% album (discovery-focused)
+                            - 0.7 = 70% top tracks, 30% album (popular-focused)
+
+        Returns:
+            List of diverse tracks from the artist
+        """
+        tool = self.tools.get_tool("get_artist_top_tracks")
+        if not tool:
+            raise ValueError("Get artist top tracks tool not available")
+
+        try:
+            tracks = await tool.get_hybrid_tracks(
+                access_token=access_token,
+                artist_id=artist_id,
+                market=market,
+                max_popularity=max_popularity,
+                min_popularity=min_popularity,
+                target_count=target_count,
+                top_tracks_ratio=top_tracks_ratio
+            )
+
+            logger.info(
+                f"Hybrid strategy returned {len(tracks)} tracks for artist {artist_id} "
+                f"(popularity: {min_popularity}-{max_popularity}, ratio: {top_tracks_ratio:.1%})"
+            )
+            return tracks
+
+        except Exception as e:
+            logger.error(f"Failed to get hybrid tracks for artist {artist_id}: {e}")
+            # Fallback to regular top tracks if hybrid strategy fails
+            logger.info("Falling back to regular top tracks")
+            return await self.get_artist_top_tracks(
+                access_token=access_token,
+                artist_id=artist_id,
+                market=market
+            )
+
     async def search_spotify_tracks(
         self,
         access_token: str,
