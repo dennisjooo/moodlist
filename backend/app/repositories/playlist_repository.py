@@ -15,7 +15,7 @@ from app.models.playlist import Playlist
 from app.repositories.base_repository import BaseRepository
 from app.core.exceptions import InternalServerError, ValidationException
 
-# Phase 5: Import cache manager for query result caching
+# Import cache manager for query result caching
 from app.agents.core.cache import cache_manager
 
 logger = structlog.get_logger(__name__)
@@ -683,7 +683,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
     async def get_user_playlist_stats(self, user_id: int) -> Dict[str, int]:
         """Get comprehensive playlist statistics for a user with a single query.
 
-        Phase 5: Added caching to reduce database load for frequently accessed stats.
+        Uses caching to reduce database load for frequently accessed stats.
 
         Args:
             user_id: User ID
@@ -691,7 +691,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
         Returns:
             Dictionary with total_playlists, playlists saved to Spotify, and total_tracks
         """
-        # Phase 5: Check cache first
+        # Check cache first
         cache_key = f"user_playlist_stats:{user_id}"
         cached_stats = await cache_manager.cache.get(cache_key)
         if cached_stats:
@@ -720,7 +720,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "total_tracks": row.total_tracks or 0,
             }
 
-            # Phase 5: Cache the stats for 5 minutes
+            # Cache the stats for 5 minutes
             await cache_manager.cache.set(cache_key, stats, ttl=300)
 
             self.logger.debug("User playlist stats retrieved and cached", user_id=user_id, **stats)
@@ -840,12 +840,12 @@ class PlaylistRepository(BaseRepository[Playlist]):
     async def get_public_playlist_stats(self) -> Dict[str, int]:
         """Get public platform statistics.
 
-        Phase 5: Added caching to reduce load for public stats endpoint.
+        Uses caching to reduce load for the public stats endpoint.
 
         Returns:
             Dictionary with total_users, total_playlists, and completed_playlists
         """
-        # Phase 5: Check cache first (5 minute TTL for public stats)
+        # Check cache first (5 minute TTL for public stats)
         cache_key = "public_playlist_stats"
         cached_stats = await cache_manager.cache.get(cache_key)
         if cached_stats:
@@ -876,7 +876,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "completed_playlists": completed_playlists
             }
 
-            # Phase 5: Cache for 5 minutes
+            # Cache for 5 minutes
             await cache_manager.cache.set(cache_key, stats, ttl=300)
 
             self.logger.debug("Public playlist stats retrieved and cached", **stats)

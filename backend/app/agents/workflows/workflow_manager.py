@@ -196,9 +196,9 @@ class WorkflowManager:
         start_time = datetime.now(timezone.utc)
 
         try:
-            logger.info(f"Executing workflow {session_id} (Phase 2)")
+            logger.info(f"Executing workflow {session_id}")
 
-            # Phase 2: Execute workflow steps in new order
+            # Execute workflow steps in the updated order
             # STEP 1: Analyze user intent FIRST
             state = await self.executor.execute_intent_analysis(state)
             await self._update_state(session_id, state)

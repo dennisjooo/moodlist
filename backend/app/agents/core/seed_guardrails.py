@@ -1,7 +1,7 @@
 """Seed selection guardrails for RecoBeat API compatibility.
 
-Phase 3 Optimization: Maintains a persistent allow/deny list to prevent
-repeating failing seed combinations and provides intelligent fallback strategies.
+Maintains a persistent allow/deny list to prevent repeating failing seed
+combinations and provides intelligent fallback strategies.
 """
 
 import hashlib
@@ -159,8 +159,7 @@ class SeedGuardrails:
     ) -> Optional[Dict]:
         """Suggest a fallback strategy for failed seed combinations.
 
-        Phase 3 Optimization: Provides contextual fallbacks instead of abandoning
-        the request entirely.
+        Provides contextual fallbacks instead of abandoning the request entirely.
 
         Args:
             seeds: Original seed track IDs
@@ -228,7 +227,7 @@ class SeedGuardrails:
     ) -> Tuple[bool, Optional[str], Optional[Dict]]:
         """Validate seed parameters and suggest auto-balancing if needed.
 
-        Phase 3 Optimization: Instead of rejecting bad parameters, auto-balance them.
+        Instead of rejecting bad parameters, attempts to auto-balance them.
 
         Args:
             seeds: List of seed track IDs

@@ -26,15 +26,15 @@ _reccobeat_semaphore: Optional[asyncio.Semaphore] = None
 def get_reccobeat_semaphore() -> asyncio.Semaphore:
     """Get or create the global RecoBeat API semaphore.
 
-    Phase 2 Optimization: Increased from 5 to 10 concurrent requests now that
-    Phase 1 caching reduces actual API load.
+    Increased from 5 to 10 concurrent requests now that caching reduces
+    actual API load.
 
     Returns:
         Semaphore limiting concurrent RecoBeat API requests
     """
     global _reccobeat_semaphore
     if _reccobeat_semaphore is None:
-        # Phase 2: Increased to 10 concurrent requests (from 5) with Phase 1 caching
+        # Increased to 10 concurrent requests (from 5) while relying on caching
         _reccobeat_semaphore = asyncio.Semaphore(10)
     return _reccobeat_semaphore
 
@@ -508,10 +508,9 @@ class RateLimitedTool(BaseAPITool):
     ) -> Dict[str, Any]:
         """Internal method to make a rate-limited HTTP request.
 
-        Phase 1 Optimization: Check cache BEFORE applying rate limits to avoid
-        unnecessary sleeping on cache hits.
+        Checks cache before applying rate limits to avoid unnecessary delays on cache hits.
         """
-        # PHASE 1: Check cache first to bypass rate limiting on cache hits
+        # Check cache first to bypass rate limiting on cache hits
         if use_cache:
             cache_key = self._make_cache_key(method, endpoint, params, json_data)
             cached_response = await self._get_cached_response(cache_key)
