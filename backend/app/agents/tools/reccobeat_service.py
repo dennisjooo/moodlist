@@ -312,14 +312,14 @@ class RecoBeatService:
             logger.warning("Multiple tracks tool not available for ID conversion")
             return id_mapping
 
-        # Phase 5: Increased batch size from 40 to 100 for better throughput
+        # Increased batch size from 40 to 100 for better throughput
         chunk_size = 100
         chunks = [ids_to_check[i:i + chunk_size] for i in range(0, len(ids_to_check), chunk_size)]
 
         async def process_chunk(chunk: List[str]) -> Dict[str, str]:
             """Process a single chunk of track IDs with retry logic.
 
-            Phase 5: Added retry logic for transient failures.
+            Includes retry logic for transient failures.
             """
             max_retries = 3
             retry_delay = 1  # seconds
@@ -376,7 +376,7 @@ class RecoBeatService:
 
         # Execute all chunks in parallel
         try:
-            # Phase 5: Increased from 8 to 20 concurrent requests
+            # Increased from 8 to 20 concurrent requests
             chunk_results = await self._bounded_gather(chunks, process_chunk, concurrency=20)
 
             # Combine results from all chunks
@@ -473,7 +473,7 @@ class RecoBeatService:
 
         # Execute all fetches in parallel
         try:
-            # Phase 5: Increased concurrency from 15 to 30 for faster batch processing
+            # Increased concurrency from 15 to 30 for faster batch processing
             results = await self._bounded_gather(
                 tracks_needing_fetch,
                 fetch_single_track_features,

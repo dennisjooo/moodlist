@@ -19,8 +19,6 @@ logger = structlog.get_logger(__name__)
 
 class MoodAnalyzerAgent(BaseAgent):
     """Agent for analyzing and understanding user mood prompts.
-    
-    Phase 2: Focused on audio feature analysis only.
     """
 
     def __init__(
@@ -48,7 +46,7 @@ class MoodAnalyzerAgent(BaseAgent):
         # Note: spotify_service and reccobeat_service kept for backward compatibility
         # but no longer used by this agent (moved to SeedGathererAgent)
 
-        # Initialize component classes (Phase 2: Simplified)
+        # Initialize component classes
         self.mood_analysis_engine = MoodAnalysisEngine(llm=llm)
         self.feature_extractor = FeatureExtractor()
         self.playlist_target_planner = PlaylistTargetPlanner()
@@ -56,8 +54,6 @@ class MoodAnalyzerAgent(BaseAgent):
 
     async def execute(self, state: AgentState) -> AgentState:
         """Execute mood analysis on the user's prompt.
-        
-        Phase 2: Simplified to focus on audio features only.
 
         Args:
             state: Current agent state
@@ -82,7 +78,7 @@ class MoodAnalyzerAgent(BaseAgent):
             # STEP 3: Determine playlist target
             await self._determine_playlist_target(state, mood_analysis)
 
-            logger.info("Mood analysis completed (Phase 2: focused on audio features only)")
+            logger.info("Mood analysis completed (focused on audio features)")
 
         except Exception as e:
             logger.error(f"Error in mood analysis: {str(e)}", exc_info=True)
@@ -92,8 +88,6 @@ class MoodAnalyzerAgent(BaseAgent):
 
     async def _perform_mood_analysis(self, state: AgentState) -> dict:
         """Perform mood analysis to extract audio features.
-        
-        Phase 2: Simplified - just analyze mood for audio features.
         
         Args:
             state: Current agent state

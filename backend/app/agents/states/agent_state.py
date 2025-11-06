@@ -33,7 +33,7 @@ class TrackRecommendation(BaseModel):
     reasoning: str = Field(..., description="Why this track was recommended")
     source: str = Field(..., description="Source of recommendation (reccobeat/spotify)")
     
-    # Anchor track protection metadata (Phase 1)
+    # Anchor track protection metadata
     user_mentioned: bool = Field(default=False, description="Whether track was explicitly mentioned by user")
     user_mentioned_artist: bool = Field(default=False, description="Whether track is from a user-mentioned artist")
     anchor_type: Optional[str] = Field(None, description="Type of anchor: 'user' or 'genre'")

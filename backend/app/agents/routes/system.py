@@ -98,8 +98,7 @@ async def get_profiling_metrics(
 ):
     """Get performance profiling metrics.
 
-    Phase 3 Optimization: Continuous profiling endpoint for monitoring
-    performance and detecting regressions.
+    Continuous profiling endpoint for monitoring performance and detecting regressions.
     """
     try:
         if metric_name:
@@ -134,7 +133,7 @@ async def get_profiling_samples(
 ):
     """Get recent samples for a specific metric.
 
-    Phase 3 Optimization: Retrieve detailed profiling samples for analysis.
+    Retrieve detailed profiling samples for analysis.
     """
     try:
         samples = PerformanceProfiler.get_metrics(metric_name, limit)

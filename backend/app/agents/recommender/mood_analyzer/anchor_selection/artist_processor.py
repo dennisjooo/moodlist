@@ -122,7 +122,7 @@ class ArtistProcessor:
     ) -> List[Dict[str, Any]]:
         """Search for artists on Spotify in parallel and return validated artist info.
 
-        Phase 2 Optimization: Parallel artist searches to reduce latency.
+        Performs parallel artist searches to reduce latency.
 
         Args:
             artists_to_process: List of artist names to search
@@ -173,7 +173,7 @@ class ArtistProcessor:
                 logger.warning(f"Failed to search for artist '{artist_name}': {e}")
                 return None
 
-        # Phase 2: Search all artists concurrently (limit to 8 artists)
+        # Search all artists concurrently (limit to 8 artists)
         artists_to_search = artists_to_process[:8]
         logger.info(f"Searching for {len(artists_to_search)} artists in parallel")
 
@@ -201,7 +201,7 @@ class ArtistProcessor:
     ) -> List[Dict[str, Any]]:
         """Fetch top tracks for each artist in parallel and create anchor candidates.
 
-        Phase 2 Optimization: Parallel artist track fetching to reduce latency.
+        Fetches artist tracks in parallel to reduce latency.
 
         Args:
             artist_infos: List of validated artist info dicts
@@ -247,7 +247,7 @@ class ArtistProcessor:
                 logger.warning(f"Failed to get tracks for artist '{artist_name}': {e}")
                 return []
 
-        # Phase 2: Fetch tracks for all artists concurrently
+        # Fetch tracks for all artists concurrently
         logger.info(f"Fetching top tracks for {len(artist_infos)} artists in parallel")
 
         results = await asyncio.gather(
@@ -263,7 +263,7 @@ class ArtistProcessor:
             elif isinstance(result, Exception):
                 logger.warning(f"Exception in artist track fetching: {result}")
 
-        # Phase 2 Optimization: Batch fetch all audio features at once
+        # Batch fetch all audio features at once
         if candidates and self.reccobeat_service:
             track_ids = [c['track']['id'] for c in candidates if c.get('track', {}).get('id')]
             if track_ids:
@@ -295,8 +295,8 @@ class ArtistProcessor:
     ) -> Optional[Dict[str, Any]]:
         """Create an anchor candidate from an artist track.
 
-        Phase 2 Optimization: Audio features are now batch fetched after all candidates
-        are collected, so this method no longer fetches them individually.
+        Audio features are batch fetched after candidates are collected, so this
+        method no longer fetches them individually.
 
         Args:
             track: Track dictionary from Spotify
@@ -324,7 +324,7 @@ class ArtistProcessor:
             )
             return None
 
-        # Phase 2: Audio features will be batch fetched after all candidates are collected
+        # Audio features will be batch fetched after all candidates are collected
         # Initialize with empty features dict
         features = {}
 
