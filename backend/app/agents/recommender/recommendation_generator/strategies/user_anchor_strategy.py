@@ -360,12 +360,13 @@ class UserAnchorStrategy(RecommendationStrategy):
 
         for artist_id in artist_ids:
             try:
-                # Use hybrid strategy for better diversity (filtered top tracks + album deep cuts)
+                # Use hybrid strategy with higher popularity threshold for user-mentioned artists
+                # Users explicitly requested these artists, so favor more recognizable tracks
                 top_tracks = await self.spotify_service.get_artist_hybrid_tracks(
                     artist_id=artist_id,
                     access_token=access_token,
-                    max_popularity=80,  # Exclude mega-hits
-                    min_popularity=20,  # Ensure quality
+                    max_popularity=95,  # Allow popular tracks (users want hits from mentioned artists)
+                    min_popularity=30,  # Ensure decent quality
                     target_count=tracks_per_artist
                 )
 
@@ -508,12 +509,13 @@ class UserAnchorStrategy(RecommendationStrategy):
             logger.warning(f"Found artist '{artist_name}' in search but no artist ID available")
             return []
 
-        # Get artist's tracks using hybrid strategy (filtered top tracks + album deep cuts)
+        # Get artist's tracks using hybrid strategy with higher popularity threshold
+        # Users explicitly mentioned this artist, so favor more recognizable tracks
         top_tracks = await self.spotify_service.get_artist_hybrid_tracks(
             artist_id=artist_id,
             access_token=access_token,
-            max_popularity=80,  # Exclude mega-hits
-            min_popularity=20,  # Ensure quality
+            max_popularity=95,  # Allow popular tracks (users want hits from mentioned artists)
+            min_popularity=30,  # Ensure decent quality
             target_count=tracks_per_artist
         )
 
