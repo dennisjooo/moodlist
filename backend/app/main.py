@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
@@ -131,6 +132,19 @@ def create_application() -> FastAPI:
         description="Mood-based playlist generation API",
         lifespan=lifespan,
     )
+
+    # Add global exception handler for CORS on errors
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        logger.error("Unhandled exception", error=str(exc), error_type=type(exc).__name__, path=request.url.path)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+            headers={
+                "Access-Control-Allow-Origin": request.headers.get("Origin", "*"),
+                "Access-Control-Allow-Credentials": "true",
+            }
+        )
 
     if settings.ENABLE_RATE_LIMITING:
         from slowapi.middleware import SlowAPIMiddleware
