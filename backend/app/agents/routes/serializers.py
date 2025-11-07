@@ -71,7 +71,9 @@ def serialize_playlist_status(
         "session_id": session_id,
         "status": playlist.status,
         "current_step": (
-            "completed" if playlist.status == PlaylistStatus.COMPLETED else playlist.status
+            "completed" if playlist.status == PlaylistStatus.COMPLETED 
+            else "cancelled" if playlist.status == PlaylistStatus.CANCELLED
+            else playlist.status
         ),
         "mood_prompt": playlist.mood_prompt,
         "mood_analysis": playlist.mood_analysis_data,

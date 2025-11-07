@@ -76,6 +76,17 @@ class WorkflowStateManager:
             session_id: Workflow session ID
             state: Updated workflow state
         """
+        # Don't update if workflow is in completed_workflows (e.g., was cancelled)
+        # This prevents race conditions where cancelled workflows get moved back to active
+        if session_id in self.completed_workflows:
+            logger.debug(f"Skipping state update - workflow {session_id} already in completed workflows")
+            return
+        
+        # Don't update if state is marked as cancelled
+        if state.status.value == "cancelled":
+            logger.debug(f"Skipping state update - state marked as cancelled for {session_id}")
+            return
+        
         self.active_workflows[session_id] = state
         await self.update_playlist_db(session_id, state)
         await self.notify_state_change(session_id, state)

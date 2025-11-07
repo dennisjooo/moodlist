@@ -147,6 +147,11 @@ class OrchestratorAgent(BaseAgent):
         max_stalled = 2  # Stop after 2 iterations with no meaningful improvement
 
         for iteration in range(self.max_iterations):
+            # Check for cancellation before each iteration
+            if state.status == RecommendationStatus.CANCELLED:
+                logger.info(f"Orchestration cancelled during iteration {iteration + 1}")
+                break
+            
             state.metadata["orchestration_iterations"] = iteration + 1
             
             # Evaluate quality and check for convergence
@@ -154,6 +159,11 @@ class OrchestratorAgent(BaseAgent):
                 state, iteration, previous_score, convergence_threshold,
                 stalled_iterations, max_stalled
             )
+            
+            # Check for cancellation after evaluation
+            if state.status == RecommendationStatus.CANCELLED:
+                logger.info(f"Orchestration cancelled after quality evaluation in iteration {iteration + 1}")
+                break
             
             if quality_evaluation is None:
                 # Converged or threshold met
@@ -168,6 +178,11 @@ class OrchestratorAgent(BaseAgent):
             # Apply improvement strategies
             previous_score = quality_evaluation['overall_score']
             state = await self.apply_improvement_strategies(state, iteration, quality_evaluation)
+            
+            # Check for cancellation after applying improvements
+            if state.status == RecommendationStatus.CANCELLED:
+                logger.info(f"Orchestration cancelled after applying improvements in iteration {iteration + 1}")
+                break
 
             # Small delay between iterations
             await asyncio.sleep(0.1)
