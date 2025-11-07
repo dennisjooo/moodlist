@@ -1,6 +1,7 @@
-from typing import List, Optional, Dict
-from pydantic_settings import BaseSettings
-from pydantic import Field
+from typing import List, Optional, Dict, Union
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
+import json
 
 
 class Settings(BaseSettings):
@@ -33,29 +34,28 @@ class Settings(BaseSettings):
     
     # CORS
     FRONTEND_URL: str = Field(default="http://127.0.0.1:3000", env="FRONTEND_URL")
-    ALLOWED_ORIGINS_STR: Optional[str] = Field(default=None, env="ALLOWED_ORIGINS")
-
-    @property
-    def ALLOWED_ORIGINS(self) -> List[str]:
-        """Get allowed origins from environment or defaults."""
-        if self.ALLOWED_ORIGINS_STR:
-            # Parse comma-separated list from environment
-            origins = [origin.strip() for origin in self.ALLOWED_ORIGINS_STR.split(",")]
-            return origins
-
-        # Default origins for local development
-        defaults = [
+    ALLOWED_ORIGINS: Union[str, List[str]] = Field(
+        default_factory=lambda: [
             "http://127.0.0.1:3000",
             "http://localhost:3000",
             "http://127.0.0.1:8000",
             "http://localhost:8000"
-        ]
+        ],
+        env="ALLOWED_ORIGINS"
+    )
 
-        # Add FRONTEND_URL if it's not localhost
-        if self.FRONTEND_URL and not any(host in self.FRONTEND_URL for host in ["127.0.0.1", "localhost"]):
-            defaults.append(self.FRONTEND_URL)
-
-        return defaults
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, v):
+        """Parse ALLOWED_ORIGINS from comma-separated string or JSON list."""
+        if isinstance(v, str):
+            # Try parsing as JSON first
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                # Fall back to comma-separated
+                return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
     
     # Redis
     REDIS_URL: Optional[str] = Field(default=None, env="REDIS_URL")
@@ -95,20 +95,23 @@ class Settings(BaseSettings):
             headers=headers,
         )
     
-    ALLOWED_HOSTS_STR: Optional[str] = Field(default=None, env="ALLOWED_HOSTS")
+    ALLOWED_HOSTS: Union[str, List[str]] = Field(
+        default_factory=lambda: ["localhost", "127.0.0.1", "0.0.0.0"],
+        env="ALLOWED_HOSTS"
+    )
 
-    @property
-    def ALLOWED_HOSTS(self) -> List[str]:
-        """Get allowed hosts based on environment."""
-        if self.ALLOWED_HOSTS_STR:
-            # Parse comma-separated list from environment
-            hosts = [host.strip() for host in self.ALLOWED_HOSTS_STR.split(",")]
-            return hosts
-
-        # Default: allow all in development, disable in production (set ALLOWED_HOSTS env var)
-        if self.APP_ENV == "production":
-            return []  # Empty list disables TrustedHostMiddleware
-        return ["localhost", "127.0.0.1", "0.0.0.0"]
+    @field_validator("ALLOWED_HOSTS", mode="before")
+    @classmethod
+    def parse_allowed_hosts(cls, v):
+        """Parse ALLOWED_HOSTS from comma-separated string or JSON list."""
+        if isinstance(v, str):
+            # Try parsing as JSON first
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                # Fall back to comma-separated
+                return [host.strip() for host in v.split(",") if host.strip()]
+        return v
     
     def get_database_url(self) -> str:
         """Get the appropriate database URL based on environment."""
