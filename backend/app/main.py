@@ -93,6 +93,10 @@ def _initialize_cache_manager():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan context manager."""
+    # Configure logging first
+    from app.core.logging_config import configure_logging
+    configure_logging(log_level=settings.LOG_LEVEL)
+
     # Startup
     logger.info("Starting application", app_name=settings.APP_NAME, environment=settings.APP_ENV)
 
