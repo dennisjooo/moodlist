@@ -3,11 +3,7 @@ import { CardDescription, CardTitle } from "@/components/ui/card";
 import { XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-interface ErrorViewProps {
-  onRetry: () => void;
-}
-
-export function ErrorView({ onRetry }: ErrorViewProps) {
+export function ErrorView() {
   return (
     <>
       <div
