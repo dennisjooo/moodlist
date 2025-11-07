@@ -106,12 +106,8 @@ class SeedBasedGenerator:
 
         # Process chunks in parallel with bounded concurrency for better performance
         async def process_chunk_with_delay(idx: int, chunk: List[str]) -> List[TrackRecommendation]:
-            """Process a chunk with staggered delays to spread load."""
+            """Process a chunk - removed artificial delays for better performance."""
             try:
-                # Stagger chunk processing to avoid bursts
-                if idx > 0:
-                    await asyncio.sleep(0.2 * idx)
-                
                 return await self._process_chunk(chunk, reccobeat_params, state)
             except Exception as e:
                 logger.error(f"Error generating recommendations for seed chunk {chunk}: {e}")
@@ -123,8 +119,8 @@ class SeedBasedGenerator:
             for idx, chunk in enumerate(seed_chunks)
         ]
         
-        # Limit to 3 concurrent chunk requests to avoid overwhelming the API
-        semaphore = asyncio.Semaphore(3)
+        # Increase concurrency while respecting RecoBeat rate limits
+        semaphore = asyncio.Semaphore(6)
         
         async def bounded_task(task):
             async with semaphore:

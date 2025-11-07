@@ -51,7 +51,8 @@ class TrackRecommendationsTool(RateLimitedTool):
             base_url="https://api.reccobeats.com",
             rate_limit_per_minute=80,    # Conservative limit to avoid 429 responses
             min_request_interval=0.75,   # Spread calls more evenly across the minute
-            use_global_semaphore=True    # Use global semaphore to limit concurrent requests
+            use_global_semaphore=True,   # Use global semaphore to limit concurrent requests
+            timeout=60                   # Increased timeout for RecoBeat API slowness
         )
 
     def _normalize_spotify_uri(self, href: str, track_id: str) -> str:
