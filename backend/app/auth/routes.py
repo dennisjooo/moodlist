@@ -253,31 +253,31 @@ async def verify_auth(
             logger.warning("Cache get failed, continuing without cache", error=str(cache_error))
             # Continue without cache
 
-    # Single optimized query: get session with user in one go
-    session = await session_repo.get_valid_session_with_user(session_token)
+        # Single optimized query: get session with user in one go
+        session = await session_repo.get_valid_session_with_user(session_token)
 
-    if not session or not session.user:
-        logger.debug("Auth verification failed - invalid session or no user",
-                    has_session=bool(session), has_user=bool(session.user if session else False))
-        result = AuthResponse(
-            user=None,
-            requires_spotify_auth=True
-        )
-    elif not session.user.is_active:
-        logger.debug("Auth verification failed - user not active", user_id=session.user.id)
-        result = AuthResponse(
-            user=None,
-            requires_spotify_auth=True
-        )
-    else:
-        logger.debug("Auth verification successful",
-                    user_id=session.user.id,
-                    spotify_id=session.user.spotify_id,
-                    session_id=session.id)
-        result = AuthResponse(
-            user=UserResponse.from_orm(session.user),
-            requires_spotify_auth=False
-        )
+        if not session or not session.user:
+            logger.debug("Auth verification failed - invalid session or no user",
+                        has_session=bool(session), has_user=bool(session.user if session else False))
+            result = AuthResponse(
+                user=None,
+                requires_spotify_auth=True
+            )
+        elif not session.user.is_active:
+            logger.debug("Auth verification failed - user not active", user_id=session.user.id)
+            result = AuthResponse(
+                user=None,
+                requires_spotify_auth=True
+            )
+        else:
+            logger.debug("Auth verification successful",
+                        user_id=session.user.id,
+                        spotify_id=session.user.spotify_id,
+                        session_id=session.id)
+            result = AuthResponse(
+                user=UserResponse.from_orm(session.user),
+                requires_spotify_auth=False
+            )
 
         # Cache with TTL based on session expiration time
         # If session expires soon (< 1 hour), cache for shorter time
