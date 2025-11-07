@@ -1,5 +1,6 @@
 """Spotify API service that coordinates all Spotify tools."""
 
+import asyncio
 import structlog
 from typing import Dict, List, Optional, Any
 
@@ -8,7 +9,12 @@ from .agent_tools import AgentTools
 from .spotify.user_data import GetUserTopTracksTool, GetUserTopArtistsTool
 from .spotify.playlist_management import CreatePlaylistTool, AddTracksToPlaylistTool
 from .spotify.user_profile import GetUserProfileTool
-from .spotify.artist_search import SearchSpotifyArtistsTool, GetSeveralSpotifyArtistsTool, GetArtistTopTracksTool
+from .spotify.artist_search import (
+    SearchSpotifyArtistsTool,
+    GetSeveralSpotifyArtistsTool,
+    GetArtistTopTracksTool,
+    BatchGetArtistTopTracksTool,
+)
 from .spotify.track_search import SearchSpotifyTracksTool
 
 
@@ -38,6 +44,7 @@ class SpotifyService:
             SearchSpotifyArtistsTool(),
             GetSeveralSpotifyArtistsTool(),
             GetArtistTopTracksTool(),
+            BatchGetArtistTopTracksTool(),
             SearchSpotifyTracksTool()
         ]
 
@@ -365,6 +372,115 @@ class SpotifyService:
 
         return tracks
 
+    async def get_artist_top_tracks_batch(
+        self,
+        access_token: str,
+        artist_ids: List[str],
+        market: str = "US",
+        max_concurrency: int = 3,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Batch fetch artist top tracks while leveraging cache hits."""
+
+        if not artist_ids:
+            return {}
+
+        # Deduplicate while preserving original order
+        unique_artist_ids: List[str] = []
+        seen_ids = set()
+        for artist_id in artist_ids:
+            if artist_id not in seen_ids:
+                unique_artist_ids.append(artist_id)
+                seen_ids.add(artist_id)
+
+        results: Dict[str, List[Dict[str, Any]]] = {}
+        pending_ids: List[str] = []
+
+        # Serve as many artists as possible from cache first
+        for artist_id in unique_artist_ids:
+            cached_tracks = await cache_manager.get_artist_top_tracks_cache(
+                artist_id=artist_id,
+                market=market,
+            )
+            if cached_tracks is not None:
+                results[artist_id] = cached_tracks
+            else:
+                pending_ids.append(artist_id)
+
+        if not pending_ids:
+            return results
+
+        batch_tool = self.tools.get_tool("batch_get_artist_top_tracks")
+        if batch_tool:
+            chunk_size = 20
+            chunks = [
+                pending_ids[i : i + chunk_size]
+                for i in range(0, len(pending_ids), chunk_size)
+            ]
+            semaphore = asyncio.Semaphore(max(1, max_concurrency))
+
+            async def process_chunk(chunk: List[str]):
+                async with semaphore:
+                    try:
+                        result = await batch_tool._run(
+                            access_token=access_token,
+                            artist_ids=chunk,
+                            market=market,
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            f"Batch artist top tracks chunk failed: {exc}",
+                            artists=chunk,
+                        )
+                        return [], chunk
+
+                    if not result.success:
+                        logger.warning(
+                            "Batch artist top tracks chunk unsuccessful",
+                            artists=chunk,
+                            error=result.error,
+                        )
+                        return [], chunk
+
+                    data = result.data or {}
+                    fetched = data.get("artist_tracks", {})
+                    failed = data.get("failed_artist_ids", [])
+                    return list(fetched.items()), failed
+
+            chunk_tasks = [process_chunk(chunk) for chunk in chunks]
+            # Gather results preserving concurrency control
+            gathered_results = await asyncio.gather(*chunk_tasks)
+
+            for fetched_items, failed_ids in gathered_results:
+                for artist_id, tracks in fetched_items:
+                    results[artist_id] = tracks
+                    if tracks:
+                        await cache_manager.set_artist_top_tracks_cache(
+                            artist_id=artist_id,
+                            market=market,
+                            tracks=tracks,
+                        )
+
+                for failed_id in failed_ids:
+                    if failed_id not in results:
+                        pending_ids.append(failed_id)
+
+            # Remove artists already resolved from fallback list
+            pending_ids = [artist_id for artist_id in pending_ids if artist_id not in results]
+            if pending_ids:
+                pending_ids = list(dict.fromkeys(pending_ids))
+
+        # Fallback for any unresolved artists
+        for artist_id in pending_ids:
+            tracks = await self.get_artist_top_tracks(
+                access_token=access_token,
+                artist_id=artist_id,
+                market=market,
+            )
+            if tracks:
+                results[artist_id] = tracks
+
+        return results
+
     async def get_artist_hybrid_tracks(
         self,
         access_token: str,
@@ -373,7 +489,8 @@ class SpotifyService:
         max_popularity: int = 80,
         min_popularity: int = 20,
         target_count: int = 10,
-        top_tracks_ratio: float = 0.4
+        top_tracks_ratio: float = 0.4,
+        prefetched_top_tracks: Optional[List[Dict[str, Any]]] = None,
     ) -> List[Dict[str, Any]]:
         """Get diverse tracks using hybrid strategy (top tracks + album deep cuts).
 
@@ -402,12 +519,13 @@ class SpotifyService:
             raise ValueError("Get artist top tracks tool not available")
 
         try:
-            prefetched_top_tracks = await self.get_artist_top_tracks(
-                access_token=access_token,
-                artist_id=artist_id,
-                market=market
-            )
-            prefetch_payload = prefetched_top_tracks or None
+            if prefetched_top_tracks is None:
+                prefetched_top_tracks = await self.get_artist_top_tracks(
+                    access_token=access_token,
+                    artist_id=artist_id,
+                    market=market
+                )
+            prefetch_payload = prefetched_top_tracks if prefetched_top_tracks is not None else None
 
             tracks = await tool.get_hybrid_tracks(
                 access_token=access_token,
