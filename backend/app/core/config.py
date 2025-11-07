@@ -106,7 +106,7 @@ class Settings(BaseSettings):
         )
     
     ALLOWED_HOSTS: Union[str, List[str]] = Field(
-        default_factory=lambda: ["localhost", "127.0.0.1", "0.0.0.0"],
+        default_factory=lambda: ["localhost", "127.0.0.1", "0.0.0.0", "*.onrender.com"],
         env="ALLOWED_HOSTS"
     )
 
