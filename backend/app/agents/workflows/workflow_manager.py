@@ -2,11 +2,13 @@
 
 import asyncio
 import json
+import os
 import structlog
 import uuid
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone
 
+from ...core.config import settings
 from ..core.base_agent import BaseAgent
 from ..states.agent_state import AgentState, RecommendationStatus
 from ..tools.agent_tools import AgentTools
@@ -304,8 +306,9 @@ class WorkflowManager:
                 await self._update_state(session_id, state)
                 self.success_count += 1
                 
-                # Dump the state to a file
-                self._save_workflow_state_to_file(session_id, state)
+                # Dump the state to a file if DEBUG is enabled
+                if settings.DEBUG:
+                    self._save_workflow_state_to_file(session_id, state)
 
         except asyncio.CancelledError:
             logger.info(f"Workflow {session_id} was cancelled")
@@ -375,8 +378,15 @@ class WorkflowManager:
                     return serialize_datetime(obj.__dict__)
                 else:
                     return obj
+            
+            # Check if logs directory exists
+            if not os.path.exists("logs"):
+                os.makedirs("logs")
 
-            with open(f"logs/workflow_{session_id}.json", "w") as f:
+            # Create timestamp for filename
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            filename = f"logs/workflow_{timestamp}_{session_id}.json"
+            with open(filename, "w") as f:
                 state_dict = state.model_dump()
                 serialized_state = serialize_datetime(state_dict)
                 f.write(json.dumps(serialized_state, indent=4, default=str))
