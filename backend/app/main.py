@@ -103,8 +103,9 @@ async def lifespan(app: FastAPI):
     validate_required_secrets()
 
     # Initialize cache manager - replace global singleton
-    global cache_manager
-    cache_manager = _initialize_cache_manager()
+    import app.agents.core.cache as cache_module
+    new_cache_manager = _initialize_cache_manager()
+    cache_module.cache_manager = new_cache_manager
 
     # Create database tables
     async with engine.begin() as conn:
@@ -114,11 +115,12 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down application", app_name=settings.APP_NAME)
-    
+
     # Close cache manager connection
-    if hasattr(cache_manager, 'close'):
+    import app.agents.core.cache as cache_module
+    if hasattr(cache_module.cache_manager, 'close'):
         logger.info("Closing cache manager connection")
-        await cache_manager.close()
+        await cache_module.cache_manager.close()
 
 
 def create_application() -> FastAPI:
