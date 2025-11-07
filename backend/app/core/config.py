@@ -31,10 +31,6 @@ class Settings(BaseSettings):
     SPOTIFY_CLIENT_SECRET: str = Field(env="SPOTIFY_CLIENT_SECRET")
     SPOTIFY_REDIRECT_URI: str = Field(env="SPOTIFY_REDIRECT_URI")
     
-    # AWS
-    AWS_ACCESS_KEY_ID: Optional[str] = Field(default=None, env="AWS_ACCESS_KEY_ID")
-    AWS_SECRET_ACCESS_KEY: Optional[str] = Field(default=None, env="AWS_SECRET_ACCESS_KEY")
-    
     # CORS
     FRONTEND_URL: str = Field(default="http://127.0.0.1:3000", env="FRONTEND_URL")
     ALLOWED_ORIGINS_STR: Optional[str] = Field(default=None, env="ALLOWED_ORIGINS")
@@ -99,11 +95,19 @@ class Settings(BaseSettings):
             headers=headers,
         )
     
+    ALLOWED_HOSTS_STR: Optional[str] = Field(default=None, env="ALLOWED_HOSTS")
+
     @property
     def ALLOWED_HOSTS(self) -> List[str]:
         """Get allowed hosts based on environment."""
+        if self.ALLOWED_HOSTS_STR:
+            # Parse comma-separated list from environment
+            hosts = [host.strip() for host in self.ALLOWED_HOSTS_STR.split(",")]
+            return hosts
+
+        # Default: allow all in development, disable in production (set ALLOWED_HOSTS env var)
         if self.APP_ENV == "production":
-            return ["your-production-domain.com"]
+            return []  # Empty list disables TrustedHostMiddleware
         return ["localhost", "127.0.0.1", "0.0.0.0"]
     
     def get_database_url(self) -> str:
