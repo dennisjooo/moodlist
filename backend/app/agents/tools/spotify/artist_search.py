@@ -137,6 +137,145 @@ class GetArtistTopTracksInput(BaseModel):
     market: str = Field(default="US", description="ISO 3166-1 alpha-2 country code")
 
 
+class BatchGetArtistTopTracksInput(BaseModel):
+    """Input schema for batching artist top tracks requests."""
+
+    access_token: str = Field(..., description="Spotify access token")
+    artist_ids: List[str] = Field(..., min_items=1, max_items=20, description="Artist IDs to fetch top tracks for")
+    market: str = Field(default="US", description="ISO 3166-1 alpha-2 country code")
+
+
+class BatchGetArtistTopTracksTool(RateLimitedTool):
+    """Tool for batching artist top track lookups via Spotify's batch endpoint."""
+
+    name: str = "batch_get_artist_top_tracks"
+    description: str = """
+    Fetch multiple artists' top tracks using Spotify's batch API endpoint.
+    This significantly reduces HTTP round-trips compared to per-artist requests.
+    """
+
+    def __init__(self):
+        """Initialize the batch artist top tracks tool."""
+        super().__init__(
+            name="batch_get_artist_top_tracks",
+            description="Batch artist top tracks from Spotify API",
+            base_url="https://api.spotify.com/v1",
+            rate_limit_per_minute=45,
+            min_request_interval=0.25,
+        )
+
+    def _get_input_schema(self) -> Type[BaseModel]:
+        """Get the input schema for this tool."""
+        return BatchGetArtistTopTracksInput
+
+    async def _run(
+        self,
+        access_token: str,
+        artist_ids: List[str],
+        market: str = "US",
+    ) -> ToolResult:
+        """Batch fetch top tracks for multiple artists."""
+
+        if not artist_ids:
+            return ToolResult.error_result("No artist IDs provided", skip_retry=True)
+
+        unique_artist_ids = list(dict.fromkeys(artist_ids))
+        try:
+            requests_payload = [
+                {
+                    "method": "GET",
+                    "path": f"/v1/artists/{artist_id}/top-tracks?market={market}",
+                }
+                for artist_id in unique_artist_ids
+            ]
+
+            response_data = await self._make_request(
+                method="POST",
+                endpoint="/batch",
+                json_data={
+                    "requests": requests_payload,
+                    "halt_on_error": False,
+                },
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+
+            responses = response_data.get("responses", [])
+            artist_tracks: Dict[str, List[Dict[str, Any]]] = {}
+            failed_artists: List[str] = []
+
+            # Spotify guarantees order of responses matches requests
+            for artist_id, artist_response in zip(unique_artist_ids, responses):
+                status = artist_response.get("status", 500)
+                if 200 <= status < 300:
+                    try:
+                        body = artist_response.get("body", {})
+                        tracks = []
+                        for track_data in body.get("tracks", []):
+                            track_info = {
+                                "id": track_data.get("id"),
+                                "name": track_data.get("name"),
+                                "spotify_uri": track_data.get("uri"),
+                                "duration_ms": track_data.get("duration_ms"),
+                                "popularity": track_data.get("popularity", 50),
+                                "explicit": track_data.get("explicit", False),
+                                "preview_url": track_data.get("preview_url"),
+                                "track_number": track_data.get("track_number"),
+                                "artists": [
+                                    {
+                                        "id": artist.get("id"),
+                                        "name": artist.get("name"),
+                                        "uri": artist.get("uri"),
+                                    }
+                                    for artist in track_data.get("artists", [])
+                                ],
+                                "album": {
+                                    "id": track_data.get("album", {}).get("id"),
+                                    "name": track_data.get("album", {}).get("name"),
+                                    "uri": track_data.get("album", {}).get("uri"),
+                                    "release_date": track_data.get("album", {}).get("release_date"),
+                                }
+                                if track_data.get("album")
+                                else None,
+                            }
+                            tracks.append(track_info)
+
+                        artist_tracks[artist_id] = tracks
+                    except Exception as parse_error:
+                        logger.warning(
+                            f"Failed to parse batched top tracks for artist {artist_id}: {parse_error}"
+                        )
+                        failed_artists.append(artist_id)
+                else:
+                    failed_artists.append(artist_id)
+
+            logger.info(
+                "Batch artist top tracks fetched",
+                requested=len(unique_artist_ids),
+                succeeded=len(artist_tracks),
+                failed=len(failed_artists),
+            )
+
+            return ToolResult.success_result(
+                data={
+                    "artist_tracks": artist_tracks,
+                    "failed_artist_ids": failed_artists,
+                },
+                metadata={
+                    "source": "spotify",
+                    "api_endpoint": "/batch",
+                    "requested_count": len(unique_artist_ids),
+                    "succeeded": len(artist_tracks),
+                },
+            )
+
+        except Exception as e:
+            logger.error(f"Error during batch artist top tracks fetch: {e}", exc_info=True)
+            return ToolResult.error_result(
+                f"Failed to batch fetch artist top tracks: {e}",
+                error_type=type(e).__name__,
+            )
+
+
 class GetArtistTopTracksTool(RateLimitedTool):
     """Tool for getting an artist's top tracks from Spotify API.
 
