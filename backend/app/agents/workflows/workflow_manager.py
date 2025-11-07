@@ -106,6 +106,17 @@ class WorkflowManager:
             session_id: Workflow session ID
             state: Updated workflow state
         """
+        # Don't update state if workflow has been cancelled
+        # Check both active and completed workflows to handle race conditions
+        if self.is_cancelled(session_id):
+            logger.debug(f"Skipping state update for cancelled workflow {session_id}")
+            return
+        
+        # Also check the state object directly
+        if state.status == RecommendationStatus.CANCELLED:
+            logger.debug(f"Skipping state update - state already marked as cancelled for {session_id}")
+            return
+        
         await self.state_manager.update_state(session_id, state)
 
 
@@ -160,9 +171,17 @@ class WorkflowManager:
         """
         if session_id in self.state_manager.active_workflows:
             state = self.state_manager.active_workflows[session_id]
-            state.status = RecommendationStatus.FAILED
+            
+            # Check if already cancelled or completed
+            if state.status == RecommendationStatus.CANCELLED:
+                logger.info(f"Workflow {session_id} already cancelled")
+                return True
+            
+            # Update state atomically
+            state.status = RecommendationStatus.CANCELLED
             state.error_message = "Workflow cancelled by user"
             state.current_step = "cancelled"
+            state.update_timestamp()
             
             # Cancel the asyncio task if it exists
             if session_id in self.active_tasks:
@@ -173,13 +192,27 @@ class WorkflowManager:
                 del self.active_tasks[session_id]
             
             # Move to completed workflows
+            # Note: The route handler will update the database, so we don't need to do it here
             self.state_manager.move_to_completed(session_id, state)
+            
             self.failure_count += 1
             
             logger.info(f"Workflow {session_id} cancelled by user")
             return True
         
-        logger.warning(f"Attempted to cancel non-existent or completed workflow {session_id}")
+        # Check if it's in completed workflows but not cancelled
+        if session_id in self.state_manager.completed_workflows:
+            state = self.state_manager.completed_workflows[session_id]
+            if state.status != RecommendationStatus.CANCELLED:
+                # Update to cancelled even if already completed
+                state.status = RecommendationStatus.CANCELLED
+                state.error_message = "Workflow cancelled by user"
+                state.current_step = "cancelled"
+                state.update_timestamp()
+                logger.info(f"Updated completed workflow {session_id} to cancelled status")
+                return True
+        
+        logger.warning(f"Attempted to cancel non-existent workflow {session_id}")
         return False
 
     async def _execute_workflow(self, session_id: str):
@@ -195,62 +228,102 @@ class WorkflowManager:
         state = self.state_manager.active_workflows[session_id]
         start_time = datetime.now(timezone.utc)
 
+        def check_cancellation() -> bool:
+            """Check if workflow has been cancelled.
+            
+            Returns:
+                True if cancelled, False otherwise
+            """
+            if self.is_cancelled(session_id):
+                return True
+            # Also check the state object directly
+            if state.status == RecommendationStatus.CANCELLED:
+                return True
+            return False
+
         try:
             logger.info(f"Executing workflow {session_id}")
 
+            # Check cancellation before starting
+            if check_cancellation():
+                logger.info(f"Workflow {session_id} was cancelled before execution started")
+                return
+
             # Execute workflow steps in the updated order
             # STEP 1: Analyze user intent FIRST
+            if check_cancellation():
+                return
             state = await self.executor.execute_intent_analysis(state)
-            await self._update_state(session_id, state)
-            # Check for cancellation
-            if state.status == RecommendationStatus.FAILED and state.error_message == "Workflow cancelled by user":
+            # Only update state if not cancelled
+            if not check_cancellation():
+                await self._update_state(session_id, state)
+            if check_cancellation():
                 return
 
             # STEP 2: Analyze mood (now focused on audio features only)
+            if check_cancellation():
+                return
             state = await self.executor.execute_mood_analysis(state)
-            await self._update_state(session_id, state)
-            # Check for cancellation
-            if state.status == RecommendationStatus.FAILED and state.error_message == "Workflow cancelled by user":
+            # Only update state if not cancelled
+            if not check_cancellation():
+                await self._update_state(session_id, state)
+            if check_cancellation():
                 return
 
             # STEP 3-5: Execute orchestration (handles seed gathering, recommendations, and quality improvement)
             async def notify_progress(updated_state: AgentState):
                 """Callback to notify SSE clients of state changes."""
-                await self.state_manager.notify_state_change(state.session_id, updated_state)
+                # Don't notify if workflow is cancelled
+                if not check_cancellation():
+                    await self.state_manager.notify_state_change(state.session_id, updated_state)
 
+            if check_cancellation():
+                return
             state = await self.executor.execute_orchestration(state, progress_callback=notify_progress)
-            await self._update_state(session_id, state)
-            # Check for cancellation
-            if state.status == RecommendationStatus.FAILED and state.error_message == "Workflow cancelled by user":
+            # Only update state if not cancelled
+            if not check_cancellation():
+                await self._update_state(session_id, state)
+            if check_cancellation():
                 return
 
             # STEP 6: Order playlist tracks for optimal energy flow
+            if check_cancellation():
+                return
             state = await self.executor.execute_playlist_ordering(state)
-            await self._update_state(session_id, state)
-            # Check for cancellation
-            if state.status == RecommendationStatus.FAILED and state.error_message == "Workflow cancelled by user":
+            # Only update state if not cancelled
+            if not check_cancellation():
+                await self._update_state(session_id, state)
+            if check_cancellation():
                 return
             
             # Mark as completed after recommendations are ready
-            state.status = RecommendationStatus.COMPLETED
-            state.current_step = "recommendations_ready"
-            state.metadata["playlist_saved_to_spotify"] = False
-            await self._update_state(session_id, state)
-            self.success_count += 1
-            
-            # Dump the state to a file
-            self._save_workflow_state_to_file(session_id, state)
+            if not check_cancellation():
+                state.status = RecommendationStatus.COMPLETED
+                state.current_step = "recommendations_ready"
+                state.metadata["playlist_saved_to_spotify"] = False
+                await self._update_state(session_id, state)
+                self.success_count += 1
+                
+                # Dump the state to a file
+                self._save_workflow_state_to_file(session_id, state)
 
         except asyncio.CancelledError:
             logger.info(f"Workflow {session_id} was cancelled")
-            state.status = RecommendationStatus.FAILED
-            state.error_message = "Workflow cancelled by user"
+            # Ensure state reflects cancellation
+            if state.status != RecommendationStatus.CANCELLED:
+                state.status = RecommendationStatus.CANCELLED
+                state.error_message = "Workflow cancelled by user"
+                state.current_step = "cancelled"
+                state.update_timestamp()
+                await self._update_state(session_id, state)
             self.failure_count += 1
             raise
 
         except Exception as e:
             logger.error(f"Workflow {session_id} failed: {str(e)}", exc_info=True)
-            state.set_error(str(e))
+            # Don't overwrite cancellation status with error
+            if state.status != RecommendationStatus.CANCELLED:
+                state.set_error(str(e))
             self.failure_count += 1
 
         finally:
@@ -259,14 +332,26 @@ class WorkflowManager:
                 del self.active_tasks[session_id]
             
             # Move to completed workflows if still in active
+            # But preserve cancelled status if it was set
             if session_id in self.state_manager.active_workflows:
+                # Check if workflow was cancelled - if so, ensure status is preserved
+                is_cancelled = self.is_cancelled(session_id) or state.status == RecommendationStatus.CANCELLED
+                
+                if is_cancelled and state.status != RecommendationStatus.CANCELLED:
+                    # Restore cancelled status if it was lost
+                    state.status = RecommendationStatus.CANCELLED
+                    state.error_message = "Workflow cancelled by user"
+                    state.current_step = "cancelled"
+                    state.update_timestamp()
+                
                 completion_time = datetime.now(timezone.utc)
                 state.metadata["completion_time"] = completion_time.isoformat()
                 state.metadata["total_duration"] = (completion_time - start_time).total_seconds()
 
                 self.state_manager.move_to_completed(session_id, state)
 
-                logger.info(f"Workflow {session_id} completed in {state.metadata['total_duration']:.2f}s")
+                status_msg = "cancelled" if is_cancelled else "completed"
+                logger.info(f"Workflow {session_id} {status_msg} in {state.metadata['total_duration']:.2f}s")
 
     def _save_workflow_state_to_file(self, session_id: str, state: AgentState):
         """Save workflow state to a JSON file for debugging.
@@ -298,6 +383,18 @@ class WorkflowManager:
         except Exception as e:
             logger.error(f"Failed to save workflow state to file: {e}")
 
+
+    def is_cancelled(self, session_id: str) -> bool:
+        """Check if a workflow has been cancelled.
+
+        Args:
+            session_id: Workflow session ID
+
+        Returns:
+            True if workflow is cancelled, False otherwise
+        """
+        state = self.get_workflow_state(session_id)
+        return state is not None and state.status == RecommendationStatus.CANCELLED
 
     def get_workflow_state(self, session_id: str) -> Optional[AgentState]:
         """Get the current state of a workflow.
