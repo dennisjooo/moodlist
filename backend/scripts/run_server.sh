@@ -159,7 +159,7 @@ case $WS in
 esac
 
 # Build the uvicorn command
-CMD="uvicorn $APP --host $HOST --port $PORT --workers $WORKERS --log-level $LOG_LEVEL --loop $LOOP --http $HTTP --ws $WS"
+CMD="uvicorn $APP --host $HOST --port $PORT --workers $WORKERS --log-level $LOG_LEVEL --loop $LOOP --http $HTTP --ws $WS --timeout-keep-alive 75"
 
 # Add optional flags
 if [[ -n "$ACCESS_LOG" ]]; then
