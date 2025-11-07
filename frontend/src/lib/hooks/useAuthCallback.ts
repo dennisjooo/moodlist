@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { config } from '@/lib/config';
+import apiClient from '@/lib/axios';
 import { logger } from '@/lib/utils/logger';
 
 export type AuthStatus = 'loading' | 'success' | 'error';
@@ -78,38 +78,22 @@ export function useAuthCallback() {
 
       try {
         // Exchange code for tokens using backend
-        const backendUrl = config.api.baseUrl;
         setCurrentStage(1);
-        const tokenResponse = await fetch(`${backendUrl}/api/spotify/token?code=${encodeURIComponent(code)}`, {
-          method: 'POST',
+        const tokenResponse = await apiClient.post<{ access_token: string; refresh_token: string; expires_in: number }>(`/api/spotify/token`, null, {
+          params: { code },
         });
 
-        if (!tokenResponse.ok) {
-          throw new Error('Failed to exchange code for tokens');
-        }
-
-        const tokenData = await tokenResponse.json();
+        const tokenData = tokenResponse.data;
 
         // Use new authentication system
         try {
           // Begin finalizing session
           // Register/Login through backend API (this will set session cookies)
-          const response = await fetch(`${backendUrl}/api/auth/login`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-              access_token: tokenData.access_token,
-              refresh_token: tokenData.refresh_token,
-              token_expires_at: Date.now() + (tokenData.expires_in * 1000),
-            }),
+          await apiClient.post('/api/auth/login', {
+            access_token: tokenData.access_token,
+            refresh_token: tokenData.refresh_token,
+            token_expires_at: Date.now() + (tokenData.expires_in * 1000),
           });
-
-          if (!response.ok) {
-            throw new Error(`Authentication failed: ${response.status}`);
-          }
 
           setCurrentStage(2);
 
