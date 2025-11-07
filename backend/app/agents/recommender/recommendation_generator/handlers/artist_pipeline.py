@@ -195,9 +195,16 @@ class ArtistRecommendationPipeline:
         # Use up to 20 artists for maximum coverage
         artists_to_process = mood_matched_artists[:20]
         
+        # Prefetch top tracks in batches to minimize per-artist API calls
+        prefetched_top_tracks = await self.spotify_service.get_artist_top_tracks_batch(
+            access_token=access_token,
+            artist_ids=artists_to_process,
+            market="US",
+        )
+
         # Process artists in parallel with bounded concurrency (4-6 concurrent)
         semaphore = asyncio.Semaphore(5)
-        
+
         async def process_artist_bounded(idx: int, artist_id: str) -> Tuple[List[TrackRecommendation], bool]:
             """Process a single artist with concurrency control."""
             async with semaphore:
@@ -210,7 +217,8 @@ class ArtistRecommendationPipeline:
                         target_features,
                         tracks_per_artist,
                         create_recommendation_fn,
-                        calculate_score_fn
+                        calculate_score_fn,
+                        prefetched_top_tracks
                     )
                     success = len(artist_recommendations) > 0
                     return artist_recommendations, success
@@ -255,7 +263,8 @@ class ArtistRecommendationPipeline:
         target_features: Dict[str, Any],
         tracks_per_artist: int,
         create_recommendation_fn: Callable,
-        calculate_score_fn: Callable
+        calculate_score_fn: Callable,
+        prefetched_top_tracks_map: Optional[Dict[str, List[Dict[str, Any]]]] = None,
     ) -> List[TrackRecommendation]:
         """Fetch and process tracks from a single artist.
 
@@ -268,6 +277,7 @@ class ArtistRecommendationPipeline:
             tracks_per_artist: Number of tracks to fetch
             create_recommendation_fn: Callback to create recommendations
             calculate_score_fn: Callback to calculate scores
+            prefetched_top_tracks_map: Optional pre-fetched top tracks per artist
 
         Returns:
             List of TrackRecommendation objects from this artist
@@ -287,6 +297,12 @@ class ArtistRecommendationPipeline:
 
         # Get diverse tracks using hybrid strategy (top tracks + album deep cuts)
         # For mood-based discovery, favor album diversity (30% top tracks, 70% album tracks)
+        prefetched_tracks = (
+            (prefetched_top_tracks_map or {}).get(artist_id)
+            if prefetched_top_tracks_map
+            else None
+        )
+
         artist_tracks = await self.spotify_service.get_artist_hybrid_tracks(
             access_token=access_token,
             artist_id=artist_id,
@@ -294,7 +310,8 @@ class ArtistRecommendationPipeline:
             max_popularity=80,  # Exclude mega-hits (tracks > 80 popularity)
             min_popularity=20,  # Ensure minimum quality
             target_count=tracks_per_artist,
-            top_tracks_ratio=0.3  # Discovery-focused: 30% top tracks, 70% album tracks
+            top_tracks_ratio=0.3,  # Discovery-focused: 30% top tracks, 70% album tracks
+            prefetched_top_tracks=prefetched_tracks,
         )
 
         if not artist_tracks:
