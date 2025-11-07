@@ -25,7 +25,7 @@ python-dotenv
 
 # Logging and monitoring
 structlog
-pythonjsonlogger
+python-json-logger
 
 # Agentic AI and LangGraph
 langgraph
