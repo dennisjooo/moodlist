@@ -104,17 +104,36 @@ class SeedBasedGenerator:
         """
         all_recommendations = []
 
-        for chunk in seed_chunks:
+        # Process chunks in parallel with bounded concurrency for better performance
+        async def process_chunk_with_delay(idx: int, chunk: List[str]) -> List[TrackRecommendation]:
+            """Process a chunk with staggered delays to spread load."""
             try:
-                chunk_recommendations = await self._process_chunk(chunk, reccobeat_params, state)
-                all_recommendations.extend(chunk_recommendations)
-
-                # Add some delay between API calls to respect rate limits
-                await asyncio.sleep(0.1)
-
+                # Stagger chunk processing to avoid bursts
+                if idx > 0:
+                    await asyncio.sleep(0.2 * idx)
+                
+                return await self._process_chunk(chunk, reccobeat_params, state)
             except Exception as e:
                 logger.error(f"Error generating recommendations for seed chunk {chunk}: {e}")
-                continue
+                return []
+        
+        # Process chunks with controlled concurrency
+        chunk_tasks = [
+            process_chunk_with_delay(idx, chunk)
+            for idx, chunk in enumerate(seed_chunks)
+        ]
+        
+        # Limit to 3 concurrent chunk requests to avoid overwhelming the API
+        semaphore = asyncio.Semaphore(3)
+        
+        async def bounded_task(task):
+            async with semaphore:
+                return await task
+        
+        chunk_results = await asyncio.gather(*[bounded_task(task) for task in chunk_tasks])
+        
+        for chunk_recommendations in chunk_results:
+            all_recommendations.extend(chunk_recommendations)
 
         logger.info(f"Generated {len(all_recommendations)} raw recommendations from {len(seed_chunks)} seed chunks")
         return all_recommendations

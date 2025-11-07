@@ -332,6 +332,14 @@ class SpotifyService:
         Returns:
             List of top tracks for the artist
         """
+        cached_tracks = await cache_manager.get_artist_top_tracks_cache(
+            artist_id=artist_id,
+            market=market
+        )
+        if cached_tracks is not None:
+            logger.debug(f"Cache hit for artist {artist_id} top tracks ({len(cached_tracks)} tracks)")
+            return cached_tracks
+
         tool = self.tools.get_tool("get_artist_top_tracks")
         if not tool:
             raise ValueError("Get artist top tracks tool not available")
@@ -346,7 +354,16 @@ class SpotifyService:
             logger.error(f"Failed to get artist top tracks: {result.error}")
             return []
 
-        return result.data.get("tracks", [])
+        tracks = result.data.get("tracks", [])
+        if tracks:
+            await cache_manager.set_artist_top_tracks_cache(
+                artist_id=artist_id,
+                market=market,
+                tracks=tracks
+            )
+            logger.debug(f"Cached {len(tracks)} top tracks for artist {artist_id}")
+
+        return tracks
 
     async def get_artist_hybrid_tracks(
         self,
@@ -385,6 +402,13 @@ class SpotifyService:
             raise ValueError("Get artist top tracks tool not available")
 
         try:
+            prefetched_top_tracks = await self.get_artist_top_tracks(
+                access_token=access_token,
+                artist_id=artist_id,
+                market=market
+            )
+            prefetch_payload = prefetched_top_tracks or None
+
             tracks = await tool.get_hybrid_tracks(
                 access_token=access_token,
                 artist_id=artist_id,
@@ -392,7 +416,8 @@ class SpotifyService:
                 max_popularity=max_popularity,
                 min_popularity=min_popularity,
                 target_count=target_count,
-                top_tracks_ratio=top_tracks_ratio
+                top_tracks_ratio=top_tracks_ratio,
+                prefetched_top_tracks=prefetch_payload
             )
 
             logger.info(

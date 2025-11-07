@@ -332,22 +332,24 @@ class CacheManager:
             self.cache = RedisCache(redis_url)
             logger.info(f"Using Valkey/Redis cache at {redis_url}")
         else:
-            self.cache = MemoryCache(max_size=1000)
+            # Increased cache size to 5000 for better hit rates with rate limiting
+            self.cache = MemoryCache(max_size=5000)
             logger.info("Using in-memory cache (no Valkey/Redis URL provided)")
 
-        # Cache TTL defaults (in seconds)
+        # Cache TTL defaults (in seconds) - optimized for rate limit mitigation
         self.default_ttl = {
             "user_profile": 3600,  # 1 hour
             "top_tracks": 1800,    # 30 minutes
             "top_artists": 1800,   # 30 minutes
-            "recommendations": 900,  # 15 minutes
+            "artist_top_tracks": 1800,  # Reduce duplicate Spotify artist queries
+            "recommendations": 1800,  # 30 minutes - increased from 15 to reduce API load
             "mood_analysis": 3600,  # 1 hour
             "workflow_state": 300,  # 5 minutes
-            "track_details": 3600,  # 1 hour - track details don't change often
+            "track_details": 7200,  # 2 hours - track details are stable, increased
             "workflow_artifacts": 1800,  # 30 minutes - workflow artifacts
-            "validated_seeds": 3600,  # 1 hour - validated seed lists
-            "artist_enrichment": 1800,  # 30 minutes - enriched artist data
-            "popular_mood_cache": 7200,  # 2 hours - popular mood recommendations
+            "validated_seeds": 7200,  # 2 hours - validated seed lists are stable
+            "artist_enrichment": 3600,  # 1 hour - increased from 30min for stability
+            "popular_mood_cache": 14400,  # 4 hours - popular mood recommendations
         }
 
     def _make_cache_key(self, category: str, *args) -> str:
@@ -469,6 +471,26 @@ class CacheManager:
         key = self._make_cache_key("top_artists", user_id, time_range, limit)
         ttl = self.default_ttl["top_artists"]
         await self.cache.set(key, artists, ttl)
+
+    async def get_artist_top_tracks_cache(
+        self,
+        artist_id: str,
+        market: str = "US"
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Get cached Spotify top tracks for an artist."""
+        key = self._make_cache_key("artist_top_tracks", artist_id, market)
+        return await self.cache.get(key)
+
+    async def set_artist_top_tracks_cache(
+        self,
+        artist_id: str,
+        tracks: List[Dict[str, Any]],
+        market: str = "US"
+    ) -> None:
+        """Cache Spotify top tracks for an artist."""
+        key = self._make_cache_key("artist_top_tracks", artist_id, market)
+        ttl = self.default_ttl["artist_top_tracks"]
+        await self.cache.set(key, tracks, ttl)
 
     async def get_anchor_tracks(
         self,

@@ -22,20 +22,24 @@ logger = structlog.get_logger(__name__)
 # Global semaphore for RecoBeat API to prevent concurrent requests
 _reccobeat_semaphore: Optional[asyncio.Semaphore] = None
 
+# Request deduplication: Track in-flight requests to avoid duplicate API calls
+_inflight_requests: Dict[str, asyncio.Future] = {}
+_inflight_lock = asyncio.Lock()
+
 
 def get_reccobeat_semaphore() -> asyncio.Semaphore:
     """Get or create the global RecoBeat API semaphore.
 
-    Increased from 5 to 10 concurrent requests now that caching reduces
-    actual API load.
+    Optimized to 6 concurrent requests with aggressive caching and request
+    deduplication reducing actual API load significantly.
 
     Returns:
         Semaphore limiting concurrent RecoBeat API requests
     """
     global _reccobeat_semaphore
     if _reccobeat_semaphore is None:
-        # Increased to 10 concurrent requests (from 5) while relying on caching
-        _reccobeat_semaphore = asyncio.Semaphore(10)
+        # Six concurrent requests keeps burst pressure well below rate limit
+        _reccobeat_semaphore = asyncio.Semaphore(6)
     return _reccobeat_semaphore
 
 
@@ -509,6 +513,7 @@ class RateLimitedTool(BaseAPITool):
         """Internal method to make a rate-limited HTTP request.
 
         Checks cache before applying rate limits to avoid unnecessary delays on cache hits.
+        Implements request deduplication to avoid multiple in-flight requests for the same data.
         """
         # Check cache first to bypass rate limiting on cache hits
         if use_cache:
@@ -518,30 +523,82 @@ class RateLimitedTool(BaseAPITool):
                 logger.debug(f"Cache hit for {self.name} - bypassing rate limiter")
                 return cached_response
 
-        # Check minimum interval since last request (only for cache misses)
-        if hasattr(self, '_last_request_time') and self._last_request_time and self.min_request_interval > 0:
-            elapsed = (datetime.now(timezone.utc) - self._last_request_time).total_seconds()
-            if elapsed < self.min_request_interval:
-                wait_time = self.min_request_interval - elapsed
-                logger.debug(f"Enforcing minimum interval for {self.name}, waiting {wait_time:.2f}s")
-                await asyncio.sleep(wait_time)
+            # Request deduplication: Check if same request is already in flight
+            global _inflight_requests, _inflight_lock
+            request_key = f"{self.name}:{cache_key}"
+            
+            created_future: Optional[asyncio.Future] = None
+            async with _inflight_lock:
+                if request_key in _inflight_requests:
+                    logger.debug(f"Deduplicating in-flight request for {self.name}")
+                    # Wait for the existing request to complete
+                    try:
+                        return await _inflight_requests[request_key]
+                    except Exception:
+                        # If the in-flight request failed, continue to make our own
+                        pass
+                else:
+                    # Create a future for this request
+                    created_future = asyncio.Future()
+                    _inflight_requests[request_key] = created_future
 
-        await self._check_rate_limit()
+            try:
+                # Check minimum interval since last request (only for cache misses)
+                if hasattr(self, '_last_request_time') and self._last_request_time and self.min_request_interval > 0:
+                    elapsed = (datetime.now(timezone.utc) - self._last_request_time).total_seconds()
+                    if elapsed < self.min_request_interval:
+                        wait_time = self.min_request_interval - elapsed
+                        logger.debug(f"Enforcing minimum interval for {self.name}, waiting {wait_time:.2f}s")
+                        await asyncio.sleep(wait_time)
 
-        # Format parameters (convert lists to appropriate format)
-        formatted_params = self._format_params(params)
+                await self._check_rate_limit()
 
-        # Make the actual request (pass use_cache=False since we handled caching above)
-        response = await super()._make_request(method, endpoint, formatted_params, json_data, headers, use_cache=False, cache_ttl=cache_ttl)
+                # Format parameters (convert lists to appropriate format)
+                formatted_params = self._format_params(params)
 
-        # Cache the response if caching was requested
-        if use_cache:
-            cache_key = self._make_cache_key(method, endpoint, params, json_data)
-            await self._cache_response(cache_key, response, cache_ttl)
+                # Make the actual request (pass use_cache=False since we handled caching above)
+                response = await super()._make_request(method, endpoint, formatted_params, json_data, headers, use_cache=False, cache_ttl=cache_ttl)
 
-        self._last_request_time = datetime.now(timezone.utc)  # Track request time
-        await self._record_request()
-        return response
+                # Cache the response if caching was requested
+                if use_cache:
+                    await self._cache_response(cache_key, response, cache_ttl)
+
+                self._last_request_time = datetime.now(timezone.utc)  # Track request time
+                await self._record_request()
+
+                # Set the result for other waiting requests
+                if created_future and not created_future.done():
+                    created_future.set_result(response)
+
+                return response
+
+            except Exception as exc:
+                if created_future and not created_future.done():
+                    created_future.set_exception(exc)
+                raise
+
+            finally:
+                # Clean up in-flight tracking (only if we created the future)
+                if created_future is not None:
+                    async with _inflight_lock:
+                        stored_future = _inflight_requests.get(request_key)
+                        if stored_future is created_future:
+                            _inflight_requests.pop(request_key, None)
+        else:
+            # Non-cached requests: use original flow without deduplication
+            if hasattr(self, '_last_request_time') and self._last_request_time and self.min_request_interval > 0:
+                elapsed = (datetime.now(timezone.utc) - self._last_request_time).total_seconds()
+                if elapsed < self.min_request_interval:
+                    wait_time = self.min_request_interval - elapsed
+                    logger.debug(f"Enforcing minimum interval for {self.name}, waiting {wait_time:.2f}s")
+                    await asyncio.sleep(wait_time)
+
+            await self._check_rate_limit()
+            formatted_params = self._format_params(params)
+            response = await super()._make_request(method, endpoint, formatted_params, json_data, headers, use_cache=False, cache_ttl=cache_ttl)
+            self._last_request_time = datetime.now(timezone.utc)
+            await self._record_request()
+            return response
 
 
 class ToolResult(BaseModel):
