@@ -179,7 +179,7 @@ class ArtistRecommendationPipeline:
         create_recommendation_fn: Callable,
         calculate_score_fn: Callable
     ) -> Tuple[List[TrackRecommendation], int, int]:
-        """Process all artists to get recommendations.
+        """Process all artists to get recommendations in parallel.
 
         Args:
             mood_matched_artists: List of artist IDs
@@ -192,42 +192,57 @@ class ArtistRecommendationPipeline:
         Returns:
             Tuple of (recommendations, successful_artists, failed_artists)
         """
+        # Use up to 20 artists for maximum coverage
+        artists_to_process = mood_matched_artists[:20]
+        
+        # Process artists in parallel with bounded concurrency (4-6 concurrent)
+        semaphore = asyncio.Semaphore(5)
+        
+        async def process_artist_bounded(idx: int, artist_id: str) -> Tuple[List[TrackRecommendation], bool]:
+            """Process a single artist with concurrency control."""
+            async with semaphore:
+                try:
+                    artist_recommendations = await self._fetch_tracks_from_artist(
+                        artist_id,
+                        idx,
+                        len(mood_matched_artists),
+                        access_token,
+                        target_features,
+                        tracks_per_artist,
+                        create_recommendation_fn,
+                        calculate_score_fn
+                    )
+                    success = len(artist_recommendations) > 0
+                    return artist_recommendations, success
+                    
+                except Exception as e:
+                    logger.error(
+                        f"Error getting tracks for artist {artist_id} "
+                        f"(artist {idx+1}/{len(artists_to_process)}): {e}",
+                        exc_info=True
+                    )
+                    return [], False
+        
+        # Create tasks for all artists
+        tasks = [
+            process_artist_bounded(idx, artist_id)
+            for idx, artist_id in enumerate(artists_to_process)
+        ]
+        
+        # Execute all tasks in parallel with bounded concurrency
+        results = await asyncio.gather(*tasks)
+        
+        # Aggregate results
         all_recommendations = []
         successful_artists = 0
         failed_artists = 0
-
-        # Fetch tracks from each artist (use up to 20 artists for maximum coverage)
-        for idx, artist_id in enumerate(mood_matched_artists[:20]):
-            try:
-                artist_recommendations = await self._fetch_tracks_from_artist(
-                    artist_id,
-                    idx,
-                    len(mood_matched_artists),
-                    access_token,
-                    target_features,
-                    tracks_per_artist,
-                    create_recommendation_fn,
-                    calculate_score_fn
-                )
-                all_recommendations.extend(artist_recommendations)
-
-                if artist_recommendations:
-                    successful_artists += 1
-                else:
-                    failed_artists += 1
-
-                # Small delay between artists to avoid rate limiting
-                if not self.use_failed_artist_caching:
-                    await asyncio.sleep(0.1)
-
-            except Exception as e:
-                logger.error(
-                    f"Error getting tracks for artist {artist_id} "
-                    f"(artist {idx+1}/{min(len(mood_matched_artists), 20)}): {e}",
-                    exc_info=True
-                )
+        
+        for artist_recommendations, success in results:
+            all_recommendations.extend(artist_recommendations)
+            if success:
+                successful_artists += 1
+            else:
                 failed_artists += 1
-                continue
 
         return all_recommendations, successful_artists, failed_artists
 
