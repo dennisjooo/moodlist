@@ -230,23 +230,28 @@ async def verify_auth(
     Before: 2-3 queries (session lookup + user lookup)
     After: 1 query with eager loading + 5-minute cache
     """
-    session_token = request.cookies.get(SessionConstants.COOKIE_NAME)
+    try:
+        session_token = request.cookies.get(SessionConstants.COOKIE_NAME)
 
-    if not session_token:
-        logger.debug("Auth verification failed - no session token")
-        return AuthResponse(
-            user=None,
-            requires_spotify_auth=True
-        )
+        if not session_token:
+            logger.debug("Auth verification failed - no session token")
+            return AuthResponse(
+                user=None,
+                requires_spotify_auth=True
+            )
 
-    # Create cache key based on session token
-    cache_key = f"auth_verify:{session_token}"
+        # Create cache key based on session token
+        cache_key = f"auth_verify:{session_token}"
 
-    # Try to get from cache first
-    cached_result = await cache_manager.cache.get(cache_key)
-    if cached_result is not None:
-        logger.debug("Auth verification cache hit", session_token=session_token[:8] + "...")
-        return cached_result
+        # Try to get from cache first (with error handling)
+        try:
+            cached_result = await cache_manager.cache.get(cache_key)
+            if cached_result is not None:
+                logger.debug("Auth verification cache hit", session_token=session_token[:8] + "...")
+                return cached_result
+        except Exception as cache_error:
+            logger.warning("Cache get failed, continuing without cache", error=str(cache_error))
+            # Continue without cache
 
     # Single optimized query: get session with user in one go
     session = await session_repo.get_valid_session_with_user(session_token)
@@ -274,24 +279,39 @@ async def verify_auth(
             requires_spotify_auth=False
         )
 
-    # Cache with TTL based on session expiration time
-    # If session expires soon (< 1 hour), cache for shorter time
-    # If session is fresh (> 12 hours left), cache longer
-    now = datetime.now(timezone.utc)
-    if session and session.expires_at:
-        time_until_expiry = (session.expires_at - now).total_seconds()
-        if time_until_expiry < 3600:  # Less than 1 hour left
-            cache_ttl = 60  # Cache for 1 minute
-        elif time_until_expiry > 43200:  # More than 12 hours left
-            cache_ttl = 1800  # Cache for 30 minutes
+        # Cache with TTL based on session expiration time
+        # If session expires soon (< 1 hour), cache for shorter time
+        # If session is fresh (> 12 hours left), cache longer
+        now = datetime.now(timezone.utc)
+        if session and session.expires_at:
+            time_until_expiry = (session.expires_at - now).total_seconds()
+            if time_until_expiry < 3600:  # Less than 1 hour left
+                cache_ttl = 60  # Cache for 1 minute
+            elif time_until_expiry > 43200:  # More than 12 hours left
+                cache_ttl = 1800  # Cache for 30 minutes
+            else:
+                cache_ttl = 300  # Cache for 5 minutes (default)
         else:
-            cache_ttl = 300  # Cache for 5 minutes (default)
-    else:
-        cache_ttl = 300  # Default 5 minutes
+            cache_ttl = 300  # Default 5 minutes
 
-    await cache_manager.cache.set(cache_key, result, ttl=cache_ttl)
+        try:
+            await cache_manager.cache.set(cache_key, result, ttl=cache_ttl)
+        except Exception as cache_error:
+            logger.warning("Cache set failed", error=str(cache_error))
+            # Continue without caching
 
-    return result
+        return result
+
+    except Exception as e:
+        logger.error("Auth verification failed with exception",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    exc_info=True)
+        # Return unauthenticated response on error
+        return AuthResponse(
+            user=None,
+            requires_spotify_auth=True
+        )
 
 
 @router.get("/dashboard")
