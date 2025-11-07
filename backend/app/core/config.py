@@ -105,8 +105,8 @@ class Settings(BaseSettings):
             headers=headers,
         )
     
-    ALLOWED_HOSTS: Union[str, List[str]] = Field(
-        default_factory=lambda: ["localhost", "127.0.0.1", "0.0.0.0", "*.onrender.com"],
+    ALLOWED_HOSTS: Optional[Union[str, List[str]]] = Field(
+        default=None,
         env="ALLOWED_HOSTS"
     )
 
@@ -114,6 +114,8 @@ class Settings(BaseSettings):
     @classmethod
     def parse_allowed_hosts(cls, v):
         """Parse ALLOWED_HOSTS from comma-separated string or JSON list."""
+        if v is None:
+            return None
         if isinstance(v, str):
             # Try parsing as JSON first
             try:
