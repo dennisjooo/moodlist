@@ -77,6 +77,6 @@ class SessionResponse(BaseModel):
 
 class AuthResponse(BaseModel):
     """Schema for authentication response."""
-    user: UserResponse
+    user: Optional[UserResponse] = None
     session: Optional[SessionResponse] = None
     requires_spotify_auth: bool = False
