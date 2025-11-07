@@ -34,7 +34,8 @@ class GetMultipleTracksTool(RateLimitedTool):
             base_url="https://api.reccobeats.com",
             rate_limit_per_minute=120,   # More conservative rate limit
             min_request_interval=1.0,   # 1s between requests to avoid rate limiting
-            use_global_semaphore=True   # Use global semaphore to limit concurrent requests
+            use_global_semaphore=True,  # Use global semaphore to limit concurrent requests
+            timeout=60                  # Allow slower RecoBeat responses
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:
@@ -142,7 +143,8 @@ class GetTrackAudioFeaturesTool(RateLimitedTool):
             base_url="https://api.reccobeats.com",
             rate_limit_per_minute=60,   # More conservative rate limit
             min_request_interval=1.0,   # 1s between requests to avoid rate limiting
-            use_global_semaphore=True   # Use global semaphore to limit concurrent requests
+            use_global_semaphore=True,  # Use global semaphore to limit concurrent requests
+            timeout=60                  # Allow slower RecoBeat responses
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:
