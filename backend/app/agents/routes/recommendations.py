@@ -144,6 +144,9 @@ async def stream_workflow_status(
     """Stream workflow status updates via Server-Sent Events (SSE)."""
 
     async def event_generator():
+        # Send initial comment to establish connection and prevent buffering
+        yield ": connected\n\n"
+
         queue: asyncio.Queue = asyncio.Queue()
 
         async def state_change_callback(sid: str, state):
@@ -216,9 +219,13 @@ async def stream_workflow_status(
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
+            "X-Accel-Buffering": "no",  # Nginx buffering
+            "Transfer-Encoding": "chunked",
+            "Content-Type": "text/event-stream; charset=utf-8",
         },
     )
 
