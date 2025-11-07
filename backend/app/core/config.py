@@ -12,8 +12,9 @@ class Settings(BaseSettings):
     APP_ENV: str = Field(default="development", env="APP_ENV")
     DEBUG: bool = Field(default=False, env="DEBUG")
     
-    # Database
-    POSTGRES_CONNECTION_STRING: str = Field(default=None, env="POSTGRES_CONNECTION_STRING")
+    # Database (Render sets DATABASE_URL automatically)
+    DATABASE_URL: Optional[str] = Field(default=None, env="DATABASE_URL")
+    POSTGRES_CONNECTION_STRING: Optional[str] = Field(default=None, env="POSTGRES_CONNECTION_STRING")
     
     # JWT
     JWT_SECRET_KEY: str = Field(env="JWT_SECRET_KEY")
@@ -50,9 +51,9 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = Field(default="INFO", env="LOG_LEVEL")
     
     # LLM Providers
-    OPENROUTER_API_KEY: str = Field(env="OPENROUTER_API_KEY")
-    GROQ_API_KEY: str = Field(env="GROQ_API_KEY")
-    CEREBRAS_API_KEY: str = Field(env="CEREBRAS_API_KEY")
+    OPENROUTER_API_KEY: Optional[str] = Field(default=None, env="OPENROUTER_API_KEY")
+    GROQ_API_KEY: Optional[str] = Field(default=None, env="GROQ_API_KEY")
+    CEREBRAS_API_KEY: Optional[str] = Field(default=None, env="CEREBRAS_API_KEY")
     
     # Rate Limiting
     DAILY_PLAYLIST_CREATION_LIMIT: int = Field(default=5, env="DAILY_PLAYLIST_CREATION_LIMIT")
@@ -90,7 +91,8 @@ class Settings(BaseSettings):
     
     def get_database_url(self) -> str:
         """Get the appropriate database URL based on environment."""
-        return self.POSTGRES_CONNECTION_STRING
+        # Prefer POSTGRES_CONNECTION_STRING, fallback to DATABASE_URL (set by Render)
+        return self.POSTGRES_CONNECTION_STRING or self.DATABASE_URL
         
     class Config:
         env_file = ".env"
