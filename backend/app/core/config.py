@@ -37,12 +37,29 @@ class Settings(BaseSettings):
     
     # CORS
     FRONTEND_URL: str = Field(default="http://127.0.0.1:3000", env="FRONTEND_URL")
-    ALLOWED_ORIGINS: List[str] = Field(default_factory=lambda: [
-        "http://127.0.0.1:3000",
-        "http://localhost:3000",
-        "http://127.0.0.1:8000",
-        "http://localhost:8000"
-    ])
+    ALLOWED_ORIGINS_STR: Optional[str] = Field(default=None, env="ALLOWED_ORIGINS")
+
+    @property
+    def ALLOWED_ORIGINS(self) -> List[str]:
+        """Get allowed origins from environment or defaults."""
+        if self.ALLOWED_ORIGINS_STR:
+            # Parse comma-separated list from environment
+            origins = [origin.strip() for origin in self.ALLOWED_ORIGINS_STR.split(",")]
+            return origins
+
+        # Default origins for local development
+        defaults = [
+            "http://127.0.0.1:3000",
+            "http://localhost:3000",
+            "http://127.0.0.1:8000",
+            "http://localhost:8000"
+        ]
+
+        # Add FRONTEND_URL if it's not localhost
+        if self.FRONTEND_URL and not any(host in self.FRONTEND_URL for host in ["127.0.0.1", "localhost"]):
+            defaults.append(self.FRONTEND_URL)
+
+        return defaults
     
     # Redis
     REDIS_URL: Optional[str] = Field(default=None, env="REDIS_URL")
