@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     DEBUG: bool = Field(default=False, env="DEBUG")
     
     # Database
-    DATABASE_URL: str = Field(env="DATABASE_URL")
     POSTGRES_CONNECTION_STRING: str = Field(default=None, env="POSTGRES_CONNECTION_STRING")
     
     # JWT
