@@ -110,6 +110,9 @@ class Settings(BaseSettings):
         env="ALLOWED_HOSTS"
     )
 
+    # Auto-detect Render service URL for TrustedHostMiddleware
+    RENDER_EXTERNAL_URL: Optional[str] = Field(default=None, env="RENDER_EXTERNAL_URL")
+
     @field_validator("ALLOWED_HOSTS", mode="before")
     @classmethod
     def parse_allowed_hosts(cls, v):
@@ -123,6 +126,34 @@ class Settings(BaseSettings):
             except json.JSONDecodeError:
                 # Fall back to comma-separated
                 return [host.strip() for host in v.split(",") if host.strip()]
+        return v
+
+    @field_validator("ALLOWED_HOSTS", mode="after")
+    @classmethod
+    def add_render_host(cls, v, info):
+        """Automatically add Render hostname if RENDER_EXTERNAL_URL is set."""
+        import os
+        from urllib.parse import urlparse
+
+        # Check if we're on Render (Render sets RENDER_EXTERNAL_URL)
+        render_url = info.data.get("RENDER_EXTERNAL_URL") or os.getenv("RENDER_EXTERNAL_URL")
+
+        if render_url:
+            # Extract hostname from Render URL
+            parsed = urlparse(render_url)
+            hostname = parsed.hostname or parsed.netloc
+
+            if hostname:
+                # Initialize list if None
+                if v is None:
+                    v = []
+                elif isinstance(v, str):
+                    v = [v]
+
+                # Add Render hostname if not already present
+                if hostname not in v:
+                    v.append(hostname)
+
         return v
     
     def get_database_url(self) -> str:
