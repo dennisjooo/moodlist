@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { logger } from '@/lib/utils/logger';
+import { isTerminalStatus } from '@/lib/utils/workflow';
 
 export interface ActiveWorkflow {
     sessionId: string;
@@ -12,9 +13,6 @@ export interface ActiveWorkflow {
 
 const STORAGE_KEY = 'moodlist_active_workflows';
 const MAX_WORKFLOWS = 5; // Keep track of up to 5 active workflows
-
-// Terminal statuses that should remove workflow from active list
-const TERMINAL_STATUSES = ['completed', 'failed'];
 
 /**
  * Hook to manage and track active workflows globally across the app
@@ -64,7 +62,7 @@ export function useActiveWorkflows() {
                 const existing = prev.find(w => w.sessionId === event.detail.sessionId);
 
                 // If workflow reached terminal status, remove it
-                if (TERMINAL_STATUSES.includes(event.detail.status)) {
+                if (isTerminalStatus(event.detail.status)) {
                     const filtered = prev.filter(w => w.sessionId !== event.detail.sessionId);
 
                     // Persist to localStorage
@@ -136,10 +134,12 @@ export function useActiveWorkflows() {
                 const now = Date.now();
                 const ONE_HOUR = 60 * 60 * 1000;
 
-                // Remove workflows older than 1 hour
+                // Remove workflows older than 1 hour or in terminal state
                 const filtered = prev.filter(w => {
                     const startedAt = new Date(w.startedAt).getTime();
-                    return now - startedAt < ONE_HOUR;
+                    const isOld = now - startedAt >= ONE_HOUR;
+                    const isTerminal = isTerminalStatus(w.status);
+                    return !isOld && !isTerminal;
                 });
 
                 if (filtered.length !== prev.length) {
