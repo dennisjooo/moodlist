@@ -24,6 +24,10 @@ R = TypeVar("R")
 class RecoBeatService:
     """Service for coordinating RecoBeat API operations."""
 
+    AUDIO_FEATURE_BATCH_SIZE = 5
+    AUDIO_FEATURE_MAX_CONCURRENCY = 3
+    AUDIO_FEATURE_THROTTLE_SECONDS = 1.2
+
     def __init__(self):
         """Initialize the RecoBeat service."""
         self.tools = AgentTools()
@@ -440,7 +444,10 @@ class RecoBeatService:
             logger.info(f"All {len(track_ids)} tracks found in cache")
             return features_map
 
-        logger.info(f"Fetching audio features for {len(tracks_needing_fetch)} tracks in parallel (cached: {len(features_map)})")
+        logger.info(
+            f"Fetching audio features for {len(tracks_needing_fetch)} tracks "
+            f"(cached: {len(features_map)}) with throttled batches"
+        )
 
         async def fetch_single_track_features(
             item: Tuple[str, str]
@@ -471,24 +478,42 @@ class RecoBeatService:
                     logger.error(f"Error getting features for track {reccobeat_id}: {e}")
                 return track_id, None
 
-        # Execute all fetches in parallel
+        total_batches = (len(tracks_needing_fetch) + self.AUDIO_FEATURE_BATCH_SIZE - 1) // self.AUDIO_FEATURE_BATCH_SIZE
+        results: List[Tuple[str, Optional[Dict[str, Any]]]] = []
+
+        # Execute batches sequentially to stay under upstream quotas
         try:
-            # Reduce concurrency to protect against rate limits
-            results = await self._bounded_gather(
-                tracks_needing_fetch,
-                fetch_single_track_features,
-                concurrency=10,
-            )
+            for batch_index in range(total_batches):
+                start = batch_index * self.AUDIO_FEATURE_BATCH_SIZE
+                chunk = tracks_needing_fetch[start:start + self.AUDIO_FEATURE_BATCH_SIZE]
+                chunk_results = await self._bounded_gather(
+                    chunk,
+                    fetch_single_track_features,
+                    concurrency=min(self.AUDIO_FEATURE_MAX_CONCURRENCY, len(chunk)),
+                )
+                results.extend(chunk_results)
+
+                successes = len([feature for _, feature in chunk_results if feature])
+                logger.debug(
+                    f"Processed audio feature batch {batch_index + 1}/{total_batches} "
+                    f"successes={successes}/{len(chunk)}"
+                )
+
+                if batch_index + 1 < total_batches:
+                    await asyncio.sleep(self.AUDIO_FEATURE_THROTTLE_SECONDS)
 
             # Combine results
             for track_id, features in results:
                 if features:
                     features_map[track_id] = features
 
-            logger.info(f"Successfully fetched {len([f for _, f in results if f])}/{len(tracks_needing_fetch)} audio features in parallel")
+            logger.info(
+                f"Successfully fetched {len([f for _, f in results if f])}/"
+                f"{len(tracks_needing_fetch)} audio features after throttling"
+            )
 
         except Exception as e:
-            logger.error(f"Error in parallel audio features fetching: {e}")
+            logger.error(f"Error in throttled audio features fetching: {e}")
 
         return features_map
 
