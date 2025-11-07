@@ -368,7 +368,7 @@ class UserAnchorStrategy(RecommendationStrategy):
                     max_popularity=95,  # Allow popular tracks (users want hits from mentioned artists)
                     min_popularity=30,  # Ensure decent quality
                     target_count=tracks_per_artist,
-                    top_tracks_ratio=0.7  # Popular-focused: 70% top tracks, 30% album tracks
+                    top_tracks_ratio=0.9  # Popular-focused: 90% top tracks, 10% album tracks
                 )
 
                 for track in top_tracks:
