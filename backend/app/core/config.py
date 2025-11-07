@@ -56,6 +56,16 @@ class Settings(BaseSettings):
                 # Fall back to comma-separated
                 return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
+
+    @field_validator("ALLOWED_ORIGINS", mode="after")
+    @classmethod
+    def add_frontend_url_to_origins(cls, v, info):
+        """Automatically add FRONTEND_URL to allowed origins if not localhost."""
+        frontend_url = info.data.get("FRONTEND_URL")
+        if frontend_url and not any(host in frontend_url for host in ["127.0.0.1", "localhost"]):
+            if frontend_url not in v:
+                v.append(frontend_url)
+        return v
     
     # Redis
     REDIS_URL: Optional[str] = Field(default=None, env="REDIS_URL")
