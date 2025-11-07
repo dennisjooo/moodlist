@@ -4,6 +4,35 @@
 
 Phase 4 introduces strategic enhancements focused on persistent distributed caching, workflow artifact reuse, precomputed recommendations, and intelligent ID validation. These features provide significant latency improvements and enable production-scale deployments.
 
+## Security Configuration
+
+### TrustedHostMiddleware
+
+**Purpose**: Prevent HTTP Host header attacks by validating incoming request hosts.
+
+**Auto-Configuration (Render)**:
+- Render sets `RENDER_EXTERNAL_URL` automatically
+- The hostname is automatically extracted and added to `ALLOWED_HOSTS`
+- No manual configuration needed on Render deployments
+
+**Manual Configuration**:
+```bash
+# Option 1: Comma-separated list
+ALLOWED_HOSTS=example.com,api.example.com,localhost
+
+# Option 2: JSON array
+ALLOWED_HOSTS=["example.com","api.example.com","localhost"]
+
+# Option 3: Disable (not recommended for production)
+# Simply don't set ALLOWED_HOSTS - middleware won't be added
+```
+
+**Important Notes**:
+- TrustedHostMiddleware is ONLY enabled if `ALLOWED_HOSTS` is set
+- On Render, the service hostname is automatically included
+- For development, leave `ALLOWED_HOSTS` unset to disable the middleware
+- For production, explicitly set allowed hosts or rely on auto-detection
+
 ## Features
 
 ### 1. Persistent Distributed Cache (Redis/Valkey)

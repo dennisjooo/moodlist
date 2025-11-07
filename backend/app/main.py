@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
@@ -163,6 +164,15 @@ def create_application() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Add TrustedHostMiddleware if ALLOWED_HOSTS is configured
+    # Automatically includes Render hostname via RENDER_EXTERNAL_URL
+    if settings.ALLOWED_HOSTS:
+        logger.info("Enabling TrustedHostMiddleware", allowed_hosts=settings.ALLOWED_HOSTS)
+        app.add_middleware(
+            TrustedHostMiddleware,
+            allowed_hosts=settings.ALLOWED_HOSTS,
+        )
 
     # Add custom middleware
     app.add_middleware(LoggingMiddleware)
