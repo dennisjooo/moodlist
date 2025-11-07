@@ -6,6 +6,7 @@ import { pollingManager } from '@/lib/pollingManager';
 import { workflowAPI } from '@/lib/api/workflow';
 import type { WorkflowStatus, WorkflowResults } from '@/lib/api/workflow';
 import { logger } from '@/lib/utils/logger';
+import { isTerminalStatus } from '@/lib/utils/workflow';
 
 interface SSECallbacks {
     onStatus?: (status: WorkflowStatus) => void | Promise<void>;
@@ -62,7 +63,7 @@ export function useWorkflowSSE(
         }
 
         // Check if workflow is in a terminal state at connection time
-        const isTerminalState = currentStatusRef.current === 'completed' || currentStatusRef.current === 'failed';
+        const isTerminalState = isTerminalStatus(currentStatusRef.current);
         if (isTerminalState) {
             logger.debug('Workflow in terminal state, not starting SSE', {
                 component: 'useWorkflowSSE',
@@ -115,7 +116,7 @@ export function useWorkflowSSE(
                 }
 
                 // If workflow reached terminal state, fetch results
-                const isTerminal = status.status === 'completed' || status.status === 'failed';
+                const isTerminal = isTerminalStatus(status.status);
 
                 if (isTerminal && !terminalHandledRef.current) {
                     terminalHandledRef.current = true;
@@ -192,7 +193,7 @@ export function useWorkflowSSE(
                     }
 
                     // If it's a terminal state, fetch results
-                    const isTerminal = finalStatus.status === 'completed' || finalStatus.status === 'failed';
+                    const isTerminal = isTerminalStatus(finalStatus.status);
                     if (isTerminal && !terminalHandledRef.current) {
                         terminalHandledRef.current = true;
                         let results = null;
@@ -266,7 +267,7 @@ export function useWorkflowSSE(
                 }
 
                 // If workflow reached terminal state, fetch results and stop polling
-                const isTerminal = status.status === 'completed' || status.status === 'failed';
+                const isTerminal = isTerminalStatus(status.status);
 
                 if (isTerminal) {
                     logger.debug('Terminal state detected, stopping polling', {

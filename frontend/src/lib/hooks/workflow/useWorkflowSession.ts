@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { logger } from '@/lib/utils/logger';
 import { workflowEvents } from './useActiveWorkflows';
+import { isTerminalStatus } from '@/lib/utils/workflow';
 
 /**
  * Custom hook for managing workflow session loading and state
@@ -99,7 +100,7 @@ export function useWorkflowSession() {
     sessionId,
     isLoadingSession,
     workflowState,
-    isTerminalStatus: workflowState.status === 'completed' || workflowState.status === 'failed',
+    isTerminalStatus: isTerminalStatus(workflowState.status),
   };
 }
 

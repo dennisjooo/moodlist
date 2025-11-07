@@ -5,6 +5,7 @@ import { logger } from '@/lib/utils/logger';
 import { useEffect, useRef } from 'react';
 import { useToast } from '../ui/useToast';
 import { workflowEvents } from './useActiveWorkflows';
+import { isTerminalStatus } from '@/lib/utils/workflow';
 
 /**
  * Global polling hook that polls ALL active workflows regardless of current page
@@ -69,7 +70,7 @@ export function useGlobalWorkflowPolling(activeSessionIds: string[], excludeSess
                         });
 
                         // If terminal state, show toast and remove from tracking
-                        if (status.status === 'completed' || status.status === 'failed') {
+                        if (isTerminalStatus(status.status)) {
                             logger.info('Workflow reached terminal state in global polling', {
                                 component: 'useGlobalWorkflowPolling',
                                 sessionId,

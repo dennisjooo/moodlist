@@ -3,6 +3,7 @@ import { logger } from '@/lib/utils/logger';
 import { workflowEvents } from './useActiveWorkflows';
 import { useWorkflowApi } from './useWorkflowApi';
 import type { WorkflowState } from '@/lib/types/workflow';
+import { isTerminalStatus } from '@/lib/utils/workflow';
 
 interface UseWorkflowActionsProps {
     workflowState: WorkflowState;
@@ -12,8 +13,8 @@ interface UseWorkflowActionsProps {
 
 export function useWorkflowActions({
     workflowState,
-   setLoading,
-   setWorkflowData
+    setLoading,
+    setWorkflowData
 }: UseWorkflowActionsProps) {
     const api = useWorkflowApi();
     const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -103,7 +104,7 @@ export function useWorkflowActions({
 
         // If we already have this session loaded and it's terminal, no need to reload
         if (workflowState.sessionId === sessionId &&
-            (workflowState.status === 'completed' || workflowState.status === 'failed') &&
+            isTerminalStatus(workflowState.status) &&
             workflowState.recommendations.length > 0) {
             logger.debug('[loadWorkflow] Already loaded and terminal, skipping', { component: 'useWorkflowActions', sessionId });
             return;
@@ -119,7 +120,7 @@ export function useWorkflowActions({
 
             // Only load results if workflow is in terminal state (completed or failed)
             let results = null;
-            const isTerminal = status.status === 'completed' || status.status === 'failed';
+            const isTerminal = isTerminalStatus(status.status);
             if (isTerminal) {
                 logger.debug('Workflow is terminal, loading results', { component: 'useWorkflowActions', sessionId });
                 try {
@@ -206,7 +207,7 @@ export function useWorkflowActions({
         if (!workflowState.sessionId) return;
 
         // Don't fetch results if we're already in a terminal state and have results
-        if ((workflowState.status === 'completed' || workflowState.status === 'failed') &&
+        if (isTerminalStatus(workflowState.status) &&
             workflowState.recommendations.length > 0) {
             logger.debug('Results already loaded for terminal workflow, skipping refresh', { component: 'useWorkflowActions', sessionId: workflowState.sessionId });
             return;
