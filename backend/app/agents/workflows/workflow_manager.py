@@ -202,11 +202,17 @@ class WorkflowManager:
             # STEP 1: Analyze user intent FIRST
             state = await self.executor.execute_intent_analysis(state)
             await self._update_state(session_id, state)
-            
+            # Check for cancellation
+            if state.status == RecommendationStatus.FAILED and state.error_message == "Workflow cancelled by user":
+                return
+
             # STEP 2: Analyze mood (now focused on audio features only)
             state = await self.executor.execute_mood_analysis(state)
             await self._update_state(session_id, state)
-            
+            # Check for cancellation
+            if state.status == RecommendationStatus.FAILED and state.error_message == "Workflow cancelled by user":
+                return
+
             # STEP 3-5: Execute orchestration (handles seed gathering, recommendations, and quality improvement)
             async def notify_progress(updated_state: AgentState):
                 """Callback to notify SSE clients of state changes."""
@@ -214,10 +220,16 @@ class WorkflowManager:
 
             state = await self.executor.execute_orchestration(state, progress_callback=notify_progress)
             await self._update_state(session_id, state)
-            
+            # Check for cancellation
+            if state.status == RecommendationStatus.FAILED and state.error_message == "Workflow cancelled by user":
+                return
+
             # STEP 6: Order playlist tracks for optimal energy flow
             state = await self.executor.execute_playlist_ordering(state)
             await self._update_state(session_id, state)
+            # Check for cancellation
+            if state.status == RecommendationStatus.FAILED and state.error_message == "Workflow cancelled by user":
+                return
             
             # Mark as completed after recommendations are ready
             state.status = RecommendationStatus.COMPLETED
