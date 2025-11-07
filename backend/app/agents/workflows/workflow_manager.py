@@ -276,7 +276,41 @@ class WorkflowManager:
             async def notify_progress(updated_state: AgentState):
                 """Callback to notify SSE clients of state changes."""
                 # Don't notify if workflow is cancelled
-                if not check_cancellation():
+                if check_cancellation():
+                    return
+                
+                # Get current state to ensure we don't send backwards updates
+                current_state = self.get_workflow_state(state.session_id)
+                if current_state:
+                    # Only send if this is forward progress (newer status or step)
+                    from ..states.agent_state import RecommendationStatus
+                    
+                    # Define status progression order
+                    status_order = {
+                        RecommendationStatus.PENDING: 0,
+                        RecommendationStatus.ANALYZING_MOOD: 1,
+                        RecommendationStatus.GATHERING_SEEDS: 2,
+                        RecommendationStatus.GENERATING_RECOMMENDATIONS: 3,
+                        RecommendationStatus.EVALUATING_QUALITY: 4,
+                        RecommendationStatus.OPTIMIZING_RECOMMENDATIONS: 5,
+                        RecommendationStatus.COMPLETED: 6,
+                        RecommendationStatus.FAILED: 6,
+                        RecommendationStatus.CANCELLED: 6,
+                    }
+                    
+                    current_status_order = status_order.get(current_state.status, -1)
+                    updated_status_order = status_order.get(updated_state.status, -1)
+                    
+                    # Allow same status (sub-steps within a stage) or forward progress
+                    if updated_status_order >= current_status_order:
+                        await self.state_manager.notify_state_change(state.session_id, updated_state)
+                    else:
+                        logger.debug(
+                            f"Skipping backwards progress notification: {current_state.status.value} -> {updated_state.status.value}",
+                            session_id=state.session_id
+                        )
+                else:
+                    # No current state, safe to send
                     await self.state_manager.notify_state_change(state.session_id, updated_state)
 
             if check_cancellation():
@@ -351,6 +385,10 @@ class WorkflowManager:
                 state.metadata["completion_time"] = completion_time.isoformat()
                 state.metadata["total_duration"] = (completion_time - start_time).total_seconds()
 
+                # Send final notification before moving to completed
+                # This ensures subscribers get the final state
+                await self.state_manager.notify_state_change(session_id, state)
+                
                 self.state_manager.move_to_completed(session_id, state)
 
                 status_msg = "cancelled" if is_cancelled else "completed"
