@@ -27,7 +27,7 @@ export function SuccessView() {
           Spotify connected
         </Badge>
         <CardTitle className="text-3xl font-semibold">
-          You're all set!
+          You&apos;re all set!
         </CardTitle>
         <CardDescription className="text-base text-muted-foreground">
           Spotify granted access and your Moodlist session is ready.

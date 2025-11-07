@@ -1,6 +1,8 @@
 // API client for playlist-related endpoints
 
-import { config } from '@/lib/config';
+import { AxiosError, AxiosRequestConfig, isAxiosError } from 'axios';
+
+import apiClient from '@/lib/axios';
 import { logger } from '@/lib/utils/logger';
 
 export interface MoodAnalysis {
@@ -54,27 +56,37 @@ export interface UserPlaylistsResponse {
 class PlaylistAPI {
     private async request<T>(
         endpoint: string,
-        options: RequestInit = {}
+        options: AxiosRequestConfig = {}
     ): Promise<T> {
-        const url = `${config.api.baseUrl}${endpoint}`;
+        try {
+            const response = await apiClient.request<T>({
+                url: endpoint,
+                ...options,
+            });
 
-        const reqConfig: RequestInit = {
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers,
-            },
-            credentials: 'include',
-            ...options,
-        };
+            return response.data;
+        } catch (error) {
+            if (isAxiosError(error)) {
+                const axiosError = error as AxiosError;
+                const status = axiosError.response?.status ?? 0;
+                const statusText = axiosError.response?.statusText ?? axiosError.message;
 
-        const response = await fetch(url, reqConfig);
+                logger.error('Playlist API request failed', error, {
+                    component: 'PlaylistAPI',
+                    status,
+                    statusText,
+                    endpoint,
+                });
 
-        if (!response.ok) {
-            logger.error('Playlist API request failed', undefined, { component: 'PlaylistAPI', status: response.status, statusText: response.statusText, endpoint });
-            throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+                throw new Error(`API request failed: ${status} ${statusText}`);
+            }
+
+            logger.error('Unexpected Playlist API error', error, {
+                component: 'PlaylistAPI',
+                endpoint,
+            });
+            throw error;
         }
-
-        return await response.json();
     }
 
     async getUserPlaylists(
