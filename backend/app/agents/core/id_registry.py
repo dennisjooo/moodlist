@@ -24,9 +24,9 @@ class RecoBeatIDRegistry:
     MISSING_ID_PREFIX = "reccobeat:missing:"
     VALIDATED_ID_PREFIX = "reccobeat:validated:"
     
-    # TTLs for different states
-    MISSING_ID_TTL = 86400 * 7  # 7 days - missing IDs rarely appear suddenly
-    VALIDATED_ID_TTL = 86400 * 30  # 30 days - validated IDs remain stable
+    # TTLs for different states - optimized for rate limit mitigation
+    MISSING_ID_TTL = 86400 * 14  # 14 days - missing IDs rarely appear suddenly
+    VALIDATED_ID_TTL = 86400 * 60  # 60 days - validated IDs remain very stable
     
     @classmethod
     async def mark_missing(cls, spotify_id: str, reason: Optional[str] = None) -> None:

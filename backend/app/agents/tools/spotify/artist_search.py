@@ -429,7 +429,8 @@ class GetArtistTopTracksTool(RateLimitedTool):
         max_popularity: int = 80,
         min_popularity: int = 20,
         target_count: int = 10,
-        top_tracks_ratio: float = 0.4
+        top_tracks_ratio: float = 0.4,
+        prefetched_top_tracks: Optional[List[Dict[str, Any]]] = None
     ) -> List[Dict[str, Any]]:
         """Get diverse tracks using hybrid strategy: top tracks + album deep cuts.
 
@@ -466,15 +467,26 @@ class GetArtistTopTracksTool(RateLimitedTool):
             f"(max_popularity: {max_popularity}, ratio: {top_tracks_ratio:.1%}, "
             f"target: {top_tracks_count} top + {album_tracks_count} album = {target_count} total)"
         )
-        top_tracks_result = await self._run(
-            access_token=access_token,
-            artist_id=artist_id,
-            market=market
-        )
+        top_tracks: List[Dict[str, Any]] = []
+        if prefetched_top_tracks is not None:
+            top_tracks = prefetched_top_tracks
+            logger.debug(f"Using prefetched top tracks for artist {artist_id} (count={len(top_tracks)})")
+        else:
+            top_tracks_result = await self._run(
+                access_token=access_token,
+                artist_id=artist_id,
+                market=market
+            )
 
-        if top_tracks_result.success:
-            top_tracks = top_tracks_result.data.get("tracks", [])
-            # Filter top tracks by popularity range
+            if top_tracks_result.success:
+                top_tracks = top_tracks_result.data.get("tracks", [])
+            else:
+                logger.warning(
+                    f"Failed to fetch top tracks inside hybrid strategy for artist {artist_id}: "
+                    f"{top_tracks_result.error}"
+                )
+
+        if top_tracks:
             filtered_top_tracks = [
                 track for track in top_tracks
                 if min_popularity <= track.get("popularity", 50) <= max_popularity
@@ -484,7 +496,6 @@ class GetArtistTopTracksTool(RateLimitedTool):
                 f"within popularity range {min_popularity}-{max_popularity}"
             )
 
-            # Take the calculated number of filtered top tracks
             for track in filtered_top_tracks[:top_tracks_count]:
                 track_id = track.get("id")
                 if track_id and track_id not in track_ids_seen:
@@ -830,4 +841,3 @@ class GetSeveralSpotifyArtistsTool(RateLimitedTool):
                 f"Failed to get several Spotify artists: {str(e)}",
                 error_type=type(e).__name__
             )
-
