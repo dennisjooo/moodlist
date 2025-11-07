@@ -407,3 +407,41 @@ class WorkflowManager:
             workflow.get_summary()
             for workflow in recent_workflows[:limit]
         ]
+
+    async def graceful_shutdown(self, timeout: int = 300):
+        """Wait for active workflows to complete before shutdown.
+
+        Args:
+            timeout: Maximum time to wait in seconds (default: 5 minutes)
+        """
+        if not self.active_tasks:
+            logger.info("No active workflows, proceeding with shutdown")
+            return
+
+        active_count = len(self.active_tasks)
+        logger.info(
+            f"Graceful shutdown initiated: waiting for {active_count} active workflow(s) to complete",
+            active_workflows=list(self.active_tasks.keys()),
+            timeout=timeout
+        )
+
+        try:
+            # Wait for all active tasks with timeout
+            await asyncio.wait_for(
+                asyncio.gather(*self.active_tasks.values(), return_exceptions=True),
+                timeout=timeout
+            )
+            logger.info(f"All {active_count} workflows completed successfully during shutdown")
+        except asyncio.TimeoutError:
+            remaining = len([t for t in self.active_tasks.values() if not t.done()])
+            logger.warning(
+                f"Graceful shutdown timeout after {timeout}s: {remaining} workflow(s) still running",
+                remaining_workflows=list(self.active_tasks.keys())
+            )
+            # Cancel remaining tasks
+            for session_id, task in list(self.active_tasks.items()):
+                if not task.done():
+                    logger.info(f"Force-cancelling workflow {session_id} due to shutdown timeout")
+                    task.cancel()
+        except Exception as e:
+            logger.error(f"Error during graceful shutdown: {e}", exc_info=True)
