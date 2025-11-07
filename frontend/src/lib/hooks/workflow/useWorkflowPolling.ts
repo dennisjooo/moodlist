@@ -63,7 +63,7 @@ export function useWorkflowPolling(
             }
 
             // If workflow reached terminal state, fetch results and stop polling
-            const isTerminal = status.status === 'completed' || status.status === 'failed';
+            const isTerminal = isTerminalStatus(status.status);
 
             if (isTerminal) {
                 logger.debug('Terminal state detected, stopping polling', {
