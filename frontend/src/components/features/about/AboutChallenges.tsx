@@ -1,57 +1,77 @@
+'use client';
+
+import { motion } from '@/components/ui/lazy-motion';
 import { TrendingUp } from 'lucide-react';
 
 export function AboutChallenges() {
+    const challenges = [
+        {
+            title: "Session Management Hell",
+            content: "Managing user sessions across multi-worker backends? Yeah, that's a whole different beast. What works locally doesn't always work in production, especially when you have multiple instances running."
+        },
+        {
+            title: "AWS and That October 20th Outage",
+            content: "I was in the middle of setting up AWS services when the big outage hit on 10/20/2025. Perfect timing, right? Nothing like debugging whether it's your code or the entire cloud infrastructure that's broken. Thanks Jeff, at least I'm still on the free tier."
+        },
+        {
+            title: "AI Agents Are... Unpredictable",
+            content: "The AI agentic approach sounded great in theory. In practice? Some recommendations are way off the mark. Even with iterative filtering and refinement, it's not always there yet. Turns out teaching an AI to understand musical taste is surprisingly difficult."
+        },
+        {
+            title: "Spotify OAuth Deep Dive",
+            content: "Implementing Spotify's OAuth flow was fascinating and frustrating in equal measure. Token refresh, scope management, redirect URIs—there's a lot to get right."
+        }
+    ];
+
     return (
-        <section>
-            <div className="flex items-center gap-3 mb-6">
+        <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-80px' }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+        >
+            <motion.div
+                className="flex items-center gap-3 mb-6"
+                initial={{ opacity: 0, x: -12 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true, margin: '-80px' }}
+                transition={{ duration: 0.4, delay: 0.1, ease: 'easeOut' }}
+            >
                 <div className="p-2 rounded-lg bg-primary/10 border border-primary/10">
                     <TrendingUp className="w-4 h-4 text-primary" />
                 </div>
                 <h2 className="text-2xl font-semibold text-foreground">The Hard Parts</h2>
-            </div>
+            </motion.div>
             <div className="space-y-4 text-base leading-relaxed">
-                <p className="text-muted-foreground">
+                <motion.p
+                    className="text-muted-foreground"
+                    initial={{ opacity: 0, y: 12 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-80px' }}
+                    transition={{ duration: 0.4, delay: 0.2, ease: 'easeOut' }}
+                >
                     Turns out, building a full-stack application from scratch is <em>hard</em>. Here are some things
                     that humbled me:
-                </p>
+                </motion.p>
 
                 <div className="space-y-8 mt-6">
-                    <div className="space-y-2">
-                        <h3 className="text-lg font-medium text-foreground">Session Management Hell</h3>
-                        <p className="text-muted-foreground">
-                            Managing user sessions across multi-worker backends? Yeah, that&apos;s a whole different beast.
-                            What works locally doesn&apos;t always work in production, especially when you have multiple
-                            instances running.
-                        </p>
-                    </div>
-
-                    <div className="space-y-2">
-                        <h3 className="text-lg font-medium text-foreground">AWS and That October 20th Outage</h3>
-                        <p className="text-muted-foreground">
-                            I was in the middle of setting up AWS services when the big outage hit on 10/20/2025.
-                            Perfect timing, right? Nothing like debugging whether it&apos;s your code or the entire
-                            cloud infrastructure that&apos;s broken. Thanks Jeff, at least I&apos;m still on the free tier.
-                        </p>
-                    </div>
-
-                    <div className="space-y-2">
-                        <h3 className="text-lg font-medium text-foreground">AI Agents Are... Unpredictable</h3>
-                        <p className="text-muted-foreground">
-                            The AI agentic approach sounded great in theory. In practice? Some recommendations are way off
-                            the mark. Even with iterative filtering and refinement, it&apos;s not always there yet. Turns out
-                            teaching an AI to understand musical taste is surprisingly difficult.
-                        </p>
-                    </div>
-
-                    <div className="space-y-2">
-                        <h3 className="text-lg font-medium text-foreground">Spotify OAuth Deep Dive</h3>
-                        <p className="text-muted-foreground">
-                            Implementing Spotify&apos;s OAuth flow was fascinating and frustrating in equal measure.
-                            Token refresh, scope management, redirect URIs—there&apos;s a lot to get right.
-                        </p>
-                    </div>
+                    {challenges.map((challenge, index) => (
+                        <motion.div
+                            key={challenge.title}
+                            className="space-y-2"
+                            initial={{ opacity: 0, y: 16 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true, margin: '-60px' }}
+                            transition={{ duration: 0.4, delay: 0.3 + index * 0.1, ease: 'easeOut' }}
+                        >
+                            <h3 className="text-lg font-medium text-foreground">{challenge.title}</h3>
+                            <p className="text-muted-foreground">
+                                {challenge.content}
+                            </p>
+                        </motion.div>
+                    ))}
                 </div>
             </div>
-        </section>
+        </motion.section>
     );
 }

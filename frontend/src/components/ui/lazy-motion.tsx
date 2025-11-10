@@ -27,9 +27,12 @@ type MotionSpanComponent = React.ComponentType<MotionComponentProps>;
 type MotionUlComponent = React.ComponentType<MotionComponentProps>;
 type MotionLiComponent = React.ComponentType<MotionComponentProps>;
 type MotionButtonComponent = React.ComponentType<MotionComponentProps>;
+type MotionH1Component = React.ComponentType<MotionComponentProps>;
 type MotionH2Component = React.ComponentType<MotionComponentProps>;
 type MotionPComponent = React.ComponentType<MotionComponentProps>;
 type MotionArticleComponent = React.ComponentType<MotionComponentProps>;
+type MotionSectionComponent = React.ComponentType<MotionComponentProps>;
+type MotionFooterComponent = React.ComponentType<MotionComponentProps>;
 
 // Dynamically import motion components with placeholder
 export const motion = {
@@ -73,6 +76,14 @@ export const motion = {
     }
   ) as MotionButtonComponent,
 
+  h1: dynamic(
+    () => import('framer-motion').then((mod) => mod.motion.h1),
+    {
+      loading: () => <MotionPlaceholder as="h1" />,
+      ssr: false
+    }
+  ) as MotionH1Component,
+
   h2: dynamic(
     () => import('framer-motion').then((mod) => mod.motion.h2),
     {
@@ -96,6 +107,22 @@ export const motion = {
       ssr: false
     }
   ) as MotionArticleComponent,
+
+  section: dynamic(
+    () => import('framer-motion').then((mod) => mod.motion.section),
+    {
+      loading: () => <MotionPlaceholder as="section" />,
+      ssr: false
+    }
+  ) as MotionSectionComponent,
+
+  footer: dynamic(
+    () => import('framer-motion').then((mod) => mod.motion.footer),
+    {
+      loading: () => <MotionPlaceholder as="footer" />,
+      ssr: false
+    }
+  ) as MotionFooterComponent,
 };
 
 // Export commonly used hooks and utilities - these are lightweight and don't need lazy loading

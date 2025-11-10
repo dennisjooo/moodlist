@@ -1,25 +1,51 @@
+'use client';
+
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
+import { motion } from '@/components/ui/lazy-motion';
 import { Wrench, Monitor, Server, Globe, Code, Database, Activity, Settings, Palette, Sparkles, Zap, Shield, Key } from 'lucide-react';
 
 export function AboutTechStack() {
     return (
-        <section>
-            <div className="flex items-center gap-3 mb-6">
+        <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-80px' }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+        >
+            <motion.div
+                className="flex items-center gap-3 mb-6"
+                initial={{ opacity: 0, x: -12 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true, margin: '-80px' }}
+                transition={{ duration: 0.4, delay: 0.1, ease: 'easeOut' }}
+            >
                 <div className="p-2 rounded-lg bg-primary/10 border border-primary/10">
                     <Wrench className="w-4 h-4 text-primary" />
                 </div>
                 <h2 className="text-2xl font-semibold text-foreground">What I Built With</h2>
-            </div>
+            </motion.div>
             <div className="space-y-8 text-base leading-relaxed">
-                <p className="text-muted-foreground">
+                <motion.p
+                    className="text-muted-foreground"
+                    initial={{ opacity: 0, y: 12 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-80px' }}
+                    transition={{ duration: 0.4, delay: 0.2, ease: 'easeOut' }}
+                >
                     This project uses both <strong className="text-foreground">Reccobeat</strong> and{' '}
                     <strong className="text-foreground">Spotify APIs</strong>—huge kudos and thanks to them
                     for their wonderful APIs that made this possible. I used this as a learning playground to dive deep into modern web development.
-                </p>
+                </motion.p>
 
                 {/* Tech Stack Accordions */}
-                <Accordion type="single" collapsible className="w-full">
+                <motion.div
+                    initial={{ opacity: 0, y: 12 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: '-80px' }}
+                    transition={{ duration: 0.4, delay: 0.3, ease: 'easeOut' }}
+                >
+                    <Accordion type="single" collapsible className="w-full">
                     {/* Frontend Accordion */}
                     <AccordionItem value="frontend">
                         <AccordionTrigger className="hover:no-underline">
@@ -226,9 +252,10 @@ export function AboutTechStack() {
                             </div>
                         </AccordionContent>
                     </AccordionItem>
-                </Accordion>
+                    </Accordion>
+                </motion.div>
             </div>
-        </section>
+        </motion.section>
     );
 }
 
