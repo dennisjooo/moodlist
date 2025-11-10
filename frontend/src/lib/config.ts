@@ -16,10 +16,18 @@ interface PollingConfig {
   readonly pendingInterval: number;
 }
 
+interface AccessConfig {
+  readonly isDevMode: boolean;
+  readonly showLimitedAccessNotice: boolean;
+  readonly betaContactUrl?: string;
+  readonly betaContactLabel?: string;
+}
+
 export interface AppConfig {
   readonly api: APIConfig;
   readonly auth: AuthConfig;
   readonly polling: PollingConfig;
+  readonly access: AccessConfig;
 }
 
 export const config: AppConfig = {
@@ -37,5 +45,12 @@ export const config: AppConfig = {
     maxRetries: 3,
     awaitingInputInterval: 10000, // 10s
     pendingInterval: 5000,        // 5s
+  },
+  access: {
+    // Spotify API in dev mode = limited to 25 manually added users
+    isDevMode: process.env.NEXT_PUBLIC_SPOTIFY_DEV_MODE !== 'false',
+    showLimitedAccessNotice: process.env.NEXT_PUBLIC_SHOW_LIMITED_ACCESS_NOTICE !== 'false',
+    betaContactUrl: process.env.NEXT_PUBLIC_SPOTIFY_BETA_CONTACT_URL || undefined,
+    betaContactLabel: process.env.NEXT_PUBLIC_SPOTIFY_BETA_CONTACT_LABEL || undefined,
   },
 };
