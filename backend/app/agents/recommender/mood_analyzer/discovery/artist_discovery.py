@@ -1,5 +1,6 @@
 """Artist discovery component for Spotify artist search and filtering."""
 
+import asyncio
 import structlog
 from typing import Any, Dict, List, Optional
 
@@ -277,6 +278,8 @@ class ArtistDiscovery:
     ) -> List[Dict[str, Any]]:
         """Discover artists directly from genres (enhanced for 50% weight).
         
+        Optimized: All genre searches run in parallel for better performance.
+        
         Args:
             genre_keywords: List of genre keywords
             access_token: Spotify access token
@@ -284,10 +287,8 @@ class ArtistDiscovery:
         Returns:
             List of artist dictionaries
         """
-        genre_artists = []
-        
-        # Process up to 10 genres (expanded from 5)
-        for genre in genre_keywords[:10]:
+        async def search_genre(genre: str) -> List[Dict[str, Any]]:
+            """Search artists for a single genre."""
             try:
                 logger.info(f"Searching artists for genre: {genre}")
                 
@@ -297,7 +298,6 @@ class ArtistDiscovery:
                     genre=genre,
                     limit=40  # Get more artists per genre
                 )
-                genre_artists.extend(direct_artists)
                 
                 # Also search tracks for additional artist discovery
                 track_artists = await self.spotify_service.search_tracks_for_artists(
@@ -305,11 +305,27 @@ class ArtistDiscovery:
                     query=f"genre:{genre}",
                     limit=30  # Increased from 20
                 )
-                genre_artists.extend(track_artists)
+                
+                return direct_artists + track_artists
                 
             except Exception as e:
                 logger.error(f"Failed to search for genre '{genre}': {e}")
-                continue
+                return []
+        
+        # Process up to 10 genres in parallel
+        genres_to_search = genre_keywords[:10]
+        results = await asyncio.gather(
+            *[search_genre(genre) for genre in genres_to_search],
+            return_exceptions=True
+        )
+        
+        # Flatten results and filter out exceptions
+        genre_artists = []
+        for result in results:
+            if isinstance(result, list):
+                genre_artists.extend(result)
+            elif isinstance(result, Exception):
+                logger.warning(f"Exception in genre artist discovery: {result}")
         
         return genre_artists
 

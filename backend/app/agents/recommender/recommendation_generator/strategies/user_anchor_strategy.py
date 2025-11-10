@@ -1,7 +1,8 @@
 """User anchor strategy for recommendations based on user-mentioned tracks."""
 
+import asyncio
 import structlog
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ....states.agent_state import AgentState
 from .base_strategy import RecommendationStrategy
@@ -449,14 +450,30 @@ class UserAnchorStrategy(RecommendationStrategy):
         try:
             tracks_per_artist = max(2, limit // len(artist_names)) if artist_names else limit
 
+            # Search for all artists and prefetch their top tracks
+            artist_id_map, prefetched_top_tracks_map = await self._search_and_prefetch_artists(
+                artist_names, access_token
+            )
+
+            # Process artists sequentially but use prefetched data
             for artist_name in artist_names:
                 try:
+                    artist_id = artist_id_map.get(artist_name)
+                    if not artist_id:
+                        logger.warning(f"Could not find artist '{artist_name}' on Spotify")
+                        continue
+                    
+                    # Get prefetched tracks for this artist
+                    prefetched_tracks = prefetched_top_tracks_map.get(artist_id)
+                    
                     artist_recs = await self._get_tracks_for_single_artist(
                         artist_name,
                         access_token,
                         tracks_per_artist,
                         temporal_context,
-                        exclude_track_ids=exclude_track_ids
+                        exclude_track_ids=exclude_track_ids,
+                        prefetched_top_tracks=prefetched_tracks,
+                        artist_id=artist_id
                     )
                     recommendations.extend(artist_recs)
 
@@ -469,13 +486,68 @@ class UserAnchorStrategy(RecommendationStrategy):
 
         return recommendations[:limit]
 
+    async def _search_and_prefetch_artists(
+        self,
+        artist_names: List[str],
+        access_token: str
+    ) -> Tuple[Dict[str, str], Dict[str, List[Dict[str, Any]]]]:
+        """Search for artists and prefetch their top tracks in parallel.
+        
+        Args:
+            artist_names: List of artist names to search for
+            access_token: Spotify access token
+            
+        Returns:
+            Tuple of (artist_id_map, prefetched_top_tracks_map)
+        """
+        # First, search for all artists and get their IDs
+        artist_id_map = {}  # Maps artist_name -> artist_id
+        artist_search_tasks = []
+        for artist_name in artist_names:
+            async def search_artist(name: str):
+                try:
+                    results = await self.spotify_service.search_spotify_artists(
+                        access_token=access_token,
+                        query=name,
+                        limit=3
+                    )
+                    if results:
+                        artist = self._find_best_matching_artist(results, name)
+                        return name, artist.get("id")
+                except Exception as e:
+                    logger.warning(f"Failed to search for artist '{name}': {e}")
+                return name, None
+            artist_search_tasks.append(search_artist(artist_name))
+        
+        # Search all artists in parallel
+        search_results = await asyncio.gather(*artist_search_tasks, return_exceptions=True)
+        for result in search_results:
+            if isinstance(result, tuple):
+                name, artist_id = result
+                if artist_id:
+                    artist_id_map[name] = artist_id
+        
+        # Batch prefetch top tracks for all found artists
+        artist_ids = list(artist_id_map.values())
+        prefetched_top_tracks_map = {}
+        if artist_ids:
+            prefetched_top_tracks_map = await self.spotify_service.get_artist_top_tracks_batch(
+                access_token=access_token,
+                artist_ids=artist_ids,
+                market="US",
+            )
+        
+        return artist_id_map, prefetched_top_tracks_map
+
     async def _get_tracks_for_single_artist(
         self,
         artist_name: str,
         access_token: str,
         tracks_per_artist: int,
         temporal_context: Optional[Dict[str, Any]] = None,
-        exclude_track_ids: Optional[set] = None
+        exclude_track_ids: Optional[set] = None,
+        prefetched_top_tracks: Optional[List[Dict[str, Any]]] = None,
+        artist_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Get top tracks for a single artist by name.
 
@@ -492,39 +564,75 @@ class UserAnchorStrategy(RecommendationStrategy):
         recommendations = []
         exclude_track_ids = exclude_track_ids or set()
 
-        # Search for the artist (get 3 results to find best match)
-        artist_results = await self.spotify_service.search_spotify_artists(
-            access_token=access_token,
-            query=artist_name,
-            limit=3
-        )
-
-        if not artist_results or len(artist_results) == 0:
-            logger.warning(f"Could not find artist '{artist_name}' on Spotify (search returned empty)")
-            return []
-
-        # Find the best matching artist
-        artist = self._find_best_matching_artist(artist_results, artist_name)
-        artist_id = artist.get("id")
+        # Use provided artist_id if available, otherwise search for it
         if not artist_id:
-            logger.warning(f"Found artist '{artist_name}' in search but no artist ID available")
-            return []
+            # Search for the artist (get 3 results to find best match)
+            artist_results = await self.spotify_service.search_spotify_artists(
+                access_token=access_token,
+                query=artist_name,
+                limit=3
+            )
+
+            if not artist_results or len(artist_results) == 0:
+                logger.warning(f"Could not find artist '{artist_name}' on Spotify (search returned empty)")
+                return []
+
+            # Find the best matching artist
+            artist = self._find_best_matching_artist(artist_results, artist_name)
+            artist_id = artist.get("id")
+            if not artist_id:
+                logger.warning(f"Found artist '{artist_name}' in search but no artist ID available")
+                return []
 
         # Get artist's tracks using hybrid strategy favoring top tracks
         # Users explicitly mentioned this artist, so favor their popular/recognizable tracks
+        # Use prefetched tracks if available to avoid individual API calls
         top_tracks = await self.spotify_service.get_artist_hybrid_tracks(
             artist_id=artist_id,
             access_token=access_token,
             max_popularity=95,  # Allow popular tracks (users want hits from mentioned artists)
             min_popularity=30,  # Ensure decent quality
             target_count=tracks_per_artist,
-            top_tracks_ratio=0.7  # Popular-focused: 70% top tracks, 30% album tracks
+            top_tracks_ratio=0.7,  # Popular-focused: 70% top tracks, 30% album tracks
+            prefetched_top_tracks=prefetched_top_tracks
         )
 
-        # Add top tracks (already limited by hybrid strategy)
+        # Process tracks and create recommendations
+        track_count, filtered_count, skipped_duplicates = await self._process_artist_tracks(
+            top_tracks, artist_name, temporal_context, exclude_track_ids, recommendations
+        )
+
+        logger.info(
+            f"✓ Got {track_count} top tracks from user-mentioned artist: {artist_name} "
+            f"(filtered {filtered_count}, skipped {skipped_duplicates} duplicates, marked as source='anchor_track', protected=True)"
+        )
+
+        return recommendations
+
+    async def _process_artist_tracks(
+        self,
+        top_tracks: List[Dict[str, Any]],
+        artist_name: str,
+        temporal_context: Optional[Dict[str, Any]],
+        exclude_track_ids: set,
+        recommendations: List[Dict[str, Any]]
+    ) -> Tuple[int, int, int]:
+        """Process artist tracks and add them to recommendations.
+        
+        Args:
+            top_tracks: List of track dictionaries from the artist
+            artist_name: Name of the artist (for logging)
+            temporal_context: Temporal context for filtering
+            exclude_track_ids: Set of track IDs to exclude
+            recommendations: List to append recommendations to
+            
+        Returns:
+            Tuple of (track_count, filtered_count, skipped_duplicates)
+        """
         track_count = 0
         filtered_count = 0
         skipped_duplicates = 0
+        
         for track in top_tracks:
             if not track.get("id"):
                 continue
@@ -567,13 +675,8 @@ class UserAnchorStrategy(RecommendationStrategy):
                 "anchor_type": "user"  # Mark as user anchor
             })
             track_count += 1
-
-        logger.info(
-            f"✓ Got {track_count} top tracks from user-mentioned artist: {artist_name} "
-            f"(filtered {filtered_count}, skipped {skipped_duplicates} duplicates, marked as source='anchor_track', protected=True)"
-        )
-
-        return recommendations
+        
+        return track_count, filtered_count, skipped_duplicates
 
     def _find_best_matching_artist(
         self,

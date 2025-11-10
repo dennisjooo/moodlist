@@ -30,7 +30,8 @@ class ArtistProcessor:
         target_features: Dict[str, Any],
         access_token: str,
         mood_analysis: Optional[Dict[str, Any]] = None,
-        user_mentioned_artists: Optional[List[str]] = None
+        user_mentioned_artists: Optional[List[str]] = None,
+        skip_audio_features: bool = False
     ) -> List[Dict[str, Any]]:
         """Get anchor candidates from top recommended artists, prioritizing those mentioned in prompt.
 
@@ -63,7 +64,8 @@ class ArtistProcessor:
         
         # Step 3: Fetch tracks for each validated artist
         candidates = await self._fetch_artist_tracks(
-            artist_infos, mentioned_artists, target_features, access_token, temporal_context
+            artist_infos, mentioned_artists, target_features, access_token, temporal_context,
+            skip_audio_features=skip_audio_features
         )
 
         return candidates
@@ -197,7 +199,8 @@ class ArtistProcessor:
         mentioned_artists: List[str],
         target_features: Dict[str, Any],
         access_token: str,
-        temporal_context: Optional[Dict[str, Any]] = None
+        temporal_context: Optional[Dict[str, Any]] = None,
+        skip_audio_features: bool = False
     ) -> List[Dict[str, Any]]:
         """Fetch top tracks for each artist in parallel and create anchor candidates.
 
@@ -263,8 +266,8 @@ class ArtistProcessor:
             elif isinstance(result, Exception):
                 logger.warning(f"Exception in artist track fetching: {result}")
 
-        # Batch fetch all audio features at once
-        if candidates and self.reccobeat_service:
+        # Batch fetch all audio features at once (unless skipped for coordinated batching)
+        if not skip_audio_features and candidates and self.reccobeat_service:
             track_ids = [c['track']['id'] for c in candidates if c.get('track', {}).get('id')]
             if track_ids:
                 try:
