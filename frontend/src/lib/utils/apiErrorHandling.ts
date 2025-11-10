@@ -1,3 +1,16 @@
+import { AxiosError } from 'axios';
+
+interface ValidationError {
+  msg: string;
+}
+
+interface ErrorResponse {
+  detail?: {
+    message?: string;
+  } | string | ValidationError[];
+  message?: string;
+}
+
 /**
  * Extract user-friendly error message from API response
  */
@@ -10,11 +23,11 @@ export async function extractErrorMessage(response: Response): Promise<string> {
       return defaultMessage;
     }
 
-    const errorData = await response.json();
+    const errorData = await response.json() as ErrorResponse;
 
     // Backend returns error in detail.message for rate limits
-    if (errorData.detail?.message) {
-      return errorData.detail.message;
+    if (errorData.detail && typeof errorData.detail === 'object' && !Array.isArray(errorData.detail) && 'message' in errorData.detail) {
+      return errorData.detail.message ?? defaultMessage;
     }
 
     // FastAPI validation errors
@@ -29,13 +42,52 @@ export async function extractErrorMessage(response: Response): Promise<string> {
 
     // Array of validation errors
     if (Array.isArray(errorData.detail)) {
-      return errorData.detail.map((e: any) => e.msg).join(', ');
+      return errorData.detail.map((e: ValidationError) => e.msg).join(', ');
     }
   } catch {
     // If parsing fails, use default message
   }
 
   return defaultMessage;
+}
+
+/**
+ * Extract user-friendly error message from Axios error
+ */
+export function extractAxiosErrorMessage(error: AxiosError): string {
+  if (error.response) {
+    const errorData = error.response.data as ErrorResponse;
+    const status = error.response.status;
+    const statusText = error.response.statusText;
+
+    // Backend returns error in detail.message for rate limits
+    if (errorData?.detail && typeof errorData.detail === 'object' && !Array.isArray(errorData.detail) && 'message' in errorData.detail) {
+      return errorData.detail.message ?? `Request failed: ${status} ${statusText}`;
+    }
+
+    // FastAPI validation errors
+    if (errorData?.detail && typeof errorData.detail === 'string') {
+      return errorData.detail;
+    }
+
+    // Generic message field
+    if (errorData?.message) {
+      return errorData.message;
+    }
+
+    // Array of validation errors
+    if (Array.isArray(errorData?.detail)) {
+      return errorData.detail.map((e: ValidationError) => e.msg).join(', ');
+    }
+
+    return `Request failed: ${status} ${statusText}`;
+  }
+
+  if (error.request) {
+    return 'Network error: No response received from server';
+  }
+
+  return error.message || 'Unknown error occurred';
 }
 
 /**
