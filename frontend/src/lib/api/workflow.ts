@@ -1,9 +1,12 @@
 // API service layer for agentic workflow endpoints
 // Following the interfaces from FRONTEND_INTEGRATION_GUIDE.md
 
+import { AxiosError, AxiosRequestConfig, isAxiosError } from 'axios';
+
+import apiClient from '@/lib/axios';
 import { config } from '@/lib/config';
 import { logger } from '@/lib/utils/logger';
-import { extractErrorMessage, APIError } from '@/lib/utils/apiErrorHandling';
+import { extractAxiosErrorMessage, APIError } from '@/lib/utils/apiErrorHandling';
 
 export interface StartRecommendationRequest {
     mood_prompt: string;
@@ -138,41 +141,34 @@ export interface WorkflowCostSummary {
 class WorkflowAPI {
     private async request<T>(
         endpoint: string,
-        options: RequestInit = {}
+        options: AxiosRequestConfig = {}
     ): Promise<T> {
         const url = `${config.api.baseUrl}${endpoint}`;
-        logger.debug('API request', { component: 'WorkflowAPI', url, endpoint, credentials: options.credentials || 'include' });
-
-        const reqConfig: RequestInit = {
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers,
-            },
-            credentials: 'include',
-            ...options,
-        };
+        logger.debug('API request', { component: 'WorkflowAPI', url, endpoint, method: options.method ?? 'get' });
 
         try {
-            const response = await fetch(url, reqConfig);
+            const response = await apiClient.request<T>({
+                url: endpoint,
+                ...options,
+            });
             logger.info('API response', { component: 'WorkflowAPI', status: response.status, endpoint });
 
-            if (!response.ok) {
-                const errorMessage = await extractErrorMessage(response);
-                logger.error('API request failed', undefined, {
-                    component: 'WorkflowAPI',
-                    status: response.status,
-                    endpoint,
-                    errorMessage
-                });
-                throw new APIError(response.status, errorMessage, endpoint);
-            }
-
-            return await response.json();
+            return response.data;
         } catch (error) {
             logger.error('API request error', error, { component: 'WorkflowAPI', endpoint });
+
+            if (isAxiosError(error)) {
+                const axiosError = error as AxiosError;
+                const status = axiosError.response?.status ?? 0;
+                const errorMessage = extractAxiosErrorMessage(axiosError);
+
+                throw new APIError(status, errorMessage, endpoint);
+            }
+
             if (error instanceof APIError) {
                 throw error;
             }
+
             throw new APIError(0, `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`, endpoint);
         }
     }

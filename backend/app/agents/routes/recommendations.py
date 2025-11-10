@@ -148,21 +148,55 @@ async def stream_workflow_status(
         yield ": connected\n\n"
 
         queue: asyncio.Queue = asyncio.Queue()
+        last_sent_status = None
+        last_sent_step = None
 
         async def state_change_callback(sid: str, state):
             await queue.put(state)
 
         workflow_manager.subscribe_to_state_changes(session_id, state_change_callback)
 
+        def get_current_state():
+            """Get the current state from workflow manager, checking both active and completed."""
+            return workflow_manager.get_workflow_state(session_id)
+        
+        def is_forward_progress(current_status: str, new_status: str) -> bool:
+            """Check if new_status represents forward progress from current_status."""
+            if not current_status:
+                return True  # No previous status, allow any
+            
+            # Define status progression order
+            status_order = {
+                "pending": 0,
+                "analyzing_mood": 1,
+                "gathering_seeds": 2,
+                "generating_recommendations": 3,
+                "evaluating_quality": 4,
+                "optimizing_recommendations": 5,
+                "ordering_playlist": 5,
+                "completed": 6,
+                "failed": 6,
+                "cancelled": 6,
+            }
+            
+            current_order = status_order.get(current_status, -1)
+            new_order = status_order.get(new_status, -1)
+            
+            # Allow same order (sub-steps) or forward progress
+            return new_order >= current_order
+
         try:
-            state = workflow_manager.get_workflow_state(session_id)
+            # Get initial state
+            state = get_current_state()
 
             if state:
                 status_data = serialize_workflow_state(session_id, state)
+                last_sent_status = state.status.value
+                last_sent_step = state.current_step
 
                 yield f"event: status\ndata: {json.dumps(status_data)}\n\n"
 
-                if state.status.value in ["completed", "failed"]:
+                if state.status.value in ["completed", "failed", "cancelled"]:
                     yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
                     return
             else:
@@ -177,11 +211,13 @@ async def stream_workflow_status(
                     return
 
                 status_data = serialize_playlist_status(session_id, playlist)
+                last_sent_status = playlist.status
 
                 yield f"event: status\ndata: {json.dumps(status_data)}\n\n"
                 yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
                 return
 
+            # Main loop: process queued updates and periodically verify current state
             while True:
                 if await request.is_disconnected():
                     logger.debug(
@@ -191,15 +227,69 @@ async def stream_workflow_status(
                     break
 
                 try:
-                    updated_state = await asyncio.wait_for(queue.get(), timeout=15.0)
-                    status_data = serialize_workflow_state(session_id, updated_state)
-                    yield f"event: status\ndata: {json.dumps(status_data)}\n\n"
+                    # Wait for state change notification with timeout
+                    updated_state = await asyncio.wait_for(queue.get(), timeout=5.0)
+                    
+                    # Always get the latest state from workflow manager to ensure accuracy
+                    current_state = get_current_state()
+                    if current_state:
+                        # Use the current state from manager (most up-to-date)
+                        state_to_send = current_state
+                    else:
+                        # Fallback to queued state if manager doesn't have it
+                        state_to_send = updated_state
+                    
+                    # Only send if status or step actually changed AND it's forward progress
+                    if (state_to_send.status.value != last_sent_status or 
+                        state_to_send.current_step != last_sent_step):
+                        
+                        # Check if this is forward progress (prevent backwards updates)
+                        if is_forward_progress(last_sent_status, state_to_send.status.value):
+                            status_data = serialize_workflow_state(session_id, state_to_send)
+                            last_sent_status = state_to_send.status.value
+                            last_sent_step = state_to_send.current_step
+                            
+                            yield f"event: status\ndata: {json.dumps(status_data)}\n\n"
 
-                    if updated_state.status.value in ["completed", "failed"]:
-                        yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
-                        break
+                            if state_to_send.status.value in ["completed", "failed", "cancelled"]:
+                                yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
+                                break
+                        else:
+                            logger.debug(
+                                "Skipping backwards status update in stream",
+                                session_id=session_id,
+                                from_status=last_sent_status,
+                                to_status=state_to_send.status.value
+                            )
 
                 except asyncio.TimeoutError:
+                    # On timeout, verify current state hasn't changed
+                    current_state = get_current_state()
+                    if current_state:
+                        # Check if state changed while we were waiting AND it's forward progress
+                        if (current_state.status.value != last_sent_status or 
+                            current_state.current_step != last_sent_step):
+                            
+                            # Check if this is forward progress
+                            if is_forward_progress(last_sent_status, current_state.status.value):
+                                status_data = serialize_workflow_state(session_id, current_state)
+                                last_sent_status = current_state.status.value
+                                last_sent_step = current_state.current_step
+                                
+                                yield f"event: status\ndata: {json.dumps(status_data)}\n\n"
+
+                                if current_state.status.value in ["completed", "failed", "cancelled"]:
+                                    yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
+                                    break
+                            else:
+                                logger.debug(
+                                    "Skipping backwards status update in stream (timeout check)",
+                                    session_id=session_id,
+                                    from_status=last_sent_status,
+                                    to_status=current_state.status.value
+                                )
+                    
+                    # Send keep-alive
                     yield ": keep-alive\n\n"
 
         except Exception as exc:

@@ -41,10 +41,10 @@ export function AlreadyAuthenticatedView() {
               Already authenticated
             </Badge>
             <CardTitle className="text-3xl font-semibold">
-              You're good to go!
+              You&apos;re good to go!
             </CardTitle>
             <CardDescription className="text-base text-muted-foreground">
-              You're already logged in. Redirecting you to our homepage...
+              You&apos;re already logged in. Redirecting you to our homepage...
             </CardDescription>
           </div>
         </CardHeader>
