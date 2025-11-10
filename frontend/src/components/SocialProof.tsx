@@ -3,7 +3,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { motion } from '@/components/ui/lazy-motion';
 import { useEffect, useRef, useState } from 'react';
-import { config } from '@/lib/config';
+import apiClient from '@/lib/axios';
 import { logger } from '@/lib/utils/logger';
 
 interface PublicStats {
@@ -25,11 +25,8 @@ export default function SocialProof() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const response = await fetch(`${config.api.baseUrl}/api/stats/public`);
-        if (response.ok) {
-          const data = await response.json();
-          setStats(data);
-        }
+        const response = await apiClient.get<PublicStats>('/api/stats/public');
+        setStats(response.data);
       } catch (error) {
         logger.error('Failed to fetch public stats', error, { component: 'SocialProof' });
       } finally {

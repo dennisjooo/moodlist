@@ -1,6 +1,8 @@
 // API client for user-related endpoints
 
-import { config } from '@/lib/config';
+import { AxiosError, AxiosRequestConfig, isAxiosError } from 'axios';
+
+import apiClient from '@/lib/axios';
 import { logger } from '@/lib/utils/logger';
 
 export interface UserStats {
@@ -64,32 +66,37 @@ export interface QuotaStatus {
 class UserAPI {
     private async request<T>(
         endpoint: string,
-        options: RequestInit = {}
+        options: AxiosRequestConfig = {}
     ): Promise<T> {
-        const url = `${config.api.baseUrl}${endpoint}`;
-
-        const reqConfig: RequestInit = {
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers,
-            },
-            credentials: 'include',
-            ...options,
-        };
-
-        const response = await fetch(url, reqConfig);
-
-        if (!response.ok) {
-            logger.error('User API request failed', undefined, {
-                component: 'UserAPI',
-                status: response.status,
-                statusText: response.statusText,
-                endpoint
+        try {
+            const response = await apiClient.request<T>({
+                url: endpoint,
+                ...options,
             });
-            throw new Error(`API request failed: ${response.status} ${response.statusText}`);
-        }
 
-        return await response.json();
+            return response.data;
+        } catch (error) {
+            if (isAxiosError(error)) {
+                const axiosError = error as AxiosError;
+                const status = axiosError.response?.status ?? 0;
+                const statusText = axiosError.response?.statusText ?? axiosError.message;
+
+                logger.error('User API request failed', error, {
+                    component: 'UserAPI',
+                    status,
+                    statusText,
+                    endpoint,
+                });
+
+                throw new Error(`API request failed: ${status} ${statusText}`);
+            }
+
+            logger.error('Unexpected User API error', error, {
+                component: 'UserAPI',
+                endpoint,
+            });
+            throw error;
+        }
     }
 
     async getDashboard(): Promise<DashboardData> {

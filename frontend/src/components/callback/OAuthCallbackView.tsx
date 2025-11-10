@@ -32,7 +32,7 @@ export function OAuthCallbackView({
         <CardHeader className="flex flex-col items-center gap-5 text-center">
           {status === 'loading' && <AuthenticatingView />}
           {status === 'success' && <SuccessView />}
-          {status === 'error' && <ErrorView onRetry={onRetry} />}
+          {status === 'error' && <ErrorView />}
         </CardHeader>
 
         <CardContent className="space-y-6 pb-8">
