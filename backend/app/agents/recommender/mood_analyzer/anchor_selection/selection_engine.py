@@ -1,5 +1,6 @@
 """Main anchor selection engine coordinating all components."""
 
+import asyncio
 import structlog
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -147,22 +148,46 @@ class AnchorSelectionEngine:
             user_mentioned_artists, artist_recommendations
         )
 
-        # Step 3: Get tracks from top recommended artists
-        artist_candidates = await self.artist_processor.get_artist_based_candidates(
-            mood_prompt, prioritized_artists, target_features, access_token, mood_analysis, user_mentioned_artists
+        # Step 3 & 4: Parallelize artist and genre candidate gathering (without audio features)
+        # We'll fetch audio features once for all candidates to avoid rate limits
+        artist_task = self.artist_processor.get_artist_based_candidates(
+            mood_prompt, prioritized_artists, target_features, access_token, mood_analysis, user_mentioned_artists,
+            skip_audio_features=True  # Skip audio features, we'll fetch them all together
         )
-        logger.info(f"Found {len(artist_candidates)} artist-based track candidates from {len(prioritized_artists)} artists")
-
-        # Step 4: Get genre-based candidates for LLM to evaluate
-        genre_candidates = []
+        
+        genre_task = None
         if genre_keywords:
-            genre_candidates = await self._get_genre_based_candidates(
-                genre_keywords[:8], target_features, access_token, mood_prompt, temporal_context
+            genre_task = self._get_genre_based_candidates(
+                genre_keywords[:8], target_features, access_token, mood_prompt, temporal_context,
+                skip_audio_features=True  # Skip audio features, we'll fetch them all together
             )
-            logger.info(f"Found {len(genre_candidates)} genre-based track candidates")
+        
+        # Execute artist and genre gathering in parallel
+        if genre_task:
+            artist_candidates, genre_candidates = await asyncio.gather(
+                artist_task, genre_task, return_exceptions=True
+            )
+            if isinstance(artist_candidates, Exception):
+                logger.error(f"Artist candidate gathering failed: {artist_candidates}")
+                artist_candidates = []
+            if isinstance(genre_candidates, Exception):
+                logger.error(f"Genre candidate gathering failed: {genre_candidates}")
+                genre_candidates = []
+        else:
+            artist_candidates = await artist_task
+            genre_candidates = []
+        
+        logger.info(f"Found {len(artist_candidates)} artist-based track candidates from {len(prioritized_artists)} artists")
+        logger.info(f"Found {len(genre_candidates)} genre-based track candidates")
 
         # Combine all candidates
-        return user_candidates + artist_candidates + genre_candidates
+        all_candidates = user_candidates + artist_candidates + genre_candidates
+        
+        # Fetch audio features ONCE for all candidates to avoid rate limits
+        if all_candidates and self.track_processor.reccobeat_service:
+            await self._attach_audio_features_to_candidates(all_candidates)
+        
+        return all_candidates
 
     def _prioritize_user_mentioned_artists(
         self,
@@ -191,6 +216,51 @@ class AnchorSelectionEngine:
                 prioritized_artists.append(artist)
         
         return prioritized_artists
+
+    async def _attach_audio_features_to_candidates(
+        self,
+        candidates: List[Dict[str, Any]]
+    ) -> None:
+        """Attach audio features to all candidates in a batch to avoid rate limits.
+        
+        Args:
+            candidates: List of candidate dictionaries to enrich with audio features
+        """
+        # Collect all track IDs
+        track_ids = []
+        for candidate in candidates:
+            track_id = None
+            if isinstance(candidate, dict):
+                # Artist candidates have nested 'track' dict
+                track_id = candidate.get('track', {}).get('id') or candidate.get('id')
+            if track_id and track_id not in track_ids:
+                track_ids.append(track_id)
+        
+        if not track_ids:
+            return
+        
+        try:
+            logger.info(f"Batch fetching audio features for {len(track_ids)} tracks from all sources")
+            features_map = await self.track_processor.get_track_features_batch(track_ids)
+            
+            # Attach features to candidates
+            for candidate in candidates:
+                track_id = None
+                if isinstance(candidate, dict):
+                    track_id = candidate.get('track', {}).get('id') or candidate.get('id')
+                
+                if track_id and track_id in features_map:
+                    features = features_map[track_id]
+                    # Attach to both formats (artist candidates vs genre candidates)
+                    if 'track' in candidate:
+                        candidate['track']['audio_features'] = features
+                        candidate['features'] = features
+                    else:
+                        candidate['audio_features'] = features
+            
+            logger.info(f"Successfully attached audio features to {len([c for c in candidates if (c.get('track', {}).get('audio_features') or c.get('audio_features'))])} candidates")
+        except Exception as e:
+            logger.warning(f"Failed to batch fetch audio features for all candidates: {e}")
 
     async def _apply_llm_scoring_and_selection(
         self,
@@ -287,30 +357,83 @@ class AnchorSelectionEngine:
             user_mentioned_artists, artist_recommendations
         )
 
-        # PRIORITY 3: Add tracks from artists (now prioritized with user mentions first)
+        # PRIORITY 3 & 4: Parallelize artist and genre candidate gathering for better performance
+        artist_candidates, genre_candidates = await self._gather_artist_and_genre_candidates_parallel(
+            prioritized_artists, genre_keywords, mood_prompt, target_features,
+            access_token, user_mentioned_artists
+        )
+        
+        if artist_candidates:
+            anchor_candidates.extend(artist_candidates)
+            logger.info(f"Found {len(artist_candidates)} artist-based tracks as anchors")
+        if genre_candidates:
+            anchor_candidates.extend(genre_candidates)
+
+        return anchor_candidates
+
+    async def _gather_artist_and_genre_candidates_parallel(
+        self,
+        prioritized_artists: List[str],
+        genre_keywords: List[str],
+        mood_prompt: str,
+        target_features: Dict[str, Any],
+        access_token: str,
+        user_mentioned_artists: List[str]
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """Gather artist and genre candidates in parallel.
+        
+        Args:
+            prioritized_artists: List of prioritized artist names
+            genre_keywords: List of genre keywords
+            mood_prompt: User's mood prompt
+            target_features: Target audio features
+            access_token: Spotify access token
+            user_mentioned_artists: User-mentioned artists
+            
+        Returns:
+            Tuple of (artist_candidates, genre_candidates)
+        """
+        artist_task = None
+        genre_task = None
+        
         if prioritized_artists:
             fallback_mood_analysis = {
                 'mood_interpretation': '',
                 'genre_keywords': genre_keywords,
                 'artist_recommendations': prioritized_artists
             }
-            artist_candidates = await self.artist_processor.get_artist_based_candidates(
+            artist_task = self.artist_processor.get_artist_based_candidates(
                 mood_prompt, prioritized_artists, target_features, access_token, 
                 fallback_mood_analysis, user_mentioned_artists
             )
-            anchor_candidates.extend(artist_candidates)
-            logger.info(f"Found {len(artist_candidates)} artist-based tracks as anchors")
-
-        # PRIORITY 4: Add genre-based tracks
-        if not genre_keywords and (user_candidates or artist_candidates):
-            logger.info("No genre keywords, but using user/artist-mentioned tracks as anchors")
-        else:
-            genre_candidates = await self._get_genre_based_candidates(
+        
+        if genre_keywords:
+            genre_task = self._get_genre_based_candidates(
                 genre_keywords[:5], target_features, access_token, mood_prompt
             )
-            anchor_candidates.extend(genre_candidates)
-
-        return anchor_candidates
+        
+        # Execute artist and genre gathering in parallel
+        if artist_task and genre_task:
+            artist_candidates, genre_candidates = await asyncio.gather(
+                artist_task, genre_task, return_exceptions=True
+            )
+            if isinstance(artist_candidates, Exception):
+                logger.error(f"Artist candidate gathering failed: {artist_candidates}")
+                artist_candidates = []
+            if isinstance(genre_candidates, Exception):
+                logger.error(f"Genre candidate gathering failed: {genre_candidates}")
+                genre_candidates = []
+        elif artist_task:
+            artist_candidates = await artist_task
+            genre_candidates = []
+        elif genre_task:
+            artist_candidates = []
+            genre_candidates = await genre_task
+        else:
+            artist_candidates = []
+            genre_candidates = []
+        
+        return artist_candidates, genre_candidates
 
     async def _get_user_mentioned_candidates(
         self,
@@ -397,64 +520,103 @@ class AnchorSelectionEngine:
         # Search for each extracted track
         for track_name, artist_name in track_artist_pairs[:5]:  # Limit to 5 tracks
             try:
-                # Search for track with artist context
-                search_query = f"{track_name} {artist_name}" if artist_name else track_name
-                logger.info(f"🔍 Searching Spotify for user-mentioned track: '{search_query}'")
-
-                tracks = await self.spotify_service.search_spotify_tracks(
-                    access_token=access_token,
-                    query=search_query,
-                    limit=5  # Get more results to validate artist match
+                best_match = await self._search_and_match_track(
+                    track_name, artist_name, access_token
                 )
-
-                if tracks:
-                    # Log all search results
-                    logger.info(f"  Found {len(tracks)} results from Spotify:")
-                    for i, track in enumerate(tracks[:3]):
-                        track_artists = ', '.join([a.get('name', '') for a in track.get('artists', [])])
-                        logger.info(f"    {i+1}. '{track.get('name')}' by {track_artists}")
-                    
-                    # Try to find best match by artist validation
-                    best_match = None
-                    
-                    # If artist was specified, try to match it
-                    if artist_name:
-                        artist_name_lower = artist_name.lower()
-                        for track in tracks:
-                            track_artists = [a.get('name', '').lower() for a in track.get('artists', [])]
-                            if any(artist_name_lower in ta or ta in artist_name_lower for ta in track_artists):
-                                best_match = track
-                                logger.info(
-                                    f"✓ Found validated match: '{track.get('name')}' by "
-                                    f"{', '.join([a.get('name', '') for a in track.get('artists', [])])} "
-                                    f"(matched artist: {artist_name})"
-                                )
-                                break
-                    
-                    # Fallback to first result if no artist match
-                    if not best_match:
-                        best_match = tracks[0]
-                        if artist_name:
-                            logger.warning(
-                                f"⚠ No artist match found for '{artist_name}', using top result: "
-                                f"'{best_match.get('name')}' by "
-                                f"{', '.join([a.get('name', '') for a in best_match.get('artists', [])])}"
-                            )
-                        else:
-                            logger.info(
-                                f"✓ Using top result: '{best_match.get('name')}' by "
-                                f"{', '.join([a.get('name', '') for a in best_match.get('artists', [])])}"
-                            )
-                    
+                if best_match:
                     user_tracks.append(best_match)
-                else:
-                    logger.warning(f"✗ No Spotify results found for '{search_query}'")
-
             except Exception as e:
                 logger.warning(f"Failed to search for user-mentioned track '{track_name}': {e}")
                 continue
 
         return user_tracks
+
+    async def _search_and_match_track(
+        self,
+        track_name: str,
+        artist_name: Optional[str],
+        access_token: str
+    ) -> Optional[Dict[str, Any]]:
+        """Search for a track and find the best matching result.
+        
+        Args:
+            track_name: Name of the track to search for
+            artist_name: Optional artist name for validation
+            access_token: Spotify access token
+            
+        Returns:
+            Best matching track dictionary or None if not found
+        """
+        # Search for track with artist context
+        search_query = f"{track_name} {artist_name}" if artist_name else track_name
+        logger.info(f"🔍 Searching Spotify for user-mentioned track: '{search_query}'")
+
+        tracks = await self.spotify_service.search_spotify_tracks(
+            access_token=access_token,
+            query=search_query,
+            limit=5  # Get more results to validate artist match
+        )
+
+        if not tracks:
+            logger.warning(f"✗ No Spotify results found for '{search_query}'")
+            return None
+
+        # Log all search results
+        logger.info(f"  Found {len(tracks)} results from Spotify:")
+        for i, track in enumerate(tracks[:3]):
+            track_artists = ', '.join([a.get('name', '') for a in track.get('artists', [])])
+            logger.info(f"    {i+1}. '{track.get('name')}' by {track_artists}")
+        
+        # Try to find best match by artist validation
+        best_match = self._find_best_track_match(tracks, artist_name)
+        
+        return best_match
+
+    def _find_best_track_match(
+        self,
+        tracks: List[Dict[str, Any]],
+        artist_name: Optional[str]
+    ) -> Optional[Dict[str, Any]]:
+        """Find the best matching track from search results.
+        
+        Args:
+            tracks: List of track dictionaries from search
+            artist_name: Optional artist name for validation
+            
+        Returns:
+            Best matching track dictionary
+        """
+        if not tracks:
+            return None
+        
+        # If artist was specified, try to match it
+        if artist_name:
+            artist_name_lower = artist_name.lower()
+            for track in tracks:
+                track_artists = [a.get('name', '').lower() for a in track.get('artists', [])]
+                if any(artist_name_lower in ta or ta in artist_name_lower for ta in track_artists):
+                    logger.info(
+                        f"✓ Found validated match: '{track.get('name')}' by "
+                        f"{', '.join([a.get('name', '') for a in track.get('artists', [])])} "
+                        f"(matched artist: {artist_name})"
+                    )
+                    return track
+        
+        # Fallback to first result if no artist match
+        best_match = tracks[0]
+        if artist_name:
+            logger.warning(
+                f"⚠ No artist match found for '{artist_name}', using top result: "
+                f"'{best_match.get('name')}' by "
+                f"{', '.join([a.get('name', '') for a in best_match.get('artists', [])])}"
+            )
+        else:
+            logger.info(
+                f"✓ Using top result: '{best_match.get('name')}' by "
+                f"{', '.join([a.get('name', '') for a in best_match.get('artists', [])])}"
+            )
+        
+        return best_match
 
     async def _get_genre_based_candidates(
         self,
@@ -462,12 +624,16 @@ class AnchorSelectionEngine:
         target_features: Dict[str, Any],
         access_token: str,
         mood_prompt: str = "",
-        temporal_context: Optional[Dict[str, Any]] = None
+        temporal_context: Optional[Dict[str, Any]] = None,
+        skip_audio_features: bool = False
     ) -> List[Dict[str, Any]]:
-        """Get anchor candidates from genre-based track search."""
-        candidates = []
-
-        for genre in genres:
+        """Get anchor candidates from genre-based track search.
+        
+        Optimized: All genre searches run in parallel, then audio features are batched
+        to avoid rate limit issues.
+        """
+        async def search_genre(genre: str) -> Tuple[str, List[Dict[str, Any]]]:
+            """Search tracks for a single genre (without fetching audio features)."""
             try:
                 logger.info(f"Searching anchor tracks for genre: {genre}")
                 tracks = await self.spotify_service.search_spotify_tracks(
@@ -475,17 +641,86 @@ class AnchorSelectionEngine:
                     query=f"genre:{genre}",
                     limit=15
                 )
-
-                genre_candidates = await self._score_and_create_candidates(
-                    tracks, target_features, genre, mood_prompt, genres, temporal_context
-                )
-                candidates.extend(genre_candidates)
-
+                return genre, tracks
             except Exception as e:
                 logger.error(f"Failed to search anchor tracks for genre '{genre}': {e}")
-                continue
+                return genre, []
+
+        # Search all genres in parallel (just track search, no audio features yet)
+        results = await asyncio.gather(
+            *[search_genre(genre) for genre in genres],
+            return_exceptions=True
+        )
+        
+        # Collect all tracks grouped by genre
+        genre_tracks: Dict[str, List[Dict[str, Any]]] = {}
+        for result in results:
+            if isinstance(result, tuple):
+                genre, tracks = result
+                if tracks:
+                    genre_tracks[genre] = tracks
+            elif isinstance(result, Exception):
+                logger.warning(f"Exception in genre search: {result}")
+
+        if not genre_tracks:
+            return []
+
+        # Collect and fetch audio features for all tracks
+        features_map = await self._fetch_genre_track_features(
+            genre_tracks, skip_audio_features
+        )
+
+        # Score and create candidates per genre using the batched features
+        candidates = []
+        for genre, tracks in genre_tracks.items():
+            # Pre-populate tracks with audio features
+            for track in tracks:
+                track_id = track.get('id')
+                if track_id and track_id in features_map:
+                    track['audio_features'] = features_map[track_id]
+
+            # Score and create candidates (features already attached)
+            genre_candidates = await self._score_and_create_candidates(
+                tracks, target_features, genre, mood_prompt, genres, temporal_context
+            )
+            candidates.extend(genre_candidates)
 
         return candidates
+
+    async def _fetch_genre_track_features(
+        self,
+        genre_tracks: Dict[str, List[Dict[str, Any]]],
+        skip_audio_features: bool
+    ) -> Dict[str, Dict[str, Any]]:
+        """Fetch audio features for all genre tracks in a batch.
+        
+        Args:
+            genre_tracks: Dictionary mapping genre names to track lists
+            skip_audio_features: Whether to skip feature fetching
+            
+        Returns:
+            Dictionary mapping track IDs to audio features
+        """
+        # Collect ALL track IDs from all genres (remove duplicates)
+        all_track_ids = []
+        seen_ids = set()
+        for tracks in genre_tracks.values():
+            for track in tracks:
+                track_id = track.get('id')
+                if track_id and track_id not in seen_ids:
+                    all_track_ids.append(track_id)
+                    seen_ids.add(track_id)
+
+        # Fetch audio features ONCE for all tracks (batched to avoid rate limits)
+        # Unless skipped for coordinated batching at a higher level
+        features_map = {}
+        if not skip_audio_features and all_track_ids and self.track_processor.reccobeat_service:
+            try:
+                features_map = await self.track_processor.get_track_features_batch(all_track_ids)
+            except Exception as e:
+                logger.warning(f"Failed to batch fetch audio features for genre tracks: {e}")
+        
+        return features_map
 
     async def _score_and_create_candidates(
         self,
@@ -502,51 +737,39 @@ class AnchorSelectionEngine:
 
         candidates = []
 
-        # Try to get audio features if RecoBeat service available
-        if self.track_processor.reccobeat_service:
-            track_ids = [track['id'] for track in tracks if track.get('id')]
+        # Check if tracks already have audio features attached (from batched fetch)
+        tracks_with_features = [t for t in tracks if t.get('audio_features')]
+        tracks_needing_features = [t for t in tracks if not t.get('audio_features') and t.get('id')]
 
+        # Only fetch features for tracks that don't have them yet
+        features_map = {}
+        if tracks_needing_features and self.track_processor.reccobeat_service:
+            track_ids = [track['id'] for track in tracks_needing_features]
             try:
                 features_map = await self.track_processor.get_track_features_batch(track_ids)
-
-                # Score tracks by feature match
-                for track in tracks:
+                # Attach features to tracks
+                for track in tracks_needing_features:
                     track_id = track.get('id')
-                    if not track_id:
-                        continue
-
-                    features = features_map.get(track_id, {})
-                    if features:
-                        track['audio_features'] = features
-
-                    candidate = self.track_processor.create_candidate_from_track(
-                        track, target_features, genre, mood_prompt,
-                        genre_keywords or [], features, f"genre_{genre}", temporal_context
-                    )
-                    if candidate:
-                        candidates.append(candidate)
-
+                    if track_id and track_id in features_map:
+                        track['audio_features'] = features_map[track_id]
             except Exception as e:
                 logger.warning(f"Failed to get audio features for anchor tracks: {e}")
-                # Add tracks with default scores
-                for track in tracks:
-                    if track.get('id'):
-                        candidate = self.track_processor.create_candidate_from_track(
-                            track, target_features, genre, mood_prompt, genre_keywords or [],
-                            temporal_context=temporal_context
-                        )
-                        if candidate:
-                            candidates.append(candidate)
-        else:
-            # No RecoBeat service, add tracks with default scores
-            for track in tracks:
-                if track.get('id'):
-                    candidate = self.track_processor.create_candidate_from_track(
-                        track, target_features, genre, mood_prompt, genre_keywords or [],
-                        temporal_context=temporal_context
-                    )
-                    if candidate:
-                        candidates.append(candidate)
+
+        # Score tracks by feature match
+        for track in tracks:
+            track_id = track.get('id')
+            if not track_id:
+                continue
+
+            # Get features from track (either pre-attached or from features_map)
+            features = track.get('audio_features') or features_map.get(track_id, {})
+
+            candidate = self.track_processor.create_candidate_from_track(
+                track, target_features, genre, mood_prompt,
+                genre_keywords or [], features, f"genre_{genre}", temporal_context
+            )
+            if candidate:
+                candidates.append(candidate)
 
         return candidates
 
