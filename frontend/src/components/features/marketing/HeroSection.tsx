@@ -4,10 +4,11 @@ import { SpotifyLoginButton } from '@/components/features/auth/SpotifyLoginButto
 import TypewriterText from '@/components/TypewriterText';
 import { FeatureBadge } from '@/components/ui/feature-badge';
 import { Button } from '@/components/ui/button';
-import { Music, ArrowDown } from 'lucide-react';
+import { Music, ArrowDown, Info } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/store/authStore';
+import { config } from '@/lib/config';
 
 export interface HeroSectionProps {
     isLoggedIn?: boolean;
@@ -90,9 +91,17 @@ export function HeroSection({ isLoggedIn: serverIsLoggedIn }: HeroSectionProps) 
                             </div>
                         ) : !isLoggedIn ? (
                             <div className="flex flex-col items-center space-y-4 min-h-[120px] justify-center">
+                                {config.access.isDevMode && config.access.showLimitedAccessNotice && (
+                                    <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/20 text-sm text-primary mb-2">
+                                        <Info className="h-4 w-4 flex-shrink-0" />
+                                        <span className="font-medium">Limited Beta - Whitelisted users only</span>
+                                    </div>
+                                )}
                                 <SpotifyLoginButton />
-                                <p className="text-sm text-muted-foreground">
-                                    Connect your Spotify account to get started
+                                <p className="text-sm text-muted-foreground text-center max-w-sm">
+                                    {config.access.isDevMode && config.access.showLimitedAccessNotice
+                                        ? 'We\'re in private beta while we wait for full Spotify approval. Only invited accounts can log in right now.'
+                                        : 'Connect your Spotify account to get started'}
                                 </p>
                             </div>
                         ) : (
