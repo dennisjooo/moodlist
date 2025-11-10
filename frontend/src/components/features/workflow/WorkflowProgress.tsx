@@ -43,7 +43,10 @@ export function WorkflowProgress() {
         // The workflow will automatically restart polling
     };
 
-    if (!workflowState.sessionId && !workflowState.isLoading) {
+    // Don't render if:
+    // 1. No sessionId and not loading, OR
+    // 2. Has sessionId but status is null (uninitialized state) and not loading
+    if ((!workflowState.sessionId || workflowState.status === null) && !workflowState.isLoading) {
         return null;
     }
 
@@ -83,8 +86,8 @@ export function WorkflowProgress() {
                     {/* Status Message and Timeline */}
                     <div className="space-y-3">
                         <div className="flex items-center justify-between gap-4">
-                            <StatusMessage 
-                                status={workflowState.status} 
+                            <StatusMessage
+                                status={workflowState.status}
                                 currentStep={workflowState.currentStep}
                             />
                         </div>

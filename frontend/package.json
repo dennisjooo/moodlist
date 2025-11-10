@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "build": "next build --turbopack --profile",
     "start": "next start",
     "lint": "eslint",
     "analyze": "ANALYZE=true next build --turbopack",
