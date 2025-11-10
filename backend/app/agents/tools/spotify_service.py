@@ -525,6 +525,17 @@ class SpotifyService:
                     artist_id=artist_id,
                     market=market
                 )
+            elif not prefetched_top_tracks:
+                # Treat empty prefetched payloads (e.g. empty batch responses) as a miss so
+                # we still execute the single-artist fallback logic that tries multiple
+                # markets and search. Without this rerun, region-restricted artists end up
+                # with no top tracks and the hybrid strategy relies solely on album tracks.
+                prefetched_top_tracks = await self.get_artist_top_tracks(
+                    access_token=access_token,
+                    artist_id=artist_id,
+                    market=market
+                )
+
             prefetch_payload = prefetched_top_tracks if prefetched_top_tracks is not None else None
 
             tracks = await tool.get_hybrid_tracks(
