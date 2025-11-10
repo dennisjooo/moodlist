@@ -3,19 +3,22 @@
 import { createContext, useContext } from 'react';
 import { AuthContextType, AuthProviderProps } from '../types/auth';
 import { useAuthStore } from '@/lib/store/authStore';
+import { useShallow } from 'zustand/shallow';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const value = useAuthStore((state) => ({
-    user: state.user,
-    isLoading: state.isLoading,
-    isAuthenticated: state.isAuthenticated,
-    isValidated: state.isValidated,
-    login: state.login,
-    logout: state.logout,
-    refreshUser: state.refreshUser,
-  }));
+  const value = useAuthStore(
+    useShallow((state) => ({
+      user: state.user,
+      isLoading: state.isLoading,
+      isAuthenticated: state.isAuthenticated,
+      isValidated: state.isValidated,
+      login: state.login,
+      logout: state.logout,
+      refreshUser: state.refreshUser,
+    }))
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
