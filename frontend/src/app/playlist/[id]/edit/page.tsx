@@ -47,7 +47,7 @@ function EditPlaylistPageContent() {
     if (isLoading || workflowState.isLoading) {
         return (
             <div className="min-h-screen bg-background relative">
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
+                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.8s_ease-out_forwards]">
                     <DotPattern
                         className={cn(
                             "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
@@ -68,7 +68,7 @@ function EditPlaylistPageContent() {
     if (workflowState.error || !workflowState.sessionId) {
         return (
             <div className="min-h-screen bg-background relative">
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
+                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.8s_ease-out_forwards]">
                     <DotPattern
                         className={cn(
                             "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
@@ -95,7 +95,7 @@ function EditPlaylistPageContent() {
     if (!workflowState.recommendations || workflowState.recommendations.length === 0) {
         return (
             <div className="min-h-screen bg-background relative">
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
+                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.8s_ease-out_forwards]">
                     <DotPattern
                         className={cn(
                             "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
@@ -129,7 +129,7 @@ function EditPlaylistPageContent() {
                 opacity={0.2}
             />
 
-            <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
+            <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.8s_ease-out_forwards]">
                 <DotPattern
                     className={cn(
                         "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
