@@ -141,8 +141,8 @@ class GetTrackAudioFeaturesTool(RateLimitedTool):
             name="get_track_audio_features",
             description="Get track audio features from RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=60,   # More conservative rate limit
-            min_request_interval=1.0,   # 1s between requests to avoid rate limiting
+            rate_limit_per_minute=50,   # More conservative: 50/min = ~0.83/sec to avoid hitting limits
+            min_request_interval=1.2,   # Increased from 1.0s to 1.2s for better spacing
             use_global_semaphore=True,  # Use global semaphore to limit concurrent requests
             timeout=60                  # Allow slower RecoBeat responses
         )
