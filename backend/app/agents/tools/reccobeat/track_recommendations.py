@@ -1,7 +1,8 @@
 """RecoBeat track recommendations tool."""
 
+import asyncio
 import structlog
-from typing import List, Optional, Type
+from typing import Dict, List, Optional, Type
 
 from pydantic import BaseModel, Field
 
@@ -51,7 +52,8 @@ class TrackRecommendationsTool(RateLimitedTool):
             base_url="https://api.reccobeats.com",
             rate_limit_per_minute=80,    # Conservative limit to avoid 429 responses
             min_request_interval=0.75,   # Spread calls more evenly across the minute
-            use_global_semaphore=True    # Use global semaphore to limit concurrent requests
+            use_global_semaphore=True,   # Use global semaphore to limit concurrent requests
+            timeout=60                   # Increased timeout for RecoBeat API slowness
         )
 
     def _normalize_spotify_uri(self, href: str, track_id: str) -> str:
@@ -139,51 +141,90 @@ class TrackRecommendationsTool(RateLimitedTool):
 
         return None
 
-    async def _get_track_details(self, track_ids: List[str]) -> dict[str, int]:
-        """Get track details including duration_ms from /v1/track endpoint.
+    async def _get_track_details(
+        self,
+        track_ids: List[str],
+        existing_details: Optional[Dict[str, int]] = None,
+    ) -> Dict[str, int]:
+        """Get track details including duration_ms from /v1/track endpoint."""
 
-        Args:
-            track_ids: List of RecoBeat track IDs
-
-        Returns:
-            Dictionary mapping track_id to duration_ms
-        """
+        details: Dict[str, int] = dict(existing_details or {})
         if not track_ids:
-            return {}
+            return details
+
+        unique_track_ids = []
+        seen_ids = set(details.keys())
+        for track_id in track_ids:
+            if track_id and track_id not in seen_ids:
+                unique_track_ids.append(track_id)
+                seen_ids.add(track_id)
+
+        if not unique_track_ids:
+            return details
+
+        chunk_size = 50
+        chunks = [
+            unique_track_ids[i : i + chunk_size]
+            for i in range(0, len(unique_track_ids), chunk_size)
+        ]
+        semaphore = asyncio.Semaphore(3)
+
+        async def process_chunk(chunk: List[str]) -> Dict[str, int]:
+            async with semaphore:
+                try:
+                    response_data = await self._make_request(
+                        method="GET",
+                        endpoint="/v1/track",
+                        params={"ids": chunk},
+                        use_cache=True,
+                        cache_ttl=1800,  # 30 minutes
+                    )
+
+                    if not self._validate_response(response_data, ["content"]):
+                        logger.warning("Invalid response structure from track details API")
+                        return {}
+
+                    parsed: Dict[str, int] = {}
+                    for track_data in response_data.get("content", []):
+                        try:
+                            track_id = track_data.get("id")
+                            duration_ms = track_data.get("durationMs")
+                            if track_id and duration_ms:
+                                parsed[track_id] = duration_ms
+                        except Exception as parse_error:
+                            logger.warning(
+                                f"Failed to parse track detail: {track_data}, error: {parse_error}"
+                            )
+                            continue
+
+                    return parsed
+
+                except Exception as exc:
+                    logger.error(f"Error getting track details chunk: {exc}", exc_info=True)
+                    return {}
+
+        chunk_results = await asyncio.gather(*[process_chunk(chunk) for chunk in chunks])
+
+        for chunk_detail in chunk_results:
+            details.update(chunk_detail)
+
+        logger.info(
+            "Successfully retrieved duration_ms for %d/%d tracks",
+            len(details),
+            len(existing_details or {}) + len(unique_track_ids),
+        )
+        return details
+
+    async def _prefetch_seed_track_details(self, seed_ids: List[str]) -> None:
+        """Warm the track details cache for known seeds while waiting for recommendations."""
+
+        if not seed_ids:
+            return
 
         try:
-            # Make API request to get track details with caching (30 minutes TTL for track details)
-            response_data = await self._make_request(
-                method="GET",
-                endpoint="/v1/track",
-                params={"ids": track_ids},
-                use_cache=True,
-                cache_ttl=1800  # 30 minutes
-            )
-
-            # Validate response structure
-            if not self._validate_response(response_data, ["content"]):
-                logger.warning("Invalid response structure from track details API")
-                return {}
-
-            # Parse track details
-            track_details = {}
-            for track_data in response_data["content"]:
-                try:
-                    track_id = track_data.get("id")
-                    duration_ms = track_data.get("durationMs")
-                    if track_id and duration_ms:
-                        track_details[track_id] = duration_ms
-                except Exception as e:
-                    logger.warning(f"Failed to parse track detail: {track_data}, error: {e}")
-                    continue
-
-            logger.info(f"Successfully retrieved details for {len(track_details)} tracks")
-            return track_details
-
-        except Exception as e:
-            logger.error(f"Error getting track details: {str(e)}", exc_info=True)
-            return {}
+            await self._get_track_details(seed_ids)
+        except Exception as exc:
+            logger.debug("Seed detail prefetch encountered an error", error=str(exc))
 
     async def _run(
         self,
@@ -294,13 +335,32 @@ class TrackRecommendationsTool(RateLimitedTool):
 
             # Make API request with aggressive caching (15 minutes TTL for recommendations)
             # Recommendations are stable for the same params, so longer cache helps rate limiting
-            response_data = await self._make_request(
-                method="GET",
-                endpoint="/v1/track/recommendation",
-                params=params,
-                use_cache=True,
-                cache_ttl=900  # 15 minutes - stable recommendations, helps avoid rate limits
+            recommendation_task = asyncio.create_task(
+                self._make_request(
+                    method="GET",
+                    endpoint="/v1/track/recommendation",
+                    params=params,
+                    use_cache=True,
+                    cache_ttl=900,  # 15 minutes - stable recommendations, helps avoid rate limits
+                )
             )
+
+            prefetch_task = (
+                asyncio.create_task(self._prefetch_seed_track_details(seeds))
+                if seeds
+                else None
+            )
+
+            response_data = await recommendation_task
+
+            if prefetch_task:
+                try:
+                    await prefetch_task
+                except Exception as prefetch_error:
+                    logger.debug(
+                        "Seed track detail prefetch failed",
+                        error=str(prefetch_error),
+                    )
 
             # Validate response structure
             if not self._validate_response(response_data, ["content"]):
@@ -312,19 +372,34 @@ class TrackRecommendationsTool(RateLimitedTool):
             # Extract track IDs from recommendations for getting duration_ms from track endpoint
             track_ids = []
             recommendation_data = []
+            existing_durations: Dict[str, int] = {}
+            missing_duration_ids: List[str] = []
             for track_data in response_data["content"]:
                 try:
                     track_id = track_data.get("id")
                     if track_id:
                         track_ids.append(track_id)
                         recommendation_data.append(track_data)
+                        duration_ms = track_data.get("durationMs")
+                        if duration_ms:
+                            existing_durations[track_id] = duration_ms
+                        else:
+                            missing_duration_ids.append(track_id)
                 except Exception as e:
                     logger.warning(f"Failed to extract track ID: {track_data}, error: {e}")
                     continue
 
-            # Get track details including duration_ms from /v1/track endpoint
-            track_details = await self._get_track_details(track_ids)
-            logger.info(f"Retrieved duration_ms for {len(track_details)} tracks from track endpoint")
+            track_details: Dict[str, int]
+            if missing_duration_ids:
+                details_task = asyncio.create_task(
+                    self._get_track_details(missing_duration_ids, existing_durations)
+                )
+                track_details = await details_task
+            else:
+                track_details = existing_durations
+            logger.info(
+                f"Retrieved duration_ms for {len(track_details)} tracks from track endpoint"
+            )
 
             # Parse recommendations using duration_ms from track endpoint
             recommendations = []

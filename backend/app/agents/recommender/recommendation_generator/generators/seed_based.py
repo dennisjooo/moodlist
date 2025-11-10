@@ -106,12 +106,8 @@ class SeedBasedGenerator:
 
         # Process chunks in parallel with bounded concurrency for better performance
         async def process_chunk_with_delay(idx: int, chunk: List[str]) -> List[TrackRecommendation]:
-            """Process a chunk with staggered delays to spread load."""
+            """Process a chunk - removed artificial delays for better performance."""
             try:
-                # Stagger chunk processing to avoid bursts
-                if idx > 0:
-                    await asyncio.sleep(0.2 * idx)
-                
                 return await self._process_chunk(chunk, reccobeat_params, state)
             except Exception as e:
                 logger.error(f"Error generating recommendations for seed chunk {chunk}: {e}")
@@ -123,8 +119,8 @@ class SeedBasedGenerator:
             for idx, chunk in enumerate(seed_chunks)
         ]
         
-        # Limit to 3 concurrent chunk requests to avoid overwhelming the API
-        semaphore = asyncio.Semaphore(3)
+        # Increase concurrency while respecting RecoBeat rate limits
+        semaphore = asyncio.Semaphore(6)
         
         async def bounded_task(task):
             async with semaphore:
@@ -161,20 +157,44 @@ class SeedBasedGenerator:
             **reccobeat_params
         )
 
-        # Batch fetch audio features for all tracks first
+        # Collect track IDs and kick off detail/audio feature fetches in parallel
         track_data = []
+        track_ids = []
         for rec_data in chunk_recommendations:
             track_id = rec_data.get("track_id", "")
             if track_id:
+                track_ids.append(track_id)
                 track_data.append((track_id, rec_data.get("audio_features")))
 
-        audio_features_map = await self.audio_features_handler.get_batch_complete_audio_features(track_data)
+        audio_features_task = asyncio.create_task(
+            self.audio_features_handler.get_batch_complete_audio_features(track_data)
+        )
+        track_details_task = asyncio.create_task(
+            self.reccobeat_service.get_tracks_by_ids(track_ids)
+        )
+
+        audio_features_map, track_details = await asyncio.gather(
+            audio_features_task,
+            track_details_task,
+        )
+
+        track_details_map = {
+            detail.get("id"): detail
+            for detail in track_details
+            if detail.get("id")
+        }
 
         # Convert to TrackRecommendation objects
         recommendations = []
         for rec_data in chunk_recommendations:
             try:
-                recommendation = await self._create_recommendation(rec_data, chunk, state, audio_features_map)
+                recommendation = await self._create_recommendation(
+                    rec_data,
+                    chunk,
+                    state,
+                    audio_features_map,
+                    track_details_map,
+                )
                 if recommendation:
                     recommendations.append(recommendation)
 
@@ -189,7 +209,8 @@ class SeedBasedGenerator:
         rec_data: Dict[str, Any],
         chunk: List[str],
         state: AgentState,
-        audio_features_map: Dict[str, Dict[str, Any]]
+        audio_features_map: Dict[str, Dict[str, Any]],
+        track_details_map: Dict[str, Dict[str, Any]],
     ) -> Optional[TrackRecommendation]:
         """Create a recommendation from seed-based RecoBeat data.
 
@@ -198,6 +219,7 @@ class SeedBasedGenerator:
             chunk: Original seed chunk
             state: Current agent state
             audio_features_map: Pre-fetched audio features for all tracks
+            track_details_map: Detailed track metadata fetched in parallel
 
         Returns:
             TrackRecommendation object or None if invalid
@@ -208,7 +230,23 @@ class SeedBasedGenerator:
             return None
 
         # Get audio features from pre-fetched batch
-        complete_audio_features = audio_features_map.get(track_id, {})
+        complete_audio_features = dict(audio_features_map.get(track_id, {}))
+
+        track_details = track_details_map.get(track_id)
+        if track_details:
+            duration_from_details = (
+                track_details.get("duration_ms")
+                or track_details.get("durationMs")
+            )
+            if duration_from_details and "duration_ms" not in complete_audio_features:
+                complete_audio_features["duration_ms"] = duration_from_details
+
+            popularity_from_details = track_details.get("popularity")
+            if (
+                popularity_from_details is not None
+                and "popularity" not in complete_audio_features
+            ):
+                complete_audio_features["popularity"] = popularity_from_details
 
         # Use confidence score from RecoBeat if available, otherwise calculate
         confidence = rec_data.get("confidence_score")

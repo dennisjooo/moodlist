@@ -341,7 +341,7 @@ class CacheManager:
             "user_profile": 3600,  # 1 hour
             "top_tracks": 1800,    # 30 minutes
             "top_artists": 1800,   # 30 minutes
-            "artist_top_tracks": 1800,  # Reduce duplicate Spotify artist queries
+            "artist_top_tracks": 7200,  # 2 hours - increased to minimize rate limit hits
             "recommendations": 1800,  # 30 minutes - increased from 15 to reduce API load
             "mood_analysis": 3600,  # 1 hour
             "workflow_state": 300,  # 5 minutes
