@@ -25,8 +25,8 @@ class RecoBeatService:
     """Service for coordinating RecoBeat API operations."""
 
     AUDIO_FEATURE_BATCH_SIZE = 5
-    AUDIO_FEATURE_MAX_CONCURRENCY = 3
-    AUDIO_FEATURE_THROTTLE_SECONDS = 1.2
+    AUDIO_FEATURE_MAX_CONCURRENCY = 2  # Reduced from 3 to avoid rate limits
+    AUDIO_FEATURE_THROTTLE_SECONDS = 2.0  # Increased from 1.2s to be more conservative
 
     def __init__(self):
         """Initialize the RecoBeat service."""
@@ -316,8 +316,11 @@ class RecoBeatService:
             logger.warning("Multiple tracks tool not available for ID conversion")
             return id_mapping
 
-        # Optimized batch size: 50 IDs per chunk balances throughput and API stability
-        chunk_size = 50
+        # Remove duplicates (preserve order)
+        ids_to_check = list(dict.fromkeys(ids_to_check))
+
+        # Batch size: 40 IDs per chunk (RecoBeat API limit is 40)
+        chunk_size = 40
         chunks = [ids_to_check[i:i + chunk_size] for i in range(0, len(ids_to_check), chunk_size)]
 
         async def process_chunk(chunk: List[str]) -> Dict[str, str]:
@@ -482,6 +485,7 @@ class RecoBeatService:
         results: List[Tuple[str, Optional[Dict[str, Any]]]] = []
 
         # Execute batches sequentially to stay under upstream quotas
+        # Use adaptive throttling: longer waits if we're making many requests
         try:
             for batch_index in range(total_batches):
                 start = batch_index * self.AUDIO_FEATURE_BATCH_SIZE
@@ -500,7 +504,12 @@ class RecoBeatService:
                 )
 
                 if batch_index + 1 < total_batches:
-                    await asyncio.sleep(self.AUDIO_FEATURE_THROTTLE_SECONDS)
+                    # Adaptive throttling: increase wait time as we process more batches
+                    # This helps prevent hitting rate limits when fetching many tracks
+                    base_throttle = self.AUDIO_FEATURE_THROTTLE_SECONDS
+                    # Add extra delay every 10 batches to prevent accumulation
+                    adaptive_throttle = base_throttle + (0.5 if batch_index % 10 == 9 else 0.0)
+                    await asyncio.sleep(adaptive_throttle)
 
             # Combine results
             for track_id, features in results:
@@ -577,6 +586,9 @@ class RecoBeatService:
         """
         if not track_ids:
             return []
+
+        # Remove duplicates (preserve order)
+        track_ids = list(dict.fromkeys(track_ids))
 
         # Try to get from cache first (30 min TTL for track lookups)
         cache_key = self._make_cache_key("tracks_by_ids", str(sorted(track_ids)))

@@ -200,6 +200,7 @@ async def stream_workflow_status(
                     yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
                     return
             else:
+                # Workflow state not found in memory - check database as fallback
                 from ...repositories.playlist_repository import PlaylistRepository
 
                 playlist_repo = PlaylistRepository(db)
@@ -212,10 +213,17 @@ async def stream_workflow_status(
 
                 status_data = serialize_playlist_status(session_id, playlist)
                 last_sent_status = playlist.status
+                last_sent_step = status_data.get("current_step")
 
                 yield f"event: status\ndata: {json.dumps(status_data)}\n\n"
-                yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
-                return
+                
+                # Only send complete if status is terminal (completed, failed, cancelled)
+                # Otherwise, continue the loop to wait for workflow state updates
+                terminal_statuses = [PlaylistStatus.COMPLETED, PlaylistStatus.FAILED, PlaylistStatus.CANCELLED]
+                if playlist.status in terminal_statuses:
+                    yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
+                    return
+                # If not terminal, continue to main loop to wait for state updates
 
             # Main loop: process queued updates and periodically verify current state
             while True:

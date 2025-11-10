@@ -1,7 +1,8 @@
 """Spotify artist search and discovery tools."""
 
+import asyncio
 import structlog
-from typing import List, Type, Dict, Any, Optional
+from typing import List, Type, Dict, Any, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -137,6 +138,159 @@ class GetArtistTopTracksInput(BaseModel):
     market: str = Field(default="US", description="ISO 3166-1 alpha-2 country code")
 
 
+class BatchGetArtistTopTracksInput(BaseModel):
+    """Input schema for batching artist top tracks requests."""
+
+    access_token: str = Field(..., description="Spotify access token")
+    artist_ids: List[str] = Field(..., min_items=1, max_items=20, description="Artist IDs to fetch top tracks for")
+    market: str = Field(default="US", description="ISO 3166-1 alpha-2 country code")
+
+
+class BatchGetArtistTopTracksTool(RateLimitedTool):
+    """Tool for parallel fetching of multiple artists' top tracks.
+    
+    Note: Spotify doesn't have a batch endpoint, so this tool makes parallel
+    individual requests with concurrency control to respect rate limits.
+    """
+
+    name: str = "batch_get_artist_top_tracks"
+    description: str = """
+    Fetch multiple artists' top tracks in parallel using individual API requests.
+    This uses parallel requests with concurrency control to optimize throughput
+    while respecting Spotify's rate limits.
+    """
+
+    def __init__(self):
+        """Initialize the batch artist top tracks tool."""
+        super().__init__(
+            name="batch_get_artist_top_tracks",
+            description="Batch artist top tracks from Spotify API",
+            base_url="https://api.spotify.com/v1",
+            rate_limit_per_minute=50,  # More conservative: 50/min to match individual tool
+            min_request_interval=0.5,  # Increased from 0.25s to 0.5s for better spacing
+        )
+
+    def _get_input_schema(self) -> Type[BaseModel]:
+        """Get the input schema for this tool."""
+        return BatchGetArtistTopTracksInput
+
+    async def _run(
+        self,
+        access_token: str,
+        artist_ids: List[str],
+        market: str = "US",
+    ) -> ToolResult:
+        """Fetch top tracks for multiple artists in parallel."""
+
+        if not artist_ids:
+            return ToolResult.error_result("No artist IDs provided", skip_retry=True)
+
+        unique_artist_ids = list(dict.fromkeys(artist_ids))
+        
+        # Use semaphore to control concurrency (3 concurrent requests for better rate limit compliance)
+        semaphore = asyncio.Semaphore(3)
+        
+        async def fetch_artist_tracks(artist_id: str) -> Tuple[str, List[Dict[str, Any]]]:
+            """Fetch tracks for a single artist."""
+            async with semaphore:
+                try:
+                    # Make individual API request
+                    response_data = await self._make_request(
+                        method="GET",
+                        endpoint=f"/artists/{artist_id}/top-tracks",
+                        params={"market": market},
+                        headers={"Authorization": f"Bearer {access_token}"}
+                    )
+                    
+                    # Parse tracks
+                    tracks = []
+                    for track_data in response_data.get("tracks", []):
+                        try:
+                            track_info = {
+                                "id": track_data.get("id"),
+                                "name": track_data.get("name"),
+                                "spotify_uri": track_data.get("uri"),
+                                "duration_ms": track_data.get("duration_ms"),
+                                "popularity": track_data.get("popularity", 50),
+                                "explicit": track_data.get("explicit", False),
+                                "preview_url": track_data.get("preview_url"),
+                                "track_number": track_data.get("track_number"),
+                                "artists": [
+                                    {
+                                        "id": artist.get("id"),
+                                        "name": artist.get("name"),
+                                        "uri": artist.get("uri"),
+                                    }
+                                    for artist in track_data.get("artists", [])
+                                ],
+                                "album": {
+                                    "id": track_data.get("album", {}).get("id"),
+                                    "name": track_data.get("album", {}).get("name"),
+                                    "uri": track_data.get("album", {}).get("uri"),
+                                    "release_date": track_data.get("album", {}).get("release_date"),
+                                }
+                                if track_data.get("album")
+                                else None,
+                            }
+                            tracks.append(track_info)
+                        except Exception as e:
+                            logger.warning(f"Failed to parse track data for artist {artist_id}: {e}")
+                            continue
+                    
+                    return artist_id, tracks
+                except Exception as e:
+                    logger.warning(f"Failed to fetch top tracks for artist {artist_id}: {e}")
+                    return artist_id, []
+        
+        try:
+            # Fetch all artists in parallel
+            tasks = [fetch_artist_tracks(artist_id) for artist_id in unique_artist_ids]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            artist_tracks: Dict[str, List[Dict[str, Any]]] = {}
+            failed_artists: List[str] = []
+            
+            for result in results:
+                if isinstance(result, Exception):
+                    # If gather returned an exception, we can't identify which artist failed
+                    logger.error(f"Unexpected error in batch fetch: {result}")
+                    continue
+                
+                artist_id, tracks = result
+                if tracks:
+                    artist_tracks[artist_id] = tracks
+                else:
+                    failed_artists.append(artist_id)
+
+            logger.info(
+                "Batch artist top tracks fetched",
+                requested=len(unique_artist_ids),
+                succeeded=len(artist_tracks),
+                failed=len(failed_artists),
+            )
+
+            return ToolResult.success_result(
+                data={
+                    "artist_tracks": artist_tracks,
+                    "failed_artist_ids": failed_artists,
+                },
+                metadata={
+                    "source": "spotify",
+                    "api_endpoint": "/artists/{id}/top-tracks",
+                    "requested_count": len(unique_artist_ids),
+                    "succeeded": len(artist_tracks),
+                    "method": "parallel_individual_requests",
+                },
+            )
+
+        except Exception as e:
+            logger.error(f"Error during batch artist top tracks fetch: {e}", exc_info=True)
+            return ToolResult.error_result(
+                f"Failed to batch fetch artist top tracks: {e}",
+                error_type=type(e).__name__,
+            )
+
+
 class GetArtistTopTracksTool(RateLimitedTool):
     """Tool for getting an artist's top tracks from Spotify API.
 
@@ -159,7 +313,8 @@ class GetArtistTopTracksTool(RateLimitedTool):
             name="get_artist_top_tracks",
             description="Get artist's top tracks from Spotify API",
             base_url="https://api.spotify.com/v1",
-            rate_limit_per_minute=60
+            rate_limit_per_minute=50,  # More conservative: 50/min = ~0.83/sec to avoid hitting limits
+            min_request_interval=1.0,  # 1s between requests to prevent bursts
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:
@@ -505,11 +660,13 @@ class GetArtistTopTracksTool(RateLimitedTool):
         # Step 2: Get album tracks for diversity (if ratio allows)
         if album_tracks_count > 0:
             logger.info(f"Fetching albums for artist {artist_id}")
+            # Add small delay before album fetch to avoid rate limits when processing multiple artists
+            await asyncio.sleep(0.5)  # 500ms delay to space out album API calls
             albums = await self._get_artist_albums(
                 access_token=access_token,
                 artist_id=artist_id,
                 market=market,
-                limit=10  # Get recent 10 albums
+                limit=5  # Reduced from 10 to 5 albums to reduce API calls and avoid rate limits
             )
 
             if albums:
