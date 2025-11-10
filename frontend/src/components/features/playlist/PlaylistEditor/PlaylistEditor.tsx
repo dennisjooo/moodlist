@@ -41,7 +41,7 @@ export function PlaylistEditor({
 
     return (
         <TooltipProvider>
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000 ease-out">
                 {/* Header */}
                 <div className="space-y-3">
                     <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground via-foreground to-foreground/70 bg-clip-text text-transparent">
@@ -122,7 +122,7 @@ export function PlaylistEditor({
                 </div>
 
                 {/* Mobile Touch Instructions */}
-                <div className="md:hidden animate-in slide-in-from-bottom-4 duration-500">
+                <div className="md:hidden animate-in slide-in-from-bottom-4 duration-1000 ease-out">
                     <div className="rounded-lg bg-gradient-to-r from-muted/50 to-muted/30 border border-dashed px-4 py-3 hover:border-solid transition-all">
                         <p className="text-sm text-muted-foreground">
                             <strong className="font-medium text-foreground">Tip:</strong> Touch and hold the grip handle (≡) to drag tracks on mobile devices.
