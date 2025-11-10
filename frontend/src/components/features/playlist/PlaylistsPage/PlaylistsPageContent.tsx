@@ -56,7 +56,7 @@ export function PlaylistsPageContent() {
 
             {/* Main Content */}
             <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                {!isUnauthorized && (
+                {!isUnauthorized && (playlists.length > 0 || isLoading || searchValue.trim().length > 0) && (
                     <PlaylistsPageHeader
                         searchValue={searchValue}
                         onSearchChange={setSearchValue}
@@ -73,32 +73,32 @@ export function PlaylistsPageContent() {
                     isLoading={isLoading}
                     skeleton={viewMode === 'list' ? <PlaylistListSkeleton /> : <PlaylistGridSkeleton />}
                 >
-                    <div className="space-y-12">
-                        {isUnauthorized ? (
-                            <UnauthorizedState />
-                        ) : error ? (
-                            <ErrorState error={error} onRetry={() => fetchPlaylists()} />
-                        ) : playlists.length === 0 ? (
+                    {isUnauthorized ? (
+                        <UnauthorizedState />
+                    ) : error ? (
+                        <ErrorState error={error} onRetry={() => fetchPlaylists()} />
+                    ) : playlists.length === 0 ? (
+                        <div className="flex items-center justify-center min-h-[60vh]">
                             <EmptyState />
-                        ) : (
-                            <>
-                                <PlaylistGrid
-                                    playlists={playlists}
-                                    onDelete={handleDelete}
-                                    formatDate={formatDate}
-                                    viewMode={viewMode}
-                                />
+                        </div>
+                    ) : (
+                        <div className="space-y-12">
+                            <PlaylistGrid
+                                playlists={playlists}
+                                onDelete={handleDelete}
+                                formatDate={formatDate}
+                                viewMode={viewMode}
+                            />
 
-                                <LoadMoreIndicator
-                                    hasMore={hasMore}
-                                    isLoadingMore={isLoadingMore}
-                                    playlistCount={playlists.length}
-                                    total={total}
-                                    loadMoreRef={loadMoreRef}
-                                />
-                            </>
-                        )}
-                    </div>
+                            <LoadMoreIndicator
+                                hasMore={hasMore}
+                                isLoadingMore={isLoadingMore}
+                                playlistCount={playlists.length}
+                                total={total}
+                                loadMoreRef={loadMoreRef}
+                            />
+                        </div>
+                    )}
                 </CrossfadeTransition>
             </main>
         </div>
