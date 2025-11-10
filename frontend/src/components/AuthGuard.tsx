@@ -2,7 +2,7 @@
 
 import { ReactNode, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuth } from '@/lib/contexts/AuthContext';
+import { useAuth } from '@/lib/store/authStore';
 import { logger } from '@/lib/utils/logger';
 
 interface AuthGuardProps {
@@ -62,40 +62,49 @@ export function AuthGuard({
     const searchParams = useSearchParams();
     const [shouldRender, setShouldRender] = useState(optimistic);
 
+    // DEBUG: Log auth state
     useEffect(() => {
-        // If we're using optimistic rendering, show content immediately
-        if (optimistic && isAuthenticated) {
-            setShouldRender(true);
+        logger.debug('AuthGuard state update', {
+            component: 'AuthGuard',
+            isAuthenticated,
+            isValidated,
+            isLoading,
+            path: typeof window !== 'undefined' ? window.location.pathname : 'unknown'
+        });
+    }, [isAuthenticated, isValidated, isLoading]);
+
+    useEffect(() => {
+        // CRITICAL: Don't do ANYTHING until validation is complete
+        // This prevents premature redirects
+        if (!isValidated) {
+            logger.debug('AuthGuard waiting for validation', { component: 'AuthGuard' });
             return;
         }
 
-        // If validation is complete
-        if (isValidated) {
-            if (!isAuthenticated) {
-                // Not authenticated - redirect to login
-                logger.info('AuthGuard: User not authenticated, redirecting', {
+        if (isAuthenticated) {
+            // Authenticated - show content
+            setShouldRender(true);
+
+            // If there's a redirect param, navigate to it (after successful auth)
+            const redirectParam = searchParams.get('redirect');
+            if (redirectParam) {
+                logger.info('AuthGuard: Redirecting to saved location', {
                     component: 'AuthGuard',
-                    from: window.location.pathname,
+                    redirect: redirectParam,
                 });
-
-                const currentPath = window.location.pathname;
-                const redirectUrl = `${redirectTo}?auth=required&redirect=${encodeURIComponent(currentPath)}`;
-                router.push(redirectUrl);
-                setShouldRender(false);
-            } else {
-                // Authenticated - show content
-                setShouldRender(true);
-
-                // If there's a redirect param, navigate to it (after successful auth)
-                const redirectParam = searchParams.get('redirect');
-                if (redirectParam) {
-                    logger.info('AuthGuard: Redirecting to saved location', {
-                        component: 'AuthGuard',
-                        redirect: redirectParam,
-                    });
-                    router.push(redirectParam);
-                }
+                router.push(redirectParam);
             }
+        } else {
+            // Not authenticated - redirect to login
+            logger.info('AuthGuard: User not authenticated, redirecting', {
+                component: 'AuthGuard',
+                from: window.location.pathname,
+            });
+
+            const currentPath = window.location.pathname;
+            const redirectUrl = `${redirectTo}?auth=required&redirect=${encodeURIComponent(currentPath)}`;
+            router.push(redirectUrl);
+            setShouldRender(false);
         }
     }, [isAuthenticated, isValidated, optimistic, router, searchParams, redirectTo]);
 

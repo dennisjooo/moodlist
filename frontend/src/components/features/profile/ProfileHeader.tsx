@@ -1,7 +1,7 @@
 'use client';
 
 import { type SpotifyProfile } from '@/lib/api/spotify';
-import { useAuth } from '@/lib/contexts/AuthContext';
+import { useAuth } from '@/lib/store/authStore';
 import { MapPin, Users } from 'lucide-react';
 
 interface ProfileHeaderProps {

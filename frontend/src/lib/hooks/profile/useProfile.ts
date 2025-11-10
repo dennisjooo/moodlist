@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/contexts/AuthContext';
+import { useAuth } from '@/lib/store/authStore';
 import { spotifyAPI, type SpotifyProfile } from '@/lib/api/spotify';
 import { userAPI, type DashboardData } from '@/lib/api/user';
 import { logger } from '@/lib/utils/logger';

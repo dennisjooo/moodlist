@@ -1,8 +1,12 @@
 """Cookie management utilities."""
+import structlog
+
 from fastapi import Response
 
 from app.core.config import settings
 from app.core.constants import SessionConstants
+
+logger = structlog.get_logger(__name__)
 
 
 def _is_localhost_origin(origin: str) -> bool:
@@ -38,29 +42,46 @@ def set_session_cookie(response: Response, session_token: str, origin: str = Non
         if is_localhost:
             # SPECIAL CASE: localhost frontend + production backend
             # This is cross-origin but frontend is HTTP
-            # Use samesite=none (allow cross-site) + secure=False (allow HTTP)
+            # Use samesite=None (allow cross-site) + secure=False (allow HTTP)
             # Note: This may not work in all browsers due to security restrictions
             secure = False
-            samesite = "none"
+            samesite = "None"
         else:
             # True production: HTTPS cross-origin
             secure = True
-            samesite = "none"
+            samesite = "None"
     else:
         # Development: both frontend and backend are local
         secure = False
         samesite = "lax"
 
-    response.set_cookie(
-        key=SessionConstants.COOKIE_NAME,
-        value=session_token,
-        httponly=True,
-        secure=secure,
-        samesite=samesite,
-        max_age=SessionConstants.EXPIRATION_SECONDS,
-        path="/",
-        domain=None  # Let browser handle domain automatically
-    )
+    # Build cookie string manually to add Partitioned attribute for cross-site cookies
+    # Chrome 118+ requires Partitioned for third-party cookies
+    cookie_parts = [
+        f"{SessionConstants.COOKIE_NAME}={session_token}",
+        "HttpOnly",
+        f"Max-Age={SessionConstants.EXPIRATION_SECONDS}",
+        "Path=/",
+    ]
+
+    if secure:
+        cookie_parts.append("Secure")
+
+    if samesite:
+        cookie_parts.append(f"SameSite={samesite}")
+
+    # Add Partitioned attribute for cross-site cookies in production
+    if is_production and not is_localhost and samesite == "None":
+        cookie_parts.append("Partitioned")
+        logger.info("Setting partitioned cross-site cookie",
+                   origin=origin,
+                   secure=secure,
+                   samesite=samesite)
+
+    cookie_string = "; ".join(cookie_parts)
+
+    # Set the cookie via Set-Cookie header
+    response.headers.append("Set-Cookie", cookie_string)
 
 
 def delete_session_cookie(response: Response, origin: str = None) -> None:
@@ -77,19 +98,33 @@ def delete_session_cookie(response: Response, origin: str = None) -> None:
     if is_production:
         if is_localhost:
             secure = False
-            samesite = "none"
+            samesite = "None"
         else:
             secure = True
-            samesite = "none"
+            samesite = "None"
     else:
         secure = False
         samesite = "lax"
 
-    response.delete_cookie(
-        key=SessionConstants.COOKIE_NAME,
-        httponly=True,
-        secure=secure,
-        samesite=samesite,
-        path="/",
-        domain=None  # Must match the domain used when setting the cookie
-    )
+    # Build cookie deletion string manually to match how we set it (including Partitioned)
+    cookie_parts = [
+        f"{SessionConstants.COOKIE_NAME}=",
+        "HttpOnly",
+        "Max-Age=0",  # Expire immediately
+        "Path=/",
+    ]
+
+    if secure:
+        cookie_parts.append("Secure")
+
+    if samesite:
+        cookie_parts.append(f"SameSite={samesite}")
+
+    # Must include Partitioned if it was used when setting the cookie
+    if is_production and not is_localhost and samesite == "None":
+        cookie_parts.append("Partitioned")
+
+    cookie_string = "; ".join(cookie_parts)
+
+    # Delete the cookie via Set-Cookie header
+    response.headers.append("Set-Cookie", cookie_string)

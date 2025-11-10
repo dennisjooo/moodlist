@@ -1,16 +1,17 @@
-import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
 import apiClient from '@/lib/axios';
 import { config } from '@/lib/config';
+import type { CachedAuthData, User } from '@/lib/types/auth';
 import { logger } from '@/lib/utils/logger';
-import type { User, CachedAuthData } from '@/lib/types/auth';
-import { getAuthCookies, getCookie } from '../cookies';
+import { create } from 'zustand';
+import { devtools } from 'zustand/middleware';
+import { useShallow } from 'zustand/react/shallow';
 
 interface AuthState {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   isValidated: boolean;
+  isChecking: boolean; // Flag to prevent concurrent checks
   login: (accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -82,23 +83,32 @@ export const useAuthStore = create<AuthState>()(
       isLoading: false,
       isAuthenticated: false,
       isValidated: false,
+      isChecking: false,
 
       checkAuthStatus: async (retryCount = 0, skipCache = false) => {
+        // Prevent concurrent auth checks
+        if (get().isChecking && retryCount === 0) {
+          logger.debug('Auth check already in progress, skipping', { component: 'authStore' });
+          return;
+        }
+
         try {
+          set({ isChecking: true });
           const currentUser = get().user;
 
           // Check cache first (unless explicitly skipped)
           if (!skipCache && retryCount === 0) {
             const cached = getCachedAuth();
-            if (cached) {
+            if (cached && cached.user) {
               logger.debug('Using cached auth data', { component: 'authStore', display_name: cached.user.display_name });
               set({
                 user: cached.user,
                 isAuthenticated: true,
-                isValidated: false,
+                isValidated: true, // Trust cache to prevent premature redirects
+                isChecking: false,
               });
 
-              // Start background validation
+              // Start background validation to refresh
               setTimeout(() => get().checkAuthStatus(0, true), 0);
               return;
             }
@@ -110,11 +120,10 @@ export const useAuthStore = create<AuthState>()(
           }
 
           // Fetch user info from backend
-          const response = await apiClient.get<{ user: User }>('/api/auth/verify', {
-            headers: {
-              ...getAuthCookies(),
-            },
-          });
+          // Cookies are automatically sent with withCredentials: true
+          const response = await apiClient.get<{ user: User | null; requires_spotify_auth: boolean }>('/api/auth/verify');
+
+          logger.debug('/verify response received', { component: 'authStore', hasUser: !!response.data.user });
 
           if (response.data.user) {
             logger.info('Auth verification successful', { component: 'authStore', display_name: response.data.user.display_name });
@@ -127,12 +136,16 @@ export const useAuthStore = create<AuthState>()(
                 isAuthenticated: true,
                 isValidated: true,
                 isLoading: false,
+                isChecking: false,
               });
             } else {
-              logger.debug('User data unchanged, skipping re-render', { component: 'authStore' });
+              logger.debug('User data unchanged, updating auth state', { component: 'authStore' });
               set({
+                user: response.data.user, // Still set user even if "unchanged"
+                isAuthenticated: true,
                 isValidated: true,
                 isLoading: false,
+                isChecking: false,
               });
             }
 
@@ -149,6 +162,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: false,
               isValidated: true,
               isLoading: false,
+              isChecking: false,
             });
             clearCachedAuth();
           }
@@ -161,6 +175,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: false,
               isValidated: true,
               isLoading: false,
+              isChecking: false,
             });
             clearCachedAuth();
 
@@ -180,9 +195,13 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: false,
               isValidated: true,
               isLoading: false,
+              isChecking: false,
             });
             clearCachedAuth();
           }
+        } finally {
+          // Ensure isChecking is always cleared
+          set({ isChecking: false });
         }
       },
 
@@ -218,12 +237,9 @@ export const useAuthStore = create<AuthState>()(
         }
 
         // Make backend logout call in background (fire and forget)
+        // Cookies are automatically sent with withCredentials: true
         try {
-          apiClient.post('/api/auth/logout', {}, {
-            headers: {
-              ...getAuthCookies(),
-            },
-          }).then(() => {
+          apiClient.post('/api/auth/logout', {}).then(() => {
             logger.info('Backend logout successful', { component: 'authStore' });
           }).catch((error) => {
             logger.error('Backend logout failed', error, { component: 'authStore' });
@@ -243,23 +259,17 @@ export const useAuthStore = create<AuthState>()(
 
 // Initialize auth store on client side
 if (typeof window !== 'undefined') {
-  // Optimistic auth: Check for session cookie immediately
-  const sessionCookie = getCookie(config.auth.sessionCookieName);
-
-  if (sessionCookie) {
-    // We have a session cookie - set optimistic authenticated state
-    // Check cache first for instant user data
-    const cached = getCachedAuth();
-    if (cached) {
-      logger.debug('Optimistic auth: Using cached user data', { component: 'authStore' });
-      useAuthStore.setState({
-        user: cached.user,
-        isAuthenticated: true,
-        isValidated: false,
-      });
-    } else {
-      logger.debug('Optimistic auth: Cookie present, will verify', { component: 'authStore' });
-    }
+  // Check cache first for instant user data (optimistic auth)
+  // Note: We can't check for HttpOnly cookies with document.cookie,
+  // so we rely on cache and backend verification
+  const cached = getCachedAuth();
+  if (cached) {
+    logger.debug('Optimistic auth: Using cached user data', { component: 'authStore' });
+    useAuthStore.setState({
+      user: cached.user,
+      isAuthenticated: true,
+      isValidated: true, // Trust cache initially to prevent redirects
+    });
   }
 
   // Always verify with backend (will use cache if available)
@@ -267,9 +277,22 @@ if (typeof window !== 'undefined') {
 
   // Listen for auth update events (from callback page)
   const handleAuthUpdate = () => {
-    clearCachedAuth();
+    // Don't clear cache - just refresh auth status
+    // This ensures other pages can use the cache while we verify
+    logger.debug('Auth update event received, refreshing auth status', { component: 'authStore' });
     useAuthStore.getState().checkAuthStatus(0, true);
   };
 
   window.addEventListener('auth-update', handleAuthUpdate);
 }
+
+// Convenience selectors for common use cases
+export const useAuth = () => useAuthStore(useShallow((state) => ({
+  user: state.user,
+  isLoading: state.isLoading,
+  isAuthenticated: state.isAuthenticated,
+  isValidated: state.isValidated,
+  login: state.login,
+  logout: state.logout,
+  refreshUser: state.refreshUser,
+})));

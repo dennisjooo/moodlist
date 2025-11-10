@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth } from '@/lib/contexts/AuthContext';
+import { useAuth } from '@/lib/store/authStore';
 import type { User as UserType } from '@/lib/types/auth';
 import { logger } from '@/lib/utils/logger';
 import { AnimatePresence, motion } from '@/components/ui/lazy-motion';

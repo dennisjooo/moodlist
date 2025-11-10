@@ -7,7 +7,7 @@ import MoodBackground from '@/components/shared/MoodBackground';
 import { BackButton } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { DotPattern } from '@/components/ui/dot-pattern';
-import { useAuth } from '@/lib/contexts/AuthContext';
+import { useAuth } from '@/lib/store/authStore';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { workflowEvents } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
