@@ -4,7 +4,7 @@ import LoginRequiredDialog from '@/components/LoginRequiredDialog';
 import MoodCard from '@/components/features/marketing/SampleMoods/MoodCard';
 import { motion } from '@/components/ui/lazy-motion';
 import { FeatureBadge } from '@/components/ui/feature-badge';
-import { useAuth } from '@/lib/contexts/AuthContext';
+import { useAuth } from '@/lib/store/authStore';
 import { MOOD_TEMPLATES } from '@/lib/constants/moodTemplates';
 import { shuffleArray } from '@/lib/utils/array';
 import { useRouter } from 'next/navigation';

@@ -2,8 +2,8 @@ import HeroSection from '@/components/HeroSection';
 import Navigation from '@/components/Navigation';
 import dynamic from 'next/dynamic';
 import { DotPattern } from '@/components/ui/dot-pattern';
-import { cookies } from 'next/headers';
 import { cn } from '@/lib/utils';
+import { Suspense } from 'react';
 
 // Lazy load below-the-fold components for better initial load performance
 const FeaturedMoodShowcase = dynamic(() => import('@/components/FeaturedMoodShowcase'), {
@@ -36,9 +36,11 @@ const SocialProof = dynamic(() => import('@/components/SocialProof'), {
   loading: () => <div className="h-[120px]" />,
 });
 
-export default async function Home() {
-  const cookieStore = await cookies();
-  const isLoggedIn = Boolean(cookieStore.get('session_token'));
+export default function Home() {
+  // NOTE: In a cross-origin setup (frontend on Vercel, backend on Render),
+  // we cannot reliably check cookies on the server side because the session_token
+  // cookie is set by the backend domain and is not accessible to the frontend server.
+  // Auth checking is handled client-side by authStore and components.
 
   return (
     <>
@@ -58,9 +60,9 @@ export default async function Home() {
         {/* Main Content - Render immediately (optimistic) */}
         <main className="relative z-10 overflow-x-hidden">
           {/* Hero Section */}
-          <HeroSection
-            isLoggedIn={isLoggedIn}
-          />
+          <Suspense fallback={<div className="h-screen" />}>
+            <HeroSection />
+          </Suspense>
 
           {/* Featured Mood Walkthrough */}
           <FeaturedMoodShowcase />
@@ -75,7 +77,7 @@ export default async function Home() {
           <FAQSection />
 
           {/* Call to Action */}
-          <CTASection isLoggedIn={isLoggedIn} />
+          <CTASection />
 
           {/* Social Proof */}
           <SocialProof />

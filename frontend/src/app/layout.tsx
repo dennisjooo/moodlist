@@ -1,6 +1,5 @@
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { Toaster } from '@/components/ui/sonner';
-import { AuthProvider } from '@/lib/contexts/AuthContext';
 import { WorkflowProvider } from '@/lib/contexts/WorkflowContext';
 import ErrorBoundary from '@/components/shared/ErrorBoundary';
 import { SkipLink } from '@/components/shared/SkipLink';
@@ -32,22 +31,20 @@ export default function RootLayout({
         <SkipLink targetId="main-content">Skip to main content</SkipLink>
         <ErrorBoundary>
           <ThemeProvider>
-            <AuthProvider>
-              <WorkflowProvider>
-                <Toaster />
-                <div id="main-content" tabIndex={-1}>
-                  {children}
-                </div>
-                {/* ARIA live region for screen reader announcements */}
-                <div
-                  id="a11y-live-region"
-                  role="status"
-                  aria-live="polite"
-                  aria-atomic="true"
-                  className="sr-only"
-                />
-              </WorkflowProvider>
-            </AuthProvider>
+            <WorkflowProvider>
+              <Toaster />
+              <div id="main-content" tabIndex={-1}>
+                {children}
+              </div>
+              {/* ARIA live region for screen reader announcements */}
+              <div
+                id="a11y-live-region"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                className="sr-only"
+              />
+            </WorkflowProvider>
           </ThemeProvider>
         </ErrorBoundary>
       </body>

@@ -3,7 +3,7 @@
 import { SpotifyLoginButton } from '@/components/features/auth/SpotifyLoginButton';
 import { WorkflowNotificationIndicator } from '@/components/features/workflow/WorkflowNotificationIndicator';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { useAuth } from '@/lib/contexts/AuthContext';
+import { useAuth } from '@/lib/store/authStore';
 import { config } from '@/lib/config';
 import { getCookie } from '@/lib/cookies';
 import { NavItem } from '@/lib/types/navigation';
