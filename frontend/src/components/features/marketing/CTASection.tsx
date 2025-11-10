@@ -6,7 +6,7 @@ import { motion } from '@/components/ui/lazy-motion';
 import { CheckCircle2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/lib/contexts/AuthContext';
+import { useAuth } from '@/lib/store/authStore';
 import { CTA_HIGHLIGHTS } from '@/lib/constants/marketing';
 
 export interface CTASectionProps {
@@ -22,7 +22,9 @@ export default function CTASection({ isLoggedIn: serverIsLoggedIn }: CTASectionP
     setIsClient(true);
   }, []);
 
-  const isLoggedIn = isClient ? isAuthenticated : serverIsLoggedIn;
+  // Use client-side auth state when available, fall back to server prop (if provided)
+  // In cross-origin setups, serverIsLoggedIn may be undefined/unreliable
+  const isLoggedIn = isClient ? isAuthenticated : (serverIsLoggedIn ?? false);
 
   return (
     <section className="relative mt-12 px-4 sm:mt-16 sm:px-6 md:mt-20 lg:px-8">

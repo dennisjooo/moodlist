@@ -3,7 +3,7 @@
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { AnimatePresence, motion } from '@/components/ui/lazy-motion';
 import { MENU_ITEM_VARIANTS, MOBILE_MENU_VARIANTS, SPRING_TRANSITIONS } from '@/lib/constants/animations';
-import { useAuth } from '@/lib/contexts/AuthContext';
+import { useAuth } from '@/lib/store/authStore';
 import type { User as UserType } from '@/lib/types/auth';
 import { NavItem } from '@/lib/types/navigation';
 import { cn } from '@/lib/utils';

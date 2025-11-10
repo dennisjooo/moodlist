@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { Music } from "lucide-react";
 import { CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { useAuth } from "@/lib/contexts/AuthContext";
+import { useAuth } from "@/lib/store/authStore";
 import { useAuthCallback } from "@/lib/hooks/useAuthCallback";
 import {
   CallbackLayout,

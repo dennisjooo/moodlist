@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/lib/contexts/AuthContext';
+import { useAuth } from '@/lib/store/authStore';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { logger } from '@/lib/utils/logger';
 import { useToast } from '../ui/useToast';

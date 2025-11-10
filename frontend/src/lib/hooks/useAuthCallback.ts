@@ -100,7 +100,23 @@ export function useAuthCallback() {
           // Add a small delay to ensure cookie is set before dispatching auth update
           await new Promise(resolve => setTimeout(resolve, 100));
 
-          // Dispatch custom event to notify other components to refresh auth state
+          // Force an immediate auth check to populate the cache
+          // This ensures the auth state is ready before navigation
+          const { checkAuthStatus } = await import('@/lib/store/authStore').then(m => m.useAuthStore.getState());
+          await checkAuthStatus(0, true); // Skip cache, force fresh check
+
+          // Verify the auth state was actually set before proceeding
+          const { isAuthenticated, user } = await import('@/lib/store/authStore').then(m => m.useAuthStore.getState());
+          if (!isAuthenticated || !user) {
+            logger.error('Auth state not set after checkAuthStatus', { component: 'CallbackPage' });
+            setStatus('error');
+            setErrorMessage('Failed to establish session - please try again');
+            return;
+          }
+
+          logger.info('Auth state confirmed', { component: 'CallbackPage', userId: user.id });
+
+          // Dispatch custom event to notify other components auth is updated
           window.dispatchEvent(new CustomEvent('auth-update'));
         } catch (authError) {
           logger.error('Authentication failed', authError, { component: 'CallbackPage' });
