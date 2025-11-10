@@ -1,6 +1,8 @@
 // API client for Spotify-related endpoints
 
-import { config } from '@/lib/config';
+import { AxiosError, AxiosRequestConfig, isAxiosError } from 'axios';
+
+import apiClient from '@/lib/axios';
 import { logger } from '@/lib/utils/logger';
 
 export interface SpotifyProfile {
@@ -37,32 +39,37 @@ export interface TrackDetails {
 class SpotifyAPI {
     private async request<T>(
         endpoint: string,
-        options: RequestInit = {}
+        options: AxiosRequestConfig = {}
     ): Promise<T> {
-        const url = `${config.api.baseUrl}${endpoint}`;
+        try {
+            const response = await apiClient.request<T>({
+                url: endpoint,
+                ...options,
+            });
 
-        const reqConfig: RequestInit = {
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers,
-            },
-            credentials: 'include',
-            ...options,
-        };
+            return response.data;
+        } catch (error) {
+            if (isAxiosError(error)) {
+                const axiosError = error as AxiosError;
+                const status = axiosError.response?.status ?? 0;
+                const statusText = axiosError.response?.statusText ?? axiosError.message;
 
-        const response = await fetch(url, reqConfig);
+                logger.error('Spotify API request failed', error, {
+                    component: 'SpotifyAPI',
+                    status,
+                    statusText,
+                    endpoint,
+                });
 
-        if (!response.ok) {
-            logger.error('Spotify API request failed', undefined, {
+                throw new Error(`API request failed: ${status} ${statusText}`);
+            }
+
+            logger.error('Unexpected Spotify API error', error, {
                 component: 'SpotifyAPI',
-                status: response.status,
-                statusText: response.statusText,
                 endpoint,
             });
-            throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+            throw error;
         }
-
-        return await response.json();
     }
 
     async getProfile(): Promise<SpotifyProfile> {
