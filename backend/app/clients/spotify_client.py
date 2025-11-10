@@ -464,20 +464,34 @@ class SpotifyAPIClient:
             except httpx.HTTPStatusError as e:
                 status_code = e.response.status_code
                 
+                # Get response body for better error messages
+                try:
+                    error_body = e.response.json()
+                except:
+                    error_body = e.response.text
+                
                 self.logger.warning(
                     "Spotify API HTTP error",
                     method=method,
                     endpoint=endpoint,
                     status_code=status_code,
                     attempt=attempt + 1,
-                    max_retries=self.max_retries
+                    max_retries=self.max_retries,
+                    error_body=error_body
                 )
                 
                 # Handle specific status codes
                 if status_code == 401:
                     raise SpotifyAuthError("Invalid or expired token")
                 elif status_code == 403:
-                    raise SpotifyAuthError("Insufficient permissions")
+                    error_msg = "Insufficient permissions - token may be missing required scopes. Please log out and log back in."
+                    self.logger.error(
+                        "Spotify 403 error - likely missing scopes",
+                        endpoint=endpoint,
+                        error_body=error_body,
+                        hint="User needs to re-authenticate to get new token with correct scopes"
+                    )
+                    raise SpotifyAuthError(error_msg)
                 elif status_code == 429:
                     # Rate limited - wait and retry
                     if attempt < self.max_retries - 1:
