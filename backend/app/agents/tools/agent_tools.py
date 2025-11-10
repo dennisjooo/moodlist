@@ -556,8 +556,22 @@ class RateLimitedTool(BaseAPITool):
                 # Format parameters (convert lists to appropriate format)
                 formatted_params = self._format_params(params)
 
+                # Track request timing for monitoring
+                request_start = datetime.now(timezone.utc)
+
                 # Make the actual request (pass use_cache=False since we handled caching above)
                 response = await super()._make_request(method, endpoint, formatted_params, json_data, headers, use_cache=False, cache_ttl=cache_ttl)
+
+                # Log slow requests (>20s) for RecoBeat API monitoring
+                request_duration = (datetime.now(timezone.utc) - request_start).total_seconds()
+                if request_duration > 20.0:
+                    logger.warning(
+                        f"Slow RecoBeat API request detected",
+                        tool=self.name,
+                        endpoint=endpoint,
+                        duration_seconds=request_duration,
+                        params=formatted_params
+                    )
 
                 # Cache the response if caching was requested
                 if use_cache:
@@ -595,7 +609,23 @@ class RateLimitedTool(BaseAPITool):
 
             await self._check_rate_limit()
             formatted_params = self._format_params(params)
+            
+            # Track request timing for monitoring
+            request_start = datetime.now(timezone.utc)
+            
             response = await super()._make_request(method, endpoint, formatted_params, json_data, headers, use_cache=False, cache_ttl=cache_ttl)
+            
+            # Log slow requests (>20s) for monitoring
+            request_duration = (datetime.now(timezone.utc) - request_start).total_seconds()
+            if request_duration > 20.0:
+                logger.warning(
+                    f"Slow API request detected",
+                    tool=self.name,
+                    endpoint=endpoint,
+                    duration_seconds=request_duration,
+                    params=formatted_params
+                )
+            
             self._last_request_time = datetime.now(timezone.utc)
             await self._record_request()
             return response
