@@ -115,8 +115,9 @@ async def register(
     db_time = time.time() - db_start
     logger.debug("Database operations completed", duration_ms=db_time * 1000)
 
-    # Set session cookie using utility
-    set_session_cookie(response, session_token)
+    # Set session cookie using utility (pass origin for localhost detection)
+    origin = request.headers.get("origin")
+    set_session_cookie(response, session_token, origin)
     
     # Create JWT tokens
     token_data = {"sub": user.spotify_id}
@@ -188,8 +189,9 @@ async def logout(
     current_user: Optional[User] = Depends(require_auth)
 ):
     """Logout user and clear session."""
-    # Clear session cookie using utility
-    delete_session_cookie(response)
+    # Clear session cookie using utility (pass origin for localhost detection)
+    origin = request.headers.get("origin")
+    delete_session_cookie(response, origin)
 
     # Delete session from database if user is authenticated
     if current_user:
