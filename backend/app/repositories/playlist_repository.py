@@ -3,7 +3,6 @@
 from typing import List, Optional, Dict, Iterable, Any, Tuple
 from datetime import datetime, timezone
 from dataclasses import dataclass
-import hashlib
 
 import structlog
 from sqlalchemy import select, and_, asc, desc, func, or_, String, literal, cast
