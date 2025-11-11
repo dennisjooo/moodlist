@@ -67,7 +67,7 @@ export default function MoodBackground({
 
     return (
         <div
-            className="fixed inset-0 z-0 transition-opacity duration-[2200ms] ease-[cubic-bezier(0.22,0.61,0.36,1)]"
+            className="fixed inset-0 z-0 transition-opacity duration-[1600ms] ease-[cubic-bezier(0.22,0.61,0.36,1)]"
             style={{
                 background: getGradientStyle(),
                 opacity: currentOpacity,
