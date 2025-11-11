@@ -10,10 +10,10 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { initiateSpotifyAuth } from '@/lib/spotifyAuth';
-import { config } from '@/lib/config';
-import { Info, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { config } from '@/lib/config';
+import { initiateSpotifyAuth } from '@/lib/spotifyAuth';
+import { ExternalLink, Info } from 'lucide-react';
 
 interface LimitedAccessDialogProps {
     open: boolean;
@@ -49,7 +49,7 @@ export function LimitedAccessDialog({ open, onOpenChange }: LimitedAccessDialogP
                             <div className="rounded-lg border border-border/60 bg-muted/30 p-3 text-sm space-y-2">
                                 <div className="font-medium">Want access?</div>
                                 <div className="text-muted-foreground">
-                                    We&apos;re working on getting full Spotify API approval. In the meantime, feel free to reach out if you&apos;d like to be added to the beta whitelist!
+                                    We currently don&apos; have a restriction from Spotify to 25 users. If you're interested in being added to the beta whitelist, please reach out to us.
                                 </div>
                                 {betaContactUrl && (
                                     <Button
