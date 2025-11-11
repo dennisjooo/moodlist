@@ -467,7 +467,7 @@ class SpotifyAPIClient:
                 # Get response body for better error messages
                 try:
                     error_body = e.response.json()
-                except:
+                except Exception:
                     error_body = e.response.text
                 
                 self.logger.warning(

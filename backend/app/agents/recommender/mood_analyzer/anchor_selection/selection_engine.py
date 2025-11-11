@@ -738,7 +738,6 @@ class AnchorSelectionEngine:
         candidates = []
 
         # Check if tracks already have audio features attached (from batched fetch)
-        tracks_with_features = [t for t in tracks if t.get('audio_features')]
         tracks_needing_features = [t for t in tracks if not t.get('audio_features') and t.get('id')]
 
         # Only fetch features for tracks that don't have them yet
