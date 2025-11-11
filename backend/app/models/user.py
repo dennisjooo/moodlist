@@ -18,6 +18,7 @@ class User(Base):
     token_expires_at = Column(DateTime(timezone=True), nullable=False)
     profile_image_url = Column(String(500), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    is_spotify_whitelisted = Column(Boolean, default=True, nullable=False)  # Track if user has Spotify API access
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
