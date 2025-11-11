@@ -2,6 +2,7 @@
 
 import { motion } from '@/components/ui/lazy-motion';
 import { Github, Linkedin } from 'lucide-react';
+import { config } from '@/lib/config';
 
 export function AboutFooter() {
     return (
@@ -32,23 +33,23 @@ export function AboutFooter() {
                         <div className="flex items-center gap-2">
                             <Github size={16} />
                             <a
-                                href="https://github.com/dennisjooo"
+                                href={config.social.githubUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="hover:text-primary transition-colors"
                             >
-                                dennisjooo
+                                {config.social.githubUsername}
                             </a>
                         </div>
                         <div className="flex items-center gap-2">
                             <Linkedin size={16} />
                             <a
-                                href="https://www.linkedin.com/in/dennisjooo/"
+                                href={config.social.linkedinUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="hover:text-primary transition-colors"
                             >
-                                dennisjooo
+                                {config.social.linkedinUsername}
                             </a>
                         </div>
                     </div>
