@@ -101,18 +101,45 @@ export function useAuthCallback() {
 
           setCurrentStage(2);
 
-          // Add a small delay to ensure cookie is set before dispatching auth update
-          await new Promise(resolve => setTimeout(resolve, 100));
+          // Add a delay to ensure cookie is set before checking auth status
+          await new Promise(resolve => setTimeout(resolve, 200));
 
           // Force an immediate auth check to populate the cache
           // This ensures the auth state is ready before navigation
-          const { checkAuthStatus } = await import('@/lib/store/authStore').then(m => m.useAuthStore.getState());
-          await checkAuthStatus(0, true); // Skip cache, force fresh check
+          const authStoreModule = await import('@/lib/store/authStore');
+          const { checkAuthStatus } = authStoreModule.useAuthStore.getState();
 
-          // Verify the auth state was actually set before proceeding
-          const { isAuthenticated, user } = await import('@/lib/store/authStore').then(m => m.useAuthStore.getState());
+          // Retry logic with exponential backoff to handle timing issues
+          // Sometimes the cookie needs a moment to be available or backend needs time to process
+          let retries = 0;
+          const maxRetries = 5;
+          let isAuthenticated = false;
+          let user = null;
+
+          while (retries < maxRetries && (!isAuthenticated || !user)) {
+            await checkAuthStatus(0, true); // Skip cache, force fresh check
+
+            // Wait a bit before checking state to allow store to update
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            // Verify the auth state was actually set
+            const authState = authStoreModule.useAuthStore.getState();
+            isAuthenticated = authState.isAuthenticated;
+            user = authState.user;
+
+            if (!isAuthenticated || !user) {
+              retries++;
+              if (retries < maxRetries) {
+                // Exponential backoff: 100ms, 200ms, 400ms, 800ms, 1600ms
+                const delay = Math.min(100 * Math.pow(2, retries - 1), 1600);
+                logger.debug(`Auth state not set yet, retrying in ${delay}ms (attempt ${retries}/${maxRetries})`, { component: 'CallbackPage' });
+                await new Promise(resolve => setTimeout(resolve, delay));
+              }
+            }
+          }
+
           if (!isAuthenticated || !user) {
-            logger.error('Auth state not set after checkAuthStatus', { component: 'CallbackPage' });
+            logger.error('Auth state not set after checkAuthStatus', { component: 'CallbackPage', retries });
             setStatus('error');
             setErrorMessage('Failed to establish session - please try again');
             return;
