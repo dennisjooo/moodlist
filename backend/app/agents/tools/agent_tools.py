@@ -30,7 +30,7 @@ _inflight_lock = asyncio.Lock()
 def get_reccobeat_semaphore() -> asyncio.Semaphore:
     """Get or create the global RecoBeat API semaphore.
 
-    Optimized to 6 concurrent requests with aggressive caching and request
+    Optimized to 15 concurrent requests with aggressive caching and request
     deduplication reducing actual API load significantly.
 
     Returns:
@@ -38,8 +38,8 @@ def get_reccobeat_semaphore() -> asyncio.Semaphore:
     """
     global _reccobeat_semaphore
     if _reccobeat_semaphore is None:
-        # Six concurrent requests keeps burst pressure well below rate limit
-        _reccobeat_semaphore = asyncio.Semaphore(6)
+        # Fifteen concurrent requests for maximum throughput with proper throttling
+        _reccobeat_semaphore = asyncio.Semaphore(15)
     return _reccobeat_semaphore
 
 

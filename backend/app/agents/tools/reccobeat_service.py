@@ -328,8 +328,8 @@ class RecoBeatService:
 
             Includes retry logic for transient failures.
             """
-            max_retries = 2  # Reduced retries, rely on caching instead
-            retry_delay = 1.5  # seconds
+            max_retries = 1  # Reduced to 1 retry since we have aggressive caching
+            retry_delay = 1.0  # seconds
 
             for attempt in range(max_retries):
                 try:
@@ -381,10 +381,10 @@ class RecoBeatService:
 
             return {}
 
-        # Execute all chunks in parallel with reduced concurrency to respect rate limits
+        # Execute all chunks in parallel with optimized concurrency
         try:
-            # Reduced to 4 concurrent chunk requests to respect strict rate limits
-            chunk_results = await self._bounded_gather(chunks, process_chunk, concurrency=4)
+            # Increased to 10 concurrent chunk requests for better throughput
+            chunk_results = await self._bounded_gather(chunks, process_chunk, concurrency=10)
 
             # Combine results from all chunks
             for chunk_result in chunk_results:
@@ -504,11 +504,10 @@ class RecoBeatService:
                 )
 
                 if batch_index + 1 < total_batches:
-                    # Adaptive throttling: increase wait time as we process more batches
-                    # This helps prevent hitting rate limits when fetching many tracks
+                    # Minimal throttling since we have better concurrency control
+                    # Only add extra delay every 20 batches to prevent accumulation
                     base_throttle = self.AUDIO_FEATURE_THROTTLE_SECONDS
-                    # Add extra delay every 10 batches to prevent accumulation
-                    adaptive_throttle = base_throttle + (0.5 if batch_index % 10 == 9 else 0.0)
+                    adaptive_throttle = base_throttle + (0.2 if batch_index % 20 == 19 else 0.0)
                     await asyncio.sleep(adaptive_throttle)
 
             # Combine results
@@ -607,8 +606,8 @@ class RecoBeatService:
             logger.warning("Multiple tracks tool not available")
             return []
 
-        # Process chunks in parallel with tighter concurrency to respect rate limits
-        semaphore = asyncio.Semaphore(4)  # Max 4 concurrent chunk requests
+        # Process chunks in parallel with optimized concurrency for better throughput
+        semaphore = asyncio.Semaphore(10)  # Max 10 concurrent chunk requests
 
         async def process_track_chunk(chunk: List[str]) -> List[Dict[str, Any]]:
             """Process a single chunk of track IDs."""
