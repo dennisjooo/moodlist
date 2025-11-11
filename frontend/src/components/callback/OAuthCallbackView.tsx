@@ -2,12 +2,13 @@ import { Button } from "@/components/ui/button";
 import { CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { LoadingDots } from "@/components/ui/loading-dots";
 import { useToast } from "@/lib/hooks/ui/useToast";
-import type { AuthStatus } from "@/lib/hooks/useAuthCallback";
+import type { AuthStatus, AuthErrorType } from "@/lib/hooks/useAuthCallback";
 import { useEffect, useRef } from "react";
 import { AuthenticatingView } from "./AuthenticatingView";
 import { CallbackCard } from "./CallbackCard";
 import { CallbackLayout } from "./CallbackLayout";
 import { ErrorView } from "./ErrorView";
+import { NotWhitelistedError } from "./NotWhitelistedError";
 import { StatusProgress } from "./StatusProgress";
 import { StepList } from "./StepList";
 import { SuccessView } from "./SuccessView";
@@ -15,6 +16,7 @@ import { SuccessView } from "./SuccessView";
 interface OAuthCallbackViewProps {
   status: AuthStatus;
   errorMessage: string;
+  errorType: AuthErrorType;
   currentStage: number;
   redirectLabel: string;
   onRetry: () => void;
@@ -23,6 +25,7 @@ interface OAuthCallbackViewProps {
 export function OAuthCallbackView({
   status,
   errorMessage,
+  errorType,
   currentStage,
   redirectLabel,
   onRetry,
@@ -31,14 +34,15 @@ export function OAuthCallbackView({
   const errorToastShownRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (status === "error" && errorMessage && errorToastShownRef.current !== errorMessage) {
+    // Only show toast for generic errors, whitelist errors have their own UI
+    if (status === "error" && errorMessage && errorType === 'generic' && errorToastShownRef.current !== errorMessage) {
       errorToastShownRef.current = errorMessage;
       showErrorToast("Authentication failed", {
         description: errorMessage,
         duration: 5000,
       });
     }
-  }, [status, errorMessage, showErrorToast]);
+  }, [status, errorMessage, errorType, showErrorToast]);
 
   return (
     <CallbackLayout>
@@ -71,11 +75,22 @@ export function OAuthCallbackView({
         )}
 
         {status === "error" && (
-          <CardFooter className="pt-0">
-            <Button onClick={onRetry} className="w-full">
-              Return to home
-            </Button>
-          </CardFooter>
+          <>
+            {errorType === 'whitelist' ? (
+              <CardContent className="pt-0">
+                <NotWhitelistedError
+                  errorMessage={errorMessage}
+                  onRetry={onRetry}
+                />
+              </CardContent>
+            ) : (
+              <CardFooter className="pt-0">
+                <Button onClick={onRetry} className="w-full">
+                  Return to home
+                </Button>
+              </CardFooter>
+            )}
+          </>
         )}
       </CallbackCard>
     </CallbackLayout>

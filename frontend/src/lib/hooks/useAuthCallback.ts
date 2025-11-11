@@ -4,10 +4,12 @@ import apiClient from '@/lib/axios';
 import { logger } from '@/lib/utils/logger';
 
 export type AuthStatus = 'loading' | 'success' | 'error';
+export type AuthErrorType = 'whitelist' | 'generic' | null;
 
 export interface AuthCallbackState {
   status: AuthStatus;
   errorMessage: string;
+  errorType: AuthErrorType;
   currentStage: number;
   redirectPath: string | null;
   redirectLabel: string;
@@ -36,6 +38,7 @@ export function useAuthCallback() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [errorMessage, setErrorMessage] = useState('');
+  const [errorType, setErrorType] = useState<AuthErrorType>(null);
   const [currentStage, setCurrentStage] = useState(0);
   const [redirectPath, setRedirectPath] = useState<string | null>(null);
 
@@ -48,6 +51,7 @@ export function useAuthCallback() {
     const handleCallback = async () => {
       setStatus('loading');
       setErrorMessage('');
+      setErrorType(null);
       setCurrentStage(0);
 
       const code = searchParams.get('code');
@@ -120,8 +124,22 @@ export function useAuthCallback() {
           window.dispatchEvent(new CustomEvent('auth-update'));
         } catch (authError) {
           logger.error('Authentication failed', authError, { component: 'CallbackPage' });
-          setStatus('error');
-          setErrorMessage('Authentication failed - please try again');
+
+          // Check if it's a whitelist error
+          const errorDetail = (authError as any)?.response?.data?.detail || '';
+
+          if (errorDetail.includes('NOT_WHITELISTED') || errorDetail.includes('not whitelisted')) {
+            setStatus('error');
+            setErrorType('whitelist');
+            setErrorMessage(
+              errorDetail.replace('NOT_WHITELISTED: ', '') ||
+              'Your Spotify account is not whitelisted for beta access. MoodList is currently in limited beta.'
+            );
+          } else {
+            setStatus('error');
+            setErrorType('generic');
+            setErrorMessage('Authentication failed - please try again');
+          }
           return;
         }
 
@@ -161,6 +179,7 @@ export function useAuthCallback() {
   return {
     status,
     errorMessage,
+    errorType,
     currentStage,
     redirectPath,
     redirectLabel,

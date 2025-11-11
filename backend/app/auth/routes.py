@@ -67,11 +67,53 @@ async def register(
     logger.info("Login attempt", ip=request.client.host)
     
     # Fetch user profile from Spotify using centralized client
+    from app.core.config import settings
     spotify_client = SpotifyAPIClient()
+    is_whitelisted = True  # Default to True
+
     try:
         profile_data = await spotify_client.get_user_profile(user_data.access_token)
+
+        # If in dev mode, test if user can actually use the API
+        # Some users might authenticate successfully but not be whitelisted
+        if settings.SPOTIFY_DEV_MODE:
+            try:
+                # Ping /me again to verify API access (not just OAuth)
+                await spotify_client.get_user_profile(user_data.access_token)
+                is_whitelisted = True
+            except SpotifyAuthError as test_error:
+                test_error_msg = str(test_error)
+                if "403" in test_error_msg or "Insufficient permissions" in test_error_msg or "permissions" in test_error_msg.lower():
+                    logger.error("User authenticated but not whitelisted for API access",
+                               spotify_id=profile_data.get("id"),
+                               error=test_error_msg,
+                               ip=request.client.host)
+                    is_whitelisted = False
+                    raise SpotifyAuthError(
+                        "NOT_WHITELISTED: Your Spotify account is not whitelisted for beta access. "
+                        "MoodList is currently in limited beta (25 users max). "
+                        "Please request access to be added to the whitelist."
+                    )
+                # Other errors, re-raise
+                raise
+
     except SpotifyAuthError as e:
-        logger.error("Failed to fetch Spotify profile", error=str(e))
+        error_msg = str(e)
+
+        # If already marked as NOT_WHITELISTED, re-raise as-is
+        if "NOT_WHITELISTED" in error_msg:
+            raise
+
+        # If in dev mode and we get a 403-type error, it's likely a whitelist issue
+        if settings.SPOTIFY_DEV_MODE and ("403" in error_msg or "Insufficient permissions" in error_msg or "permissions" in error_msg.lower()):
+            logger.error("User not whitelisted in Spotify dev mode", error=error_msg, ip=request.client.host)
+            raise SpotifyAuthError(
+                "NOT_WHITELISTED: Your Spotify account is not whitelisted for beta access. "
+                "MoodList is currently in limited beta (25 users max). "
+                "Please request access to be added to the whitelist."
+            )
+
+        logger.error("Failed to fetch Spotify profile", error=error_msg)
         raise SpotifyAuthError("Invalid Spotify access token or failed to fetch profile")
     except Exception as e:
         logger.error("Unexpected error fetching Spotify profile", error=str(e))
@@ -95,6 +137,7 @@ async def register(
         display_name=profile_data.get("display_name", "Unknown User"),
         email=profile_data.get("email"),
         profile_image_url=profile_image_url,
+        is_spotify_whitelisted=is_whitelisted,
     )
     
     # OPTIMIZED: Atomic session replacement
