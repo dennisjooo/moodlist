@@ -177,7 +177,7 @@ class TrackRecommendationsTool(RateLimitedTool):
                         endpoint="/v1/track",
                         params={"ids": chunk},
                         use_cache=True,
-                        cache_ttl=1800,  # 30 minutes
+                        cache_ttl=2592000,  # 30 days - track metadata is stable
                     )
 
                     if not self._validate_response(response_data, ["content"]):
@@ -333,7 +333,7 @@ class TrackRecommendationsTool(RateLimitedTool):
 
             logger.info(f"Getting {size} recommendations for {len(seeds)} seeds")
 
-            # Make API request with aggressive caching (15 minutes TTL for recommendations)
+            # Make API request with aggressive caching (7 days TTL for recommendations)
             # Recommendations are stable for the same params, so longer cache helps rate limiting
             recommendation_task = asyncio.create_task(
                 self._make_request(
@@ -341,7 +341,7 @@ class TrackRecommendationsTool(RateLimitedTool):
                     endpoint="/v1/track/recommendation",
                     params=params,
                     use_cache=True,
-                    cache_ttl=900,  # 15 minutes - stable recommendations, helps avoid rate limits
+                    cache_ttl=604800,  # 7 days - stable recommendations, helps avoid rate limits
                 )
             )
 

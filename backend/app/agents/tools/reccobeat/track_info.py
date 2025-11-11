@@ -54,13 +54,13 @@ class GetMultipleTracksTool(RateLimitedTool):
         try:
             logger.info(f"Getting {len(ids)} tracks from RecoBeat")
 
-            # Make API request with caching (30 minutes TTL for track details)
+            # Make API request with caching (30 days TTL for track details - immutable metadata)
             response_data = await self._make_request(
                 method="GET",
                 endpoint="/v1/track",
                 params={"ids": ids},
                 use_cache=True,
-                cache_ttl=1800  # 30 minutes
+                cache_ttl=2592000  # 30 days - track metadata is immutable
             )
 
             # Validate response structure
@@ -163,12 +163,12 @@ class GetTrackAudioFeaturesTool(RateLimitedTool):
         try:
             logger.debug(f"Getting audio features for track {track_id}")
 
-            # Make API request with caching (60 minutes TTL for audio features)
+            # Make API request with caching (90 days TTL for audio features - immutable per track)
             response_data = await self._make_request(
                 method="GET",
                 endpoint=f"/v1/track/{track_id}/audio-features",
                 use_cache=True,
-                cache_ttl=3600  # 60 minutes - audio features are very stable
+                cache_ttl=7776000  # 90 days - audio features never change for a track
             )
 
             # Validate response structure
