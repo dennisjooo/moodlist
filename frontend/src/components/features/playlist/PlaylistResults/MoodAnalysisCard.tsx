@@ -2,6 +2,8 @@
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { motion } from '@/components/ui/lazy-motion';
+import { CARD_FADE_IN_UP_DELAYED_VARIANTS } from '@/lib/constants/animations';
 import { useMoodAnalysisStyling } from '@/lib/hooks';
 import { ChevronDown } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -55,7 +57,12 @@ export default function MoodAnalysisCard({
   }, [isMetricsOpen]);
 
   return (
-    <Card className="group transition-all duration-300 hover:shadow-lg hover:shadow-black/10 gap-4">
+    <motion.div
+      variants={CARD_FADE_IN_UP_DELAYED_VARIANTS}
+      initial="hidden"
+      animate="visible"
+    >
+      <Card className="group transition-all duration-300 hover:shadow-lg hover:shadow-black/10 gap-4">
       <CardHeader>
         <div className="flex items-center justify-between gap-4">
           <CardTitle className="text-lg">Mood Analysis</CardTitle>
@@ -153,6 +160,7 @@ export default function MoodAnalysisCard({
         </div>
       </CardContent>
     </Card>
+    </motion.div>
   );
 }
 

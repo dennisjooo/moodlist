@@ -104,80 +104,40 @@ function PlaylistPageContent() {
         syncFromSpotify
     ]);
 
-    // Loading state - show while loading playlist
-    if (isLoadingSession) {
-        return (
-            <div className="min-h-screen bg-background relative">
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
-                    <DotPattern
-                        className={cn(
-                            "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-                        )}
-                    />
-                </div>
-
-                <Navigation />
-
-                <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                    <BackButton
-                        onClick={handleBack}
-                        animated
-                        className="mb-6"
-                    />
-
-                    <PlaylistResultsSkeleton />
-                </main>
-            </div>
-        );
-    }
-
-    // Error state
-    if (workflowState.error || workflowState.status !== 'completed') {
-        return (
-            <div className="min-h-screen bg-background relative">
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
-                    <DotPattern
-                        className={cn(
-                            "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-                        )}
-                    />
-                </div>
-
-                <Navigation />
-
-                <main className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                    <BackButton
-                        onClick={handleBack}
-                        animated
-                        className="mb-6"
-                    />
-
-                    <div className="flex items-center justify-center min-h-[60vh]">
-                        <div className="text-center">
-                            <h2 className="text-2xl font-bold mb-4">Playlist Not Found</h2>
-                            <p className="text-muted-foreground mb-6">
-                                {workflowState.error || 'This playlist is not available or still being created.'}
-                            </p>
-                            <Button onClick={() => router.push('/create')}>
-                                Create New Playlist
-                            </Button>
-                        </div>
-                    </div>
-                </main>
-            </div>
-        );
-    }
-
-    // Show playlist results
+    // Determine content based on state
     const colorScheme = workflowState.moodAnalysis?.color_scheme;
+    const showMoodBackground = !isLoadingSession && workflowState.status === 'completed';
+
+    let content;
+    if (isLoadingSession) {
+        content = <PlaylistResultsSkeleton />;
+    } else if (workflowState.error || workflowState.status !== 'completed') {
+        content = (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="text-center">
+                    <h2 className="text-2xl font-bold mb-4">Playlist Not Found</h2>
+                    <p className="text-muted-foreground mb-6">
+                        {workflowState.error || 'This playlist is not available or still being created.'}
+                    </p>
+                    <Button onClick={() => router.push('/create')}>
+                        Create New Playlist
+                    </Button>
+                </div>
+            </div>
+        );
+    } else {
+        content = <PlaylistResults />;
+    }
 
     return (
         <div className="min-h-screen bg-background relative">
-            <MoodBackground
-                colorScheme={colorScheme}
-                style="linear-diagonal"
-                opacity={0.2}
-            />
+            {showMoodBackground && (
+                <MoodBackground
+                    colorScheme={colorScheme}
+                    style="linear-diagonal"
+                    opacity={0.2}
+                />
+            )}
 
             <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
                 <DotPattern
@@ -196,7 +156,7 @@ function PlaylistPageContent() {
                     className="mb-6"
                 />
 
-                <PlaylistResults />
+                {content}
             </main>
         </div>
     );

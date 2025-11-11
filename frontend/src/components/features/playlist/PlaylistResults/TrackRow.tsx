@@ -1,6 +1,8 @@
 'use client';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { motion } from '@/components/ui/lazy-motion';
+import { TRACK_ROW_SLIDE_IN_VARIANTS } from '@/lib/constants/animations';
 import { useReducedMotion } from '@/lib/hooks';
 import { Track } from '@/lib/types/track';
 import { cn } from '@/lib/utils';
@@ -19,7 +21,7 @@ function TrackRow({ track, index, isFocused }: TrackRowProps) {
 
   return (
     <TooltipProvider>
-      <div
+      <motion.div
         className={cn(
           "flex items-center gap-3 p-2.5 rounded-lg group cursor-pointer",
           isFocused && "bg-accent ring-2 ring-ring ring-offset-2",
@@ -30,6 +32,9 @@ function TrackRow({ track, index, isFocused }: TrackRowProps) {
         aria-label={`Track ${index + 1}: ${track.track_name} by ${track.artists.join(', ')}`}
         aria-selected={isFocused}
         tabIndex={-1}
+        variants={TRACK_ROW_SLIDE_IN_VARIANTS}
+        initial="hidden"
+        animate="visible"
       >
         <div className="flex-shrink-0 w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">
           {index + 1}
@@ -52,7 +57,7 @@ function TrackRow({ track, index, isFocused }: TrackRowProps) {
 
           {track.spotify_uri && <TrackDetailsTooltip spotifyUri={track.spotify_uri} />}
         </div>
-      </div>
+      </motion.div>
     </TooltipProvider>
   );
 }
