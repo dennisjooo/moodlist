@@ -23,10 +23,12 @@ class RecoBeatIDRegistry:
     # Cache key prefixes
     MISSING_ID_PREFIX = "reccobeat:missing:"
     VALIDATED_ID_PREFIX = "reccobeat:validated:"
+    REVERSE_ID_PREFIX = "reccobeat:reverse:"  # RecoBeat ID -> Spotify ID
     
     # TTLs for different states - optimized for rate limit mitigation
     MISSING_ID_TTL = 86400 * 14  # 14 days - missing IDs rarely appear suddenly
-    VALIDATED_ID_TTL = 86400 * 60  # 60 days - validated IDs remain very stable
+    VALIDATED_ID_TTL = 86400 * 180  # 180 days - validated IDs are immutable (increased from 60 days)
+    REVERSE_ID_TTL = 86400 * 180  # 180 days - reverse mappings are also immutable
     
     @classmethod
     async def mark_missing(cls, spotify_id: str, reason: Optional[str] = None) -> None:
@@ -59,16 +61,28 @@ class RecoBeatIDRegistry:
             reccobeat_id: Corresponding RecoBeat ID
         """
         key = f"{cls.VALIDATED_ID_PREFIX}{spotify_id}"
+        reverse_key = f"{cls.REVERSE_ID_PREFIX}{reccobeat_id}"
+        timestamp = datetime.now(timezone.utc).isoformat()
         
         data = {
             "spotify_id": spotify_id,
             "reccobeat_id": reccobeat_id,
-            "validated_at": datetime.now(timezone.utc).isoformat()
+            "validated_at": timestamp
+        }
+        reverse_data = {
+            "spotify_id": spotify_id,
+            "reccobeat_id": reccobeat_id,
+            "validated_at": timestamp
         }
         
         try:
             await cache_manager.cache.set(key, data, ttl=cls.VALIDATED_ID_TTL)
-            logger.debug(f"Validated Spotify ID mapping: {spotify_id} -> {reccobeat_id}")
+            await cache_manager.cache.set(reverse_key, reverse_data, ttl=cls.REVERSE_ID_TTL)
+            logger.debug(
+                "Validated Spotify ID mapping: %s -> %s",
+                spotify_id,
+                reccobeat_id,
+            )
         except Exception as e:
             logger.warning(f"Error marking ID as validated: {e}")
     
@@ -143,6 +157,27 @@ class RecoBeatIDRegistry:
         return ids_to_check, known_missing
     
     @classmethod
+    async def get_spotify_id(cls, reccobeat_id: str) -> Optional[str]:
+        """Get the Spotify ID for a RecoBeat ID (reverse lookup).
+        
+        Args:
+            reccobeat_id: RecoBeat track ID
+            
+        Returns:
+            Spotify ID if mapped, None otherwise
+        """
+        key = f"{cls.REVERSE_ID_PREFIX}{reccobeat_id}"
+        
+        try:
+            data = await cache_manager.cache.get(key)
+            if data:
+                return data.get("spotify_id")
+        except Exception as e:
+            logger.warning(f"Error retrieving Spotify ID from RecoBeat ID: {e}")
+        
+        return None
+    
+    @classmethod
     async def bulk_get_validated(cls, spotify_ids: list[str]) -> dict[str, str]:
         """Bulk retrieve validated RecoBeat IDs from cache.
         
@@ -169,6 +204,32 @@ class RecoBeatIDRegistry:
             )
         
         return validated_mapping
+    
+    @classmethod
+    async def bulk_get_spotify_ids(cls, reccobeat_ids: list[str]) -> dict[str, str]:
+        """Bulk retrieve Spotify IDs from RecoBeat IDs (reverse lookup).
+        
+        Args:
+            reccobeat_ids: List of RecoBeat track IDs
+            
+        Returns:
+            Dictionary mapping RecoBeat IDs to Spotify IDs for validated entries
+        """
+        spotify_mapping = {}
+        
+        for reccobeat_id in reccobeat_ids:
+            spotify_id = await cls.get_spotify_id(reccobeat_id)
+            if spotify_id:
+                spotify_mapping[reccobeat_id] = spotify_id
+        
+        if spotify_mapping:
+            logger.info(
+                f"Retrieved {len(spotify_mapping)} Spotify IDs from cache (reverse lookup)",
+                total_requested=len(reccobeat_ids),
+                cache_hit_rate=f"{len(spotify_mapping)/len(reccobeat_ids)*100:.1f}%"
+            )
+        
+        return spotify_mapping
     
     @classmethod
     async def get_registry_stats(cls) -> dict[str, int]:
