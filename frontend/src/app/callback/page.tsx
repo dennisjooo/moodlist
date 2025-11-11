@@ -17,7 +17,7 @@ import {
 
 function CallbackContent() {
   const { isAuthenticated, isValidated, isLoading } = useAuth();
-  const { status, errorMessage, currentStage, redirectLabel, handleRetry } = useAuthCallback();
+  const { status, errorMessage, errorType, currentStage, redirectLabel, handleRetry } = useAuthCallback();
 
   // Already authenticated - show success message and redirect
   if (isValidated && isAuthenticated) {
@@ -34,6 +34,7 @@ function CallbackContent() {
     <OAuthCallbackView
       status={status}
       errorMessage={errorMessage}
+      errorType={errorType}
       currentStage={currentStage}
       redirectLabel={redirectLabel}
       onRetry={handleRetry}
