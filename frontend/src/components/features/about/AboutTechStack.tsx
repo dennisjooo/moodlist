@@ -8,43 +8,26 @@ import { Wrench, Monitor, Server, Globe, Code, Database, Activity, Settings, Pal
 export function AboutTechStack() {
     return (
         <motion.section
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.5, ease: 'easeOut' }}
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
         >
-            <motion.div
-                className="flex items-center gap-3 mb-6"
-                initial={{ opacity: 0, x: -12 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: '-80px' }}
-                transition={{ duration: 0.4, delay: 0.1, ease: 'easeOut' }}
-            >
+            <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 rounded-lg bg-primary/10 border border-primary/10">
                     <Wrench className="w-4 h-4 text-primary" />
                 </div>
                 <h2 className="text-2xl font-semibold text-foreground">What I Built With</h2>
-            </motion.div>
+            </div>
             <div className="space-y-8 text-base leading-relaxed">
-                <motion.p
-                    className="text-muted-foreground"
-                    initial={{ opacity: 0, y: 12 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: '-80px' }}
-                    transition={{ duration: 0.4, delay: 0.2, ease: 'easeOut' }}
-                >
+                <p className="text-muted-foreground">
                     This project uses both <strong className="text-foreground">Reccobeat</strong> and{' '}
                     <strong className="text-foreground">Spotify APIs</strong>—huge kudos and thanks to them
                     for their wonderful APIs that made this possible. I used this as a learning playground to dive deep into modern web development.
-                </motion.p>
+                </p>
 
                 {/* Tech Stack Accordions */}
-                <motion.div
-                    initial={{ opacity: 0, y: 12 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: '-80px' }}
-                    transition={{ duration: 0.4, delay: 0.3, ease: 'easeOut' }}
-                >
+                <div>
                     <Accordion type="single" collapsible className="w-full">
                         {/* Frontend Accordion */}
                         <AccordionItem value="frontend">
@@ -289,7 +272,7 @@ export function AboutTechStack() {
                             </AccordionContent>
                         </AccordionItem>
                     </Accordion>
-                </motion.div>
+                </div>
             </div>
         </motion.section>
     );
