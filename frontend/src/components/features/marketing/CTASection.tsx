@@ -65,12 +65,6 @@ export default function CTASection({ isLoggedIn: serverIsLoggedIn }: CTASectionP
             transition={{ duration: 0.6, delay: 0.1, ease: 'easeOut' }}
             className="flex w-full flex-col gap-3.5 rounded-xl border border-border/60 bg-background/90 p-5 text-center shadow-lg sm:gap-4 sm:rounded-2xl sm:p-6 md:max-w-sm"
           >
-            {!isLoggedIn && config.access.isDevMode && config.access.showLimitedAccessNotice && isClient && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-xs text-primary">
-                <Info className="h-3.5 w-3.5 flex-shrink-0" />
-                <span className="font-medium">Limited beta access</span>
-              </div>
-            )}
             <p className="text-xs font-medium leading-relaxed text-muted-foreground sm:text-sm">
               {isLoggedIn ? 'Jump back in and create another mix.' : 'Connect Spotify to start crafting playlists.'}
             </p>
