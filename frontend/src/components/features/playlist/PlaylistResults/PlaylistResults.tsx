@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useToast } from '@/lib/hooks';
 import { logger } from '@/lib/utils/logger';
+import { motion } from '@/components/ui/lazy-motion';
+import { FADE_IN_VARIANTS, ACTIONS_FADE_IN_UP_VARIANTS } from '@/lib/constants/animations';
 import PlaylistStatusBanner from './PlaylistStatusBanner';
 import MoodAnalysisCard from './MoodAnalysisCard';
 import TrackListView from './TrackListView';
@@ -93,7 +95,12 @@ export default function PlaylistResults() {
   const colorScheme = workflowState.moodAnalysis?.color_scheme;
 
   return (
-    <div className="space-y-6">
+    <motion.div
+      className="space-y-6"
+      variants={FADE_IN_VARIANTS}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Status Banner */}
       <PlaylistStatusBanner
         hasSavedToSpotify={!!hasSavedToSpotify}
@@ -135,7 +142,12 @@ export default function PlaylistResults() {
       <TrackListView tracks={workflowState.recommendations} />
 
       {/* Actions */}
-      <div className="flex gap-3">
+      <motion.div
+        className="flex gap-3"
+        variants={ACTIONS_FADE_IN_UP_VARIANTS}
+        initial="hidden"
+        animate="visible"
+      >
         <Button
           variant="outline"
           onClick={() => {
@@ -147,8 +159,8 @@ export default function PlaylistResults() {
         >
           🔄 Create New Playlist
         </Button>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
