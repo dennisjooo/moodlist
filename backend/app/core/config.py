@@ -1,7 +1,8 @@
+import ast
+import json
 from typing import List, Optional, Dict, Union
 from pydantic_settings import BaseSettings
 from pydantic import Field, field_validator
-import json
 
 
 class Settings(BaseSettings):
@@ -54,8 +55,15 @@ class Settings(BaseSettings):
             try:
                 return json.loads(v)
             except json.JSONDecodeError:
+                # Handle Python-style list strings (e.g. "['https://...']")
+                try:
+                    evaluated = ast.literal_eval(v)
+                    if isinstance(evaluated, (list, tuple, set)):
+                        return list(evaluated)
+                except (ValueError, SyntaxError):
+                    pass
                 # Fall back to comma-separated
-                return [origin.strip() for origin in v.split(",") if origin.strip()]
+                return [origin.strip().strip("\"'") for origin in v.split(",") if origin.strip()]
         return v
 
     @field_validator("ALLOWED_ORIGINS", mode="after")
@@ -125,8 +133,15 @@ class Settings(BaseSettings):
             try:
                 return json.loads(v)
             except json.JSONDecodeError:
+                # Handle Python-style list strings (e.g. "['https://...']")
+                try:
+                    evaluated = ast.literal_eval(v)
+                    if isinstance(evaluated, (list, tuple, set)):
+                        return list(evaluated)
+                except (ValueError, SyntaxError):
+                    pass
                 # Fall back to comma-separated
-                return [host.strip() for host in v.split(",") if host.strip()]
+                return [host.strip().strip("\"'") for host in v.split(",") if host.strip()]
         return v
 
     @field_validator("ALLOWED_HOSTS", mode="after")
