@@ -1,14 +1,16 @@
-import { CardHeader, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { LoadingDots } from "@/components/ui/loading-dots";
-import { CallbackLayout } from "./CallbackLayout";
-import { CallbackCard } from "./CallbackCard";
+import { useToast } from "@/lib/hooks/ui/useToast";
+import type { AuthStatus } from "@/lib/hooks/useAuthCallback";
+import { useEffect, useRef } from "react";
 import { AuthenticatingView } from "./AuthenticatingView";
-import { SuccessView } from "./SuccessView";
+import { CallbackCard } from "./CallbackCard";
+import { CallbackLayout } from "./CallbackLayout";
 import { ErrorView } from "./ErrorView";
 import { StatusProgress } from "./StatusProgress";
 import { StepList } from "./StepList";
-import type { AuthStatus } from "@/lib/hooks/useAuthCallback";
+import { SuccessView } from "./SuccessView";
 
 interface OAuthCallbackViewProps {
   status: AuthStatus;
@@ -25,6 +27,19 @@ export function OAuthCallbackView({
   redirectLabel,
   onRetry,
 }: OAuthCallbackViewProps) {
+  const { error: showErrorToast } = useToast();
+  const errorToastShownRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (status === "error" && errorMessage && errorToastShownRef.current !== errorMessage) {
+      errorToastShownRef.current = errorMessage;
+      showErrorToast("Authentication failed", {
+        description: errorMessage,
+        duration: 5000,
+      });
+    }
+  }, [status, errorMessage, showErrorToast]);
+
   return (
     <CallbackLayout>
       <CallbackCard>
