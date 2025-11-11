@@ -1,8 +1,16 @@
+'use client';
+
+import { motion } from '@/components/ui/lazy-motion';
 import { Award } from 'lucide-react';
 
 export function AboutConclusion() {
     return (
-        <section>
+        <motion.section
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+        >
             <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 rounded-lg bg-primary/10 border border-primary/10">
                     <Award className="w-4 h-4 text-primary" />
@@ -22,6 +30,6 @@ export function AboutConclusion() {
                     If you find some cool music along the way, that&apos;s just a bonus.
                 </p>
             </div>
-        </section>
+        </motion.section>
     );
 }
