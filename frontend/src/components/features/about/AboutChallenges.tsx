@@ -33,50 +33,31 @@ export function AboutChallenges() {
 
     return (
         <motion.section
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.5, ease: 'easeOut' }}
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
         >
-            <motion.div
-                className="flex items-center gap-3 mb-6"
-                initial={{ opacity: 0, x: -12 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: '-80px' }}
-                transition={{ duration: 0.4, delay: 0.1, ease: 'easeOut' }}
-            >
+            <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 rounded-lg bg-primary/10 border border-primary/10">
                     <TrendingUp className="w-4 h-4 text-primary" />
                 </div>
                 <h2 className="text-2xl font-semibold text-foreground">The Hard Parts</h2>
-            </motion.div>
+            </div>
             <div className="space-y-4 text-base leading-relaxed">
-                <motion.p
-                    className="text-muted-foreground"
-                    initial={{ opacity: 0, y: 12 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: '-80px' }}
-                    transition={{ duration: 0.4, delay: 0.2, ease: 'easeOut' }}
-                >
+                <p className="text-muted-foreground">
                     Turns out, building a full-stack application from scratch is <em>hard</em>. Here are some things
                     that humbled me:
-                </motion.p>
+                </p>
 
                 <div className="space-y-8 mt-6">
-                    {challenges.map((challenge, index) => (
-                        <motion.div
-                            key={challenge.title}
-                            className="space-y-2"
-                            initial={{ opacity: 0, y: 16 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true, margin: '-60px' }}
-                            transition={{ duration: 0.4, delay: 0.3 + index * 0.1, ease: 'easeOut' }}
-                        >
+                    {challenges.map((challenge) => (
+                        <div key={challenge.title} className="space-y-2">
                             <h3 className="text-lg font-medium text-foreground">{challenge.title}</h3>
                             <p className="text-muted-foreground">
                                 {challenge.content}
                             </p>
-                        </motion.div>
+                        </div>
                     ))}
                 </div>
             </div>
