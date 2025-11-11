@@ -230,6 +230,9 @@ class WorkflowManager:
         state = self.state_manager.active_workflows[session_id]
         start_time = datetime.now(timezone.utc)
 
+        # Track timing for each step
+        step_timings = {}
+
         def check_cancellation() -> bool:
             """Check if workflow has been cancelled.
             
@@ -255,7 +258,9 @@ class WorkflowManager:
             # STEP 1: Analyze user intent FIRST
             if check_cancellation():
                 return
+            step_start = datetime.now(timezone.utc)
             state = await self.executor.execute_intent_analysis(state)
+            step_timings["intent_analysis"] = (datetime.now(timezone.utc) - step_start).total_seconds()
             # Only update state if not cancelled
             if not check_cancellation():
                 await self._update_state(session_id, state)
@@ -265,7 +270,9 @@ class WorkflowManager:
             # STEP 2: Analyze mood (now focused on audio features only)
             if check_cancellation():
                 return
+            step_start = datetime.now(timezone.utc)
             state = await self.executor.execute_mood_analysis(state)
+            step_timings["mood_analysis"] = (datetime.now(timezone.utc) - step_start).total_seconds()
             # Only update state if not cancelled
             if not check_cancellation():
                 await self._update_state(session_id, state)
@@ -315,7 +322,9 @@ class WorkflowManager:
 
             if check_cancellation():
                 return
+            step_start = datetime.now(timezone.utc)
             state = await self.executor.execute_orchestration(state, progress_callback=notify_progress)
+            step_timings["orchestration"] = (datetime.now(timezone.utc) - step_start).total_seconds()
             # Only update state if not cancelled
             if not check_cancellation():
                 await self._update_state(session_id, state)
@@ -325,7 +334,9 @@ class WorkflowManager:
             # STEP 6: Order playlist tracks for optimal energy flow
             if check_cancellation():
                 return
+            step_start = datetime.now(timezone.utc)
             state = await self.executor.execute_playlist_ordering(state)
+            step_timings["playlist_ordering"] = (datetime.now(timezone.utc) - step_start).total_seconds()
             # Only update state if not cancelled
             if not check_cancellation():
                 await self._update_state(session_id, state)
@@ -384,15 +395,19 @@ class WorkflowManager:
                 completion_time = datetime.now(timezone.utc)
                 state.metadata["completion_time"] = completion_time.isoformat()
                 state.metadata["total_duration"] = (completion_time - start_time).total_seconds()
+                state.metadata["step_timings"] = step_timings
 
                 # Send final notification before moving to completed
                 # This ensures subscribers get the final state
                 await self.state_manager.notify_state_change(session_id, state)
-                
+
                 self.state_manager.move_to_completed(session_id, state)
 
                 status_msg = "cancelled" if is_cancelled else "completed"
-                logger.info(f"Workflow {session_id} {status_msg} in {state.metadata['total_duration']:.2f}s")
+                logger.info(
+                    f"Workflow {session_id} {status_msg} in {state.metadata['total_duration']:.2f}s",
+                    step_timings=step_timings
+                )
 
     def _save_workflow_state_to_file(self, session_id: str, state: AgentState):
         """Save workflow state to a JSON file for debugging.

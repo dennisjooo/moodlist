@@ -26,7 +26,7 @@ class OrchestratorAgent(BaseAgent):
         recommendation_generator: BaseAgent,
         seed_gatherer: BaseAgent,
         llm: Optional[BaseLanguageModel] = None,
-        max_iterations: int = 3,
+        max_iterations: int = 2,
         cohesion_threshold: float = 0.65,
         verbose: bool = False
     ):
@@ -142,9 +142,9 @@ class OrchestratorAgent(BaseAgent):
         """Perform iterative improvement loop with convergence detection."""
         quality_evaluation = None
         previous_score = 0.0
-        convergence_threshold = 0.02  # Must improve by at least 2% to continue
+        convergence_threshold = 0.03  # Must improve by at least 3% to continue (increased from 2% for faster convergence)
         stalled_iterations = 0
-        max_stalled = 2  # Stop after 2 iterations with no meaningful improvement
+        max_stalled = 1  # Stop after 1 iteration with no meaningful improvement (reduced from 2 for faster convergence)
 
         for iteration in range(self.max_iterations):
             # Check for cancellation before each iteration

@@ -24,9 +24,9 @@ R = TypeVar("R")
 class RecoBeatService:
     """Service for coordinating RecoBeat API operations."""
 
-    AUDIO_FEATURE_BATCH_SIZE = 5
-    AUDIO_FEATURE_MAX_CONCURRENCY = 2  # Reduced from 3 to avoid rate limits
-    AUDIO_FEATURE_THROTTLE_SECONDS = 2.0  # Increased from 1.2s to be more conservative
+    AUDIO_FEATURE_BATCH_SIZE = 20  # Increased from 5 for better throughput (4x improvement)
+    AUDIO_FEATURE_MAX_CONCURRENCY = 10  # Increased from 2 for parallel processing (5x improvement)
+    AUDIO_FEATURE_THROTTLE_SECONDS = 0.5  # Reduced from 2.0s for faster batching (4x improvement)
 
     def __init__(self):
         """Initialize the RecoBeat service."""
