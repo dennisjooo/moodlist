@@ -1,8 +1,10 @@
 import ast
 import json
 from typing import List, Optional, Dict, Union
-from pydantic_settings import BaseSettings
+from urllib.parse import urlparse
+
 from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -125,31 +127,62 @@ class Settings(BaseSettings):
     @field_validator("ALLOWED_HOSTS", mode="before")
     @classmethod
     def parse_allowed_hosts(cls, v):
-        """Parse ALLOWED_HOSTS from comma-separated string or JSON list."""
+        """Parse ALLOWED_HOSTS from comma-separated string or JSON/Python list."""
         if v is None:
             return None
+
+        parsed_hosts = v
         if isinstance(v, str):
-            # Try parsing as JSON first
+            # Try JSON first
             try:
-                return json.loads(v)
+                parsed_hosts = json.loads(v)
             except json.JSONDecodeError:
-                # Handle Python-style list strings (e.g. "['https://...']")
+                # Accept Python-style list strings
                 try:
                     evaluated = ast.literal_eval(v)
                     if isinstance(evaluated, (list, tuple, set)):
-                        return list(evaluated)
+                        parsed_hosts = list(evaluated)
+                    else:
+                        parsed_hosts = evaluated
                 except (ValueError, SyntaxError):
-                    pass
-                # Fall back to comma-separated
-                return [host.strip().strip("\"'") for host in v.split(",") if host.strip()]
-        return v
+                    parsed_hosts = v
+
+        if isinstance(parsed_hosts, str):
+            parsed_hosts = [host.strip() for host in parsed_hosts.split(",") if host.strip()]
+
+        if parsed_hosts is None:
+            return None
+
+        normalized_hosts: List[str] = []
+        for host in parsed_hosts:
+            if not host:
+                continue
+            normalized = cls._normalize_host(host)
+            if normalized and normalized not in normalized_hosts:
+                normalized_hosts.append(normalized)
+
+        return normalized_hosts or None
+
+    @staticmethod
+    def _normalize_host(host: str) -> Optional[str]:
+        """Normalize host entries to bare hostnames or allowed wildcards."""
+        host = host.strip().strip("\"'")
+        if not host:
+            return None
+        if host == "*":
+            return "*"
+        if host.startswith("*."):
+            return host
+        if "://" in host:
+            parsed = urlparse(host)
+            host = parsed.hostname or parsed.netloc
+        return host.strip("/")
 
     @field_validator("ALLOWED_HOSTS", mode="after")
     @classmethod
     def add_render_host(cls, v, info):
         """Automatically add Render hostname if RENDER_EXTERNAL_URL is set."""
         import os
-        from urllib.parse import urlparse
 
         # Check if we're on Render (Render sets RENDER_EXTERNAL_URL)
         render_url = info.data.get("RENDER_EXTERNAL_URL") or os.getenv("RENDER_EXTERNAL_URL")
