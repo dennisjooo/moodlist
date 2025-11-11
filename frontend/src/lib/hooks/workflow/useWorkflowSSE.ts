@@ -1,19 +1,19 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { wsManager } from '@/lib/wsManager';
 import { sseManager } from '@/lib/sseManager';
-import { pollingManager } from '@/lib/pollingManager';
-import { workflowAPI } from '@/lib/api/workflow';
-import type { WorkflowStatus, WorkflowResults } from '@/lib/api/workflow';
 import { logger } from '@/lib/utils/logger';
 import { isTerminalStatus } from '@/lib/utils/workflow';
+import type { WorkflowStatus } from '@/lib/api/workflow';
+import {
+    useWebSocketStreaming,
+    useSSEStreaming,
+    usePollingStreaming,
+    type StreamingCallbacks,
+} from './streaming';
 
-interface SSECallbacks {
-    onStatus?: (status: WorkflowStatus) => void | Promise<void>;
-    onError?: (error: Error) => void;
-    onAwaitingInput?: () => void;
-    onTerminal?: (status: WorkflowStatus, results: WorkflowResults | null) => void | Promise<void>;
-}
+interface SSECallbacks extends StreamingCallbacks { }
 
 interface UseWorkflowSSEOptions {
     enabled?: boolean;
@@ -80,22 +80,35 @@ export function useWorkflowSSE(
             enabled
         });
 
-        // Check SSE support
+        // Check WebSocket support (preferred for Cloudflare compatibility)
+        const wsSupported = wsManager.isSupported();
         const sseSupported = sseManager.isSupported();
 
-        if (!sseSupported && !useFallback) {
-            logger.warn('SSE not supported and fallback disabled', {
+        if (!wsSupported && !sseSupported && !useFallback) {
+            logger.warn('WebSocket and SSE not supported and fallback disabled', {
                 component: 'useWorkflowSSE',
                 sessionId
             });
             if (callbacksRef.current.onError) {
-                callbacksRef.current.onError(new Error('SSE not supported by browser'));
+                callbacksRef.current.onError(new Error('WebSocket and SSE not supported by browser'));
             }
             return;
         }
 
-        // Use SSE if supported, otherwise fallback to polling
-        if (sseSupported) {
+        // Prefer WebSocket (Cloudflare-friendly), fallback to SSE, then polling
+        let cleanup: (() => void) | undefined;
+
+        if (wsSupported) {
+            logger.info('Starting WebSocket streaming', {
+                component: 'useWorkflowSSE',
+                sessionId,
+                status: currentStatusRef.current
+            });
+
+            isUsingSSE.current = true; // Keep name for backward compat
+            cleanup = useWebSocketStreaming(sessionId, callbacksRef.current, terminalHandledRef);
+
+        } else if (sseSupported) {
             logger.info('Starting SSE streaming', {
                 component: 'useWorkflowSSE',
                 sessionId,
@@ -103,148 +116,7 @@ export function useWorkflowSSE(
             });
 
             isUsingSSE.current = true;
-
-            const handleStatus = async (status: WorkflowStatus) => {
-                // Notify status change
-                if (callbacksRef.current.onStatus) {
-                    await callbacksRef.current.onStatus(status);
-                }
-
-                // Handle awaiting input state
-                if (status.awaiting_input && callbacksRef.current.onAwaitingInput) {
-                    callbacksRef.current.onAwaitingInput();
-                }
-
-                // If workflow reached terminal state, fetch results
-                const isTerminal = isTerminalStatus(status.status);
-
-                if (isTerminal && !terminalHandledRef.current) {
-                    terminalHandledRef.current = true;
-                    logger.debug('Terminal state detected via SSE', {
-                        component: 'useWorkflowSSE',
-                        sessionId
-                    });
-
-                    // Fetch results when workflow completes
-                    let results = null;
-                    try {
-                        logger.debug('Fetching results for completed workflow', {
-                            component: 'useWorkflowSSE',
-                            sessionId
-                        });
-                        results = await workflowAPI.getWorkflowResults(sessionId);
-                    } catch (e) {
-                        logger.error('Failed to fetch results for completed workflow', e, {
-                            component: 'useWorkflowSSE',
-                            sessionId
-                        });
-                    }
-
-                    // Notify terminal state with results
-                    if (callbacksRef.current.onTerminal) {
-                        await callbacksRef.current.onTerminal(status, results);
-                    }
-
-                    logger.info('Terminal state set with results, SSE will close', {
-                        component: 'useWorkflowSSE',
-                        sessionId
-                    });
-                }
-            };
-
-            const handleError = (error: Error) => {
-                logger.error('SSE streaming error', error, {
-                    component: 'useWorkflowSSE',
-                    sessionId
-                });
-                if (callbacksRef.current.onError) {
-                    callbacksRef.current.onError(error);
-                }
-            };
-
-            const handleComplete = async () => {
-                logger.info('SSE stream completed, checking if terminal handled', {
-                    component: 'useWorkflowSSE',
-                    sessionId,
-                    terminalHandled: terminalHandledRef.current
-                });
-
-                // If terminal state was already handled, skip fetching
-                if (terminalHandledRef.current) {
-                    logger.debug('Terminal state already handled, skipping duplicate fetch', {
-                        component: 'useWorkflowSSE',
-                        sessionId
-                    });
-                    return;
-                }
-
-                // When stream ends, fetch final status to ensure we have the complete state
-                try {
-                    const finalStatus = await workflowAPI.getWorkflowStatus(sessionId);
-                    logger.info('Fetched final status after SSE completion', {
-                        component: 'useWorkflowSSE',
-                        sessionId,
-                        status: finalStatus.status
-                    });
-
-                    // Update with final status
-                    if (callbacksRef.current.onStatus) {
-                        await callbacksRef.current.onStatus(finalStatus);
-                    }
-
-                    // If it's a terminal state, fetch results
-                    const isTerminal = isTerminalStatus(finalStatus.status);
-                    if (isTerminal && !terminalHandledRef.current) {
-                        terminalHandledRef.current = true;
-                        let results = null;
-                        try {
-                            results = await workflowAPI.getWorkflowResults(sessionId);
-                        } catch (e) {
-                            logger.error('Failed to fetch results after SSE completion', e, {
-                                component: 'useWorkflowSSE',
-                                sessionId
-                            });
-                        }
-
-                        if (callbacksRef.current.onTerminal) {
-                            await callbacksRef.current.onTerminal(finalStatus, results);
-                        }
-                    }
-                } catch (e) {
-                    logger.error('Failed to fetch final status after SSE completion', e, {
-                        component: 'useWorkflowSSE',
-                        sessionId
-                    });
-                }
-            };
-
-            const handleReconnect = async () => {
-                logger.info('SSE reconnected, fetching latest state', {
-                    component: 'useWorkflowSSE',
-                    sessionId
-                });
-
-                // Fetch latest workflow status to ensure we didn't miss updates
-                try {
-                    const latestStatus = await workflowAPI.getWorkflowStatus(sessionId);
-                    if (callbacksRef.current.onStatus) {
-                        await callbacksRef.current.onStatus(latestStatus);
-                    }
-                } catch (e) {
-                    logger.error('Failed to fetch status after reconnection', e, {
-                        component: 'useWorkflowSSE',
-                        sessionId
-                    });
-                }
-            };
-
-            // Start SSE streaming
-            sseManager.startStreaming(sessionId, {
-                onStatus: handleStatus,
-                onError: handleError,
-                onComplete: handleComplete,
-                onReconnect: handleReconnect,
-            });
+            cleanup = useSSEStreaming(sessionId, callbacksRef.current, terminalHandledRef);
 
         } else if (useFallback) {
             // Fallback to polling
@@ -255,99 +127,13 @@ export function useWorkflowSSE(
             });
 
             isUsingSSE.current = false;
-
-            const pollWorkflow = async () => {
-                return await workflowAPI.getWorkflowStatus(sessionId);
-            };
-
-            const handleStatus = async (status: WorkflowStatus) => {
-                // Notify status change
-                if (callbacksRef.current.onStatus) {
-                    await callbacksRef.current.onStatus(status);
-                }
-
-                // If workflow reached terminal state, fetch results and stop polling
-                const isTerminal = isTerminalStatus(status.status);
-
-                if (isTerminal) {
-                    logger.debug('Terminal state detected, stopping polling', {
-                        component: 'useWorkflowSSE',
-                        sessionId
-                    });
-                    pollingManager.stopPolling(sessionId);
-
-                    // Fetch results when workflow completes
-                    let results = null;
-                    try {
-                        logger.debug('Fetching results for completed workflow', {
-                            component: 'useWorkflowSSE',
-                            sessionId
-                        });
-                        results = await workflowAPI.getWorkflowResults(sessionId);
-                    } catch (e) {
-                        logger.error('Failed to fetch results for completed workflow', e, {
-                            component: 'useWorkflowSSE',
-                            sessionId
-                        });
-                    }
-
-                    // Notify terminal state with results
-                    if (callbacksRef.current.onTerminal) {
-                        await callbacksRef.current.onTerminal(status, results);
-                    }
-
-                    logger.info('Terminal state set with results, polling stopped', {
-                        component: 'useWorkflowSSE',
-                        sessionId
-                    });
-                }
-            };
-
-            const handleError = (error: Error) => {
-                logger.error('Workflow polling error', error, {
-                    component: 'useWorkflowSSE',
-                    sessionId
-                });
-                if (callbacksRef.current.onError) {
-                    callbacksRef.current.onError(error);
-                }
-            };
-
-            const handleAwaitingInput = () => {
-                logger.debug('Workflow awaiting user input', {
-                    component: 'useWorkflowSSE',
-                    sessionId
-                });
-                if (callbacksRef.current.onAwaitingInput) {
-                    callbacksRef.current.onAwaitingInput();
-                }
-            };
-
-            pollingManager.startPolling(
-                sessionId,
-                pollWorkflow,
-                {
-                    onStatus: handleStatus,
-                    onError: handleError,
-                    onAwaitingInput: handleAwaitingInput,
-                }
-            );
+            cleanup = usePollingStreaming(sessionId, callbacksRef.current, terminalHandledRef);
         }
 
         return () => {
             // Cleanup on unmount or when dependencies change
-            if (isUsingSSE.current) {
-                logger.debug('Cleanup: stopping SSE stream', {
-                    component: 'useWorkflowSSE',
-                    sessionId
-                });
-                sseManager.stopStreaming(sessionId);
-            } else {
-                logger.debug('Cleanup: stopping polling', {
-                    component: 'useWorkflowSSE',
-                    sessionId
-                });
-                pollingManager.stopPolling(sessionId);
+            if (cleanup) {
+                cleanup();
             }
         };
     }, [sessionId, enabled, useFallback]);
