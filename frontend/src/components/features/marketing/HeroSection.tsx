@@ -91,17 +91,11 @@ export function HeroSection({ isLoggedIn: serverIsLoggedIn }: HeroSectionProps) 
                             </div>
                         ) : !isLoggedIn ? (
                             <div className="flex flex-col items-center space-y-4 min-h-[120px] justify-center">
-                                {config.access.isDevMode && config.access.showLimitedAccessNotice && (
-                                    <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/20 text-sm text-primary mb-2">
-                                        <Info className="h-4 w-4 flex-shrink-0" />
-                                        <span className="font-medium">Limited Beta - Whitelisted users only</span>
-                                    </div>
-                                )}
                                 <SpotifyLoginButton />
                                 <p className="text-sm text-muted-foreground text-center max-w-sm">
                                     {config.access.isDevMode && config.access.showLimitedAccessNotice
-                                        ? 'We\'re in private beta while we wait for full Spotify approval. Only invited accounts can log in right now.'
-                                        : 'Connect your Spotify account to get started'}
+                                        ? 'We\'re in private beta for now. Let\'s hope give it a try if you\'re interested.'
+                                        :'Connect your Spotify account to get started'}
                                 </p>
                             </div>
                         ) : (
