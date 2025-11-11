@@ -4,7 +4,8 @@ import asyncio
 import hashlib
 import pickle
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse, urlunparse
 import structlog
 
 try:
@@ -193,10 +194,23 @@ class RedisCache(Cache):
             prefix: Key prefix for namespacing
         """
         super().__init__()
-        self.redis_url = redis_url
+        self.redis_url, self._using_tls = self._prepare_redis_url(redis_url)
         self.prefix = prefix
         self.redis_client = None
         self._pool_initialized = False
+
+    def _prepare_redis_url(self, redis_url: str) -> Tuple[str, bool]:
+        """Ensure providers that require TLS (e.g., Upstash) don't drop connections."""
+        parsed = urlparse(redis_url)
+        using_tls = parsed.scheme == "rediss"
+
+        if parsed.scheme == "redis" and parsed.hostname and parsed.hostname.endswith("upstash.io"):
+            parsed = parsed._replace(scheme="rediss")
+            redis_url = urlunparse(parsed)
+            using_tls = True
+            logger.info("Upgrading Redis URL to TLS for Upstash host", host=parsed.hostname)
+
+        return redis_url, using_tls
 
     async def _get_client(self) -> redis.Redis:
         """Get or create Redis client with optimized connection pool.
@@ -218,7 +232,10 @@ class RedisCache(Cache):
             )
             self.redis_client = redis.Redis(connection_pool=connection_pool)
             self._pool_initialized = True
-            logger.info("Initialized Redis connection pool with 50 max connections")
+            logger.info(
+                "Initialized Redis connection pool with 50 max connections",
+                using_tls=self._using_tls
+            )
         return self.redis_client
 
     async def close(self):
@@ -777,8 +794,34 @@ class CacheManager:
         logger.info(f"Started background cache warming for user {user_id}")
 
 
-# Global cache manager - will be initialized with Valkey when available
-cache_manager = CacheManager()
+class CacheManagerProxy:
+    """Proxy that always forwards to the current CacheManager instance."""
+
+    def __init__(self, manager: CacheManager):
+        self._manager = manager
+
+    def set_manager(self, manager: CacheManager) -> None:
+        self._manager = manager
+
+    def get_manager(self) -> CacheManager:
+        return self._manager
+
+    def __getattr__(self, item: str):
+        return getattr(self._manager, item)
+
+
+# Global cache manager proxy - swapped to Valkey-backed instances at runtime
+cache_manager = CacheManagerProxy(CacheManager())
+
+
+def set_cache_manager(manager: CacheManager) -> None:
+    """Replace the active CacheManager used across the application."""
+    cache_manager.set_manager(manager)
+
+
+def get_cache_manager() -> CacheManager:
+    """Return the currently active CacheManager instance."""
+    return cache_manager.get_manager()
 
 
 class CacheDecorator:
