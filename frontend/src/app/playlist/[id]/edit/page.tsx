@@ -12,6 +12,9 @@ import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+
+const MIN_SKELETON_VISIBLE_MS = 200;
+const SKELETON_FADE_OUT_MS = 320;
 const PlaylistEditor = dynamic(() => import('@/components/PlaylistEditor'), {
     loading: () => <PlaylistEditorSkeleton />,
     ssr: false,
@@ -23,6 +26,9 @@ function EditPlaylistPageContent() {
     const sessionId = params.id as string;
     const { workflowState, loadWorkflow } = useWorkflow();
     const [isLoading, setIsLoading] = useState(true);
+    const [showSkeleton, setShowSkeleton] = useState(true);
+    const [renderSkeleton, setRenderSkeleton] = useState(true);
+    const workflowIsLoading = isLoading || workflowState.isLoading;
 
     useEffect(() => {
         const loadData = async () => {
@@ -35,6 +41,44 @@ function EditPlaylistPageContent() {
         loadData();
     }, [sessionId, loadWorkflow]);
 
+    // Provide a short overlap so the skeleton can fade out smoothly before the editor appears.
+    useEffect(() => {
+        let minTimer: ReturnType<typeof setTimeout> | undefined;
+
+        if (!workflowIsLoading) {
+            minTimer = setTimeout(() => {
+                setShowSkeleton(false);
+            }, MIN_SKELETON_VISIBLE_MS);
+        } else {
+            setShowSkeleton(true);
+            setRenderSkeleton(true);
+        }
+
+        return () => {
+            if (minTimer) {
+                clearTimeout(minTimer);
+            }
+        };
+    }, [workflowIsLoading]);
+
+    useEffect(() => {
+        let fadeTimer: ReturnType<typeof setTimeout> | undefined;
+
+        if (!showSkeleton) {
+            fadeTimer = setTimeout(() => {
+                setRenderSkeleton(false);
+            }, SKELETON_FADE_OUT_MS);
+        } else {
+            setRenderSkeleton(true);
+        }
+
+        return () => {
+            if (fadeTimer) {
+                clearTimeout(fadeTimer);
+            }
+        };
+    }, [showSkeleton]);
+
     const handleDone = () => {
         router.push(`/playlist/${sessionId}`);
     };
@@ -43,32 +87,11 @@ function EditPlaylistPageContent() {
         router.push(`/playlist/${sessionId}`);
     };
 
-    // Loading state
-    if (isLoading || workflowState.isLoading) {
-        return (
-            <div className="min-h-screen bg-background relative">
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
-                    <DotPattern
-                        className={cn(
-                            "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
-                        )}
-                    />
-                </div>
-
-                <Navigation />
-
-                <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-                    <PlaylistEditorSkeleton />
-                </main>
-            </div>
-        );
-    }
-
     // Error state
-    if (workflowState.error || !workflowState.sessionId) {
+    if (!workflowIsLoading && (workflowState.error || !workflowState.sessionId)) {
         return (
             <div className="min-h-screen bg-background relative">
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
+                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.8s_cubic-bezier(0.22,0.61,0.36,1)_forwards]">
                     <DotPattern
                         className={cn(
                             "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
@@ -92,10 +115,13 @@ function EditPlaylistPageContent() {
     }
 
     // No recommendations
-    if (!workflowState.recommendations || workflowState.recommendations.length === 0) {
+    if (
+        !workflowIsLoading &&
+        (!workflowState.recommendations || workflowState.recommendations.length === 0)
+    ) {
         return (
             <div className="min-h-screen bg-background relative">
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
+                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.8s_cubic-bezier(0.22,0.61,0.36,1)_forwards]">
                     <DotPattern
                         className={cn(
                             "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
@@ -120,6 +146,11 @@ function EditPlaylistPageContent() {
 
     const hasSavedToSpotify = !!workflowState.playlist?.id;
     const colorScheme = workflowState.moodAnalysis?.color_scheme;
+    const canRenderEditor =
+        !workflowIsLoading &&
+        workflowState.sessionId &&
+        workflowState.recommendations &&
+        workflowState.recommendations.length > 0;
 
     return (
         <div className="min-h-screen bg-background relative">
@@ -129,7 +160,7 @@ function EditPlaylistPageContent() {
                 opacity={0.2}
             />
 
-            <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
+            <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.8s_cubic-bezier(0.22,0.61,0.36,1)_forwards]">
                 <DotPattern
                     className={cn(
                         "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
@@ -140,22 +171,52 @@ function EditPlaylistPageContent() {
             <Navigation />
 
             <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-                {/* Back Button */}
-                <BackButton
-                    onClick={handleCancel}
-                    animated
-                    className="mb-8"
-                >
-                    Back to Playlist
-                </BackButton>
+                <div className="relative">
+                    {renderSkeleton && (
+                        <div
+                            className={cn(
+                                'transition-opacity duration-300 will-change-opacity',
+                                showSkeleton
+                                    ? 'opacity-100'
+                                    : 'opacity-0 pointer-events-none absolute inset-0',
+                            )}
+                        >
+                            <PlaylistEditorSkeleton />
+                        </div>
+                    )}
 
-                <PlaylistEditor
-                    sessionId={workflowState.sessionId}
-                    recommendations={workflowState.recommendations}
-                    isCompleted={hasSavedToSpotify}
-                    onSave={handleDone}
-                    onCancel={handleCancel}
-                />
+                    <div
+                        className={cn(
+                            'transition-all duration-500 ease-out transform',
+                            !canRenderEditor && 'opacity-0 pointer-events-none',
+                            canRenderEditor &&
+                            (showSkeleton
+                                ? 'opacity-0 translate-y-4 pointer-events-none'
+                                : 'opacity-100 translate-y-0'),
+                        )}
+                    >
+                        {canRenderEditor && (
+                            <>
+                                {/* Back Button */}
+                                <BackButton
+                                    onClick={handleCancel}
+                                    animated
+                                    className="mb-8"
+                                >
+                                    Back to Playlist
+                                </BackButton>
+
+                                <PlaylistEditor
+                                    sessionId={workflowState.sessionId!}
+                                    recommendations={workflowState.recommendations}
+                                    isCompleted={hasSavedToSpotify}
+                                    onSave={handleDone}
+                                    onCancel={handleCancel}
+                                />
+                            </>
+                        )}
+                    </div>
+                </div>
             </main>
         </div>
     );
@@ -168,4 +229,3 @@ export default function EditPlaylistPage() {
         </AuthGuard>
     );
 }
-
