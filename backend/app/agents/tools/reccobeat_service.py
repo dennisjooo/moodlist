@@ -163,14 +163,14 @@ class RecoBeatService:
             dict(kwargs),
         )
 
-        # Cache with 15 minute TTL
+        # Cache with 7 day TTL - recommendations are stable and RecoBeat is slow
         cache_data = {
             "recommendations": recommendations,
             "cached_at": asyncio.get_running_loop().time(),
             "parameters": metadata,
         }
 
-        await cache_manager.cache.set(cache_key, cache_data, ttl=1800)  # 30 minutes
+        await cache_manager.cache.set(cache_key, cache_data, ttl=604800)  # 7 days
         logger.debug(f"Cached track recommendations (key: {cache_key[:8]}...)")
 
     def _register_tools(self):
@@ -462,9 +462,9 @@ class RecoBeatService:
             try:
                 result = await features_tool._run(track_id=reccobeat_id)
                 if result.success:
-                    # Cache individual track features for 1 hour
+                    # Cache individual track features for 30 days - audio features are stable
                     cache_key = self._make_cache_key("track_audio_features", reccobeat_id)
-                    await cache_manager.cache.set(cache_key, result.data, ttl=3600)
+                    await cache_manager.cache.set(cache_key, result.data, ttl=2592000)  # 30 days
                     logger.debug(f"Cached audio features for track {reccobeat_id}")
                     return track_id, result.data
                 # 404 errors are common - track might not exist in RecoBeat
@@ -639,14 +639,14 @@ class RecoBeatService:
             logger.error(f"Error in parallel track fetching: {e}")
             all_tracks = []
 
-        # Cache the successful result for 30 minutes
+        # Cache the successful result for 30 days - track metadata is stable
         if all_tracks:
             cache_data = {
                 "tracks": all_tracks,
                 "cached_at": asyncio.get_running_loop().time(),
                 "track_ids": track_ids
             }
-            await cache_manager.cache.set(cache_key, cache_data, ttl=1800)  # 30 minutes
+            await cache_manager.cache.set(cache_key, cache_data, ttl=2592000)  # 30 days
             logger.debug(f"Cached track lookup result (key: {cache_key[:8]}...)")
 
         return all_tracks

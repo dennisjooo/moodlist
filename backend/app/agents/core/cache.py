@@ -342,10 +342,10 @@ class CacheManager:
             "top_tracks": 1800,    # 30 minutes
             "top_artists": 1800,   # 30 minutes
             "artist_top_tracks": 7200,  # 2 hours - increased to minimize rate limit hits
-            "recommendations": 1800,  # 30 minutes - increased from 15 to reduce API load
+            "recommendations": 604800,  # 7 days - RecoBeat is too slow, cache aggressively
             "mood_analysis": 3600,  # 1 hour
             "workflow_state": 300,  # 5 minutes
-            "track_details": 7200,  # 2 hours - track details are stable, increased
+            "track_details": 2592000,  # 30 days - track details are stable, cache long-term
             "workflow_artifacts": 1800,  # 30 minutes - workflow artifacts
             "validated_seeds": 7200,  # 2 hours - validated seed lists are stable
             "artist_enrichment": 3600,  # 1 hour - increased from 30min for stability
