@@ -1,20 +1,13 @@
 import structlog
 
-from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.security import HTTPBearer
 
 from app.core.constants import SessionConstants
-from app.core.exceptions import SpotifyAuthError, UnauthorizedException, InternalServerError
-from app.clients import SpotifyAPIClient
+from app.core.exceptions import UnauthorizedException, InternalServerError
 from app.models.user import User
-from app.auth.security import (
-    create_access_token, 
-    create_refresh_token, 
-    verify_token,
-    generate_session_token
-)
+from app.auth.security import create_access_token, create_refresh_token, verify_token
 from app.auth.dependencies import require_auth
 from app.auth.cookie_utils import set_session_cookie, delete_session_cookie
 from app.auth.schemas import (
@@ -28,11 +21,13 @@ from app.repositories.user_repository import UserRepository
 from app.repositories.session_repository import SessionRepository
 from app.repositories.playlist_repository import PlaylistRepository
 from app.services.quota_service import QuotaService
+from app.services.auth_service import AuthService
 from app.dependencies import (
     get_user_repository,
     get_session_repository,
     get_playlist_repository,
     get_quota_service,
+    get_auth_service,
 )
 from app.agents.core.cache import cache_manager
 from app.core.limiter import limiter
@@ -45,141 +40,32 @@ security = HTTPBearer(auto_error=False)
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("10/minute")
-async def register(
+async def login(
     request: Request,
     user_data: UserCreate,
     response: Response,
-    user_repo: UserRepository = Depends(get_user_repository),
-    session_repo: SessionRepository = Depends(get_session_repository)
+    auth_service: AuthService = Depends(get_auth_service)
 ):
-    """Register a new user by fetching profile from Spotify.
-    
-    OPTIMIZED VERSION with:
-    - UPSERT for user creation/update (1 query instead of 2)
-    - Atomic session replacement (1 query instead of 2)
-    - Performance timing and logging
+    """Login/Register a new user by fetching profile from Spotify.
     
     Rate limit: 10 requests per minute per IP address.
     """
-    import time
-    start_time = time.time()
-    
-    logger.info("Login attempt", ip=request.client.host)
-    
-    # Fetch user profile from Spotify using centralized client
-    from app.core.config import settings
-    spotify_client = SpotifyAPIClient()
-    is_whitelisted = True  # Default to True
-
-    try:
-        profile_data = await spotify_client.get_user_profile(user_data.access_token)
-
-        # If in dev mode, test if user can actually use the API
-        # Some users might authenticate successfully but not be whitelisted
-        if settings.SPOTIFY_DEV_MODE:
-            try:
-                # Ping /me again to verify API access (not just OAuth)
-                await spotify_client.get_user_profile(user_data.access_token)
-                is_whitelisted = True
-            except SpotifyAuthError as test_error:
-                test_error_msg = str(test_error)
-                if "403" in test_error_msg or "Insufficient permissions" in test_error_msg or "permissions" in test_error_msg.lower():
-                    logger.error("User authenticated but not whitelisted for API access",
-                               spotify_id=profile_data.get("id"),
-                               error=test_error_msg,
-                               ip=request.client.host)
-                    is_whitelisted = False
-                    raise SpotifyAuthError(
-                        "NOT_WHITELISTED: Your Spotify account is not whitelisted for beta access. "
-                        "MoodList is currently in limited beta (25 users max). "
-                        "Please request access to be added to the whitelist."
-                    )
-                # Other errors, re-raise
-                raise
-
-    except SpotifyAuthError as e:
-        error_msg = str(e)
-
-        # If already marked as NOT_WHITELISTED, re-raise as-is
-        if "NOT_WHITELISTED" in error_msg:
-            raise
-
-        # If in dev mode and we get a 403-type error, it's likely a whitelist issue
-        if settings.SPOTIFY_DEV_MODE and ("403" in error_msg or "Insufficient permissions" in error_msg or "permissions" in error_msg.lower()):
-            logger.error("User not whitelisted in Spotify dev mode", error=error_msg, ip=request.client.host)
-            raise SpotifyAuthError(
-                "NOT_WHITELISTED: Your Spotify account is not whitelisted for beta access. "
-                "MoodList is currently in limited beta (25 users max). "
-                "Please request access to be added to the whitelist."
-            )
-
-        logger.error("Failed to fetch Spotify profile", error=error_msg)
-        raise SpotifyAuthError("Invalid Spotify access token or failed to fetch profile")
-    except Exception as e:
-        logger.error("Unexpected error fetching Spotify profile", error=str(e))
-        raise InternalServerError("Failed to authenticate with Spotify")
-    
-    spotify_fetch_time = time.time() - start_time
-    logger.debug("Spotify profile fetched", duration_ms=spotify_fetch_time * 1000)
-    
-    # Extract profile data
-    profile_image_url = None
-    if profile_data.get("images") and len(profile_data["images"]) > 0:
-        profile_image_url = profile_data["images"][0]["url"]
-    
-    # OPTIMIZED: Single-query upsert
-    db_start = time.time()
-    user = await user_repo.upsert_user(
-        spotify_id=profile_data["id"],
+    # Delegate to auth service
+    user, session_token, tokens = await auth_service.login_user(
         access_token=user_data.access_token,
         refresh_token=user_data.refresh_token,
         token_expires_at=user_data.token_expires_at,
-        display_name=profile_data.get("display_name", "Unknown User"),
-        email=profile_data.get("email"),
-        profile_image_url=profile_image_url,
-        is_spotify_whitelisted=is_whitelisted,
-    )
-    
-    # OPTIMIZED: Atomic session replacement
-    session_token = generate_session_token()
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=SessionConstants.EXPIRATION_HOURS)
-    
-    await session_repo.replace_user_session_atomic(
-        user_id=user.id,
-        session_token=session_token,
         ip_address=request.client.host,
-        user_agent=request.headers.get("user-agent"),
-        expires_at=expires_at,
+        user_agent=request.headers.get("user-agent")
     )
     
-    # Commit transaction
-    await session_repo.session.commit()
-    
-    db_time = time.time() - db_start
-    logger.debug("Database operations completed", duration_ms=db_time * 1000)
-
     # Set session cookie using utility (pass origin for localhost detection)
     origin = request.headers.get("origin")
     set_session_cookie(response, session_token, origin)
     
-    # Create JWT tokens
-    token_data = {"sub": user.spotify_id}
-    access_token = create_access_token(token_data)
-    refresh_token = create_refresh_token(token_data)
-    
-    total_time = time.time() - start_time
-    logger.info(
-        "Login successful",
-        user_id=user.id,
-        spotify_id=user.spotify_id,
-        total_duration_ms=total_time * 1000,
-        spotify_duration_ms=spotify_fetch_time * 1000,
-        db_duration_ms=db_time * 1000
-    )
-    
     return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
+        access_token=tokens["access_token"],
+        refresh_token=tokens["refresh_token"],
         expires_in=3600,
         user=UserResponse.from_orm(user)
     )
@@ -265,7 +151,7 @@ async def get_current_user_info(
 @router.get("/verify", response_model=AuthResponse)
 async def verify_auth(
     request: Request,
-    session_repo: SessionRepository = Depends(get_session_repository),
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     """
     Verify authentication status with optimized session-based auth and caching.
@@ -275,88 +161,8 @@ async def verify_auth(
     Before: 2-3 queries (session lookup + user lookup)
     After: 1 query with eager loading + 5-minute cache
     """
-    try:
-        session_token = request.cookies.get(SessionConstants.COOKIE_NAME)
-
-        if not session_token:
-            logger.debug("Auth verification failed - no session token")
-            return AuthResponse(
-                user=None,
-                requires_spotify_auth=True
-            )
-
-        # Create cache key based on session token
-        cache_key = f"auth_verify:{session_token}"
-
-        # Try to get from cache first (with error handling)
-        try:
-            cached_result = await cache_manager.cache.get(cache_key)
-            if cached_result is not None:
-                logger.debug("Auth verification cache hit", session_token=session_token[:8] + "...")
-                return cached_result
-        except Exception as cache_error:
-            logger.warning("Cache get failed, continuing without cache", error=str(cache_error))
-            # Continue without cache
-
-        # Single optimized query: get session with user in one go
-        session = await session_repo.get_valid_session_with_user(session_token)
-
-        if not session or not session.user:
-            logger.debug("Auth verification failed - invalid session or no user",
-                        has_session=bool(session), has_user=bool(session.user if session else False))
-            result = AuthResponse(
-                user=None,
-                requires_spotify_auth=True
-            )
-        elif not session.user.is_active:
-            logger.debug("Auth verification failed - user not active", user_id=session.user.id)
-            result = AuthResponse(
-                user=None,
-                requires_spotify_auth=True
-            )
-        else:
-            logger.debug("Auth verification successful",
-                        user_id=session.user.id,
-                        spotify_id=session.user.spotify_id,
-                        session_id=session.id)
-            result = AuthResponse(
-                user=UserResponse.from_orm(session.user),
-                requires_spotify_auth=False
-            )
-
-        # Cache with TTL based on session expiration time
-        # If session expires soon (< 1 hour), cache for shorter time
-        # If session is fresh (> 12 hours left), cache longer
-        now = datetime.now(timezone.utc)
-        if session and session.expires_at:
-            time_until_expiry = (session.expires_at - now).total_seconds()
-            if time_until_expiry < 3600:  # Less than 1 hour left
-                cache_ttl = 60  # Cache for 1 minute
-            elif time_until_expiry > 43200:  # More than 12 hours left
-                cache_ttl = 1800  # Cache for 30 minutes
-            else:
-                cache_ttl = 300  # Cache for 5 minutes (default)
-        else:
-            cache_ttl = 300  # Default 5 minutes
-
-        try:
-            await cache_manager.cache.set(cache_key, result, ttl=cache_ttl)
-        except Exception as cache_error:
-            logger.warning("Cache set failed", error=str(cache_error))
-            # Continue without caching
-
-        return result
-
-    except Exception as e:
-        logger.error("Auth verification failed with exception",
-                    error=str(e),
-                    error_type=type(e).__name__,
-                    exc_info=True)
-        # Return unauthenticated response on error
-        return AuthResponse(
-            user=None,
-            requires_spotify_auth=True
-        )
+    session_token = request.cookies.get(SessionConstants.COOKIE_NAME)
+    return await auth_service.verify_auth(session_token)
 
 
 @router.get("/dashboard")
