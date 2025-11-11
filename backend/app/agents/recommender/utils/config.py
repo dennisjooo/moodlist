@@ -26,6 +26,7 @@ class RecommenderConfig:
     
     # Batch processing settings
     track_energy_analysis_batch_size: int = 8  # Playlist ordering agent
+    track_energy_analysis_timeout_seconds: int = 45  # Max wait per LLM batch
     seed_chunk_size: int = 3  # Seed-based recommendation generation
     artist_batch_validation_size: int = 30  # LLM batch artist validation
 

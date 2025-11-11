@@ -310,6 +310,35 @@ class BaseAPITool(BaseTool, ABC):
                 )
                 break
 
+            except httpx.RequestError as e:
+                request_url = str(getattr(e.request, "url", "unknown"))
+                error_message = f"Request error when calling {self.name}: {str(e) or e.__class__.__name__}"
+                error_data = {
+                    "error": str(e) or e.__class__.__name__,
+                    "request_url": request_url,
+                    "error_type": e.__class__.__name__,
+                }
+
+                last_exception = APIError(
+                    error_message,
+                    response_data=error_data
+                )
+
+                if attempt < self.max_retries - 1:
+                    wait_time = (2 ** attempt) * 0.5
+                    logger.warning(
+                        "Request error when calling tool, retrying",
+                        tool=self.name,
+                        attempt=attempt + 1,
+                        max_attempts=self.max_retries,
+                        wait_seconds=wait_time,
+                        error=str(e) or e.__class__.__name__,
+                        url=request_url,
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
+                break
+
             except Exception as e:
                 last_exception = APIError(f"Unexpected error: {str(e)}", response_data={"error": str(e)})
                 break

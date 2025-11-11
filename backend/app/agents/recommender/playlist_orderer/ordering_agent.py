@@ -141,9 +141,15 @@ class PlaylistOrderingAgent(BaseAgent):
 
         # Analyze batches in parallel
         try:
+            total_batches = len(batches)
             batch_tasks = [
-                self._analyze_track_batch(batch, state.mood_prompt)
-                for batch in batches
+                self._analyze_track_batch_with_timeout(
+                    batch_index=i,
+                    total_batches=total_batches,
+                    tracks=batch,
+                    mood_prompt=state.mood_prompt
+                )
+                for i, batch in enumerate(batches)
             ]
             
             batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
@@ -206,6 +212,81 @@ class PlaylistOrderingAgent(BaseAgent):
             fallback={"track_analyses": []}
         )
         return analysis_result.get("track_analyses", [])
+
+    async def _analyze_track_batch_with_timeout(
+        self,
+        batch_index: int,
+        total_batches: int,
+        tracks: List[TrackRecommendation],
+        mood_prompt: str
+    ) -> List[Dict[str, Any]]:
+        """Run batch analysis with timeout and automatic fallbacks."""
+        timeout = config.track_energy_analysis_timeout_seconds
+        batch_label = f"{batch_index + 1}/{total_batches}"
+        logger.debug(
+            "Starting energy analysis batch",
+            batch=batch_label,
+            track_count=len(tracks)
+        )
+
+        try:
+            result = await asyncio.wait_for(
+                self._analyze_track_batch(tracks, mood_prompt),
+                timeout=timeout
+            )
+            result = self._ensure_complete_batch_analysis(tracks, result, batch_label)
+            logger.info(
+                "Completed energy analysis batch",
+                batch=batch_label,
+                analyzed_tracks=len(result)
+            )
+            return result
+
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Energy analysis batch timed out, falling back to audio features",
+                batch=batch_label,
+                timeout_seconds=timeout,
+                track_count=len(tracks)
+            )
+            return self.energy_analyzer.analyze_from_audio_features(tracks)
+
+        except Exception as exc:
+            logger.error(
+                "Energy analysis batch failed, falling back to audio features",
+                batch=batch_label,
+                error=str(exc),
+                track_count=len(tracks)
+            )
+            return self.energy_analyzer.analyze_from_audio_features(tracks)
+
+    def _ensure_complete_batch_analysis(
+        self,
+        tracks: List[TrackRecommendation],
+        analyses: List[Dict[str, Any]],
+        batch_label: str
+    ) -> List[Dict[str, Any]]:
+        """Ensure each track in the batch has an analysis entry."""
+        provided_ids = {
+            analysis.get("track_id")
+            for analysis in analyses
+            if analysis.get("track_id")
+        }
+        missing_tracks = [
+            rec for rec in tracks
+            if rec.track_id not in provided_ids
+        ]
+
+        if missing_tracks:
+            logger.warning(
+                "Energy analysis batch missing tracks, supplementing from audio features",
+                batch=batch_label,
+                missing_count=len(missing_tracks),
+                analyzed_count=len(analyses)
+            )
+            analyses.extend(self.energy_analyzer.analyze_from_audio_features(missing_tracks))
+
+        return analyses
 
     def _attach_energy_analyses_to_tracks(
         self,
