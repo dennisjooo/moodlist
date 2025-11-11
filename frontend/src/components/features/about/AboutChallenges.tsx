@@ -11,7 +11,7 @@ export function AboutChallenges() {
         },
         {
             title: "AI Agents Are... Unpredictable",
-            content: "The AI agentic approach sounded great in theory. In practice? Some recommendations are way off the mark. Even with iterative filtering and refinement, it's not always there yet. Turns out teaching an AI to understand musical taste is surprisingly difficult. I tried my best in making it clean and usable, but yeah, there will be edge cases I cannot fix."
+            content: "The AI agentic approach sounded great in theory. In practice? Some recommendations are way off the mark. Even with iterative filtering and refinement, it's not always there yet. Turns out teaching an AI to understand musical taste is surprisingly difficult. I tried my best in making it clean and usable, but yeah, there will be edge cases I cannot fix. I also noticed that it's not that fast right now, trying to get it down to a minute max but it's a challenge."
         },
         {
             title: "AWS and That October 20th Outage",
