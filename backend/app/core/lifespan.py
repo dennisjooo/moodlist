@@ -23,8 +23,7 @@ def _initialize_cache_manager():
         return CacheManager(settings.REDIS_URL)
     else:
         logger.info("No Valkey URL provided, using in-memory cache")
-        from app.agents.core.cache import cache_manager as default_cache
-        return default_cache
+        return CacheManager()
 
 
 @asynccontextmanager
@@ -41,9 +40,10 @@ async def lifespan(app: FastAPI):
     validate_required_secrets()
 
     # Initialize cache manager - replace global singleton
-    import app.agents.core.cache as cache_module
+    from app.agents.core.cache import set_cache_manager
+
     new_cache_manager = _initialize_cache_manager()
-    cache_module.cache_manager = new_cache_manager
+    set_cache_manager(new_cache_manager)
 
     # Create database tables
     async with engine.begin() as conn:
@@ -64,8 +64,9 @@ async def lifespan(app: FastAPI):
         logger.error("Error during workflow graceful shutdown", error=str(e), exc_info=True)
 
     # Close cache manager connection
-    import app.agents.core.cache as cache_module
-    if hasattr(cache_module.cache_manager, 'close'):
-        logger.info("Closing cache manager connection")
-        await cache_module.cache_manager.close()
+    from app.agents.core.cache import get_cache_manager
 
+    cache_manager = get_cache_manager()
+    if hasattr(cache_manager, 'close'):
+        logger.info("Closing cache manager connection")
+        await cache_manager.close()
