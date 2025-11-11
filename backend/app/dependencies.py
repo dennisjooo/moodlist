@@ -75,11 +75,12 @@ def get_token_service(
 
 
 def get_auth_service(
+    spotify_client: SpotifyAPIClient = Depends(get_spotify_client),
     user_repo: UserRepository = Depends(get_user_repository),
-    token_service: TokenService = Depends(get_token_service)
+    session_repo: SessionRepository = Depends(get_session_repository)
 ) -> AuthService:
     """Get auth service."""
-    return AuthService(user_repo, token_service)
+    return AuthService(spotify_client, user_repo, session_repo)
 
 
 def get_workflow_state_service(
