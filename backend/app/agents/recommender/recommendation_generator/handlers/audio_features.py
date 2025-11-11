@@ -7,6 +7,21 @@ from ....tools.reccobeat_service import RecoBeatService
 
 logger = structlog.get_logger(__name__)
 
+DEFAULT_AUDIO_FEATURES: Dict[str, Any] = {
+    "acousticness": 0.5,
+    "danceability": 0.5,
+    "energy": 0.5,
+    "instrumentalness": 0.0,
+    "key": 0,  # Default to C major when key is unknown
+    "liveness": 0.2,
+    "loudness": -8.0,
+    "mode": 1,
+    "speechiness": 0.05,
+    "tempo": 120.0,
+    "valence": 0.5,
+    "popularity": 50,
+}
+
 
 class AudioFeaturesHandler:
     """Handles audio features retrieval and processing."""
@@ -58,6 +73,7 @@ class AudioFeaturesHandler:
             try:
                 audio_features_result = await self.reccobeat_service.get_tracks_audio_features(tracks_needing_api)
 
+                successful_fetches = 0
                 for track_id in tracks_needing_api:
                     if track_id in audio_features_result:
                         api_features = audio_features_result[track_id]
@@ -82,11 +98,35 @@ class AudioFeaturesHandler:
                         for feature_name, feature_value in feature_mapping.items():
                             if feature_value is not None:
                                 results[track_id][feature_name] = feature_value
+                        
+                        successful_fetches += 1
+                    else:
+                        # Track not found in RecoBeat - use defaults if needed
+                        logger.debug(f"Track {track_id} not found in RecoBeat, using defaults if needed")
+                        # Only add missing features, don't override existing
+                        for feature_name, default_value in DEFAULT_AUDIO_FEATURES.items():
+                            if feature_name not in results[track_id]:
+                                results[track_id][feature_name] = default_value
 
-                logger.info(f"Enhanced audio features for {len(audio_features_result)}/{len(tracks_needing_api)} tracks")
+                logger.info(
+                    f"Enhanced audio features for {successful_fetches}/{len(tracks_needing_api)} tracks "
+                    f"({len(tracks_needing_api) - successful_fetches} using defaults)"
+                )
 
             except Exception as e:
-                logger.warning(f"Failed to get batch audio features: {e}")
+                logger.warning(f"Failed to get batch audio features: {e}, using defaults for missing tracks")
+                # Apply defaults to all tracks that need features
+                for track_id in tracks_needing_api:
+                    if track_id in results:
+                        for feature_name, default_value in DEFAULT_AUDIO_FEATURES.items():
+                            if feature_name not in results[track_id]:
+                                results[track_id][feature_name] = default_value
+
+        # Ensure every track has a full feature set by applying defaults for missing values
+        for track_id, feature_map in results.items():
+            for feature_name, default_value in DEFAULT_AUDIO_FEATURES.items():
+                if feature_name not in feature_map or feature_map[feature_name] is None:
+                    feature_map[feature_name] = default_value
 
         return results
 
@@ -149,9 +189,23 @@ class AudioFeaturesHandler:
                         complete_features[feature_name] = feature_value
 
                 logger.info(f"Enhanced audio features for track {track_id}: got {len(complete_features)} features")
+            else:
+                # Track not found in RecoBeat - use defaults
+                logger.debug(f"Track {track_id} not found in RecoBeat, using defaults")
+                for feature_name, default_value in DEFAULT_AUDIO_FEATURES.items():
+                    if feature_name not in complete_features:
+                        complete_features[feature_name] = default_value
 
         except Exception as e:
-            logger.warning(f"Failed to get complete audio features for track {track_id}: {e}")
-            # Continue with existing features if API call fails
+            logger.warning(f"Failed to get complete audio features for track {track_id}: {e}, using defaults")
+            # Apply defaults for missing features
+            for feature_name, default_value in DEFAULT_AUDIO_FEATURES.items():
+                if feature_name not in complete_features:
+                    complete_features[feature_name] = default_value
+
+        # Ensure full feature set with defaults
+        for feature_name, default_value in DEFAULT_AUDIO_FEATURES.items():
+            if feature_name not in complete_features or complete_features[feature_name] is None:
+                complete_features[feature_name] = default_value
 
         return complete_features
