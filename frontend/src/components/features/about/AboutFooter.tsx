@@ -1,17 +1,32 @@
+'use client';
+
+import { motion } from '@/components/ui/lazy-motion';
 import { Github, Linkedin } from 'lucide-react';
 
 export function AboutFooter() {
     return (
         <>
             {/* Signature */}
-            <div className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <motion.div
+                className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+                initial={{ opacity: 0, y: 12 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-80px' }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+            >
                 <div className="text-center">
                     <p className="text-muted-foreground italic">- with love Dennis</p>
                 </div>
-            </div>
+            </motion.div>
 
             {/* Footer */}
-            <footer className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+            <motion.footer
+                className="relative z-10 max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pb-8"
+                initial={{ opacity: 0, y: 12 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-80px' }}
+                transition={{ duration: 0.5, delay: 0.1, ease: 'easeOut' }}
+            >
                 <div className="border-t border-border/40 pt-8">
                     <div className="flex items-center justify-center gap-6 text-muted-foreground">
                         <div className="flex items-center gap-2">
@@ -38,7 +53,7 @@ export function AboutFooter() {
                         </div>
                     </div>
                 </div>
-            </footer>
+            </motion.footer>
         </>
     );
 }
