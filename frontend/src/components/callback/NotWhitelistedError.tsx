@@ -2,6 +2,7 @@
 
 import { AlertTriangle, ExternalLink, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { FeatureBadge } from '@/components/ui/feature-badge';
 import { config } from '@/lib/config';
 
 interface NotWhitelistedErrorProps {
@@ -14,48 +15,32 @@ export function NotWhitelistedError({ errorMessage, onRetry }: NotWhitelistedErr
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Error Icon */}
-      <div className="flex justify-center">
-        <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
-          <span className="absolute inset-0 rounded-full border-2 border-destructive/30" />
-          <AlertTriangle className="h-8 w-8 text-destructive" />
-        </div>
-      </div>
-
-      {/* Error Message */}
-      <div className="space-y-3 text-center">
-        <h3 className="text-xl font-semibold text-foreground">
-          Not Whitelisted
-        </h3>
-      </div>
-
-      {/* Info Box */}
-      <div className="rounded-lg border border-border/60 bg-muted/30 p-4 space-y-3">
-        <div className="flex items-start gap-3">
-          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 flex-shrink-0 mt-0.5">
-            <span className="text-xs font-bold text-primary">!</span>
-          </div>
-          <div className="space-y-2 text-sm">
-            <p className="font-medium text-foreground">
-              Why is this happening?
+      {/* Beta Registration CTA */}
+      {betaContactUrl && (
+        <div className="rounded-lg border border-primary/30 bg-gradient-to-br from-primary/5 via-primary/10 to-primary/5 p-5 space-y-4">
+          <div className="text-center space-y-2">
+            <FeatureBadge>
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+              </span>
+              Limited Spots Available
+            </FeatureBadge>
+            <h4 className="text-lg font-semibold text-foreground">
+              Join the Beta Waitlist
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              MoodList is currently using Spotify&apos;s Development Mode API, which limits access to 25 manually whitelisted users.
             </p>
-            <p className="text-muted-foreground leading-relaxed">
-              MoodList is currently using Spotify&apos;s Development Mode API, which limits access to 25 manually whitelisted users. This is a Spotify restriction, not ours.
-            </p>
-            <p className="text-muted-foreground leading-relaxed">
-              In the meantime, we&apos;re accepting a limited number of beta testers.
+            <p className="text-sm font-bold text-muted-foreground">
+             This is a Spotify restriction, not ours.
             </p>
           </div>
-        </div>
-      </div>
 
-      {/* Action Buttons */}
-      <div className="flex flex-col gap-3 pt-2">
-        {betaContactUrl && (
           <Button
             asChild
             size="lg"
-            className="w-full"
+            className="w-full shadow-lg hover:shadow-xl transition-shadow"
           >
             <a
               href={betaContactUrl}
@@ -67,7 +52,43 @@ export function NotWhitelistedError({ errorMessage, onRetry }: NotWhitelistedErr
               <ExternalLink className="h-4 w-4" />
             </a>
           </Button>
-        )}
+        </div>
+      )}
+
+      {/* Secondary Action */}
+      <div className="flex flex-col gap-3">{!betaContactUrl && (
+        <div className="rounded-lg border border-primary/30 bg-gradient-to-br from-primary/5 via-primary/10 to-primary/5 p-5 space-y-4">
+          <div className="text-center space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/20 text-primary text-xs font-semibold">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+              </span>
+              Limited Spots Available
+            </div>
+            <h4 className="text-lg font-semibold text-foreground">
+              Join the Beta Waitlist
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              Be among the first to experience MoodList when we expand access. We&apos;ll notify you as soon as a spot opens up!
+            </p>
+          </div>
+
+          <Button
+            asChild
+            size="lg"
+            className="w-full shadow-lg hover:shadow-xl transition-shadow"
+          >
+            <a
+              href={`mailto:${config.access.betaContactUrl || 'hello@moodlist.app'}?subject=Beta Access Request`}
+              className="flex items-center justify-center gap-2"
+            >
+              Request Beta Access
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          </Button>
+        </div>
+      )}
 
         <Button
           variant="outline"
