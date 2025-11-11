@@ -4,3 +4,4 @@ TODO.md
 *.pyc
 .cursor/
 *.json
+deployed.env
