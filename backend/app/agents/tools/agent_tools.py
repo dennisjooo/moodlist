@@ -566,7 +566,7 @@ class RateLimitedTool(BaseAPITool):
                 request_duration = (datetime.now(timezone.utc) - request_start).total_seconds()
                 if request_duration > 20.0:
                     logger.warning(
-                        f"Slow RecoBeat API request detected",
+                        "Slow RecoBeat API request detected",
                         tool=self.name,
                         endpoint=endpoint,
                         duration_seconds=request_duration,
@@ -619,7 +619,7 @@ class RateLimitedTool(BaseAPITool):
             request_duration = (datetime.now(timezone.utc) - request_start).total_seconds()
             if request_duration > 20.0:
                 logger.warning(
-                    f"Slow API request detected",
+                    "Slow API request detected",
                     tool=self.name,
                     endpoint=endpoint,
                     duration_seconds=request_duration,
