@@ -23,11 +23,19 @@ interface AccessConfig {
   readonly betaContactLabel?: string;
 }
 
+interface SocialConfig {
+  readonly githubUrl: string;
+  readonly githubUsername: string;
+  readonly linkedinUrl: string;
+  readonly linkedinUsername: string;
+}
+
 export interface AppConfig {
   readonly api: APIConfig;
   readonly auth: AuthConfig;
   readonly polling: PollingConfig;
   readonly access: AccessConfig;
+  readonly social: SocialConfig;
 }
 
 export const config: AppConfig = {
@@ -52,5 +60,11 @@ export const config: AppConfig = {
     showLimitedAccessNotice: process.env.NEXT_PUBLIC_SHOW_LIMITED_ACCESS_NOTICE !== 'false',
     betaContactUrl: process.env.NEXT_PUBLIC_SPOTIFY_BETA_CONTACT_URL || undefined,
     betaContactLabel: process.env.NEXT_PUBLIC_SPOTIFY_BETA_CONTACT_LABEL || undefined,
+  },
+  social: {
+    githubUrl: process.env.NEXT_PUBLIC_GITHUB_URL || 'https://github.com/dennisjooo',
+    githubUsername: process.env.NEXT_PUBLIC_GITHUB_USERNAME || 'dennisjooo',
+    linkedinUrl: process.env.NEXT_PUBLIC_LINKEDIN_URL || 'https://www.linkedin.com/in/dennisjooo/',
+    linkedinUsername: process.env.NEXT_PUBLIC_LINKEDIN_USERNAME || 'dennisjooo',
   },
 };
