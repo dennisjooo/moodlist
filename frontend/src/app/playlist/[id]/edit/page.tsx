@@ -13,8 +13,8 @@ import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-const MIN_SKELETON_VISIBLE_MS = 300;
-const SKELETON_FADE_OUT_MS = 450;
+const MIN_SKELETON_VISIBLE_MS = 200;
+const SKELETON_FADE_OUT_MS = 320;
 const PlaylistEditor = dynamic(() => import('@/components/PlaylistEditor'), {
     loading: () => <PlaylistEditorSkeleton />,
     ssr: false,
@@ -91,7 +91,7 @@ function EditPlaylistPageContent() {
     if (!workflowIsLoading && (workflowState.error || !workflowState.sessionId)) {
         return (
             <div className="min-h-screen bg-background relative">
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_2.5s_cubic-bezier(0.22,0.61,0.36,1)_forwards]">
+                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.8s_cubic-bezier(0.22,0.61,0.36,1)_forwards]">
                     <DotPattern
                         className={cn(
                             "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
@@ -121,7 +121,7 @@ function EditPlaylistPageContent() {
     ) {
         return (
             <div className="min-h-screen bg-background relative">
-                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_2.5s_cubic-bezier(0.22,0.61,0.36,1)_forwards]">
+                <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.8s_cubic-bezier(0.22,0.61,0.36,1)_forwards]">
                     <DotPattern
                         className={cn(
                             "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
@@ -160,7 +160,7 @@ function EditPlaylistPageContent() {
                 opacity={0.2}
             />
 
-            <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_2.5s_cubic-bezier(0.22,0.61,0.36,1)_forwards]">
+            <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.8s_cubic-bezier(0.22,0.61,0.36,1)_forwards]">
                 <DotPattern
                     className={cn(
                         "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]",
@@ -175,7 +175,7 @@ function EditPlaylistPageContent() {
                     {renderSkeleton && (
                         <div
                             className={cn(
-                                'transition-opacity duration-500 will-change-opacity',
+                                'transition-opacity duration-300 will-change-opacity',
                                 showSkeleton
                                     ? 'opacity-100'
                                     : 'opacity-0 pointer-events-none absolute inset-0',
@@ -187,7 +187,7 @@ function EditPlaylistPageContent() {
 
                     <div
                         className={cn(
-                            'transition-all duration-700 ease-out transform',
+                            'transition-all duration-500 ease-out transform',
                             !canRenderEditor && 'opacity-0 pointer-events-none',
                             canRenderEditor &&
                             (showSkeleton

@@ -39,7 +39,7 @@ export function TrackSearch({
         <Card
             className={cn(
                 "lg:sticky lg:top-20 h-fit border-2 shadow-lg hover:shadow-xl transition-shadow duration-300",
-                "opacity-0 animate-[cardEnter_900ms_cubic-bezier(0.22,0.61,0.36,1)_forwards]"
+                "opacity-0 animate-[cardEnter_650ms_cubic-bezier(0.22,0.61,0.36,1)_forwards]"
             )}
             style={{ animationDelay: '160ms' }}
         >
