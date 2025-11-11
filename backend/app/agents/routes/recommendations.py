@@ -1,11 +1,10 @@
 """Recommendation workflow API endpoints."""
 
 import asyncio
-import json
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, WebSocket
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +19,7 @@ from ...core.database import get_db
 from ...core.exceptions import (
     InternalServerError,
     NotFoundException,
+    UnauthorizedException,
     ValidationException,
 )
 from ...core.limiter import limiter
@@ -34,6 +34,7 @@ from ..tools.reccobeat_service import RecoBeatService
 from ..workflows.workflow_manager import WorkflowManager
 from .dependencies import get_llm, get_workflow_manager
 from .serializers import serialize_playlist_status, serialize_workflow_state
+from .streaming import create_sse_stream, handle_websocket_connection
 
 logger = structlog.get_logger(__name__)
 
@@ -138,183 +139,22 @@ async def get_workflow_status(
 async def stream_workflow_status(
     session_id: str,
     request: Request,
+    current_user: User = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
     workflow_manager: WorkflowManager = Depends(get_workflow_manager),
 ):
     """Stream workflow status updates via Server-Sent Events (SSE)."""
 
-    async def event_generator():
-        # Send initial comment to establish connection and prevent buffering
-        yield ": connected\n\n"
+    # Verify authorization BEFORE starting stream to avoid blocking inside generator
+    from ...repositories.playlist_repository import PlaylistRepository
+    playlist_repo = PlaylistRepository(db)
+    session_playlist = await playlist_repo.get_by_session_id(session_id)
 
-        queue: asyncio.Queue = asyncio.Queue()
-        last_sent_status = None
-        last_sent_step = None
-
-        async def state_change_callback(sid: str, state):
-            await queue.put(state)
-
-        workflow_manager.subscribe_to_state_changes(session_id, state_change_callback)
-
-        def get_current_state():
-            """Get the current state from workflow manager, checking both active and completed."""
-            return workflow_manager.get_workflow_state(session_id)
-        
-        def is_forward_progress(current_status: str, new_status: str) -> bool:
-            """Check if new_status represents forward progress from current_status."""
-            if not current_status:
-                return True  # No previous status, allow any
-            
-            # Define status progression order
-            status_order = {
-                "pending": 0,
-                "analyzing_mood": 1,
-                "gathering_seeds": 2,
-                "generating_recommendations": 3,
-                "evaluating_quality": 4,
-                "optimizing_recommendations": 5,
-                "ordering_playlist": 5,
-                "completed": 6,
-                "failed": 6,
-                "cancelled": 6,
-            }
-            
-            current_order = status_order.get(current_status, -1)
-            new_order = status_order.get(new_status, -1)
-            
-            # Allow same order (sub-steps) or forward progress
-            return new_order >= current_order
-
-        try:
-            # Get initial state
-            state = get_current_state()
-
-            if state:
-                status_data = serialize_workflow_state(session_id, state)
-                last_sent_status = state.status.value
-                last_sent_step = state.current_step
-
-                yield f"event: status\ndata: {json.dumps(status_data)}\n\n"
-
-                if state.status.value in ["completed", "failed", "cancelled"]:
-                    yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
-                    return
-            else:
-                # Workflow state not found in memory - check database as fallback
-                from ...repositories.playlist_repository import PlaylistRepository
-
-                playlist_repo = PlaylistRepository(db)
-                playlist = await playlist_repo.get_by_session_id(session_id)
-
-                if not playlist:
-                    error_data = {"message": f"Workflow {session_id} not found"}
-                    yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
-                    return
-
-                status_data = serialize_playlist_status(session_id, playlist)
-                last_sent_status = playlist.status
-                last_sent_step = status_data.get("current_step")
-
-                yield f"event: status\ndata: {json.dumps(status_data)}\n\n"
-                
-                # Only send complete if status is terminal (completed, failed, cancelled)
-                # Otherwise, continue the loop to wait for workflow state updates
-                terminal_statuses = [PlaylistStatus.COMPLETED, PlaylistStatus.FAILED, PlaylistStatus.CANCELLED]
-                if playlist.status in terminal_statuses:
-                    yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
-                    return
-                # If not terminal, continue to main loop to wait for state updates
-
-            # Main loop: process queued updates and periodically verify current state
-            while True:
-                if await request.is_disconnected():
-                    logger.debug(
-                        "Client disconnected from SSE stream",
-                        session_id=session_id,
-                    )
-                    break
-
-                try:
-                    # Wait for state change notification with timeout
-                    updated_state = await asyncio.wait_for(queue.get(), timeout=5.0)
-                    
-                    # Always get the latest state from workflow manager to ensure accuracy
-                    current_state = get_current_state()
-                    if current_state:
-                        # Use the current state from manager (most up-to-date)
-                        state_to_send = current_state
-                    else:
-                        # Fallback to queued state if manager doesn't have it
-                        state_to_send = updated_state
-                    
-                    # Only send if status or step actually changed AND it's forward progress
-                    if (state_to_send.status.value != last_sent_status or 
-                        state_to_send.current_step != last_sent_step):
-                        
-                        # Check if this is forward progress (prevent backwards updates)
-                        if is_forward_progress(last_sent_status, state_to_send.status.value):
-                            status_data = serialize_workflow_state(session_id, state_to_send)
-                            last_sent_status = state_to_send.status.value
-                            last_sent_step = state_to_send.current_step
-                            
-                            yield f"event: status\ndata: {json.dumps(status_data)}\n\n"
-
-                            if state_to_send.status.value in ["completed", "failed", "cancelled"]:
-                                yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
-                                break
-                        else:
-                            logger.debug(
-                                "Skipping backwards status update in stream",
-                                session_id=session_id,
-                                from_status=last_sent_status,
-                                to_status=state_to_send.status.value
-                            )
-
-                except asyncio.TimeoutError:
-                    # On timeout, verify current state hasn't changed
-                    current_state = get_current_state()
-                    if current_state:
-                        # Check if state changed while we were waiting AND it's forward progress
-                        if (current_state.status.value != last_sent_status or 
-                            current_state.current_step != last_sent_step):
-                            
-                            # Check if this is forward progress
-                            if is_forward_progress(last_sent_status, current_state.status.value):
-                                status_data = serialize_workflow_state(session_id, current_state)
-                                last_sent_status = current_state.status.value
-                                last_sent_step = current_state.current_step
-                                
-                                yield f"event: status\ndata: {json.dumps(status_data)}\n\n"
-
-                                if current_state.status.value in ["completed", "failed", "cancelled"]:
-                                    yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
-                                    break
-                            else:
-                                logger.debug(
-                                    "Skipping backwards status update in stream (timeout check)",
-                                    session_id=session_id,
-                                    from_status=last_sent_status,
-                                    to_status=current_state.status.value
-                                )
-                    
-                    # Send keep-alive
-                    yield ": keep-alive\n\n"
-
-        except Exception as exc:
-            logger.error(
-                "Error in SSE stream",
-                session_id=session_id,
-                error=str(exc),
-                exc_info=True,
-            )
-            error_data = {"message": str(exc)}
-            yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
-        finally:
-            workflow_manager.unsubscribe_from_state_changes(session_id, state_change_callback)
-            logger.debug("Unsubscribed from state changes", session_id=session_id)
+    if session_playlist and session_playlist.user_id != current_user.id:
+        raise UnauthorizedException("Unauthorized access to workflow")
 
     return StreamingResponse(
-        event_generator(),
+        create_sse_stream(session_id, request, session_playlist, workflow_manager),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -322,10 +162,20 @@ async def stream_workflow_status(
             "Expires": "0",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",  # Nginx buffering
-            "Transfer-Encoding": "chunked",
+            "X-Content-Type-Options": "nosniff",  # Prevent MIME sniffing
             "Content-Type": "text/event-stream; charset=utf-8",
         },
     )
+
+
+@router.websocket("/recommendations/{session_id}/ws")
+async def websocket_workflow_status(
+    websocket: WebSocket,
+    session_id: str,
+    workflow_manager: WorkflowManager = Depends(get_workflow_manager),
+):
+    """WebSocket endpoint for workflow status updates (Cloudflare-friendly alternative to SSE)."""
+    await handle_websocket_connection(websocket, session_id, workflow_manager)
 
 
 @router.delete("/recommendations/{session_id}")
