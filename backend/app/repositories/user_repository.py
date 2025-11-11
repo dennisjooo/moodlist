@@ -486,6 +486,7 @@ class UserRepository(BaseRepository[User]):
         display_name: str,
         email: Optional[str] = None,
         profile_image_url: Optional[str] = None,
+        is_spotify_whitelisted: bool = True,
     ) -> User:
         """Create or update user in a single database operation using UPSERT.
         
@@ -500,7 +501,8 @@ class UserRepository(BaseRepository[User]):
             display_name: User display name
             email: User email (optional)
             profile_image_url: Profile image URL (optional)
-        
+            is_spotify_whitelisted: Whether user has Spotify API access (dev mode whitelist)
+
         Returns:
             Created or updated user instance
         """
@@ -513,7 +515,8 @@ class UserRepository(BaseRepository[User]):
                 display_name=display_name,
                 email=email,
                 profile_image_url=profile_image_url,
-                is_active=True
+                is_active=True,
+                is_spotify_whitelisted=is_spotify_whitelisted
             ).on_conflict_do_update(
                 index_elements=['spotify_id'],
                 set_={
@@ -524,6 +527,7 @@ class UserRepository(BaseRepository[User]):
                     'email': email,
                     'profile_image_url': profile_image_url,
                     'is_active': True,
+                    'is_spotify_whitelisted': is_spotify_whitelisted,
                     'updated_at': func.now()
                 }
             ).returning(User)

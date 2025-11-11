@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     SPOTIFY_CLIENT_ID: str = Field(env="SPOTIFY_CLIENT_ID")
     SPOTIFY_CLIENT_SECRET: str = Field(env="SPOTIFY_CLIENT_SECRET")
     SPOTIFY_REDIRECT_URI: str = Field(env="SPOTIFY_REDIRECT_URI")
+    SPOTIFY_DEV_MODE: bool = Field(default=True, env="SPOTIFY_DEV_MODE")
     
     # CORS
     FRONTEND_URL: str = Field(default="http://127.0.0.1:3000", env="FRONTEND_URL")
