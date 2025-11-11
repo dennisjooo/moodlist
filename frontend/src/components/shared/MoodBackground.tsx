@@ -23,10 +23,10 @@ export default function MoodBackground({
 
     useEffect(() => {
         if (colorScheme) {
-            // Small delay to ensure transition applies
+            // Delay to ensure smooth transition without flash
             const timer = setTimeout(() => {
                 setCurrentOpacity(opacity);
-            }, 50);
+            }, 100);
             return () => clearTimeout(timer);
         } else {
             setCurrentOpacity(0);
@@ -67,7 +67,7 @@ export default function MoodBackground({
 
     return (
         <div
-            className="fixed inset-0 z-0 transition-opacity duration-1000 ease-in-out"
+            className="fixed inset-0 z-0 transition-opacity duration-[1600ms] ease-[cubic-bezier(0.22,0.61,0.36,1)]"
             style={{
                 background: getGradientStyle(),
                 opacity: currentOpacity,
@@ -75,4 +75,3 @@ export default function MoodBackground({
         />
     );
 }
-

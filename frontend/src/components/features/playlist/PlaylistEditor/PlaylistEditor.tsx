@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { usePlaylistEdits } from '@/lib/hooks';
+import { cn } from '@/lib/utils';
 import type { Track } from '@/lib/types/workflow';
 import { Check, RotateCcw } from 'lucide-react';
 import { TrackList } from './TrackList';
@@ -41,7 +42,7 @@ export function PlaylistEditor({
 
     return (
         <TooltipProvider>
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="space-y-8">
                 {/* Header */}
                 <div className="space-y-3">
                     <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground via-foreground to-foreground/70 bg-clip-text text-transparent">
@@ -68,7 +69,13 @@ export function PlaylistEditor({
 
                     {/* Right Column - Playlist */}
                     <div className="space-y-6">
-                        <Card className="border-2 shadow-lg hover:shadow-xl transition-shadow duration-300">
+                        <Card
+                            className={cn(
+                                "border-2 shadow-lg hover:shadow-xl transition-shadow duration-300",
+                                "opacity-0 animate-[cardEnter_650ms_cubic-bezier(0.22,0.61,0.36,1)_forwards]"
+                            )}
+                            style={{ animationDelay: '280ms' }}
+                        >
                             <CardHeader className="pb-2">
                                 <div className="flex items-center justify-between">
                                     <div>
@@ -122,7 +129,7 @@ export function PlaylistEditor({
                 </div>
 
                 {/* Mobile Touch Instructions */}
-                <div className="md:hidden animate-in slide-in-from-bottom-4 duration-500">
+                <div className="md:hidden transition-all duration-500 ease-out">
                     <div className="rounded-lg bg-gradient-to-r from-muted/50 to-muted/30 border border-dashed px-4 py-3 hover:border-solid transition-all">
                         <p className="text-sm text-muted-foreground">
                             <strong className="font-medium text-foreground">Tip:</strong> Touch and hold the grip handle (≡) to drag tracks on mobile devices.
@@ -133,4 +140,3 @@ export function PlaylistEditor({
         </TooltipProvider>
     );
 }
-

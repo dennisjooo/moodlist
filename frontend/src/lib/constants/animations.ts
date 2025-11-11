@@ -118,3 +118,108 @@ export const STAGGER_ITEM_VARIANTS: Variants = {
     },
   },
 };
+
+// Card fade-in-up animation variants (for playlist results cards)
+export const CARD_FADE_IN_UP_VARIANTS: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.5,
+      ease: [0.4, 0, 0.2, 1],
+    },
+  },
+};
+
+// Card fade-in-up with delay (for staggered card animations)
+export const CARD_FADE_IN_UP_DELAYED_VARIANTS: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.5,
+      delay: 0.1,
+      ease: [0.4, 0, 0.2, 1],
+    },
+  },
+};
+
+// Card fade-in-up with longer delay (for track list)
+export const CARD_FADE_IN_UP_LONG_DELAY_VARIANTS: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.5,
+      delay: 0.2,
+      ease: [0.4, 0, 0.2, 1],
+    },
+  },
+};
+
+// Fade-in animation variants (for container elements)
+export const FADE_IN_VARIANTS: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      duration: 0.4,
+      ease: [0.4, 0, 0.2, 1],
+    },
+  },
+};
+
+// Actions fade-in-up animation variants
+export const ACTIONS_FADE_IN_UP_VARIANTS: Variants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.4,
+      delay: 0.3,
+      ease: [0.4, 0, 0.2, 1],
+    },
+  },
+};
+
+// Gradient scale animation variants (for accent bars)
+export const GRADIENT_SCALE_VARIANTS: Variants = {
+  hidden: { scaleX: 0 },
+  visible: {
+    scaleX: 1,
+    transition: {
+      duration: 0.6,
+      delay: 0.2,
+      ease: [0.4, 0, 0.2, 1],
+    },
+  },
+};
+
+// Track list stagger container variants (for track list animations)
+export const TRACK_LIST_STAGGER_CONTAINER_VARIANTS: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.03,
+      delayChildren: 0.1,
+    },
+  },
+};
+
+// Track row slide-in animation variants
+export const TRACK_ROW_SLIDE_IN_VARIANTS: Variants = {
+  hidden: { opacity: 0, x: -10 },
+  visible: {
+    opacity: 1,
+    x: 0,
+    transition: {
+      duration: 0.3,
+      ease: [0.4, 0, 0.2, 1],
+    },
+  },
+};

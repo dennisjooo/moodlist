@@ -36,7 +36,13 @@ export function TrackSearch({
     const [isCollapsed, setIsCollapsed] = useState(false);
 
     return (
-        <Card className="lg:sticky lg:top-20 h-fit border-2 shadow-lg hover:shadow-xl transition-shadow duration-300">
+        <Card
+            className={cn(
+                "lg:sticky lg:top-20 h-fit border-2 shadow-lg hover:shadow-xl transition-shadow duration-300",
+                "opacity-0 animate-[cardEnter_650ms_cubic-bezier(0.22,0.61,0.36,1)_forwards]"
+            )}
+            style={{ animationDelay: '160ms' }}
+        >
             <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-3">
                     <div className="flex-1">
@@ -190,4 +196,3 @@ export function TrackSearch({
         </Card>
     );
 }
-
