@@ -192,8 +192,8 @@ class ArtistRecommendationPipeline:
         Returns:
             Tuple of (recommendations, successful_artists, failed_artists)
         """
-        # Use up to 20 artists for maximum coverage
-        artists_to_process = mood_matched_artists[:20]
+        # Use up to 8 artists to reduce RecoBeat load while preserving diversity
+        artists_to_process = mood_matched_artists[:8]
         
         # Prefetch top tracks in batches to minimize per-artist API calls
         prefetched_top_tracks = await self.spotify_service.get_artist_top_tracks_batch(
@@ -202,8 +202,8 @@ class ArtistRecommendationPipeline:
             market="US",
         )
 
-        # Process artists in parallel with bounded concurrency (reduced to 2 to avoid rate limits)
-        semaphore = asyncio.Semaphore(2)
+        # Process artists in parallel with bounded concurrency (increased to 12 for speed)
+        semaphore = asyncio.Semaphore(12)
 
         async def process_artist_bounded(idx: int, artist_id: str) -> Tuple[List[TrackRecommendation], bool]:
             """Process a single artist with concurrency control."""
