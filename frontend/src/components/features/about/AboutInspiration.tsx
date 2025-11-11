@@ -1,8 +1,16 @@
+'use client';
+
+import { motion } from '@/components/ui/lazy-motion';
 import { Lightbulb } from 'lucide-react';
 
 export function AboutInspiration() {
     return (
-        <section>
+        <motion.section
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, margin: '-100px' }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+        >
             <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 rounded-lg bg-primary/10 border border-primary/10">
                     <Lightbulb className="w-4 h-4 text-primary" />
@@ -20,6 +28,6 @@ export function AboutInspiration() {
                     and boom—curated music that&apos;s listenable by you on Spotify.
                 </p>
             </div>
-        </section>
+        </motion.section>
     );
 }
