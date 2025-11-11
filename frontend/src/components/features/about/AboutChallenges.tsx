@@ -10,16 +10,24 @@ export function AboutChallenges() {
             content: "Managing user sessions across multi-worker backends? Yeah, that's a whole different beast. What works locally doesn't always work in production, especially when you have multiple instances running."
         },
         {
-            title: "AWS and That October 20th Outage",
-            content: "I was in the middle of setting up AWS services when the big outage hit on 10/20/2025. Perfect timing, right? Nothing like debugging whether it's your code or the entire cloud infrastructure that's broken. Thanks Jeff, at least I'm still on the free tier."
+            title: "AI Agents Are... Unpredictable",
+            content: "The AI agentic approach sounded great in theory. In practice? Some recommendations are way off the mark. Even with iterative filtering and refinement, it's not always there yet. Turns out teaching an AI to understand musical taste is surprisingly difficult. I tried my best in making it clean and usable, but yeah, there will be edge cases I cannot fix."
         },
         {
-            title: "AI Agents Are... Unpredictable",
-            content: "The AI agentic approach sounded great in theory. In practice? Some recommendations are way off the mark. Even with iterative filtering and refinement, it's not always there yet. Turns out teaching an AI to understand musical taste is surprisingly difficult."
+            title: "AWS and That October 20th Outage",
+            content: "I was in the middle of setting up AWS services when the big outage hit on 10/20/2025. Perfect timing, right? Nothing like debugging whether it's your code or the entire cloud infrastructure that's broken. Thanks Jeff, at least I'm still on the free tier. Eventually I ended up moving to Vercel for frontend (I know sorry, it's a touchy subject right now), Render for backend, Neon for Postgres, and Upstash for Redis. What do you know, moving things there made a huge impact on speed and load times, especially to DB."
+        },
+        {
+            title: "Cookies and CORS",
+            content: "Those are huge pains in the ass for me. Since I'm deploying my frontend and backend on different domains, I had to somehow deal with both CORS and cookies issues. It ended up working sure, but a whole lot of debugging happened here and honestly it was quite a bit of a pain."
         },
         {
             title: "Spotify OAuth Deep Dive",
-            content: "Implementing Spotify's OAuth flow was fascinating and frustrating in equal measure. Token refresh, scope management, redirect URIs—there's a lot to get right."
+            content: "Implementing Spotify's OAuth flow was fascinating and frustrating in equal measure. Token refresh, scope management, redirect URIs—there's a lot to get right. Roughly at the end of development, I realised my scope for the Spotify API I'm using is only for development, meaning I can only add a limited number of people to the list. I understand the security measures Spotify has to make, but it pretty much limits the use case of the app."
+        },
+        {
+            title: "Thinking of UX",
+            content: "I'm not a UI/UX designer by any chance, so thinking about how things should work experience wise was something new to me. Of course, I have a certain way I expect the user to interact with the app, but there's NO guarantee that they will do so. It's a learning experience and I'm sure I'll get better at it with time."
         }
     ];
 
