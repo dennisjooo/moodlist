@@ -493,17 +493,35 @@ class SpotifyAPIClient:
                     )
                     raise SpotifyAuthError(error_msg)
                 elif status_code == 429:
-                    # Rate limited - wait and retry
-                    if attempt < self.max_retries - 1:
-                        wait_time = 2 ** attempt
+                    # Rate limited - check Retry-After header first (Spotify best practice)
+                    retry_after = e.response.headers.get("Retry-After")
+                    if retry_after:
+                        wait_time = float(retry_after)
+                        # Fail fast if retry-after is unreasonably long (>5 minutes)
+                        if wait_time > 300:
+                            self.logger.error(
+                                "Rate limit with excessive Retry-After, failing immediately",
+                                retry_after_seconds=wait_time,
+                                endpoint=endpoint
+                            )
+                            raise SpotifyRateLimitError(f"Rate limit exceeded (retry after {wait_time:.0f}s)")
+                    else:
+                        # No Retry-After header - use aggressive exponential backoff
+                        # Using 2^(attempt+1) * 2.0 to match rate_limit_handlers.py: 4s, 8s, 16s
+                        wait_time = (2 ** (attempt + 1)) * 2.0
+
+                    if attempt < self.max_retries - 1 and wait_time <= 300:
                         self.logger.info(
                             "Rate limited, waiting before retry",
                             wait_time=wait_time,
-                            attempt=attempt + 1
+                            attempt=attempt + 1,
+                            has_retry_after_header=retry_after is not None
                         )
                         await asyncio.sleep(wait_time)
                         continue
-                    raise SpotifyRateLimitError("Rate limit exceeded")
+
+                    # Either out of retries or wait time too long
+                    raise SpotifyRateLimitError(f"Rate limit exceeded (retry after {wait_time:.0f}s)")
                 elif status_code >= 500:
                     # Server error - retry
                     if attempt < self.max_retries - 1:
