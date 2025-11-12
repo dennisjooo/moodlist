@@ -83,9 +83,21 @@ export function useAuthCallback() {
       try {
         // Exchange code for tokens using backend
         setCurrentStage(1);
+
+        // Retrieve PKCE code verifier from session storage
+        const codeVerifier = sessionStorage.getItem('spotify_code_verifier');
+        if (!codeVerifier) {
+          setStatus('error');
+          setErrorMessage('PKCE verification failed - please try again');
+          return;
+        }
+
         const tokenResponse = await apiClient.post<{ access_token: string; refresh_token: string; expires_in: number }>(`/api/spotify/token`, null, {
-          params: { code },
+          params: { code, code_verifier: codeVerifier },
         });
+
+        // Clean up code verifier after successful exchange
+        sessionStorage.removeItem('spotify_code_verifier');
 
         const tokenData = tokenResponse.data;
 

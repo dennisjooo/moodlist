@@ -21,9 +21,9 @@ interface LimitedAccessDialogProps {
 }
 
 export function LimitedAccessDialog({ open, onOpenChange }: LimitedAccessDialogProps) {
-    const handleProceed = () => {
+    const handleProceed = async () => {
         onOpenChange(false);
-        initiateSpotifyAuth();
+        await initiateSpotifyAuth();
     };
 
     const { betaContactUrl, betaContactLabel } = config.access;
