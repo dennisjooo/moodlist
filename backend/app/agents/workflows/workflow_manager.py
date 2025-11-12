@@ -395,7 +395,18 @@ class WorkflowManager:
                 completion_time = datetime.now(timezone.utc)
                 state.metadata["completion_time"] = completion_time.isoformat()
                 state.metadata["total_duration"] = (completion_time - start_time).total_seconds()
-                state.metadata["step_timings"] = step_timings
+                
+                # Enhance step_timings with orchestration breakdown if available
+                enhanced_step_timings = step_timings.copy()
+                if "orchestration" in enhanced_step_timings and "orchestration_timings" in state.metadata:
+                    orchestration_breakdown = state.metadata["orchestration_timings"]
+                    # Replace single orchestration timing with breakdown structure
+                    enhanced_step_timings["orchestration"] = {
+                        "total": enhanced_step_timings["orchestration"],
+                        "breakdown": orchestration_breakdown
+                    }
+                
+                state.metadata["step_timings"] = enhanced_step_timings
 
                 # Send final notification before moving to completed
                 # This ensures subscribers get the final state
@@ -406,7 +417,7 @@ class WorkflowManager:
                 status_msg = "cancelled" if is_cancelled else "completed"
                 logger.info(
                     f"Workflow {session_id} {status_msg} in {state.metadata['total_duration']:.2f}s",
-                    step_timings=step_timings
+                    step_timings=enhanced_step_timings
                 )
 
     def _save_workflow_state_to_file(self, session_id: str, state: AgentState):
