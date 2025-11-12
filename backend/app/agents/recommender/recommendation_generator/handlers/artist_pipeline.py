@@ -199,7 +199,6 @@ class ArtistRecommendationPipeline:
         prefetched_top_tracks = await self.spotify_service.get_artist_top_tracks_batch(
             access_token=access_token,
             artist_ids=artists_to_process,
-            market="US",
         )
 
         # Process artists in parallel with bounded concurrency (increased to 8 for better throughput)
@@ -306,7 +305,6 @@ class ArtistRecommendationPipeline:
         artist_tracks = await self.spotify_service.get_artist_hybrid_tracks(
             access_token=access_token,
             artist_id=artist_id,
-            market="US",
             max_popularity=80,  # Exclude mega-hits (tracks > 80 popularity)
             min_popularity=20,  # Ensure minimum quality
             target_count=tracks_per_artist,

@@ -327,14 +327,14 @@ class SpotifyService:
         self,
         access_token: str,
         artist_id: str,
-        market: str = "US"
+        market: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Get an artist's top tracks from Spotify.
 
         Args:
             access_token: Spotify access token
             artist_id: Spotify artist ID
-            market: ISO 3166-1 alpha-2 country code
+            market: Optional ISO 3166-1 alpha-2 country code (None for global)
 
         Returns:
             List of top tracks for the artist
@@ -376,7 +376,7 @@ class SpotifyService:
         self,
         access_token: str,
         artist_ids: List[str],
-        market: str = "US",
+        market: Optional[str] = None,
         max_concurrency: int = 3,
     ) -> Dict[str, List[Dict[str, Any]]]:
         """Batch fetch artist top tracks while leveraging cache hits."""
@@ -528,7 +528,7 @@ class SpotifyService:
         self,
         access_token: str,
         artist_id: str,
-        market: str = "US",
+        market: Optional[str] = None,
         max_popularity: int = 80,
         min_popularity: int = 20,
         target_count: int = 10,

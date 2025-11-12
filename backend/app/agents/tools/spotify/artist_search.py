@@ -9,7 +9,9 @@ from pydantic import BaseModel, Field
 from ..agent_tools import RateLimitedTool, ToolResult
 from .rate_limiting import wait_for_artist_top_tracks_rate_limit
 from .track_parsing import parse_track_data
-from .batch_operations import batch_fetch_tracks, create_popularity_filter
+from .params_utils import build_market_params, get_market_label
+from .album_operations import get_artist_albums, sample_album_tracks
+from .track_operations import search_artist_tracks
 
 
 logger = structlog.get_logger(__name__)
@@ -138,7 +140,7 @@ class GetArtistTopTracksInput(BaseModel):
 
     access_token: str = Field(..., description="Spotify access token")
     artist_id: str = Field(..., description="Spotify artist ID")
-    market: str = Field(default="US", description="ISO 3166-1 alpha-2 country code")
+    market: Optional[str] = Field(default=None, description="ISO 3166-1 alpha-2 country code (optional, defaults to global)")
 
 
 class BatchGetArtistTopTracksInput(BaseModel):
@@ -146,7 +148,7 @@ class BatchGetArtistTopTracksInput(BaseModel):
 
     access_token: str = Field(..., description="Spotify access token")
     artist_ids: List[str] = Field(..., min_items=1, max_items=20, description="Artist IDs to fetch top tracks for")
-    market: str = Field(default="US", description="ISO 3166-1 alpha-2 country code")
+    market: Optional[str] = Field(default=None, description="ISO 3166-1 alpha-2 country code (optional, defaults to global)")
 
 
 class BatchGetArtistTopTracksTool(RateLimitedTool):
@@ -181,7 +183,7 @@ class BatchGetArtistTopTracksTool(RateLimitedTool):
         self,
         access_token: str,
         artist_ids: List[str],
-        market: str = "US",
+        market: Optional[str] = None,
     ) -> ToolResult:
         """Fetch top tracks for multiple artists in parallel."""
 
@@ -201,11 +203,14 @@ class BatchGetArtistTopTracksTool(RateLimitedTool):
                     # Use global rate limiter to prevent overwhelming Spotify API
                     await wait_for_artist_top_tracks_rate_limit()
                     
+                    # Build params using utility
+                    params = build_market_params(market=market)
+                    
                     # Make individual API request
                     response_data = await self._make_request(
                         method="GET",
                         endpoint=f"/artists/{artist_id}/top-tracks",
-                        params={"market": market},
+                        params=params,
                         headers={"Authorization": f"Bearer {access_token}"}
                     )
                     
@@ -307,113 +312,104 @@ class GetArtistTopTracksTool(RateLimitedTool):
         self,
         access_token: str,
         artist_id: str,
-        market: str = "US"
+        market: Optional[str] = None
     ) -> ToolResult:
         """Get an artist's top tracks from Spotify.
 
         Args:
             access_token: Spotify access token
             artist_id: Spotify artist ID
-            market: ISO 3166-1 alpha-2 country code
+            market: Optional ISO 3166-1 alpha-2 country code (None for global)
 
         Returns:
             ToolResult with top tracks or error
         """
-        # Strategy 1: Try top-tracks endpoint with multiple markets
-        result = await self._try_top_tracks_with_fallback_markets(access_token, artist_id, market)
+        # Strategy 1: Try top-tracks endpoint (global if market is None)
+        result = await self._try_top_tracks(access_token, artist_id, market)
         if result.success:
             return result
 
-        # Strategy 2: If all markets failed, fallback to search by artist name
-        logger.warning(f"All market attempts failed for artist {artist_id}, trying search fallback")
+        # Strategy 2: If failed, fallback to search by artist name
+        logger.warning(f"Failed to get top tracks for artist {artist_id}, trying search fallback")
         return await self._try_search_fallback(access_token, artist_id, market)
 
-    async def _try_top_tracks_with_fallback_markets(
+    async def _try_top_tracks(
         self,
         access_token: str,
         artist_id: str,
-        market: str
+        market: Optional[str]
     ) -> ToolResult:
-        """Try getting top tracks using the top-tracks endpoint with fallback markets."""
-        # Fallback markets to try if the primary market fails
-        fallback_markets = ["US", "GB", "CA", "AU", "DE", "FR", "ES", "JP", "BR"]
-        markets_to_try = [market] + [m for m in fallback_markets if m != market]
+        """Try getting top tracks using the top-tracks endpoint (global if market is None)."""
+        try:
+            market_label = get_market_label(market)
+            logger.info(f"Getting top tracks for artist {artist_id} (market: {market_label})")
 
-        last_error = None
-        last_response_data = None
+            # Use global rate limiter to prevent overwhelming Spotify API
+            await wait_for_artist_top_tracks_rate_limit()
+            
+            # Build params using utility
+            params = build_market_params(market=market)
+            
+            # Make API request
+            response_data = await self._make_request(
+                method="GET",
+                endpoint=f"/artists/{artist_id}/top-tracks",
+                params=params,
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
 
-        for current_market in markets_to_try:
-            try:
-                logger.info(f"Getting top tracks for artist {artist_id} in market {current_market}")
-
-                # Use global rate limiter to prevent overwhelming Spotify API
-                await wait_for_artist_top_tracks_rate_limit()
-                
-                # Make API request
-                response_data = await self._make_request(
-                    method="GET",
-                    endpoint=f"/artists/{artist_id}/top-tracks",
-                    params={"market": current_market},
-                    headers={"Authorization": f"Bearer {access_token}"}
+            # Validate response structure
+            if not self._validate_response(response_data, ["tracks"]):
+                return ToolResult.error_result(
+                    "Invalid response structure from Spotify API",
+                    api_response=response_data
                 )
 
-                # Validate response structure
-                if not self._validate_response(response_data, ["tracks"]):
-                    last_error = "Invalid response structure from Spotify API"
-                    last_response_data = response_data
+            # Parse tracks
+            tracks = []
+            for track_data in response_data.get("tracks", []):
+                try:
+                    track_info = parse_track_data(track_data)
+                    tracks.append(track_info)
+                except Exception as e:
+                    logger.warning(f"Failed to parse track data: {track_data}, error: {e}")
                     continue
 
-                # Parse tracks
-                tracks = []
-                for track_data in response_data.get("tracks", []):
-                    try:
-                        track_info = parse_track_data(track_data)
-                        tracks.append(track_info)
-                    except Exception as e:
-                        logger.warning(f"Failed to parse track data: {track_data}, error: {e}")
-                        continue
+            # Return success if we got tracks
+            if tracks:
+                logger.info(f"Successfully retrieved {len(tracks)} top tracks for artist {artist_id} (market: {market_label})")
+                return ToolResult.success_result(
+                    data={
+                        "tracks": tracks,
+                        "total_count": len(tracks),
+                        "artist_id": artist_id
+                    },
+                    metadata={
+                        "source": "spotify",
+                        "api_endpoint": f"/artists/{artist_id}/top-tracks",
+                        "market": market,
+                        "strategy": "top_tracks"
+                    }
+                )
+            else:
+                logger.warning(f"No tracks found for artist {artist_id} (market: {market_label})")
+                return ToolResult.error_result(
+                    f"No tracks available for artist {artist_id}",
+                    api_response=response_data
+                )
 
-                # If we got tracks, return success
-                if tracks:
-                    logger.info(f"Successfully retrieved {len(tracks)} top tracks for artist {artist_id} using market {current_market}")
-                    return ToolResult.success_result(
-                        data={
-                            "tracks": tracks,
-                            "total_count": len(tracks),
-                            "artist_id": artist_id
-                        },
-                        metadata={
-                            "source": "spotify",
-                            "api_endpoint": f"/artists/{artist_id}/top-tracks",
-                            "market": current_market,
-                            "original_market": market,
-                            "fallback_used": current_market != market,
-                            "strategy": "top_tracks"
-                        }
-                    )
-                else:
-                    logger.warning(f"No tracks found for artist {artist_id} in market {current_market}")
-                    last_error = f"No tracks available for artist {artist_id} in market {current_market}"
-                    continue
-
-            except Exception as e:
-                logger.warning(f"Error getting artist top tracks for market {current_market}: {str(e)}")
-                last_error = str(e)
-                continue
-
-        # All markets failed
-        logger.warning(f"All market attempts failed for artist {artist_id}: {last_error}")
-        return ToolResult.error_result(
-            f"Failed to get artist top tracks after trying {len(markets_to_try)} markets: {last_error}",
-            error_type="AllMarketsFailed",
-            api_response=last_response_data
-        )
+        except Exception as e:
+            logger.error(f"Error getting artist top tracks: {str(e)}", exc_info=True)
+            return ToolResult.error_result(
+                f"Failed to get artist top tracks: {str(e)}",
+                error_type=type(e).__name__
+            )
 
     async def _try_search_fallback(
         self,
         access_token: str,
         artist_id: str,
-        market: str
+        market: Optional[str]
     ) -> ToolResult:
         """Fallback strategy: get artist name and search for tracks."""
         try:
@@ -440,50 +436,19 @@ class GetArtistTopTracksTool(RateLimitedTool):
 
             logger.info(f"Retrieved artist name '{artist_name}' for search fallback")
 
-            # Search for tracks by this artist
-            search_query = f"artist:{artist_name}"
-            search_response = await self._make_request(
-                method="GET",
-                endpoint="/search",
-                params={
-                    "q": search_query,
-                    "type": "track",
-                    "limit": 20,  # Get up to 20 tracks
-                    "market": market
-                },
-                headers={"Authorization": f"Bearer {access_token}"}
+            # Use the new track_operations utility
+            result = await search_artist_tracks(
+                make_request=self._make_request,
+                validate_response=self._validate_response,
+                access_token=access_token,
+                artist_id=artist_id,
+                artist_name=artist_name,
+                market=market,
+                limit=20
             )
 
-            if not self._validate_response(search_response, ["tracks"]):
-                return ToolResult.error_result(
-                    "Invalid response structure from Spotify search API",
-                    api_response=search_response
-                )
-
-            # Parse tracks from search results
-            tracks = []
-            tracks_data = search_response.get("tracks", {})
-            items = tracks_data.get("items", [])
-
-            for track_data in items:
-                try:
-                    # Only include tracks where this artist is the primary artist
-                    track_artists = track_data.get("artists", [])
-                    if not track_artists or track_artists[0].get("id") != artist_id:
-                        continue
-
-                    track_info = parse_track_data(track_data)
-                    tracks.append(track_info)
-
-                except Exception as e:
-                    logger.warning(f"Failed to parse search track data: {track_data}, error: {e}")
-                    continue
-
-            # Sort by popularity (most popular first) and take top 10
-            tracks.sort(key=lambda x: x.get("popularity", 0), reverse=True)
-            tracks = tracks[:10]
-
-            if tracks:
+            if result and result.get("tracks"):
+                tracks = result["tracks"]
                 logger.info(f"Successfully retrieved {len(tracks)} tracks for artist {artist_name} via search fallback")
                 return ToolResult.success_result(
                     data={
@@ -497,7 +462,7 @@ class GetArtistTopTracksTool(RateLimitedTool):
                         "market": market,
                         "artist_name": artist_name,
                         "strategy": "search_fallback",
-                        "search_query": search_query
+                        "search_query": result.get("search_query")
                     }
                 )
             else:
@@ -518,7 +483,7 @@ class GetArtistTopTracksTool(RateLimitedTool):
         self,
         access_token: str,
         artist_id: str,
-        market: str = "US",
+        market: Optional[str] = None,
         max_popularity: int = 80,
         min_popularity: int = 20,
         target_count: int = 10,
@@ -536,7 +501,7 @@ class GetArtistTopTracksTool(RateLimitedTool):
         Args:
             access_token: Spotify access token
             artist_id: Spotify artist ID
-            market: ISO 3166-1 alpha-2 country code
+            market: Optional ISO 3166-1 alpha-2 country code (None for global)
             max_popularity: Maximum popularity threshold (default: 80)
             min_popularity: Minimum popularity threshold (default: 20)
             target_count: Target number of tracks to return (default: 10)
@@ -589,7 +554,8 @@ class GetArtistTopTracksTool(RateLimitedTool):
             logger.info(f"Fetching albums for artist {artist_id}")
             # Add small delay before album fetch to avoid rate limits when processing multiple artists
             await asyncio.sleep(0.5)  # 500ms delay to space out album API calls
-            albums = await self._get_artist_albums(
+            albums = await get_artist_albums(
+                make_request=self._make_request,
                 access_token=access_token,
                 artist_id=artist_id,
                 market=market,
@@ -599,7 +565,9 @@ class GetArtistTopTracksTool(RateLimitedTool):
             if albums:
                 logger.info(f"Found {len(albums)} albums, sampling tracks for diversity")
                 # Sample tracks from albums
-                album_tracks = await self._sample_album_tracks(
+                album_tracks = await sample_album_tracks(
+                    make_request=self._make_request,
+                    validate_response=self._validate_response,
                     access_token=access_token,
                     albums=albums,
                     market=market,
@@ -631,207 +599,6 @@ class GetArtistTopTracksTool(RateLimitedTool):
         )
 
         return unique_tracks
-
-    async def _get_artist_albums(
-        self,
-        access_token: str,
-        artist_id: str,
-        market: str = "US",
-        limit: int = 10
-    ) -> List[Dict[str, Any]]:
-        """Get artist's albums.
-
-        Args:
-            access_token: Spotify access token
-            artist_id: Spotify artist ID
-            market: ISO 3166-1 alpha-2 country code
-            limit: Maximum number of albums to return
-
-        Returns:
-            List of album dictionaries
-        """
-        try:
-            response_data = await self._make_request(
-                method="GET",
-                endpoint=f"/artists/{artist_id}/albums",
-                params={
-                    "market": market,
-                    "limit": limit,
-                    "include_groups": "album,single"  # Include albums and singles
-                },
-                headers={"Authorization": f"Bearer {access_token}"}
-            )
-
-            if not self._validate_response(response_data, ["items"]):
-                logger.warning(f"Invalid response structure for albums of artist {artist_id}")
-                return []
-
-            albums = response_data.get("items", [])
-            logger.info(f"Retrieved {len(albums)} albums for artist {artist_id}")
-            return albums
-
-        except Exception as e:
-            logger.warning(f"Error fetching albums for artist {artist_id}: {e}")
-            return []
-
-    async def _sample_album_tracks(
-        self,
-        access_token: str,
-        albums: List[Dict[str, Any]],
-        market: str,
-        max_tracks: int,
-        track_ids_seen: set,
-        min_popularity: int = 20,
-        max_popularity: int = 80
-    ) -> List[Dict[str, Any]]:
-        """Sample tracks from multiple albums for diversity.
-
-        Args:
-            access_token: Spotify access token
-            albums: List of album dictionaries
-            market: ISO 3166-1 alpha-2 country code
-            max_tracks: Maximum tracks to sample
-            track_ids_seen: Set of track IDs already included
-            min_popularity: Minimum popularity threshold
-            max_popularity: Maximum popularity threshold
-
-        Returns:
-            List of sampled track dictionaries
-        """
-        import random
-
-        # Prioritize albums (newer albums first, but with some randomness)
-        albums_to_sample = albums.copy()
-        random.shuffle(albums_to_sample)  # Add randomness
-
-        # Step 1: Collect track IDs from albums (without individual API calls)
-        candidate_track_ids = []
-        tracks_per_album = max(1, max_tracks // min(len(albums), 5))  # Sample from up to 5 albums
-
-        for album in albums_to_sample[:5]:  # Sample from up to 5 albums
-            album_id = album.get("id")
-            if not album_id:
-                continue
-
-            try:
-                # Get tracks from this album
-                response_data = await self._make_request(
-                    method="GET",
-                    endpoint=f"/albums/{album_id}/tracks",
-                    params={"market": market, "limit": 50},
-                    headers={"Authorization": f"Bearer {access_token}"}
-                )
-
-                if not self._validate_response(response_data, ["items"]):
-                    continue
-
-                album_tracks = response_data.get("items", [])
-
-                if album_tracks:
-                    # Sample random tracks from middle/end of album (avoid lead singles)
-                    if len(album_tracks) > 3:
-                        # Skip first track (usually the single) and sample from the rest
-                        sample_pool = album_tracks[1:]
-                        sampled = random.sample(sample_pool, min(tracks_per_album, len(sample_pool)))
-                    else:
-                        sampled = album_tracks
-
-                    # Collect track IDs for batch fetching
-                    for track in sampled:
-                        track_id = track.get("id")
-                        if track_id and track_id not in track_ids_seen:
-                            candidate_track_ids.append(track_id)
-
-            except Exception as e:
-                logger.warning(f"Error sampling tracks from album {album_id}: {e}")
-                continue
-
-        # Step 2: Batch fetch full track info for all candidates
-        if not candidate_track_ids:
-            return []
-
-        # Create a wrapper function for making requests that matches our API
-        async def make_request_wrapper(endpoint: str, params: Dict[str, Any]) -> Dict[str, Any]:
-            """Wrapper to adapt _make_request signature for batch_fetch_tracks."""
-            response = await self._make_request(
-                method="GET",
-                endpoint=endpoint,
-                params=params,
-                headers={"Authorization": f"Bearer {access_token}"}
-            )
-            if not self._validate_response(response, ["tracks"]):
-                return {}
-            return response
-
-        # Use batch operations utility with popularity filter
-        popularity_filter = create_popularity_filter(min_popularity, max_popularity)
-        sampled_tracks = await batch_fetch_tracks(
-            track_ids=candidate_track_ids,
-            make_request=make_request_wrapper,
-            access_token=access_token,
-            market=market,
-            track_ids_seen=track_ids_seen,
-            filter_func=popularity_filter,
-            max_results=max_tracks
-        )
-
-        return sampled_tracks
-
-    async def _get_track_info(
-        self,
-        access_token: str,
-        track_id: str,
-        market: str
-    ) -> Optional[Dict[str, Any]]:
-        """Get full track information including popularity.
-
-        Args:
-            access_token: Spotify access token
-            track_id: Spotify track ID
-            market: ISO 3166-1 alpha-2 country code
-
-        Returns:
-            Track dictionary or None if failed
-        """
-        try:
-            response_data = await self._make_request(
-                method="GET",
-                endpoint=f"/tracks/{track_id}",
-                params={"market": market},
-                headers={"Authorization": f"Bearer {access_token}"}
-            )
-
-            if not response_data.get("id"):
-                return None
-
-            return {
-                "id": response_data.get("id"),
-                "name": response_data.get("name"),
-                "spotify_uri": response_data.get("uri"),
-                "duration_ms": response_data.get("duration_ms"),
-                "popularity": response_data.get("popularity", 50),
-                "explicit": response_data.get("explicit", False),
-                "preview_url": response_data.get("preview_url"),
-                "track_number": response_data.get("track_number"),
-                "artists": [
-                    {
-                        "id": artist.get("id"),
-                        "name": artist.get("name"),
-                        "uri": artist.get("uri")
-                    }
-                    for artist in response_data.get("artists", [])
-                ],
-                "album": {
-                    "id": response_data.get("album", {}).get("id"),
-                    "name": response_data.get("album", {}).get("name"),
-                    "uri": response_data.get("album", {}).get("uri"),
-                    "release_date": response_data.get("album", {}).get("release_date")
-                } if response_data.get("album") else None
-            }
-
-        except Exception as e:
-            logger.warning(f"Error fetching track info for {track_id}: {e}")
-            return None
 
 
 class GetSeveralSpotifyArtistsInput(BaseModel):
