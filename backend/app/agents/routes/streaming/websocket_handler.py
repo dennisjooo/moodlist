@@ -196,6 +196,6 @@ async def handle_websocket_connection(
         try:
             await websocket.send_json({"type": "error", "message": str(exc)})
             await websocket.close(code=1011)
-        except:
+        except Exception:
             pass
 
