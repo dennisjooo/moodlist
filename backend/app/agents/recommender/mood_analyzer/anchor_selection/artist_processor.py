@@ -202,9 +202,9 @@ class ArtistProcessor:
         temporal_context: Optional[Dict[str, Any]] = None,
         skip_audio_features: bool = False
     ) -> List[Dict[str, Any]]:
-        """Fetch top tracks for each artist in parallel and create anchor candidates.
+        """Fetch top tracks for each artist using batch method and create anchor candidates.
 
-        Fetches artist tracks in parallel to reduce latency.
+        Uses batch fetching to respect rate limits while maintaining performance.
 
         Args:
             artist_infos: List of validated artist info dicts
@@ -216,55 +216,50 @@ class ArtistProcessor:
         Returns:
             List of anchor candidate dictionaries
         """
-        async def fetch_tracks_for_artist(artist_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-            """Fetch and process tracks for a single artist."""
+        if not artist_infos:
+            return []
+
+        # Extract artist IDs and create mapping
+        artist_id_to_data = {}
+        artist_ids = []
+        for artist_data in artist_infos:
             artist_info = artist_data['info']
-            artist_name = artist_data['name']
             artist_id = artist_info.get('id')
-            artist_candidates = []
+            if artist_id:
+                artist_id_to_data[artist_id] = artist_data
+                artist_ids.append(artist_id)
 
-            try:
-                tracks = await self.spotify_service.get_artist_top_tracks(
-                    access_token=access_token,
-                    artist_id=artist_id
-                )
+        if not artist_ids:
+            return []
 
-                if not tracks:
-                    return []
-
-                # Take top 5 tracks per artist for mentioned artists, 3 for others
-                limit_per_artist = 5 if artist_name in mentioned_artists else 3
-                selected_tracks = tracks[:limit_per_artist]
-
-                # Create candidates for each track
-                for track in selected_tracks:
-                    candidate = await self._create_artist_candidate(
-                        track, artist_name, artist_data['is_mentioned'], target_features, temporal_context
-                    )
-                    if candidate:
-                        artist_candidates.append(candidate)
-
-                return artist_candidates
-
-            except Exception as e:
-                logger.warning(f"Failed to get tracks for artist '{artist_name}': {e}")
-                return []
-
-        # Fetch tracks for all artists concurrently
-        logger.info(f"Fetching top tracks for {len(artist_infos)} artists in parallel")
-
-        results = await asyncio.gather(
-            *[fetch_tracks_for_artist(artist_data) for artist_data in artist_infos],
-            return_exceptions=True
+        # Batch fetch all artist top tracks at once (respects rate limits)
+        logger.info(f"Batch fetching top tracks for {len(artist_ids)} artists")
+        prefetched_tracks = await self.spotify_service.get_artist_top_tracks_batch(
+            access_token=access_token,
+            artist_ids=artist_ids,
+            market="US",
+            max_concurrency=3,  # Conservative concurrency to avoid rate limits
         )
 
-        # Flatten results and filter out exceptions
+        # Process tracks for each artist
         candidates = []
-        for result in results:
-            if isinstance(result, list):
-                candidates.extend(result)
-            elif isinstance(result, Exception):
-                logger.warning(f"Exception in artist track fetching: {result}")
+        for artist_id, tracks in prefetched_tracks.items():
+            artist_data = artist_id_to_data.get(artist_id)
+            if not artist_data or not tracks:
+                continue
+
+            artist_name = artist_data['name']
+            # Take top 5 tracks per artist for mentioned artists, 3 for others
+            limit_per_artist = 5 if artist_name in mentioned_artists else 3
+            selected_tracks = tracks[:limit_per_artist]
+
+            # Create candidates for each track
+            for track in selected_tracks:
+                candidate = await self._create_artist_candidate(
+                    track, artist_name, artist_data['is_mentioned'], target_features, temporal_context
+                )
+                if candidate:
+                    candidates.append(candidate)
 
         # Batch fetch all audio features at once (unless skipped for coordinated batching)
         if not skip_audio_features and candidates and self.reccobeat_service:

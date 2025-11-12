@@ -25,8 +25,8 @@ class RecoBeatService:
     """Service for coordinating RecoBeat API operations."""
 
     AUDIO_FEATURE_BATCH_SIZE = 20  # Increased from 5 for better throughput (4x improvement)
-    AUDIO_FEATURE_MAX_CONCURRENCY = 10  # Increased from 2 for parallel processing (5x improvement)
-    AUDIO_FEATURE_THROTTLE_SECONDS = 0.5  # Reduced from 2.0s for faster batching (4x improvement)
+    AUDIO_FEATURE_MAX_CONCURRENCY = 3  # Reduced from 10 to respect rate limits (50/min = ~0.83/sec, so 3 concurrent * 1.2s interval = ~2.5 req/sec)
+    AUDIO_FEATURE_THROTTLE_SECONDS = 1.5  # Increased from 0.5s to give more spacing between batches
 
     def __init__(self):
         """Initialize the RecoBeat service."""

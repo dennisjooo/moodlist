@@ -7,6 +7,9 @@ from typing import List, Type, Dict, Any, Optional, Tuple
 from pydantic import BaseModel, Field
 
 from ..agent_tools import RateLimitedTool, ToolResult
+from .rate_limiting import wait_for_artist_top_tracks_rate_limit
+from .track_parsing import parse_track_data
+from .batch_operations import batch_fetch_tracks, create_popularity_filter
 
 
 logger = structlog.get_logger(__name__)
@@ -166,8 +169,8 @@ class BatchGetArtistTopTracksTool(RateLimitedTool):
             name="batch_get_artist_top_tracks",
             description="Batch artist top tracks from Spotify API",
             base_url="https://api.spotify.com/v1",
-            rate_limit_per_minute=50,  # More conservative: 50/min to match individual tool
-            min_request_interval=0.5,  # Increased from 0.25s to 0.5s for better spacing
+            rate_limit_per_minute=100,  # High limit since global rate limiter handles actual spacing
+            min_request_interval=0.1,  # Low interval since global rate limiter enforces 1.5s
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:
@@ -187,13 +190,17 @@ class BatchGetArtistTopTracksTool(RateLimitedTool):
 
         unique_artist_ids = list(dict.fromkeys(artist_ids))
         
-        # Use semaphore to control concurrency (3 concurrent requests for better rate limit compliance)
-        semaphore = asyncio.Semaphore(3)
+        # Use semaphore to control concurrency (2 concurrent requests to work with rate limiter)
+        # With min_request_interval=1.2s, this ensures we don't overwhelm the rate limiter
+        semaphore = asyncio.Semaphore(2)
         
         async def fetch_artist_tracks(artist_id: str) -> Tuple[str, List[Dict[str, Any]]]:
             """Fetch tracks for a single artist."""
             async with semaphore:
                 try:
+                    # Use global rate limiter to prevent overwhelming Spotify API
+                    await wait_for_artist_top_tracks_rate_limit()
+                    
                     # Make individual API request
                     response_data = await self._make_request(
                         method="GET",
@@ -206,32 +213,7 @@ class BatchGetArtistTopTracksTool(RateLimitedTool):
                     tracks = []
                     for track_data in response_data.get("tracks", []):
                         try:
-                            track_info = {
-                                "id": track_data.get("id"),
-                                "name": track_data.get("name"),
-                                "spotify_uri": track_data.get("uri"),
-                                "duration_ms": track_data.get("duration_ms"),
-                                "popularity": track_data.get("popularity", 50),
-                                "explicit": track_data.get("explicit", False),
-                                "preview_url": track_data.get("preview_url"),
-                                "track_number": track_data.get("track_number"),
-                                "artists": [
-                                    {
-                                        "id": artist.get("id"),
-                                        "name": artist.get("name"),
-                                        "uri": artist.get("uri"),
-                                    }
-                                    for artist in track_data.get("artists", [])
-                                ],
-                                "album": {
-                                    "id": track_data.get("album", {}).get("id"),
-                                    "name": track_data.get("album", {}).get("name"),
-                                    "uri": track_data.get("album", {}).get("uri"),
-                                    "release_date": track_data.get("album", {}).get("release_date"),
-                                }
-                                if track_data.get("album")
-                                else None,
-                            }
+                            track_info = parse_track_data(track_data)
                             tracks.append(track_info)
                         except Exception as e:
                             logger.warning(f"Failed to parse track data for artist {artist_id}: {e}")
@@ -313,8 +295,8 @@ class GetArtistTopTracksTool(RateLimitedTool):
             name="get_artist_top_tracks",
             description="Get artist's top tracks from Spotify API",
             base_url="https://api.spotify.com/v1",
-            rate_limit_per_minute=50,  # More conservative: 50/min = ~0.83/sec to avoid hitting limits
-            min_request_interval=1.0,  # 1s between requests to prevent bursts
+            rate_limit_per_minute=100,  # High limit since global rate limiter handles actual spacing
+            min_request_interval=0.1,  # Low interval since global rate limiter enforces 1.5s
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:
@@ -364,6 +346,9 @@ class GetArtistTopTracksTool(RateLimitedTool):
             try:
                 logger.info(f"Getting top tracks for artist {artist_id} in market {current_market}")
 
+                # Use global rate limiter to prevent overwhelming Spotify API
+                await wait_for_artist_top_tracks_rate_limit()
+                
                 # Make API request
                 response_data = await self._make_request(
                     method="GET",
@@ -382,32 +367,8 @@ class GetArtistTopTracksTool(RateLimitedTool):
                 tracks = []
                 for track_data in response_data.get("tracks", []):
                     try:
-                        track_info = {
-                            "id": track_data.get("id"),
-                            "name": track_data.get("name"),
-                            "spotify_uri": track_data.get("uri"),
-                            "duration_ms": track_data.get("duration_ms"),
-                            "popularity": track_data.get("popularity", 50),
-                            "explicit": track_data.get("explicit", False),
-                            "preview_url": track_data.get("preview_url"),
-                            "track_number": track_data.get("track_number"),
-                            "artists": [
-                                {
-                                    "id": artist.get("id"),
-                                    "name": artist.get("name"),
-                                    "uri": artist.get("uri")
-                                }
-                                for artist in track_data.get("artists", [])
-                            ],
-                            "album": {
-                                "id": track_data.get("album", {}).get("id"),
-                                "name": track_data.get("album", {}).get("name"),
-                                "uri": track_data.get("album", {}).get("uri"),
-                                "release_date": track_data.get("album", {}).get("release_date")
-                            } if track_data.get("album") else None
-                        }
+                        track_info = parse_track_data(track_data)
                         tracks.append(track_info)
-
                     except Exception as e:
                         logger.warning(f"Failed to parse track data: {track_data}, error: {e}")
                         continue
@@ -511,30 +472,7 @@ class GetArtistTopTracksTool(RateLimitedTool):
                     if not track_artists or track_artists[0].get("id") != artist_id:
                         continue
 
-                    track_info = {
-                        "id": track_data.get("id"),
-                        "name": track_data.get("name"),
-                        "spotify_uri": track_data.get("uri"),
-                        "duration_ms": track_data.get("duration_ms"),
-                        "popularity": track_data.get("popularity", 50),
-                        "explicit": track_data.get("explicit", False),
-                        "preview_url": track_data.get("preview_url"),
-                        "track_number": track_data.get("track_number"),
-                        "artists": [
-                            {
-                                "id": artist.get("id"),
-                                "name": artist.get("name"),
-                                "uri": artist.get("uri")
-                            }
-                            for artist in track_data.get("artists", [])
-                        ],
-                        "album": {
-                            "id": track_data.get("album", {}).get("id"),
-                            "name": track_data.get("album", {}).get("name"),
-                            "uri": track_data.get("album", {}).get("uri"),
-                            "release_date": track_data.get("album", {}).get("release_date")
-                        } if track_data.get("album") else None
-                    }
+                    track_info = parse_track_data(track_data)
                     tracks.append(track_info)
 
                 except Exception as e:
@@ -622,24 +560,13 @@ class GetArtistTopTracksTool(RateLimitedTool):
             f"(max_popularity: {max_popularity}, ratio: {top_tracks_ratio:.1%}, "
             f"target: {top_tracks_count} top + {album_tracks_count} album = {target_count} total)"
         )
-        top_tracks: List[Dict[str, Any]] = []
-        if prefetched_top_tracks is not None:
-            top_tracks = prefetched_top_tracks
-            logger.debug(f"Using prefetched top tracks for artist {artist_id} (count={len(top_tracks)})")
+        # Always use prefetched tracks (empty list if not available) to avoid individual API calls
+        # that can cause rate limits when processing multiple artists in parallel
+        top_tracks = prefetched_top_tracks if prefetched_top_tracks is not None else []
+        if top_tracks:
+            logger.debug(f"Using {len(top_tracks)} prefetched top tracks for artist {artist_id}")
         else:
-            top_tracks_result = await self._run(
-                access_token=access_token,
-                artist_id=artist_id,
-                market=market
-            )
-
-            if top_tracks_result.success:
-                top_tracks = top_tracks_result.data.get("tracks", [])
-            else:
-                logger.warning(
-                    f"Failed to fetch top tracks inside hybrid strategy for artist {artist_id}: "
-                    f"{top_tracks_result.error}"
-                )
+            logger.debug(f"No prefetched top tracks for artist {artist_id}, will rely on album tracks")
 
         if top_tracks:
             filtered_top_tracks = [
@@ -773,12 +700,13 @@ class GetArtistTopTracksTool(RateLimitedTool):
         """
         import random
 
-        sampled_tracks = []
-        tracks_per_album = max(1, max_tracks // min(len(albums), 5))  # Sample from up to 5 albums
-
         # Prioritize albums (newer albums first, but with some randomness)
-        albums_to_sample = albums[:10]  # Consider recent 10 albums
+        albums_to_sample = albums.copy()
         random.shuffle(albums_to_sample)  # Add randomness
+
+        # Step 1: Collect track IDs from albums (without individual API calls)
+        candidate_track_ids = []
+        tracks_per_album = max(1, max_tracks // min(len(albums), 5))  # Sample from up to 5 albums
 
         for album in albums_to_sample[:5]:  # Sample from up to 5 albums
             album_id = album.get("id")
@@ -799,8 +727,6 @@ class GetArtistTopTracksTool(RateLimitedTool):
 
                 album_tracks = response_data.get("items", [])
 
-                # We need to get full track info (including popularity) via separate API call
-                # For now, randomly sample tracks from the album
                 if album_tracks:
                     # Sample random tracks from middle/end of album (avoid lead singles)
                     if len(album_tracks) > 3:
@@ -810,30 +736,44 @@ class GetArtistTopTracksTool(RateLimitedTool):
                     else:
                         sampled = album_tracks
 
-                    # Convert simplified tracks to full track format
+                    # Collect track IDs for batch fetching
                     for track in sampled:
                         track_id = track.get("id")
                         if track_id and track_id not in track_ids_seen:
-                            # Fetch full track info to get popularity
-                            full_track = await self._get_track_info(
-                                access_token=access_token,
-                                track_id=track_id,
-                                market=market
-                            )
-
-                            if full_track:
-                                popularity = full_track.get("popularity", 50)
-                                # Apply popularity filter
-                                if min_popularity <= popularity <= max_popularity:
-                                    sampled_tracks.append(full_track)
-                                    track_ids_seen.add(track_id)
-
-                                    if len(sampled_tracks) >= max_tracks:
-                                        return sampled_tracks
+                            candidate_track_ids.append(track_id)
 
             except Exception as e:
                 logger.warning(f"Error sampling tracks from album {album_id}: {e}")
                 continue
+
+        # Step 2: Batch fetch full track info for all candidates
+        if not candidate_track_ids:
+            return []
+
+        # Create a wrapper function for making requests that matches our API
+        async def make_request_wrapper(endpoint: str, params: Dict[str, Any]) -> Dict[str, Any]:
+            """Wrapper to adapt _make_request signature for batch_fetch_tracks."""
+            response = await self._make_request(
+                method="GET",
+                endpoint=endpoint,
+                params=params,
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            if not self._validate_response(response, ["tracks"]):
+                return {}
+            return response
+
+        # Use batch operations utility with popularity filter
+        popularity_filter = create_popularity_filter(min_popularity, max_popularity)
+        sampled_tracks = await batch_fetch_tracks(
+            track_ids=candidate_track_ids,
+            make_request=make_request_wrapper,
+            access_token=access_token,
+            market=market,
+            track_ids_seen=track_ids_seen,
+            filter_func=popularity_filter,
+            max_results=max_tracks
+        )
 
         return sampled_tracks
 
