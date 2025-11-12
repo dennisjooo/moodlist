@@ -17,6 +17,7 @@ MoodList uses a sophisticated multi-agent AI system to analyze your mood and pre
 ## Tech Stack
 
 ### Backend
+
 - **Framework**: FastAPI with async/await support
 - **Database**: PostgreSQL (Neon.tech) with SQLAlchemy ORM
 - **AI/ML**: LangGraph + LangChain with OpenAI, Groq, and Cerebras LLMs
@@ -25,6 +26,7 @@ MoodList uses a sophisticated multi-agent AI system to analyze your mood and pre
 - **APIs**: Spotify API, RecoBeat recommendation engine
 
 ### Frontend
+
 - **Framework**: Next.js 16 with React 19 and TypeScript
 - **UI**: Tailwind CSS v4 + Radix UI components
 - **State**: Zustand for auth and workflow state management
@@ -35,6 +37,7 @@ MoodList uses a sophisticated multi-agent AI system to analyze your mood and pre
 ## Getting Started
 
 ### Prerequisites
+
 - Python 3.11+
 - Node.js 18+
 - PostgreSQL database
@@ -45,24 +48,28 @@ MoodList uses a sophisticated multi-agent AI system to analyze your mood and pre
 ### Backend Setup
 
 1. **Clone the repository**
+
 ```bash
 git clone https://github.com/yourusername/moodlist.git
 cd moodlist/backend
 ```
 
 2. **Create virtual environment**
+
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
 3. **Install dependencies**
+
 ```bash
 pip install -r requirements.txt
 ```
 
 4. **Configure environment variables**
 Create a `.env` file in the `backend` directory:
+
 ```env
 # Database
 DATABASE_URL=postgresql://user:password@localhost:5432/moodlist
@@ -98,11 +105,13 @@ DAILY_PLAYLIST_CREATION_LIMIT=5
 ```
 
 5. **Run database migrations**
+
 ```bash
 alembic upgrade head
 ```
 
 6. **Start the server**
+
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -112,17 +121,20 @@ The API will be available at `http://localhost:8000`. API documentation at `http
 ### Frontend Setup
 
 1. **Navigate to frontend directory**
+
 ```bash
 cd ../frontend
 ```
 
 2. **Install dependencies**
+
 ```bash
 npm install
 ```
 
 3. **Configure environment variables**
 Create a `.env.local` file in the `frontend` directory:
+
 ```env
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 NEXT_PUBLIC_SPOTIFY_CLIENT_ID=your-spotify-client-id
@@ -130,6 +142,7 @@ NEXT_PUBLIC_SPOTIFY_REDIRECT_URI=http://localhost:3000/callback
 ```
 
 4. **Start the development server**
+
 ```bash
 npm run dev
 ```
@@ -191,6 +204,7 @@ moodlist/
 ## Deployment
 
 ### Current Production Setup
+
 - **Backend**: Railway
 - **Frontend**: Vercel
 - **Database**: Neon.tech (PostgreSQL)
@@ -199,12 +213,14 @@ moodlist/
 ### Deploy Your Own
 
 #### Backend (Railway/Render)
+
 1. Connect your GitHub repository
 2. Set environment variables from `.env` example
 3. Deploy from `backend` directory
 4. Run migrations: `alembic upgrade head`
 
 #### Frontend (Vercel)
+
 1. Import project from GitHub
 2. Set root directory to `frontend`
 3. Configure environment variables
@@ -213,6 +229,7 @@ moodlist/
 ## API Documentation
 
 Once the backend is running, visit:
+
 - **Interactive Docs**: `http://localhost:8000/docs`
 - **ReDoc**: `http://localhost:8000/redoc`
 
@@ -237,3 +254,6 @@ Once the backend is running, visit:
 - [LangChain](https://www.langchain.com/) & [LangGraph](https://www.langchain.com/langgraph) for AI agent framework
 - [RecoBeat](https://reccobeat.com/) for advanced music recommendations
 - [Tailwind CSS](https://tailwindcss.com/) & [Radix UI](https://www.radix-ui.com/) for beautiful UI components
+- [shadcn/ui](https://ui.shadcn.com/) for accessible and customizable React components
+- [Magic UI](https://magicui.design/) for animated components and effects
+- [ReactBits](https://reactbits.dev/) for React and Next.js tutorials and resources
