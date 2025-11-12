@@ -3,6 +3,7 @@
 import asyncio
 import structlog
 from typing import Optional, Dict, Any
+from datetime import datetime, timezone
 
 from langchain_core.language_models.base import BaseLanguageModel
 
@@ -79,6 +80,9 @@ class OrchestratorAgent(BaseAgent):
         Returns:
             Updated agent state with optimized recommendations
         """
+        # Initialize timing tracking
+        orchestration_timings = {}
+        
         try:
             logger.info(f"Starting orchestration for session {state.session_id}")
 
@@ -86,13 +90,32 @@ class OrchestratorAgent(BaseAgent):
             self.initialize_metadata(state)
 
             # Initial seed gathering and recommendation generation
+            step_start = datetime.now(timezone.utc)
             state = await self.perform_initial_generation(state)
+            orchestration_timings["initial_generation"] = (datetime.now(timezone.utc) - step_start).total_seconds()
 
             # Iterative improvement loop
+            step_start = datetime.now(timezone.utc)
             quality_evaluation = await self.perform_iterative_improvement(state)
+            orchestration_timings["iterative_improvement"] = (datetime.now(timezone.utc) - step_start).total_seconds()
 
             # Final processing and cleanup
+            step_start = datetime.now(timezone.utc)
             state = await self.perform_final_processing(state, quality_evaluation)
+            orchestration_timings["final_processing"] = (datetime.now(timezone.utc) - step_start).total_seconds()
+
+            # Store orchestration timings in state metadata
+            state.metadata["orchestration_timings"] = orchestration_timings
+            
+            # Enhance iterative_improvement timing with breakdown if available
+            if "iterative_improvement_timings" in state.metadata:
+                iterative_breakdown = state.metadata["iterative_improvement_timings"]
+                orchestration_timings["iterative_improvement"] = {
+                    "total": orchestration_timings["iterative_improvement"],
+                    "breakdown": iterative_breakdown
+                }
+                # Update the stored timings with the enhanced structure
+                state.metadata["orchestration_timings"] = orchestration_timings
 
             logger.info(
                 f"Orchestration completed with {len(state.recommendations)} unique recommendations "
@@ -102,6 +125,9 @@ class OrchestratorAgent(BaseAgent):
         except Exception as e:
             logger.error(f"Error in orchestration: {str(e)}", exc_info=True)
             state.set_error(f"Orchestration failed: {str(e)}")
+            # Store partial timings even on error
+            if orchestration_timings:
+                state.metadata["orchestration_timings"] = orchestration_timings
 
         return state
 
@@ -146,6 +172,12 @@ class OrchestratorAgent(BaseAgent):
         stalled_iterations = 0
         max_stalled = 1  # Stop after 1 iteration with no meaningful improvement (reduced from 2 for faster convergence)
 
+        # Initialize timing tracking for iterative improvement breakdown
+        iterative_timings = {
+            "quality_evaluation": 0.0,
+            "improvement_strategies": 0.0
+        }
+
         for iteration in range(self.max_iterations):
             # Check for cancellation before each iteration
             if state.status == RecommendationStatus.CANCELLED:
@@ -155,10 +187,12 @@ class OrchestratorAgent(BaseAgent):
             state.metadata["orchestration_iterations"] = iteration + 1
             
             # Evaluate quality and check for convergence
+            step_start = datetime.now(timezone.utc)
             quality_evaluation = await self.evaluate_quality_with_convergence(
                 state, iteration, previous_score, convergence_threshold,
                 stalled_iterations, max_stalled
             )
+            iterative_timings["quality_evaluation"] += (datetime.now(timezone.utc) - step_start).total_seconds()
             
             # Check for cancellation after evaluation
             if state.status == RecommendationStatus.CANCELLED:
@@ -177,7 +211,9 @@ class OrchestratorAgent(BaseAgent):
 
             # Apply improvement strategies
             previous_score = quality_evaluation['overall_score']
+            step_start = datetime.now(timezone.utc)
             state = await self.apply_improvement_strategies(state, iteration, quality_evaluation)
+            iterative_timings["improvement_strategies"] += (datetime.now(timezone.utc) - step_start).total_seconds()
             
             # Check for cancellation after applying improvements
             if state.status == RecommendationStatus.CANCELLED:
@@ -186,6 +222,9 @@ class OrchestratorAgent(BaseAgent):
 
             # Small delay between iterations
             await asyncio.sleep(0.1)
+
+        # Store iterative improvement timings in state metadata
+        state.metadata["iterative_improvement_timings"] = iterative_timings
 
         return quality_evaluation
 
