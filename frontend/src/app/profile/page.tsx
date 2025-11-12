@@ -20,8 +20,8 @@ function ProfilePageContent() {
         isLoading={isLoading}
         skeleton={<ProfileSkeleton />}
       >
-        <div className="h-screen pt-2 sm:pt-3 px-2 sm:px-3 overflow-hidden">
-          <div className="h-full max-w-7xl mx-auto flex flex-col">
+        <div className="h-[calc(100vh-4rem-2rem)] sm:h-[calc(100vh-4rem-3rem)] pt-2 sm:pt-3 pb-2 sm:pb-3 px-2 sm:px-3 overflow-hidden flex flex-col">
+          <div className="flex-1 min-h-0 max-w-7xl mx-auto w-full flex flex-col">
             <ProfileHeader spotifyProfile={spotifyProfile} />
             <ProfileStats stats={stats} />
             <ProfileDashboard dashboardData={dashboardData} isDashboardLoading={isDashboardLoading} spotifyProfile={spotifyProfile} />
