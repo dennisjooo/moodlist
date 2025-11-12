@@ -1,19 +1,14 @@
 """Spotify API tools for the agentic system."""
 
-from .tools import (
-    GetUserTopTracksTool,
-    GetUserTopArtistsTool,
-    CreatePlaylistTool,
-    AddTracksToPlaylistTool,
-    GetUserProfileTool,
+from .user_data import GetUserTopTracksTool, GetUserTopArtistsTool
+from .playlist_management import CreatePlaylistTool, AddTracksToPlaylistTool
+from .user_profile import GetUserProfileTool
+from .artist_search import (
     SearchSpotifyArtistsTool,
     GetSeveralSpotifyArtistsTool,
     GetArtistTopTracksTool,
     BatchGetArtistTopTracksTool,
 )
-
-# Also export utils for convenience
-from . import utils
 
 __all__ = [
     "GetUserTopTracksTool",
@@ -25,5 +20,5 @@ __all__ = [
     "GetSeveralSpotifyArtistsTool",
     "GetArtistTopTracksTool",
     "BatchGetArtistTopTracksTool",
-    "utils",
 ]
+

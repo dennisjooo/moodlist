@@ -5,8 +5,8 @@ from typing import Type
 
 from pydantic import BaseModel, Field
 
-from ..agent_tools import RateLimitedTool, ToolResult
-from ....core.constants import SpotifyEndpoints
+from .....core.constants import SpotifyEndpoints
+from ...agent_tools import RateLimitedTool, ToolResult
 
 
 logger = structlog.get_logger(__name__)
