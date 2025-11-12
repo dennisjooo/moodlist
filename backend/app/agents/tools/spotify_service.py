@@ -6,16 +6,16 @@ from typing import Dict, List, Optional, Any
 
 from ..core.cache import cache_manager
 from .agent_tools import AgentTools
-from .spotify.user_data import GetUserTopTracksTool, GetUserTopArtistsTool
-from .spotify.playlist_management import CreatePlaylistTool, AddTracksToPlaylistTool
-from .spotify.user_profile import GetUserProfileTool
-from .spotify.artist_search import (
+from .spotify.tools.user_data import GetUserTopTracksTool, GetUserTopArtistsTool
+from .spotify.tools.playlist_management import CreatePlaylistTool, AddTracksToPlaylistTool
+from .spotify.tools.user_profile import GetUserProfileTool
+from .spotify.tools.artist_search import (
     SearchSpotifyArtistsTool,
     GetSeveralSpotifyArtistsTool,
     GetArtistTopTracksTool,
     BatchGetArtistTopTracksTool,
 )
-from .spotify.track_search import SearchSpotifyTracksTool
+from .spotify.tools.track_search import SearchSpotifyTracksTool
 
 
 logger = structlog.get_logger(__name__)

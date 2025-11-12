@@ -5,7 +5,7 @@ from typing import List, Optional, Type
 
 from pydantic import BaseModel, Field
 
-from ..agent_tools import RateLimitedTool, ToolResult
+from ...agent_tools import RateLimitedTool, ToolResult
 
 
 logger = structlog.get_logger(__name__)
