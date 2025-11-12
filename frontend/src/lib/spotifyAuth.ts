@@ -12,11 +12,17 @@ export interface SpotifyAuthConfig {
 
 /**
  * Generate a random string for PKCE code verifier
+ * RFC 7636: Must be 43-128 characters using unreserved characters (A-Z, a-z, 0-9, -, ., _, ~)
  */
 function generateCodeVerifier(): string {
   const array = new Uint8Array(32);
   crypto.getRandomValues(array);
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  // Convert to base64url (RFC 7636 compliant)
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(array)));
+  return base64
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
 }
 
 /**
