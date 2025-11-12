@@ -80,10 +80,12 @@ JWT_ALGORITHM=HS256
 JWT_EXPIRATION_MINUTES=60
 JWT_REFRESH_EXPIRATION_DAYS=7
 
-# Spotify OAuth
+# Spotify OAuth (with PKCE support)
+# IMPORTANT: Use 127.0.0.1 instead of localhost for development
+# Spotify no longer supports localhost aliases as of November 2025
 SPOTIFY_CLIENT_ID=your-spotify-client-id
 SPOTIFY_CLIENT_SECRET=your-spotify-client-secret
-SPOTIFY_REDIRECT_URI=http://localhost:3000/callback
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/callback
 
 # LLM Provider (choose one or more)
 OPENAI_API_KEY=your-openai-key
@@ -136,9 +138,11 @@ npm install
 Create a `.env.local` file in the `frontend` directory:
 
 ```env
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+# IMPORTANT: Use 127.0.0.1 instead of localhost for development
+# Spotify no longer supports localhost aliases as of November 2025
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
 NEXT_PUBLIC_SPOTIFY_CLIENT_ID=your-spotify-client-id
-NEXT_PUBLIC_SPOTIFY_REDIRECT_URI=http://localhost:3000/callback
+NEXT_PUBLIC_SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/callback
 ```
 
 4. **Start the development server**
@@ -241,6 +245,11 @@ Once the backend is running, visit:
 
 ## Security
 
+- **OAuth 2.0 with PKCE**: Implements Authorization Code Flow with PKCE (Proof Key for Code Exchange) for secure Spotify authentication
+- **Spotify OAuth Compliance**: Updated for Spotify's November 2025 requirements
+  - Uses Authorization Code Flow with PKCE
+  - HTTPS redirect URIs for production
+  - Uses 127.0.0.1 instead of localhost for development
 - JWT-based authentication with refresh tokens
 - Encrypted Spotify credentials at rest
 - Session tracking with IP and user-agent

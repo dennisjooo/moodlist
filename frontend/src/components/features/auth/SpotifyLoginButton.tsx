@@ -16,7 +16,7 @@ export function SpotifyLoginButton({ className, children, showTooltip = true, on
     const [dialogOpen, setDialogOpen] = useState(false);
     const showLimitedAccess = config.access.isDevMode && config.access.showLimitedAccessNotice;
 
-    const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
+    const handleClick = async (event: MouseEvent<HTMLButtonElement>) => {
         onClick?.(event);
 
         if (event.isDefaultPrevented()) {
@@ -31,7 +31,7 @@ export function SpotifyLoginButton({ className, children, showTooltip = true, on
             event.preventDefault();
             setDialogOpen(true);
         } else {
-            initiateSpotifyAuth();
+            await initiateSpotifyAuth();
         }
     };
 

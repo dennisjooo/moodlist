@@ -25,29 +25,43 @@ async def exchange_token(
     request: Request,
     db: AsyncSession = Depends(get_db)
 ):
-    """Exchange authorization code for Spotify access tokens."""
+    """Exchange authorization code for Spotify access tokens with PKCE support."""
     logger.info("Exchanging authorization code for tokens")
 
-    # Get code from query parameters
+    # Get code and code_verifier from query parameters
     code = request.query_params.get("code")
+    code_verifier = request.query_params.get("code_verifier")
+
     if not code:
         raise ValidationException("Authorization code is required")
 
     # Validate required environment variables
-    if not settings.SPOTIFY_CLIENT_ID or not settings.SPOTIFY_CLIENT_SECRET:
-        logger.error("Spotify credentials not configured")
+    if not settings.SPOTIFY_CLIENT_ID:
+        logger.error("Spotify Client ID not configured")
         raise InternalServerError("Server configuration error")
 
     # Exchange code for tokens
     async with httpx.AsyncClient() as client:
         try:
+            # Prepare token request data
             data = {
                 "grant_type": "authorization_code",
                 "code": code,
                 "redirect_uri": settings.SPOTIFY_REDIRECT_URI,
                 "client_id": settings.SPOTIFY_CLIENT_ID,
-                "client_secret": settings.SPOTIFY_CLIENT_SECRET
             }
+
+            # Use PKCE if code_verifier is provided, otherwise use client_secret
+            if code_verifier:
+                data["code_verifier"] = code_verifier
+                logger.info("Using PKCE for token exchange")
+            else:
+                # Fallback to client_secret for backward compatibility
+                if not settings.SPOTIFY_CLIENT_SECRET:
+                    logger.error("Neither code_verifier nor client_secret provided")
+                    raise ValidationException("PKCE code_verifier is required")
+                data["client_secret"] = settings.SPOTIFY_CLIENT_SECRET
+                logger.info("Using client_secret for token exchange (legacy)")
 
             response = await client.post(
                 SpotifyEndpoints.TOKEN_URL,
@@ -73,7 +87,7 @@ async def exchange_token(
         except httpx.HTTPStatusError as e:
             logger.error("Token exchange failed", error=str(e), status_code=e.response.status_code)
             if e.response.status_code == 400:
-                raise ValidationException("Invalid authorization code or redirect URI")
+                raise ValidationException("Invalid authorization code, redirect URI, or PKCE verification failed")
             raise SpotifyAPIException("Failed to exchange authorization code")
         except Exception as e:
             logger.error("Unexpected error during token exchange", error=str(e))
