@@ -45,7 +45,7 @@ export function AboutTechStack() {
                                     <TechCard
                                         icon={<Code className="w-4 h-4 text-blue-600 dark:text-blue-400" />}
                                         name="Next.js 16"
-                                        description="App Router & React 18 for modern SSR experiences"
+                                        description="App Router & React 19 for modern SSR experiences"
                                         bgColor="blue"
                                     />
                                     <TechCard
