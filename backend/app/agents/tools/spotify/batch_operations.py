@@ -5,9 +5,10 @@ Spotify API data to reduce API calls and respect rate limits.
 """
 
 import structlog
-from typing import List, Dict, Any, Set, Callable, Awaitable
+from typing import List, Dict, Any, Set, Callable, Awaitable, Optional
 
 from .track_parsing import parse_track_data
+from .params_utils import build_market_params
 
 logger = structlog.get_logger(__name__)
 
@@ -19,8 +20,8 @@ async def batch_fetch_tracks(
     track_ids: List[str],
     make_request: Callable[[str, Dict[str, Any]], Awaitable[Dict[str, Any]]],
     access_token: str,
-    market: str,
-    track_ids_seen: Set[str],
+    market: Optional[str] = None,
+    track_ids_seen: Set[str] = None,
     filter_func: Callable[[Dict[str, Any]], bool] = None,
     max_results: int = None
 ) -> List[Dict[str, Any]]:
@@ -34,7 +35,7 @@ async def batch_fetch_tracks(
         make_request: Async function to make API requests
                      Signature: (endpoint: str, params: Dict) -> Dict
         access_token: Spotify access token
-        market: ISO 3166-1 alpha-2 country code
+        market: Optional ISO 3166-1 alpha-2 country code (None for global)
         track_ids_seen: Set of track IDs already processed (will be updated)
         filter_func: Optional function to filter tracks (returns True to include)
         max_results: Maximum number of tracks to return (None for all)
@@ -45,6 +46,9 @@ async def batch_fetch_tracks(
     if not track_ids:
         return []
     
+    if track_ids_seen is None:
+        track_ids_seen = set()
+    
     results = []
     
     # Process in batches of 50 (Spotify API limit)
@@ -52,12 +56,12 @@ async def batch_fetch_tracks(
         batch_ids = track_ids[i:i + SPOTIFY_BATCH_LIMIT]
         
         try:
+            # Build params using utility
+            params = build_market_params(market=market, ids=",".join(batch_ids))
+            
             response_data = await make_request(
                 "/tracks",
-                {
-                    "ids": ",".join(batch_ids),
-                    "market": market
-                }
+                params
             )
             
             if not response_data or "tracks" not in response_data:

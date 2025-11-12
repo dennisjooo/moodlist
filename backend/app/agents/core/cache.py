@@ -489,23 +489,38 @@ class CacheManager:
         ttl = self.default_ttl["top_artists"]
         await self.cache.set(key, artists, ttl)
 
+    def _normalize_market_for_cache(self, market: Optional[str]) -> str:
+        """Normalize market parameter for cache key generation.
+        
+        Converts None to "global" for consistent cache keys.
+        
+        Args:
+            market: Optional ISO 3166-1 alpha-2 country code (None for global)
+            
+        Returns:
+            Market code or "global" if None
+        """
+        return market if market is not None else "global"
+
     async def get_artist_top_tracks_cache(
         self,
         artist_id: str,
-        market: str = "US"
+        market: Optional[str] = None
     ) -> Optional[List[Dict[str, Any]]]:
         """Get cached Spotify top tracks for an artist."""
-        key = self._make_cache_key("artist_top_tracks", artist_id, market)
+        cache_market = self._normalize_market_for_cache(market)
+        key = self._make_cache_key("artist_top_tracks", artist_id, cache_market)
         return await self.cache.get(key)
 
     async def set_artist_top_tracks_cache(
         self,
         artist_id: str,
         tracks: List[Dict[str, Any]],
-        market: str = "US"
+        market: Optional[str] = None
     ) -> None:
         """Cache Spotify top tracks for an artist."""
-        key = self._make_cache_key("artist_top_tracks", artist_id, market)
+        cache_market = self._normalize_market_for_cache(market)
+        key = self._make_cache_key("artist_top_tracks", artist_id, cache_market)
         ttl = self.default_ttl["artist_top_tracks"]
         await self.cache.set(key, tracks, ttl)
 

@@ -534,7 +534,6 @@ class UserAnchorStrategy(RecommendationStrategy):
             prefetched_top_tracks_map = await self.spotify_service.get_artist_top_tracks_batch(
                 access_token=access_token,
                 artist_ids=artist_ids,
-                market="US",
             )
         
         return artist_id_map, prefetched_top_tracks_map

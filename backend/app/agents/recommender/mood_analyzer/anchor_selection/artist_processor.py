@@ -237,7 +237,6 @@ class ArtistProcessor:
         prefetched_tracks = await self.spotify_service.get_artist_top_tracks_batch(
             access_token=access_token,
             artist_ids=artist_ids,
-            market="US",
             max_concurrency=3,  # Conservative concurrency to avoid rate limits
         )
 
