@@ -23,13 +23,6 @@ export function QuickActions({ spotifyProfile }: QuickActionsProps) {
             className: 'bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70'
         },
         {
-            icon: List,
-            label: 'View All Playlists',
-            description: 'Browse your collection',
-            onClick: () => router.push('/playlists'),
-            variant: 'outline' as const
-        },
-        {
             icon: ExternalLink,
             label: 'View Spotify Profile',
             description: 'Open your Spotify profile',

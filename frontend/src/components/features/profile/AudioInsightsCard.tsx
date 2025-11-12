@@ -46,32 +46,32 @@ export function AudioInsightsCard({ insights }: AudioInsightsCardProps) {
 
     return (
         <Card>
-            <CardHeader className="pb-3">
-                <CardTitle className="flex items-center space-x-2 text-base">
-                    <BarChart3 className="w-4 h-4" />
+            <CardHeader className="pb-2">
+                <CardTitle className="flex items-center space-x-2 text-sm">
+                    <BarChart3 className="w-3.5 h-3.5" />
                     <span>Audio Insights</span>
                 </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-                <div className="grid grid-cols-3 gap-2">
+            <CardContent className="space-y-2">
+                <div className="grid grid-cols-3 gap-1.5">
                     {features.map((feature) => {
                         const Icon = feature.icon;
                         const percentage = feature.value * 100;
 
                         return (
-                            <div key={feature.name} className="space-y-1">
+                            <div key={feature.name} className="space-y-0.5">
                                 <div className="flex items-center gap-1">
-                                    <Icon className="w-3 h-3 text-muted-foreground" />
-                                    <span className="text-xs font-medium">{feature.name}</span>
+                                    <Icon className="w-2.5 h-2.5 text-muted-foreground" />
+                                    <span className="text-[10px] font-medium">{feature.name}</span>
                                 </div>
                                 <div className="text-right">
-                                    <span className={`text-lg font-bold ${getFeatureColor(feature.value)}`}>
+                                    <span className={`text-sm font-bold ${getFeatureColor(feature.value)}`}>
                                         {getFeatureLabel(feature.value)}
                                     </span>
                                 </div>
-                                <div className="w-full bg-muted rounded-full h-1.5">
+                                <div className="w-full bg-muted rounded-full h-1">
                                     <div
-                                        className="h-1.5 rounded-full bg-gradient-to-r from-primary/50 to-primary transition-all"
+                                        className="h-1 rounded-full bg-gradient-to-r from-primary/50 to-primary transition-all"
                                         style={{ width: `${percentage}%` }}
                                     />
                                 </div>
@@ -81,8 +81,8 @@ export function AudioInsightsCard({ insights }: AudioInsightsCardProps) {
                 </div>
 
                 {totalEnergy > 0 && (
-                    <div className="pt-3 border-t">
-                        <div className="grid grid-cols-3 gap-2">
+                    <div className="pt-2 border-t">
+                        <div className="grid grid-cols-3 gap-1.5">
                             {Object.entries(insights.energy_distribution).map(([level, count]) => {
                                 const levelPercentage = totalEnergy > 0 ? (count / totalEnergy) * 100 : 0;
                                 const levelColors = {
@@ -94,11 +94,11 @@ export function AudioInsightsCard({ insights }: AudioInsightsCardProps) {
                                 return (
                                     <div
                                         key={level}
-                                        className={`p-2 rounded-lg border text-center ${levelColors[level as keyof typeof levelColors]}`}
+                                        className={`p-1.5 rounded-md border text-center ${levelColors[level as keyof typeof levelColors]}`}
                                     >
-                                        <div className="text-lg font-bold">{count}</div>
-                                        <div className="text-xs capitalize">{level}</div>
-                                        <div className="text-xs opacity-75">{levelPercentage.toFixed(0)}%</div>
+                                        <div className="text-sm font-bold">{count}</div>
+                                        <div className="text-[10px] capitalize leading-tight">{level}</div>
+                                        <div className="text-[10px] opacity-75 leading-tight">{levelPercentage.toFixed(0)}%</div>
                                     </div>
                                 );
                             })}
