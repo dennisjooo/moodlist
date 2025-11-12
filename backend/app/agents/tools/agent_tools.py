@@ -13,6 +13,7 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
 from ..core.cache import cache_manager
+from .rate_limit_handlers import handle_rate_limit_error
 
 
 
@@ -292,16 +293,16 @@ class BaseAPITool(BaseTool, ABC):
                     continue
 
                 # Handle 429 rate limits with aggressive backoff
-                if e.response.status_code == 429 and attempt < self.max_retries - 1:
-                    retry_after = e.response.headers.get("Retry-After")
-                    if retry_after:
-                        wait_time = float(retry_after)
-                    else:
-                        # Aggressive exponential backoff: 2s, 8s, 32s
-                        wait_time = (2 ** (attempt + 1)) * 2.0
-                    logger.warning(f"Rate limit (429) when calling {self.name}, retrying in {wait_time}s...")
-                    await asyncio.sleep(wait_time)
-                    continue
+                if e.response.status_code == 429:
+                    rate_limit_error, should_continue = await handle_rate_limit_error(
+                        e, attempt, self.max_retries, self.name
+                    )
+                    if rate_limit_error:
+                        last_exception = rate_limit_error
+                        break
+                    if should_continue:
+                        continue
+                    # Otherwise, fall through to fail
 
                 last_exception = APIError(
                     f"HTTP {e.response.status_code}: {str(e)}",
@@ -462,6 +463,7 @@ class RateLimitedTool(BaseAPITool):
         self._last_cleanup = datetime.now(timezone.utc)
         self._request_count = 0
         self._last_request_time: Optional[datetime] = None
+        self._interval_lock = asyncio.Lock()  # Protect _last_request_time from race conditions
 
     async def _check_rate_limit(self):
         """Check if we're within rate limits."""
@@ -573,12 +575,17 @@ class RateLimitedTool(BaseAPITool):
 
             try:
                 # Check minimum interval since last request (only for cache misses)
-                if hasattr(self, '_last_request_time') and self._last_request_time and self.min_request_interval > 0:
-                    elapsed = (datetime.now(timezone.utc) - self._last_request_time).total_seconds()
-                    if elapsed < self.min_request_interval:
-                        wait_time = self.min_request_interval - elapsed
-                        logger.debug(f"Enforcing minimum interval for {self.name}, waiting {wait_time:.2f}s")
-                        await asyncio.sleep(wait_time)
+                # Use lock to prevent race conditions with concurrent requests
+                async with self._interval_lock:
+                    if hasattr(self, '_last_request_time') and self._last_request_time and self.min_request_interval > 0:
+                        elapsed = (datetime.now(timezone.utc) - self._last_request_time).total_seconds()
+                        if elapsed < self.min_request_interval:
+                            wait_time = self.min_request_interval - elapsed
+                            logger.debug(f"Enforcing minimum interval for {self.name}, waiting {wait_time:.2f}s")
+                            await asyncio.sleep(wait_time)
+                    
+                    # Update last request time immediately to block other concurrent requests
+                    self._last_request_time = datetime.now(timezone.utc)
 
                 await self._check_rate_limit()
 
@@ -606,7 +613,7 @@ class RateLimitedTool(BaseAPITool):
                 if use_cache:
                     await self._cache_response(cache_key, response, cache_ttl)
 
-                self._last_request_time = datetime.now(timezone.utc)  # Track request time
+                # Note: _last_request_time is already updated at the start to prevent race conditions
                 await self._record_request()
 
                 # Set the result for other waiting requests

@@ -415,15 +415,19 @@ class SpotifyService:
                 batch_tool, pending_ids, access_token, market, max_concurrency, results
             )
 
-        # Fallback for any unresolved artists (parallelized)
+        # Fallback for any unresolved artists (with concurrency control)
         if pending_ids:
+            # Use semaphore to limit concurrent requests and respect rate limits
+            fallback_semaphore = asyncio.Semaphore(max(1, max_concurrency))
+            
             async def fetch_fallback(artist_id: str):
-                tracks = await self.get_artist_top_tracks(
-                    access_token=access_token,
-                    artist_id=artist_id,
-                    market=market,
-                )
-                return artist_id, tracks
+                async with fallback_semaphore:
+                    tracks = await self.get_artist_top_tracks(
+                        access_token=access_token,
+                        artist_id=artist_id,
+                        market=market,
+                    )
+                    return artist_id, tracks
 
             fallback_tasks = [fetch_fallback(artist_id) for artist_id in pending_ids]
             fallback_results = await asyncio.gather(*fallback_tasks, return_exceptions=True)
@@ -558,16 +562,10 @@ class SpotifyService:
             raise ValueError("Get artist top tracks tool not available")
 
         try:
-            # Only fetch individually if prefetched is None (not provided at all)
-            # If prefetched is empty list, use it as-is to avoid rate limits from individual calls
-            if prefetched_top_tracks is None:
-                # Only make individual call if no prefetch was attempted
-                prefetched_top_tracks = await self.get_artist_top_tracks(
-                    access_token=access_token,
-                    artist_id=artist_id,
-                    market=market
-                )
-            prefetch_payload = prefetched_top_tracks if prefetched_top_tracks is not None else None
+            # Use prefetched tracks if provided, otherwise use empty list
+            # This avoids individual API calls that can cause rate limits
+            # The hybrid strategy will work with just album tracks if needed
+            prefetch_payload = prefetched_top_tracks if prefetched_top_tracks is not None else []
 
             tracks = await tool.get_hybrid_tracks(
                 access_token=access_token,
@@ -588,13 +586,14 @@ class SpotifyService:
 
         except Exception as e:
             logger.error(f"Failed to get hybrid tracks for artist {artist_id}: {e}")
-            # Fallback to regular top tracks if hybrid strategy fails
-            logger.info("Falling back to regular top tracks")
-            return await self.get_artist_top_tracks(
-                access_token=access_token,
-                artist_id=artist_id,
-                market=market
-            )
+            # If we have prefetched tracks, return them; otherwise return empty list
+            # Avoid individual API calls on error to prevent rate limits
+            if prefetched_top_tracks:
+                logger.info(f"Returning {len(prefetched_top_tracks)} prefetched tracks as fallback")
+                return prefetched_top_tracks[:target_count]
+            else:
+                logger.warning(f"No tracks available for artist {artist_id} after hybrid strategy failure")
+                return []
 
     async def search_spotify_tracks(
         self,
