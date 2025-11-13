@@ -237,6 +237,11 @@ class WorkflowAPI {
             tracks_added: number;
             tracks_removed: number;
         };
+        cover_upload_retry?: {
+            attempted: boolean;
+            success: boolean;
+            message: string;
+        };
         recommendations?: Array<{
             track_id: string;
             track_name: string;
