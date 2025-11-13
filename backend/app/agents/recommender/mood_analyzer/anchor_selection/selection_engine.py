@@ -157,8 +157,9 @@ class AnchorSelectionEngine:
         
         genre_task = None
         if genre_keywords:
+            # PERFORMANCE: Reduced from 8 to 4 genres for faster anchor selection
             genre_task = self._get_genre_based_candidates(
-                genre_keywords[:8], target_features, access_token, mood_prompt, temporal_context,
+                genre_keywords[:4], target_features, access_token, mood_prompt, temporal_context,
                 skip_audio_features=True  # Skip audio features, we'll fetch them all together
             )
         
@@ -409,7 +410,7 @@ class AnchorSelectionEngine:
         
         if genre_keywords:
             genre_task = self._get_genre_based_candidates(
-                genre_keywords[:5], target_features, access_token, mood_prompt
+                genre_keywords[:4], target_features, access_token, mood_prompt
             )
         
         # Execute artist and genre gathering in parallel
