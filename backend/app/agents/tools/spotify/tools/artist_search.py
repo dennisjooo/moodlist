@@ -192,9 +192,9 @@ class BatchGetArtistTopTracksTool(RateLimitedTool):
 
         unique_artist_ids = list(dict.fromkeys(artist_ids))
         
-        # Use semaphore to control concurrency (2 concurrent requests to work with rate limiter)
-        # With min_request_interval=1.2s, this ensures we don't overwhelm the rate limiter
-        semaphore = asyncio.Semaphore(2)
+        # Use semaphore to control concurrency (increased from 2 to 4 concurrent requests)
+        # Works with global rate limiter to prevent overload
+        semaphore = asyncio.Semaphore(4)
         
         async def fetch_artist_tracks(artist_id: str) -> Tuple[str, List[Dict[str, Any]]]:
             """Fetch tracks for a single artist."""
