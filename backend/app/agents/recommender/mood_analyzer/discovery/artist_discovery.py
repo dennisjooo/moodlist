@@ -77,12 +77,12 @@ class ArtistDiscovery:
 
             # Fallback: use general search keywords if both sources failed
             if not all_artists and search_keywords:
-                for keyword in search_keywords[:5]:
+                for keyword in search_keywords[: config.fallback_search_keyword_limit]:
                     try:
                         artists = await self.spotify_service.search_spotify_artists(
                             access_token=access_token,
                             query=keyword,
-                            limit=12
+                            limit=config.fallback_artist_search_limit
                         )
                         all_artists.extend(artists)
                     except Exception as e:
@@ -104,7 +104,7 @@ class ArtistDiscovery:
             logger.info(f"After heuristic pruning: {len(pruned_artists)} artists (from {len(unique_artists)})")
 
             # Use LLM to filter artists based on cultural/genre relevance
-            if self.llm and len(pruned_artists) > 10:
+            if self.llm and len(pruned_artists) > config.llm_batch_validation_trigger:
                 # Use batch LLM validation for efficiency and better context
                 filtered_artists = await self._llm_batch_validate_artists(
                     pruned_artists, state.mood_prompt, mood_analysis
@@ -112,7 +112,7 @@ class ArtistDiscovery:
                 logger.info(f"After LLM batch validation: {len(filtered_artists)} artists")
 
                 # If LLM returns too few, fall back to the original LLM filtering method
-                if len(filtered_artists) < 5:
+                if len(filtered_artists) < config.llm_minimum_filtered_artists:
                     logger.warning("LLM batch validation returned too few artists, using fallback")
                     filtered_artists = await self._llm_filter_artists(
                         pruned_artists, state.mood_prompt, mood_analysis
@@ -124,7 +124,7 @@ class ArtistDiscovery:
                     pruned_artists,
                     key=lambda x: x.get("popularity") or 0,
                     reverse=True
-                )[:20]  # Increased from 8 to 20 for maximum diversity
+                )[: config.artist_discovery_result_limit]
 
             # Store in state metadata
             state.metadata["discovered_artists"] = [
@@ -163,7 +163,7 @@ class ArtistDiscovery:
         try:
             # Prepare artist summary for LLM
             artists_summary = []
-            for i, artist in enumerate(artists[:20], 1):  # Limit to 20 for LLM context
+            for i, artist in enumerate(artists[: config.artist_discovery_result_limit], 1):
                 genres_str = ", ".join(artist.get("genres", [])[:3]) or "no genres listed"
                 artists_summary.append(
                     f"{i}. {artist.get('name')} - Genres: {genres_str}, Popularity: {artist.get('popularity', 50)}"
@@ -181,15 +181,23 @@ class ArtistDiscovery:
             
             if not filtered_artists:
                 logger.warning("No valid artists selected by LLM, falling back to popularity-based selection")
-                return sorted(artists, key=lambda x: x.get("popularity") or 0, reverse=True)[:20]
+                return sorted(
+                    artists,
+                    key=lambda x: x.get("popularity") or 0,
+                    reverse=True
+                )[: config.artist_discovery_result_limit]
             
             logger.info(f"LLM selected {len(filtered_artists)} artists")
-            return filtered_artists[:20]  # Increased from 12 to 20 for max diversity
+            return filtered_artists[: config.artist_discovery_result_limit]
 
         except Exception as e:
             logger.error(f"LLM artist filtering failed with unexpected error: {str(e)}")
             # Fallback to popularity-based selection
-            return sorted(artists, key=lambda x: x.get("popularity") or 0, reverse=True)[:20]  # Increased from 12 to 20
+            return sorted(
+                artists,
+                key=lambda x: x.get("popularity") or 0,
+                reverse=True
+            )[: config.artist_discovery_result_limit]
 
     def _parse_llm_artist_response(
         self,
@@ -256,14 +264,14 @@ class ArtistDiscovery:
         """
         llm_artists = []
         
-        # Search for artists by name (reduced from 10 to 8 for 50% weight)
-        for artist_name in artist_recommendations[:8]:
+        # Search for artists by name
+        for artist_name in artist_recommendations[: config.artist_recommendation_limit]:
             try:
                 logger.info(f"Searching for LLM-suggested artist: {artist_name}")
                 artists = await self.spotify_service.search_spotify_artists(
                     access_token=access_token,
                     query=artist_name,
-                    limit=3  # Keep at 3 per artist to avoid exact duplicates
+                    limit=config.artist_search_limit
                 )
                 llm_artists.extend(artists)
             except Exception as e:
@@ -297,7 +305,7 @@ class ArtistDiscovery:
                 direct_artists = await self.spotify_service.search_artists_by_genre(
                     access_token=access_token,
                     genre=genre,
-                    limit=20  # Reduced for performance
+                    limit=config.genre_artist_search_limit
                 )
                 
                 # Also search tracks for additional artist discovery
@@ -305,7 +313,7 @@ class ArtistDiscovery:
                 track_artists = await self.spotify_service.search_tracks_for_artists(
                     access_token=access_token,
                     query=f"genre:{genre}",
-                    limit=15  # Reduced for performance
+                    limit=config.genre_track_search_limit
                 )
                 
                 return direct_artists + track_artists
@@ -314,8 +322,8 @@ class ArtistDiscovery:
                 logger.error(f"Failed to search for genre '{genre}': {e}")
                 return []
         
-        # Process up to 6 genres in parallel for performance
-        genres_to_search = genre_keywords[:6]
+        # Process genres in parallel using configured limit
+        genres_to_search = genre_keywords[: config.genre_anchor_search_limit]
         results = await asyncio.gather(
             *[search_genre(genre) for genre in genres_to_search],
             return_exceptions=True
@@ -391,7 +399,7 @@ class ArtistDiscovery:
                 f"LLM batch validation: kept {len(all_validated)}/{len(artists)} artists"
             )
             
-            return all_validated[:20]  # Return top 20 for diversity
+            return all_validated[: config.artist_discovery_result_limit]
         
         except Exception as e:
             logger.error(f"LLM batch artist validation failed: {e}")
@@ -415,7 +423,7 @@ class ArtistDiscovery:
         Returns:
             Pruned list of artists
         """
-        if len(artists) <= 15:
+        if len(artists) <= config.heuristic_pruning_min_artists:
             # Not enough artists to warrant pruning
             return artists
 
@@ -428,7 +436,7 @@ class ArtistDiscovery:
             popularity = artist.get("popularity")
             if popularity is None:
                 popularity = 0
-            if popularity < 15:
+            if popularity < config.heuristic_min_artist_popularity:
                 logger.debug(f"Filtered artist {artist.get('name')} - low popularity: {popularity}")
                 continue
 
@@ -458,7 +466,7 @@ class ArtistDiscovery:
 
         # Take top 30 after heuristic pruning (down from potentially 50+)
         # This gives LLM a more manageable list while preserving variety
-        pruned = pruned[:30]
+        pruned = pruned[: config.heuristic_pruned_artist_limit]
 
         logger.info(
             f"Heuristic pruning: {len(artists)} → {len(pruned)} artists "
