@@ -3,6 +3,8 @@
 This module provides backward compatibility while using the new modular anchor selection engine.
 """
 from typing import List, Dict, Any
+
+from ...utils.config import config
 from .selection_engine import AnchorSelectionEngine
 
 
@@ -31,7 +33,7 @@ class AnchorTrackSelector:
         mood_prompt: str = "",
         artist_recommendations: List[str] = None,
         mood_analysis: Dict[str, Any] = None,
-        limit: int = 5,
+        limit: int = config.anchor_track_limit,
         user_mentioned_artists: List[str] = None
     ) -> tuple[List[Dict[str, Any]], List[str]]:
         """
