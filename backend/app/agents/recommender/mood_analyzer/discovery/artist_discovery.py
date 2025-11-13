@@ -293,17 +293,19 @@ class ArtistDiscovery:
                 logger.info(f"Searching artists for genre: {genre}")
                 
                 # Direct artist search by genre (NEW - primary method)
+                # PERFORMANCE: Reduced from 40 to 20 artists per genre
                 direct_artists = await self.spotify_service.search_artists_by_genre(
                     access_token=access_token,
                     genre=genre,
-                    limit=40  # Get more artists per genre
+                    limit=20  # Reduced for performance
                 )
                 
                 # Also search tracks for additional artist discovery
+                # PERFORMANCE: Reduced from 30 to 15 tracks per genre
                 track_artists = await self.spotify_service.search_tracks_for_artists(
                     access_token=access_token,
                     query=f"genre:{genre}",
-                    limit=30  # Increased from 20
+                    limit=15  # Reduced for performance
                 )
                 
                 return direct_artists + track_artists
@@ -312,8 +314,8 @@ class ArtistDiscovery:
                 logger.error(f"Failed to search for genre '{genre}': {e}")
                 return []
         
-        # Process up to 10 genres in parallel
-        genres_to_search = genre_keywords[:10]
+        # Process up to 6 genres in parallel for performance
+        genres_to_search = genre_keywords[:6]
         results = await asyncio.gather(
             *[search_genre(genre) for genre in genres_to_search],
             return_exceptions=True
