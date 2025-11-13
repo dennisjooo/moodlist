@@ -110,15 +110,23 @@ class PlaylistSyncService:
 
             # Update playlist in database using repository update method
             await self.playlist_repository.update(playlist.id, **update_data)
+            
+            # Retry cover upload if needed
+            cover_retry_result = await self._retry_cover_upload_if_needed(
+                playlist,
+                access_token
+            )
 
             self.logger.info(
                 "Successfully synced playlist from Spotify",
                 session_id=session_id,
                 old_count=len(current_recommendations),
-                new_count=len(updated_recommendations)
+                new_count=len(updated_recommendations),
+                cover_retry_attempted=cover_retry_result["attempted"],
+                cover_retry_success=cover_retry_result["success"]
             )
 
-            return {
+            result = {
                 "session_id": session_id,
                 "synced": True,
                 "changes": {
@@ -130,6 +138,15 @@ class PlaylistSyncService:
                 "recommendations": updated_recommendations,
                 "playlist_data": playlist.playlist_data
             }
+            
+            # Include cover retry info if it was attempted
+            if cover_retry_result["attempted"]:
+                result["cover_upload_retry"] = {
+                    "success": cover_retry_result["success"],
+                    "message": cover_retry_result["message"]
+                }
+            
+            return result
 
         except SpotifyAPIException as e:
             self.logger.error(
@@ -186,6 +203,109 @@ class PlaylistSyncService:
             offset += limit
 
         return all_tracks
+
+    async def _retry_cover_upload_if_needed(
+        self,
+        playlist,
+        access_token: str
+    ) -> Dict[str, Any]:
+        """Retry cover upload if it failed during playlist creation.
+        
+        Args:
+            playlist: Playlist model instance
+            access_token: Spotify access token
+            
+        Returns:
+            Dict with retry status and result
+        """
+        result = {
+            "attempted": False,
+            "success": False,
+            "message": None
+        }
+        
+        # Check if playlist needs cover retry
+        playlist_data = playlist.playlist_data or {}
+        needs_retry = playlist_data.get("needs_cover_retry", False)
+        pending_colors = playlist_data.get("pending_cover_colors")
+        
+        if not needs_retry or not pending_colors:
+            return result
+        
+        result["attempted"] = True
+        
+        try:
+            self.logger.info(
+                "Attempting to retry cover upload",
+                playlist_id=playlist.spotify_playlist_id,
+                session_id=playlist.session_id
+            )
+            
+            # Import required services
+            from app.services.cover_image_generator import CoverImageGenerator
+            from app.agents.tools.spotify_service import SpotifyService
+            
+            # Generate cover image
+            cover_generator = CoverImageGenerator()
+            cover_base64 = cover_generator.generate_cover_base64(
+                primary_color=pending_colors["primary"],
+                secondary_color=pending_colors["secondary"],
+                tertiary_color=pending_colors["tertiary"],
+                style=pending_colors.get("style", "modern")
+            )
+            
+            # Upload to Spotify
+            spotify_service = SpotifyService()
+            success = await spotify_service.upload_playlist_cover_image(
+                access_token=access_token,
+                playlist_id=playlist.spotify_playlist_id,
+                image_base64=cover_base64
+            )
+            
+            if success:
+                # Update playlist metadata to mark success
+                updated_playlist_data = playlist_data.copy()
+                updated_playlist_data["custom_cover_uploaded"] = True
+                updated_playlist_data["needs_cover_retry"] = False
+                updated_playlist_data.pop("pending_cover_colors", None)
+                updated_playlist_data.pop("cover_upload_error", None)
+                
+                await self.playlist_repository.update(
+                    playlist.id,
+                    playlist_data=updated_playlist_data
+                )
+                
+                result["success"] = True
+                result["message"] = "Cover image uploaded successfully"
+                
+                self.logger.info(
+                    "Successfully uploaded cover during sync retry",
+                    playlist_id=playlist.spotify_playlist_id,
+                    session_id=playlist.session_id
+                )
+            else:
+                result["success"] = False
+                result["message"] = "Cover upload failed, will retry on next sync"
+                
+                self.logger.warning(
+                    "Cover upload retry failed during sync",
+                    playlist_id=playlist.spotify_playlist_id,
+                    session_id=playlist.session_id
+                )
+                
+        except Exception as e:
+            result["success"] = False
+            result["message"] = f"Cover upload error: {str(e)}"
+            
+            self.logger.error(
+                "Error during cover upload retry",
+                playlist_id=playlist.spotify_playlist_id,
+                session_id=playlist.session_id,
+                error=str(e),
+                exc_info=True
+            )
+        
+        return result
 
     def _build_updated_recommendations(
         self,

@@ -720,39 +720,93 @@ class SpotifyService:
         self,
         access_token: str,
         playlist_id: str,
-        image_base64: str
+        image_base64: str,
+        max_retries: int = 3
     ) -> bool:
         """Upload a custom cover image to a Spotify playlist.
+        
+        According to Spotify API docs:
+        - Endpoint: PUT /playlists/{playlist_id}/images
+        - Body: Base64 encoded JPEG image data
+        - Content-Type: image/jpeg
+        - Max payload size: 256 KB
+        - Required scopes: ugc-image-upload, playlist-modify-public/private
 
         Args:
             access_token: Spotify access token
             playlist_id: Spotify playlist ID
-            image_base64: Base64-encoded JPEG image data
+            image_base64: Base64-encoded JPEG image data (string)
+            max_retries: Maximum number of retry attempts for transient errors
 
         Returns:
             Whether the upload was successful
         """
         import aiohttp
+        import asyncio
         
         url = f"https://api.spotify.com/v1/playlists/{playlist_id}/images"
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "image/jpeg"
         }
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.put(url, headers=headers, data=image_base64) as response:
-                    if response.status == 202:
-                        logger.info(f"Successfully uploaded cover image to playlist {playlist_id}")
-                        return True
-                    else:
-                        error_text = await response.text()
-                        logger.error(f"Failed to upload cover image: {response.status} - {error_text}")
-                        return False
-        except Exception as e:
-            logger.error(f"Error uploading playlist cover image: {str(e)}", exc_info=True)
+        
+        # Verify payload size (Spotify limit is 256 KB for base64 string)
+        payload_size_kb = len(image_base64) / 1024
+        if payload_size_kb > 256:
+            logger.error(f"Image payload size ({payload_size_kb:.1f}KB) exceeds Spotify's 256KB limit")
             return False
+        
+        logger.debug(f"Uploading cover image: {payload_size_kb:.1f}KB base64 payload")
+
+        for attempt in range(max_retries):
+            try:
+                # Create session with longer timeout for image uploads
+                timeout = aiohttp.ClientTimeout(total=30, connect=10)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.put(url, headers=headers, data=image_base64) as response:
+                        if response.status == 202:
+                            logger.info(f"Successfully uploaded cover image to playlist {playlist_id}")
+                            return True
+                        elif response.status in [502, 503, 504] and attempt < max_retries - 1:
+                            # Retry on gateway/server errors (common on Railway/cloud deployments)
+                            wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                            error_text = await response.text()
+                            logger.warning(
+                                f"Transient error uploading cover image (attempt {attempt + 1}/{max_retries}): "
+                                f"{response.status} - {error_text}. Retrying in {wait_time}s..."
+                            )
+                            await asyncio.sleep(wait_time)
+                            continue
+                        else:
+                            error_text = await response.text()
+                            logger.error(f"Failed to upload cover image: {response.status} - {error_text}")
+                            return False
+            except asyncio.TimeoutError:
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    logger.warning(
+                        f"Timeout uploading cover image (attempt {attempt + 1}/{max_retries}). "
+                        f"Retrying in {wait_time}s..."
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
+                else:
+                    logger.error(f"Timeout uploading playlist cover image after {max_retries} attempts")
+                    return False
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    logger.warning(
+                        f"Exception uploading cover image (attempt {attempt + 1}/{max_retries}): {str(e)}. "
+                        f"Retrying in {wait_time}s..."
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
+                else:
+                    logger.error(f"Error uploading playlist cover image after {max_retries} attempts: {str(e)}", exc_info=True)
+                    return False
+        
+        return False
 
     def get_available_tools(self) -> List[str]:
         """Get list of available Spotify tools.

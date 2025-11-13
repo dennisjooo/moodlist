@@ -77,7 +77,12 @@ export interface WorkflowContextType {
         message: string;
         already_saved?: boolean;
     }>;
-    syncFromSpotify: () => Promise<{ synced: boolean; message?: string; changes?: { tracks_added: number; tracks_removed: number } }>;
+    syncFromSpotify: () => Promise<{
+        synced: boolean;
+        message?: string;
+        changes?: { tracks_added: number; tracks_removed: number };
+        cover_upload_retry?: { attempted: boolean; success: boolean; message: string };
+    }>;
     clearError: () => void;
 }
 
