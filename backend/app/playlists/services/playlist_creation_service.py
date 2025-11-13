@@ -164,15 +164,34 @@ class PlaylistCreationService:
             if success:
                 logger.info(f"Successfully uploaded custom cover image to playlist {playlist_id}")
                 state.metadata["custom_cover_uploaded"] = True
+                state.metadata["needs_cover_retry"] = False
             else:
                 logger.warning(f"Failed to upload custom cover image to playlist {playlist_id}")
                 state.metadata["custom_cover_uploaded"] = False
+                state.metadata["needs_cover_retry"] = True
+                # Store color scheme for retry during sync
+                state.metadata["pending_cover_colors"] = {
+                    "primary": color_scheme["primary"],
+                    "secondary": color_scheme["secondary"],
+                    "tertiary": color_scheme["tertiary"],
+                    "style": self.cover_style
+                }
 
         except Exception as e:
             # Don't fail the entire playlist creation if cover upload fails
             logger.error(f"Error uploading cover image: {str(e)}", exc_info=True)
             state.metadata["custom_cover_uploaded"] = False
+            state.metadata["needs_cover_retry"] = True
             state.metadata["cover_upload_error"] = str(e)
+            # Store color scheme for retry during sync
+            if "color_scheme" in state.mood_analysis:
+                color_scheme = state.mood_analysis["color_scheme"]
+                state.metadata["pending_cover_colors"] = {
+                    "primary": color_scheme["primary"],
+                    "secondary": color_scheme["secondary"],
+                    "tertiary": color_scheme["tertiary"],
+                    "style": self.cover_style
+                }
 
     def get_playlist_summary(self, state: AgentState):
         """Get a summary of the created playlist.
