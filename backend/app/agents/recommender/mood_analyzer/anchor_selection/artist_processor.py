@@ -4,6 +4,7 @@ import asyncio
 import structlog
 from typing import Any, Dict, List, Optional
 
+from ...utils.config import config
 from .track_processor import TrackProcessor
 
 logger = structlog.get_logger(__name__)
@@ -106,11 +107,12 @@ class ArtistProcessor:
                 logger.info(f"✓ Detected user-mentioned artist for anchor search: {artist}")
             else:
                 other_artists.append(artist)
-        # CRITICAL: Process ALL user-mentioned artists first (no limit), then other artists
-        artists_to_process = mentioned_artists + other_artists[:max(0, 8 - len(mentioned_artists))]
+        # PERFORMANCE: Process ALL user-mentioned artists first (no limit), then other artists
+        max_artists = config.artist_anchor_processing_limit
+        artists_to_process = mentioned_artists + other_artists[:max(0, max_artists - len(mentioned_artists))]
         
         logger.info(
-            f"Processing {len(artists_to_process)} artists for anchors: "
+            f"Processing {len(artists_to_process)} artists for anchors (limit: {max_artists}): "
             f"{len(mentioned_artists)} user-mentioned + {len(artists_to_process) - len(mentioned_artists)} others"
         )
 
@@ -142,7 +144,7 @@ class ArtistProcessor:
                 artists = await self.spotify_service.search_spotify_artists(
                     access_token=access_token,
                     query=artist_name,
-                    limit=3
+                    limit=config.artist_search_limit
                 )
 
                 if not artists:
@@ -175,8 +177,8 @@ class ArtistProcessor:
                 logger.warning(f"Failed to search for artist '{artist_name}': {e}")
                 return None
 
-        # Search all artists concurrently (limit to 8 artists)
-        artists_to_search = artists_to_process[:8]
+        # Search all artists concurrently (performance: limit to processed subset)
+        artists_to_search = artists_to_process
         logger.info(f"Searching for {len(artists_to_search)} artists in parallel")
 
         search_results = await asyncio.gather(
@@ -237,7 +239,7 @@ class ArtistProcessor:
         prefetched_tracks = await self.spotify_service.get_artist_top_tracks_batch(
             access_token=access_token,
             artist_ids=artist_ids,
-            max_concurrency=3,  # Conservative concurrency to avoid rate limits
+            max_concurrency=config.artist_top_tracks_max_concurrency,
         )
 
         # Process tracks for each artist
@@ -248,8 +250,12 @@ class ArtistProcessor:
                 continue
 
             artist_name = artist_data['name']
-            # Take top 5 tracks per artist for mentioned artists, 3 for others
-            limit_per_artist = 5 if artist_name in mentioned_artists else 3
+            # Take configurable number of tracks based on whether artist was user mentioned
+            limit_per_artist = (
+                config.mentioned_artist_track_limit
+                if artist_name in mentioned_artists
+                else config.default_artist_track_limit
+            )
             selected_tracks = tracks[:limit_per_artist]
 
             # Create candidates for each track

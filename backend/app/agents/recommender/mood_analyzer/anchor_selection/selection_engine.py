@@ -4,6 +4,7 @@ import asyncio
 import structlog
 from typing import Any, Dict, List, Optional, Tuple
 
+from ...utils.config import config
 from .track_processor import TrackProcessor
 from .artist_processor import ArtistProcessor
 from .llm_services import LLMServices
@@ -40,7 +41,7 @@ class AnchorSelectionEngine:
         mood_prompt: str = "",
         artist_recommendations: Optional[List[str]] = None,
         mood_analysis: Optional[Dict[str, Any]] = None,
-        limit: int = 5,
+        limit: int = config.anchor_track_limit,
         user_mentioned_artists: Optional[List[str]] = None
     ) -> Tuple[List[Dict[str, Any]], List[str]]:
         """
@@ -158,8 +159,12 @@ class AnchorSelectionEngine:
         genre_task = None
         if genre_keywords:
             genre_task = self._get_genre_based_candidates(
-                genre_keywords[:8], target_features, access_token, mood_prompt, temporal_context,
-                skip_audio_features=True  # Skip audio features, we'll fetch them all together
+                genre_keywords[: config.genre_anchor_search_limit],
+                target_features,
+                access_token,
+                mood_prompt,
+                temporal_context,
+                skip_audio_features=True,  # Skip audio features, we'll fetch them all together
             )
         
         # Execute artist and genre gathering in parallel
@@ -409,7 +414,10 @@ class AnchorSelectionEngine:
         
         if genre_keywords:
             genre_task = self._get_genre_based_candidates(
-                genre_keywords[:5], target_features, access_token, mood_prompt
+                genre_keywords[: config.genre_anchor_search_limit],
+                target_features,
+                access_token,
+                mood_prompt,
             )
         
         # Execute artist and genre gathering in parallel
@@ -518,7 +526,7 @@ class AnchorSelectionEngine:
             )
 
         # Search for each extracted track
-        for track_name, artist_name in track_artist_pairs[:5]:  # Limit to 5 tracks
+        for track_name, artist_name in track_artist_pairs[: config.user_track_extraction_limit]:
             try:
                 best_match = await self._search_and_match_track(
                     track_name, artist_name, access_token
@@ -554,7 +562,7 @@ class AnchorSelectionEngine:
         tracks = await self.spotify_service.search_spotify_tracks(
             access_token=access_token,
             query=search_query,
-            limit=5  # Get more results to validate artist match
+            limit=config.user_track_search_results_limit
         )
 
         if not tracks:

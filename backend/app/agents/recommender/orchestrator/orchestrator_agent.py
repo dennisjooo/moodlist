@@ -178,6 +178,22 @@ class OrchestratorAgent(BaseAgent):
             "improvement_strategies": 0.0
         }
 
+        # PERFORMANCE OPTIMIZATION: Skip iteration if quality is already excellent
+        step_start = datetime.now(timezone.utc)
+        quick_eval = await self.quality_evaluator.evaluate_playlist_quality(state)
+        iterative_timings["quality_evaluation"] += (datetime.now(timezone.utc) - step_start).total_seconds()
+        
+        if quick_eval['overall_score'] >= 0.75 and quick_eval['cohesion_score'] >= 0.60:
+            logger.info(
+                f"✓ Skipping iterative improvement - quality already excellent "
+                f"(overall: {quick_eval['overall_score']:.2f}, cohesion: {quick_eval['cohesion_score']:.2f})"
+            )
+            state.metadata["orchestration_iterations"] = 0
+            state.metadata["quality_scores"] = [quick_eval]
+            state.metadata["iterative_improvement_timings"] = iterative_timings
+            state.current_step = "recommendations_ready"
+            return quick_eval
+
         for iteration in range(self.max_iterations):
             # Check for cancellation before each iteration
             if state.status == RecommendationStatus.CANCELLED:
