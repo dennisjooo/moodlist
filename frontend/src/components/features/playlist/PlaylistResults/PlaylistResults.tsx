@@ -43,10 +43,23 @@ export default function PlaylistResults() {
       const result = await syncFromSpotify();
       if (result.synced) {
         const changes = result.changes;
+        const coverRetry = result.cover_upload_retry;
+
+        // Build description with track changes and cover retry info
+        let description = '';
         if (changes && (changes.tracks_added > 0 || changes.tracks_removed > 0)) {
-          success('Playlist synced!', {
-            description: `${changes.tracks_added > 0 ? `Added ${changes.tracks_added} track(s). ` : ''}${changes.tracks_removed > 0 ? `Removed ${changes.tracks_removed} track(s).` : ''}`.trim()
-          });
+          description = `${changes.tracks_added > 0 ? `Added ${changes.tracks_added} track(s). ` : ''}${changes.tracks_removed > 0 ? `Removed ${changes.tracks_removed} track(s).` : ''}`.trim();
+        }
+
+        // Add cover retry info if applicable
+        if (coverRetry?.success) {
+          description += (description ? ' ' : '') + 'Cover image uploaded successfully!';
+        } else if (coverRetry?.attempted && !coverRetry?.success) {
+          description += (description ? ' ' : '') + 'Note: Cover image upload is still pending.';
+        }
+
+        if (description || coverRetry?.success) {
+          success('Playlist synced!', description ? { description } : undefined);
         } else {
           success('Playlist is up to date!');
         }
