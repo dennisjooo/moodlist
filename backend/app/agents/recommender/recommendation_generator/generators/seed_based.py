@@ -120,7 +120,7 @@ class SeedBasedGenerator:
         ]
         
         # Increase concurrency while respecting RecoBeat rate limits
-        semaphore = asyncio.Semaphore(6)
+        semaphore = asyncio.Semaphore(10)
         
         async def bounded_task(task):
             async with semaphore:
@@ -315,4 +315,3 @@ class SeedBasedGenerator:
             if len(chunk) > 0:
                 chunks.append(chunk)
         return chunks
-

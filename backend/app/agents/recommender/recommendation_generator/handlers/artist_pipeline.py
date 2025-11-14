@@ -201,8 +201,8 @@ class ArtistRecommendationPipeline:
             artist_ids=artists_to_process,
         )
 
-        # Process artists in parallel with bounded concurrency (increased to 8 for better throughput)
-        semaphore = asyncio.Semaphore(8)
+        # Process artists in parallel with bounded concurrency (raised to 12 for better throughput within rate limits)
+        semaphore = asyncio.Semaphore(12)
 
         async def process_artist_bounded(idx: int, artist_id: str) -> Tuple[List[TrackRecommendation], bool]:
             """Process a single artist with concurrency control."""
