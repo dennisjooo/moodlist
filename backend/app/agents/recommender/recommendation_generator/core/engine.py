@@ -114,20 +114,20 @@ class RecommendationEngine:
         has_user_mentions = bool(user_mentioned_track_ids or user_mentioned_artists)
 
         if has_user_mentions:
-            # WITH user mentions: 40% user anchor, 40% artists, 15% seeds
+            # WITH user mentions: 40% user anchor, 55% artists, 0% seeds (Recobeat overflow only)
             target_user_anchor_recs = int(target_count * 0.40)
-            target_artist_recs = int(target_count * 0.40)
-            target_seed_recs = int(target_count * 0.15)
+            target_artist_recs = int(target_count * 0.55)
+            target_seed_recs = 0
 
             logger.info(
                 f"Split WITH user mentions: {target_user_anchor_recs} user anchor, "
                 f"{target_artist_recs} artists, {target_seed_recs} seeds (total: {target_count})"
             )
         else:
-            # WITHOUT user mentions: 55% artists, 35% seeds
+            # WITHOUT user mentions: 90% artists, 0% seeds (Recobeat overflow only)
             target_user_anchor_recs = 0
-            target_artist_recs = int(target_count * 0.55)
-            target_seed_recs = int(target_count * 0.35)
+            target_artist_recs = int(target_count * 0.90)
+            target_seed_recs = 0
 
             logger.info(
                 f"Split WITHOUT user mentions: {target_artist_recs} artists, "
