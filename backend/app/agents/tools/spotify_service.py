@@ -561,6 +561,22 @@ class SpotifyService:
         if not tool:
             raise ValueError("Get artist top tracks tool not available")
 
+        cached_tracks = await cache_manager.get_artist_hybrid_tracks_cache(
+            artist_id=artist_id,
+            market=market,
+            min_popularity=min_popularity,
+            max_popularity=max_popularity,
+            target_count=target_count,
+            top_tracks_ratio=top_tracks_ratio,
+        )
+        if cached_tracks:
+            logger.info(
+                f"Returning {len(cached_tracks)} cached hybrid tracks for artist {artist_id} "
+                f"(popularity: {min_popularity}-{max_popularity}, ratio: {top_tracks_ratio:.1%})"
+            )
+            return cached_tracks
+
+        tracks: List[Dict[str, Any]] = []
         try:
             # Use prefetched tracks if provided, otherwise use empty list
             # This avoids individual API calls that can cause rate limits
@@ -594,6 +610,18 @@ class SpotifyService:
             else:
                 logger.warning(f"No tracks available for artist {artist_id} after hybrid strategy failure")
                 return []
+        finally:
+            # Cache successful fetches only
+            if tracks:
+                await cache_manager.set_artist_hybrid_tracks_cache(
+                    artist_id=artist_id,
+                    tracks=tracks,
+                    market=market,
+                    min_popularity=min_popularity,
+                    max_popularity=max_popularity,
+                    target_count=target_count,
+                    top_tracks_ratio=top_tracks_ratio,
+                )
 
     async def search_spotify_tracks(
         self,

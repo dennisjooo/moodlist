@@ -359,6 +359,7 @@ class CacheManager:
             "top_tracks": 1800,    # 30 minutes
             "top_artists": 1800,   # 30 minutes
             "artist_top_tracks": 7200,  # 2 hours - increased to minimize rate limit hits
+            "artist_hybrid_tracks": 300,  # 5 minutes - short-lived cache for album sampling
             "recommendations": 1800,  # 30 minutes - increased from 15 to reduce API load
             "mood_analysis": 3600,  # 1 hour
             "workflow_state": 300,  # 5 minutes
@@ -522,6 +523,54 @@ class CacheManager:
         cache_market = self._normalize_market_for_cache(market)
         key = self._make_cache_key("artist_top_tracks", artist_id, cache_market)
         ttl = self.default_ttl["artist_top_tracks"]
+        await self.cache.set(key, tracks, ttl)
+
+    async def get_artist_hybrid_tracks_cache(
+        self,
+        artist_id: str,
+        market: Optional[str],
+        min_popularity: int,
+        max_popularity: int,
+        target_count: int,
+        top_tracks_ratio: float
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Get cached hybrid (top + album) tracks for an artist."""
+        cache_market = self._normalize_market_for_cache(market)
+        ratio_key = f"{top_tracks_ratio:.2f}"
+        key = self._make_cache_key(
+            "artist_hybrid_tracks",
+            artist_id,
+            cache_market,
+            min_popularity,
+            max_popularity,
+            target_count,
+            ratio_key
+        )
+        return await self.cache.get(key)
+
+    async def set_artist_hybrid_tracks_cache(
+        self,
+        artist_id: str,
+        tracks: List[Dict[str, Any]],
+        market: Optional[str],
+        min_popularity: int,
+        max_popularity: int,
+        target_count: int,
+        top_tracks_ratio: float
+    ) -> None:
+        """Cache hybrid (top + album) track selections for a short time."""
+        cache_market = self._normalize_market_for_cache(market)
+        ratio_key = f"{top_tracks_ratio:.2f}"
+        key = self._make_cache_key(
+            "artist_hybrid_tracks",
+            artist_id,
+            cache_market,
+            min_popularity,
+            max_popularity,
+            target_count,
+            ratio_key
+        )
+        ttl = self.default_ttl["artist_hybrid_tracks"]
         await self.cache.set(key, tracks, ttl)
 
     async def get_anchor_tracks(

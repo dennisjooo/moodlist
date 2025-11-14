@@ -90,49 +90,62 @@ async def sample_album_tracks(
     # Prioritize albums (newer albums first, but with some randomness)
     albums_to_sample = albums.copy()
     random.shuffle(albums_to_sample)
+    albums_to_sample = albums_to_sample[:5]  # Sample from up to 5 albums
     
-    # Step 1: Collect track IDs from albums (without individual API calls)
-    candidate_track_ids = []
-    tracks_per_album = max(1, max_tracks // min(len(albums), 5))
+    # Step 1: Collect track IDs from albums via batched /albums requests
+    candidate_track_ids: List[str] = []
+    tracks_per_album = max(1, max_tracks // max(1, len(albums_to_sample)))
+    album_track_map: Dict[str, List[Dict[str, Any]]] = {}
+    album_ids = [album.get("id") for album in albums_to_sample if album.get("id")]
     
-    for album in albums_to_sample[:5]:  # Sample from up to 5 albums
-        album_id = album.get("id")
-        if not album_id:
+    for i in range(0, len(album_ids), 20):  # Spotify allows 20 album IDs per /albums call
+        chunk = album_ids[i:i + 20]
+        if not chunk:
             continue
         
         try:
-            params = build_market_params(market=market, limit=50)
-            
+            params = build_market_params(market=market, ids=",".join(chunk))
             response_data = await make_request(
                 method="GET",
-                endpoint=f"/albums/{album_id}/tracks",
+                endpoint="/albums",
                 params=params,
                 headers={"Authorization": f"Bearer {access_token}"}
             )
-            
-            if not validate_response(response_data, ["items"]):
+
+            if not validate_response(response_data, ["albums"]):
                 continue
-            
-            album_tracks = response_data.get("items", [])
-            
-            if album_tracks:
-                # Sample random tracks from middle/end of album (avoid lead singles)
-                if len(album_tracks) > 3:
-                    # Skip first track (usually the single) and sample from the rest
-                    sample_pool = album_tracks[1:]
-                    sampled = random.sample(sample_pool, min(tracks_per_album, len(sample_pool)))
-                else:
-                    sampled = album_tracks
-                
-                # Collect track IDs for batch fetching
-                for track in sampled:
-                    track_id = track.get("id")
-                    if track_id and track_id not in track_ids_seen:
-                        candidate_track_ids.append(track_id)
-        
+
+            for album_data in response_data.get("albums", []):
+                album_id = album_data.get("id")
+                if not album_id:
+                    continue
+                tracks_data = album_data.get("tracks", {})
+                album_track_map[album_id] = tracks_data.get("items", []) or []
+
         except Exception as e:
-            logger.warning(f"Error sampling tracks from album {album_id}: {e}")
+            logger.warning(f"Error fetching album batch {chunk}: {e}")
             continue
+    
+    for album in albums_to_sample:
+        album_id = album.get("id")
+        if not album_id:
+            continue
+        album_tracks = album_track_map.get(album_id, [])
+        if not album_tracks:
+            continue
+
+        # Sample random tracks from middle/end of album (avoid lead singles)
+        if len(album_tracks) > 3:
+            sample_pool = album_tracks[1:]
+            sample_size = min(tracks_per_album, len(sample_pool))
+            sampled = random.sample(sample_pool, sample_size) if sample_size > 0 else []
+        else:
+            sampled = album_tracks
+
+        for track in sampled:
+            track_id = track.get("id")
+            if track_id and track_id not in track_ids_seen:
+                candidate_track_ids.append(track_id)
     
     # Step 2: Batch fetch full track info for all candidates
     if not candidate_track_ids:
@@ -164,4 +177,3 @@ async def sample_album_tracks(
     )
     
     return sampled_tracks
-
