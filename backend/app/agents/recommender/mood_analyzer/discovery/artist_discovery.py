@@ -2,7 +2,8 @@
 
 import asyncio
 import structlog
-from typing import Any, Dict, List, Optional
+from collections import Counter
+from typing import Any, Dict, List, Optional, Set
 
 from langchain_core.language_models.base import BaseLanguageModel
 
@@ -136,9 +137,27 @@ class ArtistDiscovery:
                 }
                 for artist in filtered_artists
             ]
-            state.metadata["mood_matched_artists"] = [artist.get("id") for artist in filtered_artists]
 
-            logger.info(f"Discovered {len(filtered_artists)} mood-matched artists: {[a.get('name') for a in filtered_artists[:5]]}")
+            # Expand artist pool with genre-based discovery for diversity
+            # Alternative to deprecated get_related_artists endpoint
+            core_artist_ids = [artist.get("id") for artist in filtered_artists]
+            expanded_artist_ids = await self._expand_with_genre_artists(
+                core_artists=filtered_artists,
+                access_token=access_token,
+                existing_artist_ids=set(core_artist_ids)
+            )
+
+            # Combine core + expanded artists (deduplicated)
+            all_artist_ids = core_artist_ids + expanded_artist_ids
+            unique_artist_ids = list(dict.fromkeys(all_artist_ids))  # Preserves order, removes duplicates
+
+            state.metadata["mood_matched_artists"] = unique_artist_ids
+
+            logger.info(
+                f"Discovered {len(filtered_artists)} core mood-matched artists + "
+                f"{len(expanded_artist_ids)} genre-expanded artists = {len(unique_artist_ids)} total artists. "
+                f"Top 5: {[a.get('name') for a in filtered_artists[:5]]}"
+            )
 
         except Exception as e:
             logger.error(f"Error in artist discovery: {str(e)}", exc_info=True)
@@ -474,3 +493,108 @@ class ArtistDiscovery:
         )
 
         return pruned
+
+    async def _expand_with_genre_artists(
+        self,
+        core_artists: List[Dict[str, Any]],
+        access_token: str,
+        existing_artist_ids: Optional[Set[str]] = None
+    ) -> List[str]:
+        """Expand artist pool with genre-based artist discovery for diversity.
+
+        Alternative to deprecated get_related_artists endpoint.
+        Searches for additional artists in the same genres as top mood-matched artists.
+
+        Args:
+            core_artists: Top mood-matched artists to expand from
+            access_token: Spotify access token
+            existing_artist_ids: Set of artist IDs to avoid duplicating
+
+        Returns:
+            List of expanded artist IDs
+        """
+        if not core_artists:
+            return []
+
+        limits = config.limits
+        core_limit = limits.genre_expansion_core_limit
+        max_total_artists = config.artist_discovery_result_limit
+        existing_artist_ids = set(existing_artist_ids or set())
+
+        # Ensure we have room to add more artists
+        expansion_capacity = max(max_total_artists - len(existing_artist_ids), 0)
+        if expansion_capacity == 0:
+            logger.info("Skipping genre expansion – artist pool already at capacity")
+            return []
+
+        expansion_target = min(limits.genre_expansion_target, expansion_capacity)
+        search_limit = limits.genre_expansion_search_limit
+        max_genres = limits.genre_expansion_max_genres
+        min_popularity = limits.genre_expansion_min_popularity
+
+        top_core_artists = core_artists[:core_limit]
+        logger.info(f"Expanding artist pool via genre search from top {len(top_core_artists)} core artists")
+
+        expanded_artist_ids: List[str] = []
+
+        try:
+            # Collect genres from top core artists
+            genre_counts = Counter()
+            core_len = len(top_core_artists)
+            for idx, artist in enumerate(top_core_artists):
+                genres = artist.get("genres", [])
+                if not genres:
+                    continue
+                weight = core_len - idx  # Earlier artists carry more weight
+                for genre in genres:
+                    genre_counts[genre] += weight
+
+            top_genres = [genre for genre, _ in genre_counts.most_common(max_genres)]
+
+            if not top_genres:
+                logger.warning("No genres found in core artists for expansion")
+                return []
+
+            logger.info(f"Expanding with genres: {top_genres[:3]}")
+
+            # Search for artists in these genres
+            for genre in top_genres:
+                if len(expanded_artist_ids) >= expansion_target:
+                    break
+
+                try:
+                    search_results = await self.spotify_service.search_spotify_artists(
+                        access_token=access_token,
+                        query=f'genre:"{genre}"',
+                        limit=search_limit
+                    )
+
+                    if not search_results:
+                        continue
+
+                    for artist in search_results:
+                        artist_id = artist.get("id")
+                        popularity = artist.get("popularity", 0)
+
+                        if (
+                            artist_id
+                            and artist_id not in existing_artist_ids
+                            and artist_id not in expanded_artist_ids
+                            and popularity >= min_popularity
+                        ):
+                            expanded_artist_ids.append(artist_id)
+                            existing_artist_ids.add(artist_id)
+
+                            if len(expanded_artist_ids) >= expansion_target:
+                                break
+
+                except Exception as e:
+                    logger.warning(f"Failed to search genre '{genre}': {e}")
+                    continue
+
+            logger.info(f"Added {len(expanded_artist_ids)} genre-based artists for diversity")
+            return expanded_artist_ids
+
+        except Exception as e:
+            logger.error(f"Error expanding with genre artists: {e}", exc_info=True)
+            return []
