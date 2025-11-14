@@ -27,7 +27,7 @@ class OrchestratorAgent(BaseAgent):
         recommendation_generator: BaseAgent,
         seed_gatherer: BaseAgent,
         llm: Optional[BaseLanguageModel] = None,
-        max_iterations: int = 2,
+        max_iterations: int = 1,
         cohesion_threshold: float = 0.65,
         verbose: bool = False
     ):
