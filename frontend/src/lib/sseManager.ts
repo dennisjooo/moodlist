@@ -1,6 +1,7 @@
-// SSE manager for real-time workflow status updates
-// Replaces polling with efficient Server-Sent Events
+// Optimized SSE manager using @microsoft/fetch-event-source
+// Provides better reconnection, error handling, and reliability
 
+import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { config } from '@/lib/config';
 import { logger } from '@/lib/utils/logger';
 import { WorkflowStatus } from './api/workflow';
@@ -13,10 +14,10 @@ export interface SSECallbacks {
 }
 
 interface SSEConnection {
-    eventSource: EventSource;
+    abortController: AbortController;
     callbacks: SSECallbacks;
-    reconnectAttempts: number;
-    reconnectTimer?: NodeJS.Timeout;
+    reconnectCount: number;
+    isActive: boolean;
 }
 
 export class SSEManager {
@@ -29,16 +30,13 @@ export class SSEManager {
      * Check if SSE is supported by the browser
      */
     isSupported(): boolean {
-        return typeof EventSource !== 'undefined';
+        return typeof window !== 'undefined' && typeof fetch !== 'undefined' && typeof AbortController !== 'undefined';
     }
 
     /**
      * Start SSE connection for a workflow session
      */
-    startStreaming(
-        sessionId: string,
-        callbacks: SSECallbacks
-    ): void {
+    startStreaming(sessionId: string, callbacks: SSECallbacks): void {
         // Stop any existing connection first
         if (this.connections.has(sessionId)) {
             logger.debug('SSE connection already exists - closing and restarting', {
@@ -48,13 +46,22 @@ export class SSEManager {
             this.stopStreaming(sessionId);
         }
 
-        this.connect(sessionId, callbacks);
+        const abortController = new AbortController();
+        const connection: SSEConnection = {
+            abortController,
+            callbacks,
+            reconnectCount: 0,
+            isActive: true
+        };
+
+        this.connections.set(sessionId, connection);
+        this.connect(sessionId, connection);
     }
 
     /**
-     * Establish SSE connection
+     * Establish SSE connection using fetch-event-source
      */
-    private connect(sessionId: string, callbacks: SSECallbacks): void {
+    private async connect(sessionId: string, connection: SSEConnection): Promise<void> {
         const url = `${config.api.baseUrl}/api/agents/recommendations/${sessionId}/stream`;
 
         logger.info('Establishing SSE connection', {
@@ -64,204 +71,198 @@ export class SSEManager {
         });
 
         try {
-            const eventSource = new EventSource(url, {
-                withCredentials: true
-            });
+            await fetchEventSource(url, {
+                signal: connection.abortController.signal,
+                credentials: 'include',
+                
+                onopen: async (response) => {
+                    if (response.ok) {
+                        logger.info('SSE connection established successfully', {
+                            component: 'SSEManager',
+                            sessionId,
+                            status: response.status
+                        });
 
-            const connection: SSEConnection = {
-                eventSource,
-                callbacks,
-                reconnectAttempts: 0
-            };
+                        // Notify reconnection if this was a reconnect
+                        if (connection.reconnectCount > 0 && connection.callbacks.onReconnect) {
+                            logger.info('SSE reconnected successfully', {
+                                component: 'SSEManager',
+                                sessionId,
+                                reconnectAttempt: connection.reconnectCount
+                            });
+                            connection.callbacks.onReconnect();
+                        }
 
-            this.connections.set(sessionId, connection);
-
-            // Handle generic message events (for keep-alive and debugging)
-            eventSource.onmessage = (event: MessageEvent) => {
-                // Keep-alive messages or other generic messages
-                if (event.data && event.data.startsWith(':')) {
-                    logger.debug('Received keep-alive message', {
-                        component: 'SSEManager',
-                        sessionId
-                    });
-                    return;
-                }
-                // Log unexpected message format
-                logger.debug('Received generic SSE message', {
-                    component: 'SSEManager',
-                    sessionId,
-                    data: event.data
-                });
-            };
-
-            // Handle status updates
-            eventSource.addEventListener('status', (event: MessageEvent) => {
-                try {
-                    const status = JSON.parse(event.data) as WorkflowStatus;
-                    logger.info('Received status update via SSE', {
-                        component: 'SSEManager',
-                        sessionId,
-                        status: status.status,
-                        currentStep: status.current_step
-                    });
-                    // Immediately invoke callback to ensure real-time update
-                    callbacks.onStatus(status);
-                } catch (error) {
-                    logger.error('Failed to parse status event', error, {
-                        component: 'SSEManager',
-                        sessionId,
-                        eventData: event.data
-                    });
-                }
-            });
-
-            // Handle completion
-            eventSource.addEventListener('complete', (event: MessageEvent) => {
-                try {
-                    const status = JSON.parse(event.data) as WorkflowStatus;
-                    logger.info('Workflow completed', {
-                        component: 'SSEManager',
-                        sessionId,
-                        status: status.status
-                    });
-                    callbacks.onStatus(status);
-                    if (callbacks.onComplete) {
-                        callbacks.onComplete();
+                        connection.reconnectCount = 0;
+                        return;
                     }
-                    this.stopStreaming(sessionId);
-                } catch (error) {
-                    logger.error('Failed to parse complete event', error, {
-                        component: 'SSEManager',
-                        sessionId
-                    });
-                }
-            });
 
-            // Handle errors
-            eventSource.addEventListener('error', (event: MessageEvent) => {
-                try {
-                    const errorData = JSON.parse(event.data);
-                    const error = new Error(errorData.message || 'SSE error event');
-                    logger.error('Received error event', error, {
+                    // Handle error responses
+                    const error = new Error(`SSE connection failed: ${response.status} ${response.statusText}`);
+                    logger.error('SSE connection error', error, {
                         component: 'SSEManager',
-                        sessionId
+                        sessionId,
+                        status: response.status
                     });
-                    if (callbacks.onError) {
-                        callbacks.onError(error);
+
+                    if (connection.callbacks.onError) {
+                        connection.callbacks.onError(error);
                     }
-                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                } catch (_parseError) {
-                    // Event might not have data, ignore
-                    logger.debug('Error event without parseable data', {
+
+                    throw error;
+                },
+
+                onmessage: (event) => {
+                    // Handle keep-alive messages
+                    if (!event.data || event.data.startsWith(':')) {
+                        logger.debug('Received keep-alive message', {
+                            component: 'SSEManager',
+                            sessionId
+                        });
+                        return;
+                    }
+
+                    // Handle different event types
+                    switch (event.event) {
+                        case 'status':
+                            try {
+                                const status = JSON.parse(event.data) as WorkflowStatus;
+                                logger.info('Received status update via SSE', {
+                                    component: 'SSEManager',
+                                    sessionId,
+                                    status: status.status,
+                                    currentStep: status.current_step
+                                });
+                                connection.callbacks.onStatus(status);
+                            } catch (error) {
+                                logger.error('Failed to parse status event', error, {
+                                    component: 'SSEManager',
+                                    sessionId,
+                                    eventData: event.data
+                                });
+                            }
+                            break;
+
+                        case 'complete':
+                            try {
+                                const status = JSON.parse(event.data) as WorkflowStatus;
+                                logger.info('Workflow completed', {
+                                    component: 'SSEManager',
+                                    sessionId,
+                                    status: status.status
+                                });
+                                connection.callbacks.onStatus(status);
+                                if (connection.callbacks.onComplete) {
+                                    connection.callbacks.onComplete();
+                                }
+                                this.stopStreaming(sessionId);
+                            } catch (error) {
+                                logger.error('Failed to parse complete event', error, {
+                                    component: 'SSEManager',
+                                    sessionId
+                                });
+                            }
+                            break;
+
+                        case 'error':
+                            try {
+                                const errorData = JSON.parse(event.data);
+                                const error = new Error(errorData.message || 'SSE error event');
+                                logger.error('Received error event', error, {
+                                    component: 'SSEManager',
+                                    sessionId
+                                });
+                                if (connection.callbacks.onError) {
+                                    connection.callbacks.onError(error);
+                                }
+                            } catch {
+                                logger.debug('Error event without parseable data', {
+                                    component: 'SSEManager',
+                                    sessionId
+                                });
+                            }
+                            break;
+
+                        default:
+                            logger.debug('Received generic SSE message', {
+                                component: 'SSEManager',
+                                sessionId,
+                                event: event.event,
+                                data: event.data
+                            });
+                    }
+                },
+
+                onerror: (error) => {
+                    logger.error('SSE connection error', error, {
                         component: 'SSEManager',
                         sessionId
                     });
-                }
+
+                    // Check if we should retry
+                    if (!connection.isActive) {
+                        logger.debug('Connection stopped by client, not retrying', {
+                            component: 'SSEManager',
+                            sessionId
+                        });
+                        return null; // Stop retrying
+                    }
+
+                    connection.reconnectCount++;
+
+                    if (connection.reconnectCount > this.maxReconnectAttempts) {
+                        logger.error('Max reconnection attempts reached', undefined, {
+                            component: 'SSEManager',
+                            sessionId,
+                            attempts: connection.reconnectCount
+                        });
+
+                        if (connection.callbacks.onError) {
+                            connection.callbacks.onError(
+                                new Error('Failed to reconnect after multiple attempts')
+                            );
+                        }
+
+                        this.stopStreaming(sessionId);
+                        return null; // Stop retrying
+                    }
+
+                    const delay = Math.min(
+                        this.baseReconnectDelay * Math.pow(2, connection.reconnectCount - 1),
+                        this.maxReconnectDelay
+                    );
+
+                    logger.info('Will retry SSE connection', {
+                        component: 'SSEManager',
+                        sessionId,
+                        attempt: connection.reconnectCount,
+                        delayMs: delay
+                    });
+
+                    return delay; // Tell library to retry after delay
+                },
+
+                // fetch-event-source will automatically retry with exponential backoff
+                openWhenHidden: true, // Keep connection open when tab is hidden
             });
-
-            // Handle connection errors and reconnection
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            eventSource.onerror = (_event) => {
-                logger.warn('SSE connection error', {
-                    component: 'SSEManager',
-                    sessionId,
-                    readyState: eventSource.readyState
-                });
-
-                // EventSource.CLOSED = 2
-                if (eventSource.readyState === 2) {
-                    logger.info('SSE connection closed', {
-                        component: 'SSEManager',
-                        sessionId
-                    });
-                    this.handleReconnect(sessionId);
-                }
-            };
-
-            // Handle successful connection
-            eventSource.onopen = () => {
-                logger.info('SSE connection established successfully', {
-                    component: 'SSEManager',
-                    sessionId,
-                    readyState: eventSource.readyState,
-                    url
-                });
-                // Reset reconnect attempts on successful connection
-                const wasReconnecting = connection.reconnectAttempts > 0;
-                connection.reconnectAttempts = 0;
-
-                // Notify reconnection callback if this was a reconnection
-                if (wasReconnecting && callbacks.onReconnect) {
-                    logger.info('SSE reconnected successfully', {
-                        component: 'SSEManager',
-                        sessionId
-                    });
-                    callbacks.onReconnect();
-                }
-            };
-
         } catch (error) {
-            logger.error('Failed to create SSE connection', error, {
-                component: 'SSEManager',
-                sessionId
-            });
-            if (callbacks.onError) {
-                callbacks.onError(error instanceof Error ? error : new Error('Failed to create SSE connection'));
-            }
-        }
-    }
+            // Only log if not aborted (client didn't stop it)
+            if (!connection.abortController.signal.aborted) {
+                logger.error('SSE connection terminated', error, {
+                    component: 'SSEManager',
+                    sessionId
+                });
 
-    /**
-     * Handle reconnection with exponential backoff
-     */
-    private handleReconnect(sessionId: string): void {
-        const connection = this.connections.get(sessionId);
-        if (!connection) {
-            return;
-        }
-
-        connection.reconnectAttempts++;
-
-        if (connection.reconnectAttempts > this.maxReconnectAttempts) {
-            logger.error('Max reconnection attempts reached', undefined, {
-                component: 'SSEManager',
-                sessionId,
-                attempts: connection.reconnectAttempts
-            });
-
-            if (connection.callbacks.onError) {
-                connection.callbacks.onError(new Error('Failed to reconnect after multiple attempts'));
+                if (connection.callbacks.onError && connection.isActive) {
+                    connection.callbacks.onError(
+                        error instanceof Error ? error : new Error('SSE connection terminated')
+                    );
+                }
             }
 
-            this.stopStreaming(sessionId);
-            return;
+            // Clean up
+            this.connections.delete(sessionId);
         }
-
-        // Calculate exponential backoff delay
-        const delay = Math.min(
-            this.baseReconnectDelay * Math.pow(2, connection.reconnectAttempts - 1),
-            this.maxReconnectDelay
-        );
-
-        logger.info('Scheduling SSE reconnection', {
-            component: 'SSEManager',
-            sessionId,
-            attempt: connection.reconnectAttempts,
-            delayMs: delay
-        });
-
-        // Clean up old connection
-        connection.eventSource.close();
-
-        // Schedule reconnection
-        connection.reconnectTimer = setTimeout(() => {
-            logger.debug('Attempting SSE reconnection', {
-                component: 'SSEManager',
-                sessionId,
-                attempt: connection.reconnectAttempts
-            });
-            this.connect(sessionId, connection.callbacks);
-        }, delay);
     }
 
     /**
@@ -278,15 +279,8 @@ export class SSEManager {
             sessionId
         });
 
-        // Clear reconnect timer if exists
-        if (connection.reconnectTimer) {
-            clearTimeout(connection.reconnectTimer);
-        }
-
-        // Close EventSource
-        connection.eventSource.close();
-
-        // Remove from connections map
+        connection.isActive = false;
+        connection.abortController.abort();
         this.connections.delete(sessionId);
     }
 
@@ -314,4 +308,3 @@ export class SSEManager {
 
 // Singleton instance
 export const sseManager = new SSEManager();
-
