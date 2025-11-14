@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ....states.agent_state import AgentState
 from .base_strategy import RecommendationStrategy
+from ...utils.temporal_filter import check_temporal_match
 
 logger = structlog.get_logger(__name__)
 
@@ -46,43 +47,7 @@ class UserAnchorStrategy(RecommendationStrategy):
             Tuple of (is_match, reason) - (True, None) if matches or no constraint,
             (False, reason) if violates temporal requirement
         """
-        # If no temporal context or not temporal, allow all tracks
-        if not temporal_context or not temporal_context.get('is_temporal'):
-            return (True, None)
-
-        # Extract year range
-        year_range = temporal_context.get('year_range')
-        if not year_range or len(year_range) != 2:
-            return (True, None)
-
-        min_year, max_year = year_range
-
-        # Get release date from track
-        album = track.get('album', {})
-        release_date = album.get('release_date', '')
-
-        if not release_date:
-            # No release date - allow it (might be incomplete data)
-            logger.debug(f"Track '{track.get('name')}' has no release_date, allowing")
-            return (True, None)
-
-        # Parse year from release_date (formats: YYYY, YYYY-MM-DD, YYYY-MM)
-        try:
-            release_year = int(release_date.split('-')[0])
-        except (ValueError, IndexError):
-            logger.debug(f"Could not parse release_date '{release_date}', allowing")
-            return (True, None)
-
-        # Check if within range
-        if min_year <= release_year <= max_year:
-            return (True, None)
-        else:
-            decade = temporal_context.get('decade', f'{min_year}-{max_year}')
-            reason = (
-                f"Released in {release_year}, outside {decade} requirement "
-                f"({min_year}-{max_year})"
-            )
-            return (False, reason)
+        return check_temporal_match(track, temporal_context)
 
     async def generate_recommendations(
         self,
