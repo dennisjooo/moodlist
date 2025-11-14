@@ -64,7 +64,9 @@ export function PlaylistsPageHeader({
                         My Playlists
                     </h1>
                     <p className="mx-auto max-w-2xl text-sm text-muted-foreground sm:text-base">
-                        All your mood-based playlists in one place. Search, sort, and revisit every vibe you&apos;ve created.
+                        All your mood-based playlists in one place.
+                        <br />
+                        Search, sort, and revisit every vibe you&apos;ve created.
                     </p>
                 </div>
             </div>

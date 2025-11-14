@@ -46,7 +46,9 @@ export default function CTASection({ isLoggedIn: serverIsLoggedIn }: CTASectionP
               Turn today&apos;s mood into tonight&apos;s soundtrack
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:mt-4 sm:text-base">
-              Describe how you feel and Moodlist will translate it into a fully fledged playlist. Start with a vibe, keep what you love, and save the rest for later.
+              Describe how you feel and Moodlist will translate it into a fully fledged playlist.
+              <br />
+              Start with a vibe, keep what you love, and save the rest for later.
             </p>
             <ul className="mt-5 space-y-2.5 sm:mt-6 sm:space-y-3">
               {CTA_HIGHLIGHTS.map((highlight) => (
