@@ -13,6 +13,11 @@ import httpx
 if TYPE_CHECKING:
     from .agent_tools import APIError
 
+try:
+    from .spotify.utils.rate_limiting import register_artist_top_tracks_retry_after
+except ImportError:  # pragma: no cover - defensive in case spotify module missing
+    register_artist_top_tracks_retry_after = None
+
 logger = structlog.get_logger(__name__)
 
 
@@ -72,6 +77,12 @@ async def handle_rate_limit_error(
         wait_time_to_use = (2 ** (attempt + 1)) * 2.0
     
     if wait_time_to_use <= 300:  # Only retry if wait time is reasonable
+        if (
+            register_artist_top_tracks_retry_after
+            and tool_name in {"get_artist_top_tracks", "batch_get_artist_top_tracks"}
+        ):
+            await register_artist_top_tracks_retry_after(wait_time_to_use)
+
         logger.warning(f"Rate limit (429) when calling {tool_name}, retrying in {wait_time_to_use}s...")
         await asyncio.sleep(wait_time_to_use)
         return None, True

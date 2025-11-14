@@ -457,35 +457,64 @@ class RateLimitedTool(BaseAPITool):
         self.rate_limit_per_minute = rate_limit_per_minute
         self.min_request_interval = min_request_interval
         self.use_global_semaphore = use_global_semaphore
-        self.request_times: List[datetime] = []
+        self.request_times: Dict[str, List[datetime]] = {"default": []}
+        self._scope_rate_limits: Dict[str, int] = {}
+        self._scope_min_intervals: Dict[str, float] = {}
+        self._scope_last_request_time: Dict[str, Optional[datetime]] = {"default": None}
 
         # Rate limiting state
         self._last_cleanup = datetime.now(timezone.utc)
         self._request_count = 0
-        self._last_request_time: Optional[datetime] = None
         self._interval_lock = asyncio.Lock()  # Protect _last_request_time from race conditions
 
-    async def _check_rate_limit(self):
+    def configure_scope_limits(
+        self,
+        scope: str,
+        rate_limit_per_minute: Optional[int] = None,
+        min_request_interval: Optional[float] = None,
+    ) -> None:
+        """Configure custom rate limits for a logical request scope."""
+        if scope == "default":
+            if rate_limit_per_minute is not None:
+                self.rate_limit_per_minute = rate_limit_per_minute
+            if min_request_interval is not None:
+                self.min_request_interval = min_request_interval
+        else:
+            if rate_limit_per_minute is not None:
+                self._scope_rate_limits[scope] = rate_limit_per_minute
+            if min_request_interval is not None:
+                self._scope_min_intervals[scope] = min_request_interval
+            self.request_times.setdefault(scope, [])
+            self._scope_last_request_time.setdefault(scope, None)
+
+    async def _check_rate_limit(self, scope: str = "default"):
         """Check if we're within rate limits."""
         now = datetime.now(timezone.utc)
 
         # Clean old requests (older than 1 minute)
         cutoff = now.replace(second=0, microsecond=0)
-        self.request_times = [t for t in self.request_times if t > cutoff]
+        history = self.request_times.setdefault(scope, [])
+        history[:] = [t for t in history if t > cutoff]
         self._last_cleanup = now
 
-        if len(self.request_times) >= self.rate_limit_per_minute:
+        rate_limit = self._scope_rate_limits.get(scope, self.rate_limit_per_minute)
+        if rate_limit is None or rate_limit <= 0:
+            return
+
+        if len(history) >= rate_limit:
             # Calculate wait time
-            oldest_request = min(self.request_times)
+            oldest_request = min(history)
             wait_seconds = 60 - (now - oldest_request).total_seconds()
             if wait_seconds > 0:
-                logger.warning(f"Rate limit reached for {self.name}, waiting {wait_seconds:.1f}s")
+                logger.warning(
+                    f"Rate limit reached for {self.name} (scope={scope}), waiting {wait_seconds:.1f}s"
+                )
                 await asyncio.sleep(wait_seconds)
 
-    async def _record_request(self):
+    async def _record_request(self, scope: str = "default"):
         """Record a request for rate limiting."""
         now = datetime.now(timezone.utc)
-        self.request_times.append(now)
+        self.request_times.setdefault(scope, []).append(now)
         self._request_count += 1
 
     def _format_params(self, params: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -520,16 +549,38 @@ class RateLimitedTool(BaseAPITool):
         json_data: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
         use_cache: bool = False,
-        cache_ttl: int = 300
+        cache_ttl: int = 300,
+        request_scope: str = "default"
     ) -> Dict[str, Any]:
-        """Make a rate-limited HTTP request."""
+        """Make a rate-limited HTTP request.
+        
+        Args mirror BaseAPITool plus optional request_scope to separate rate buckets.
+        """
         # Use global semaphore if enabled (for APIs that don't handle concurrency well)
         if self.use_global_semaphore:
             semaphore = get_reccobeat_semaphore()
             async with semaphore:
-                return await self._make_request_internal(method, endpoint, params, json_data, headers, use_cache, cache_ttl)
+                return await self._make_request_internal(
+                    method,
+                    endpoint,
+                    params,
+                    json_data,
+                    headers,
+                    use_cache,
+                    cache_ttl,
+                    request_scope,
+                )
         else:
-            return await self._make_request_internal(method, endpoint, params, json_data, headers, use_cache, cache_ttl)
+            return await self._make_request_internal(
+                method,
+                endpoint,
+                params,
+                json_data,
+                headers,
+                use_cache,
+                cache_ttl,
+                request_scope,
+            )
     
     async def _make_request_internal(
         self,
@@ -539,13 +590,17 @@ class RateLimitedTool(BaseAPITool):
         json_data: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
         use_cache: bool = False,
-        cache_ttl: int = 300
+        cache_ttl: int = 300,
+        request_scope: str = "default"
     ) -> Dict[str, Any]:
         """Internal method to make a rate-limited HTTP request.
 
         Checks cache before applying rate limits to avoid unnecessary delays on cache hits.
         Implements request deduplication to avoid multiple in-flight requests for the same data.
         """
+        self.request_times.setdefault(request_scope, [])
+        self._scope_last_request_time.setdefault(request_scope, None)
+
         # Check cache first to bypass rate limiting on cache hits
         if use_cache:
             cache_key = self._make_cache_key(method, endpoint, params, json_data)
@@ -577,17 +632,22 @@ class RateLimitedTool(BaseAPITool):
                 # Check minimum interval since last request (only for cache misses)
                 # Use lock to prevent race conditions with concurrent requests
                 async with self._interval_lock:
-                    if hasattr(self, '_last_request_time') and self._last_request_time and self.min_request_interval > 0:
-                        elapsed = (datetime.now(timezone.utc) - self._last_request_time).total_seconds()
-                        if elapsed < self.min_request_interval:
-                            wait_time = self.min_request_interval - elapsed
-                            logger.debug(f"Enforcing minimum interval for {self.name}, waiting {wait_time:.2f}s")
+                    min_interval = self._scope_min_intervals.get(request_scope, self.min_request_interval)
+                    last_request_time = self._scope_last_request_time.get(request_scope)
+                    if last_request_time and min_interval > 0:
+                        elapsed = (datetime.now(timezone.utc) - last_request_time).total_seconds()
+                        if elapsed < min_interval:
+                            wait_time = min_interval - elapsed
+                            logger.debug(
+                                f"Enforcing minimum interval for {self.name} (scope={request_scope}), "
+                                f"waiting {wait_time:.2f}s"
+                            )
                             await asyncio.sleep(wait_time)
                     
                     # Update last request time immediately to block other concurrent requests
-                    self._last_request_time = datetime.now(timezone.utc)
+                    self._scope_last_request_time[request_scope] = datetime.now(timezone.utc)
 
-                await self._check_rate_limit()
+                await self._check_rate_limit(request_scope)
 
                 # Format parameters (convert lists to appropriate format)
                 formatted_params = self._format_params(params)
@@ -614,7 +674,7 @@ class RateLimitedTool(BaseAPITool):
                     await self._cache_response(cache_key, response, cache_ttl)
 
                 # Note: _last_request_time is already updated at the start to prevent race conditions
-                await self._record_request()
+                await self._record_request(request_scope)
 
                 # Set the result for other waiting requests
                 if created_future and not created_future.done():
@@ -636,14 +696,19 @@ class RateLimitedTool(BaseAPITool):
                             _inflight_requests.pop(request_key, None)
         else:
             # Non-cached requests: use original flow without deduplication
-            if hasattr(self, '_last_request_time') and self._last_request_time and self.min_request_interval > 0:
-                elapsed = (datetime.now(timezone.utc) - self._last_request_time).total_seconds()
-                if elapsed < self.min_request_interval:
-                    wait_time = self.min_request_interval - elapsed
-                    logger.debug(f"Enforcing minimum interval for {self.name}, waiting {wait_time:.2f}s")
+            min_interval = self._scope_min_intervals.get(request_scope, self.min_request_interval)
+            last_request_time = self._scope_last_request_time.get(request_scope)
+            if last_request_time and min_interval > 0:
+                elapsed = (datetime.now(timezone.utc) - last_request_time).total_seconds()
+                if elapsed < min_interval:
+                    wait_time = min_interval - elapsed
+                    logger.debug(
+                        f"Enforcing minimum interval for {self.name} (scope={request_scope}), "
+                        f"waiting {wait_time:.2f}s"
+                    )
                     await asyncio.sleep(wait_time)
 
-            await self._check_rate_limit()
+            await self._check_rate_limit(request_scope)
             formatted_params = self._format_params(params)
             
             # Track request timing for monitoring
@@ -662,8 +727,8 @@ class RateLimitedTool(BaseAPITool):
                     params=formatted_params
                 )
             
-            self._last_request_time = datetime.now(timezone.utc)
-            await self._record_request()
+            self._scope_last_request_time[request_scope] = datetime.now(timezone.utc)
+            await self._record_request(request_scope)
             return response
 
 
