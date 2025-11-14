@@ -87,7 +87,9 @@ CRITICAL: Detect temporal/era context from the user's request:
     - "classic jazz" → {"era": "classic", "is_temporal": true}
     - "modern indie" → {"era": "modern", "is_temporal": false} (not strict temporal requirement)
     - "chill vibes" → {"is_temporal": false} (no temporal context)
+    - "songs like Slowdive, Beach House, Bon Iver" → {"is_temporal": false} (just artist references, not a decade request)
   * IMPORTANT: Only set is_temporal=true if the user explicitly requests a specific time period
+  * DO NOT set is_temporal=true just because artists are mentioned - focus on the VIBE, not the era
   * This helps ensure playlist cohesion when users want era-specific music
 
 CRITICAL: Generate a triadic color scheme that visually represents the mood:
