@@ -146,8 +146,13 @@ class RecommendationGeneratorAgent(BaseAgent):
             recommendations, state.mood_analysis, negative_seeds=state.negative_seeds
         )
 
-        # Ensure diversity in recommendations
-        return self.diversity_manager._ensure_diversity(filtered_recommendations)
+        # Ensure diversity in recommendations using playlist target count for dynamic caps
+        playlist_target = state.metadata.get("playlist_target", {})
+        target_count = playlist_target.get("target_count")
+        return self.diversity_manager._ensure_diversity(
+            filtered_recommendations,
+            target_count=target_count
+        )
 
 
     def _get_max_recommendations(self, state: AgentState) -> int:

@@ -1,9 +1,12 @@
 """Diversity management for recommendation lists."""
 
+from collections import defaultdict
+from typing import Dict, List, Optional
+
 import structlog
-from typing import List, Dict
 
 from ....states.agent_state import TrackRecommendation
+from ...utils import config as recommender_config
 
 logger = structlog.get_logger(__name__)
 
@@ -11,9 +14,32 @@ logger = structlog.get_logger(__name__)
 class DiversityManager:
     """Manages diversity in recommendation lists to avoid repetition."""
 
+    def __init__(
+        self,
+        max_tracks_per_artist: Optional[int] = None,
+        user_mentioned_artist_ratio: Optional[float] = None
+    ):
+        """Configure diversity manager.
+
+        Args:
+            max_tracks_per_artist: Hard cap for how many tracks from a single artist
+                can appear in the final list. User-mentioned/protected tracks always remain,
+                but they still count toward the cap for subsequent items.
+            user_mentioned_artist_ratio: Fraction of the playlist target that user-mentioned
+                artists are allowed to occupy (shared across all mentioned artists).
+        """
+        if max_tracks_per_artist is None:
+            max_tracks_per_artist = recommender_config.max_tracks_per_artist
+        if user_mentioned_artist_ratio is None:
+            user_mentioned_artist_ratio = recommender_config.user_mentioned_artist_ratio
+
+        self.max_tracks_per_artist = max_tracks_per_artist
+        self.user_mentioned_artist_ratio = max(0.0, min(1.0, user_mentioned_artist_ratio))
+
     def _ensure_diversity(
         self,
-        recommendations: List[TrackRecommendation]
+        recommendations: List[TrackRecommendation],
+        target_count: Optional[int] = None
     ) -> List[TrackRecommendation]:
         """Ensure diversity in recommendations to avoid repetition.
         
@@ -38,6 +64,12 @@ class DiversityManager:
 
         # Sort with protected tracks first
         diversified_recommendations = self._sort_with_protected_priority(diversified_recommendations)
+
+        # Apply hard artist limits (default: 2 tracks per artist)
+        diversified_recommendations = self._enforce_artist_limits(
+            diversified_recommendations,
+            target_count=target_count
+        )
 
         logger.info(
             f"Diversity applied: {protected_count} tracks exempted (protected/user-mentioned), "
@@ -64,16 +96,13 @@ class DiversityManager:
                 artist_counts[artist] = artist_counts.get(artist, 0) + 1
         return artist_counts
 
-    def _is_protected_track(self, rec: TrackRecommendation) -> bool:
-        """Check if a track is protected from diversity penalties.
+    def _is_penalty_exempt(self, rec: TrackRecommendation) -> bool:
+        """Check if a track is protected from diversity penalties."""
+        return rec.user_mentioned or rec.protected
 
-        Args:
-            rec: Track recommendation to check
-
-        Returns:
-            True if track is protected
-        """
-        return rec.user_mentioned or rec.user_mentioned_artist or rec.protected
+    def _is_cap_exempt(self, rec: TrackRecommendation) -> bool:
+        """Check if a track should bypass artist caps entirely."""
+        return rec.user_mentioned
 
     def _calculate_diversity_penalty(
         self,
@@ -143,7 +172,7 @@ class DiversityManager:
         penalized_count = 0
 
         for rec in recommendations:
-            if self._is_protected_track(rec):
+            if self._is_penalty_exempt(rec):
                 # Protected tracks keep original confidence score
                 diversified_rec = self._create_diversified_recommendation(
                     rec, rec.confidence_score
@@ -184,17 +213,108 @@ class DiversityManager:
         """
         # Separate protected and non-protected tracks
         protected_tracks = [
-            r for r in recommendations 
-            if self._is_protected_track(r)
+            r for r in recommendations
+            if self._is_penalty_exempt(r)
         ]
         non_protected_tracks = [
-            r for r in recommendations 
-            if not self._is_protected_track(r)
+            r for r in recommendations
+            if not self._is_penalty_exempt(r)
         ]
-        
+
         # Sort each group independently by confidence score
         protected_tracks.sort(key=lambda x: x.confidence_score, reverse=True)
         non_protected_tracks.sort(key=lambda x: x.confidence_score, reverse=True)
-        
+
         # Recombine with protected tracks first
         return protected_tracks + non_protected_tracks
+
+    def _enforce_artist_limits(
+        self,
+        recommendations: List[TrackRecommendation],
+        target_count: Optional[int] = None
+    ) -> List[TrackRecommendation]:
+        """Ensure no artist exceeds the configured track limit."""
+        if not recommendations or self.max_tracks_per_artist <= 0:
+            return recommendations
+
+        target_total = max(target_count or len(recommendations) or 1, 1)
+        user_artist_total_limit = max(
+            self.max_tracks_per_artist,
+            int(target_total * self.user_mentioned_artist_ratio)
+        )
+
+        artist_usage: Dict[str, int] = defaultdict(int)
+        user_artist_total = 0
+        limited_recommendations: List[TrackRecommendation] = []
+        dropped_count = 0
+
+        for rec in recommendations:
+            is_user_artist = bool(rec.user_mentioned_artist)
+
+            if self._is_cap_exempt(rec):
+                limited_recommendations.append(rec)
+                logger.debug(
+                    "artist_limit_bypass_user_track",
+                    track_name=rec.track_name,
+                    artists=rec.artists
+                )
+                continue
+
+            if not self._can_include_track(
+                rec,
+                artist_usage,
+                is_user_artist,
+                user_artist_total,
+                user_artist_total_limit
+            ):
+                dropped_count += 1
+                logger.debug(
+                    "artist_limit_skipped",
+                    track_name=rec.track_name,
+                    artists=rec.artists,
+                    limit=self.max_tracks_per_artist,
+                    user_artist_limit=user_artist_total_limit,
+                    reason="artist_cap_exceeded"
+                )
+                continue
+
+            limited_recommendations.append(rec)
+            self._increment_artist_usage(artist_usage, rec)
+            if is_user_artist:
+                user_artist_total += 1
+
+        if dropped_count:
+            logger.info(
+                "artist_limit_enforced",
+                dropped=dropped_count,
+                artist_cap=self.max_tracks_per_artist,
+                user_artist_cap=user_artist_total_limit
+            )
+
+        return limited_recommendations
+
+    def _can_include_track(
+        self,
+        rec: TrackRecommendation,
+        artist_usage: Dict[str, int],
+        is_user_artist: bool,
+        user_artist_total: int,
+        user_artist_total_limit: int
+    ) -> bool:
+        """Check if adding this track would violate artist usage limits."""
+        if is_user_artist and user_artist_total >= user_artist_total_limit:
+            return False
+
+        for artist in rec.artists:
+            if artist_usage[artist] >= self.max_tracks_per_artist:
+                return False
+        return True
+
+    def _increment_artist_usage(
+        self,
+        artist_usage: Dict[str, int],
+        rec: TrackRecommendation
+    ) -> None:
+        """Increment usage counters for all artists on the track."""
+        for artist in rec.artists:
+            artist_usage[artist] += 1
