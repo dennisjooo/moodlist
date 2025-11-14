@@ -53,14 +53,14 @@ class RecommendationProcessor:
         self,
         recommendations: List[TrackRecommendation],
         max_count: int = 30,
-        artist_ratio: float = 0.95
+        artist_ratio: float = 1.0
     ) -> List[TrackRecommendation]:
         """Enforce source ratio between artist discovery and RecoBeat recommendations.
 
         Args:
             recommendations: List of track recommendations (assumed to be pre-deduplicated)
             max_count: Maximum number of recommendations to return
-            artist_ratio: Ratio of artist recommendations (default 0.95 for 95% artist)
+            artist_ratio: Ratio of artist recommendations (default 1.0 for 100% artist, Recobeat overflow only)
 
         Returns:
             List with enforced source ratio, sorted by confidence
@@ -128,8 +128,9 @@ class RecommendationProcessor:
         max_artist = min(max_artist, remaining)
         max_reccobeat = max(0, remaining - max_artist)
 
-        # Ensure we leave room for at least one RecoBeat fallback when possible
-        if remaining > 0 and max_reccobeat == 0 and artist_ratio < 1:
+        # Only ensure RecoBeat fallback if artist_ratio is strictly less than 1.0
+        # If artist_ratio == 1.0, we want 0 Recobeat tracks (overflow only)
+        if remaining > 0 and max_reccobeat == 0 and artist_ratio < 1.0:
             max_reccobeat = 1
             max_artist = max(0, remaining - 1)
 

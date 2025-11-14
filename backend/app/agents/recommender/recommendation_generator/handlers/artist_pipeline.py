@@ -160,8 +160,9 @@ class ArtistRecommendationPipeline:
             return None, {}, 0
 
         # Maximize diversity: Use more artists with more tracks to account for filtering
-        artist_count = min(len(state.metadata.get("mood_matched_artists", [])), 20)
-        tracks_per_artist = max(3, min(int((target_artist_recs * 2.5) // artist_count) + 2, 5))
+        # Increased from 20 to 30 artists and from 5 to 10 tracks per artist for better overflow coverage
+        artist_count = min(len(state.metadata.get("mood_matched_artists", [])), 30)
+        tracks_per_artist = max(3, min(int((target_artist_recs * 3.5) // artist_count) + 2, 10))
 
         logger.info(
             f"Fetching {tracks_per_artist} tracks from up to {artist_count} artists "
@@ -192,8 +193,8 @@ class ArtistRecommendationPipeline:
         Returns:
             Tuple of (recommendations, successful_artists, failed_artists)
         """
-        # Use up to 20 artists for maximum coverage
-        artists_to_process = mood_matched_artists[:20]
+        # Use up to 30 artists for maximum coverage (increased from 20)
+        artists_to_process = mood_matched_artists[:30]
         
         # Prefetch top tracks in batches to minimize per-artist API calls
         prefetched_top_tracks = await self.spotify_service.get_artist_top_tracks_batch(
@@ -305,8 +306,8 @@ class ArtistRecommendationPipeline:
         artist_tracks = await self.spotify_service.get_artist_hybrid_tracks(
             access_token=access_token,
             artist_id=artist_id,
-            max_popularity=80,  # Exclude mega-hits (tracks > 80 popularity)
-            min_popularity=20,  # Ensure minimum quality
+            max_popularity=95,  # Relaxed: allow most tracks (was 80)
+            min_popularity=10,  # Relaxed: allow more obscure tracks (was 20)
             target_count=tracks_per_artist,
             top_tracks_ratio=0.3,  # Discovery-focused: 30% top tracks, 70% album tracks
             prefetched_top_tracks=prefetched_tracks,

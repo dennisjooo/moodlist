@@ -434,11 +434,11 @@ class OrchestratorAgent(BaseAgent):
         # But doesn't artificially limit if we're at target
         final_limit = min(max(target_count, len(state.recommendations)), max_count)
 
-        # Enforce 95:5 ratio (95% artist, 5% RecoBeat) at the target count
+        # Enforce 100% artist discovery ratio (Recobeat overflow only)
         state.recommendations = self.recommendation_processor.enforce_source_ratio(
             recommendations=state.recommendations,
             max_count=final_limit,
-            artist_ratio=0.95
+            artist_ratio=1.0
         )
         
         final_evaluation = state.metadata.get("final_quality_evaluation", {})

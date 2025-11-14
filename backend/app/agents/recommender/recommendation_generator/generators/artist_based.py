@@ -95,11 +95,12 @@ class ArtistBasedGenerator:
         # Score track against mood (relaxed threshold for artist tracks)
         cohesion_score = self._calculate_track_score(audio_features, target_features)
 
-        # Very relaxed threshold for artist tracks (0.3 vs 0.6 for RecoBeat)
-        if cohesion_score < 0.3:
+        # Ultra-relaxed threshold for artist tracks (0.2 vs 0.6 for RecoBeat)
+        # Lower threshold to ensure enough tracks pass filtering
+        if cohesion_score < 0.2:
             logger.info(
                 f"Filtering low-cohesion artist track: {track.get('name')} "
-                f"(cohesion: {cohesion_score:.2f} < 0.3 threshold)"
+                f"(cohesion: {cohesion_score:.2f} < 0.2 threshold)"
             )
             return None
 

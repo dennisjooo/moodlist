@@ -90,12 +90,12 @@ class RecommendationGeneratorAgent(BaseAgent):
             await self._notify_progress(state)
 
             # Apply ratio limits and get final recommendations using the shared processor
-            # Use 98:2 ratio (0.98 for artist discovery) to minimize RecoBeat fallback
+            # Use 100% artist discovery (1.0) - Recobeat only for extreme overflow
             max_recommendations = self._get_max_recommendations(state)
             final_recommendations = self.recommendation_processor.enforce_source_ratio(
                 recommendations=processed_recommendations,
                 max_count=max_recommendations,
-                artist_ratio=0.98
+                artist_ratio=1.0
             )
 
             # Deduplicate and add to state
