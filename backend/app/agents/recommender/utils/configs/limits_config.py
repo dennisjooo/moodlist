@@ -30,9 +30,21 @@ class LimitsConfig:
     fallback_artist_search_limit: int = 12  # Spotify limit when probing fallback keywords
     llm_batch_validation_trigger: int = 10  # Min artist count before running batch LLM filtering
     llm_minimum_filtered_artists: int = 5  # Minimum acceptable LLM output before falling back
-    artist_discovery_result_limit: int = 20  # Final number of artists to keep for downstream steps
+    artist_discovery_result_limit: int = 40  # Final number of artists to keep for downstream steps (increased from 20 for diversity)
     genre_artist_search_limit: int = 20  # Artists to fetch per-genre via direct search
     genre_track_search_limit: int = 15  # Track-based artist discoveries per genre
     heuristic_pruning_min_artists: int = 15  # Skip pruning when artist pool is already small
     heuristic_min_artist_popularity: int = 15  # Minimum popularity before we discard an artist
-    heuristic_pruned_artist_limit: int = 30  # Cap heuristically-pruned list before LLM work
+    heuristic_pruned_artist_limit: int = 50  # Cap heuristically-pruned list before LLM work (increased from 30 to support 40 final artists)
+    genre_expansion_core_limit: int = 10  # Core artists considered when expanding via genre search
+    genre_expansion_target: int = 10  # Max artists added during genre expansion
+    genre_expansion_max_genres: int = 5  # Number of genres to fan out from
+    genre_expansion_search_limit: int = 10  # Artists pulled per genre expansion query
+    genre_expansion_min_popularity: int = 20  # Minimum popularity for expansion candidates
+
+    # Diversity balancing controls
+    popularity_tier_mainstream_threshold: int = 70  # Popularity > threshold => mainstream
+    popularity_tier_mid_threshold: int = 40  # Popularity >= threshold => mid-tier
+    popularity_tier_mainstream_ratio: float = 0.3  # 30% mainstream
+    popularity_tier_mid_ratio: float = 0.5  # 50% mid-tier
+    popularity_tier_niche_ratio: float = 0.2  # 20% niche

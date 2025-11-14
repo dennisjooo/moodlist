@@ -318,3 +318,88 @@ class DiversityManager:
         """Increment usage counters for all artists on the track."""
         for artist in rec.artists:
             artist_usage[artist] += 1
+
+    def enforce_popularity_tiers(
+        self,
+        recommendations: List[TrackRecommendation],
+        target_count: int
+    ) -> List[TrackRecommendation]:
+        """Enforce popularity tier balancing to ensure mix of mainstream, mid-tier, and niche tracks.
+
+        Args:
+            recommendations: List of track recommendations
+            target_count: Target number of tracks for final playlist
+
+        Returns:
+            Balanced list of recommendations
+        """
+        if not recommendations or target_count <= 0:
+            return recommendations
+
+        limits = recommender_config.limits
+        mainstream_threshold = limits.popularity_tier_mainstream_threshold
+        mid_threshold = limits.popularity_tier_mid_threshold
+        mainstream_ratio = limits.popularity_tier_mainstream_ratio
+        mid_ratio = limits.popularity_tier_mid_ratio
+        niche_ratio = limits.popularity_tier_niche_ratio
+
+        # Clamp target count to available recommendations
+        target_count = min(target_count, len(recommendations))
+
+        # Calculate tier targets
+        mainstream_target = int(target_count * mainstream_ratio)
+        mid_target = int(target_count * mid_ratio)
+        niche_target = int(target_count * niche_ratio)
+
+        # Group recommendations by popularity tier
+        mainstream = []
+        mid_tier = []
+        niche = []
+
+        for rec in recommendations:
+            # Get popularity from audio_features or default to 50
+            popularity = 50  # Default
+            if rec.audio_features and isinstance(rec.audio_features, dict):
+                popularity = rec.audio_features.get("popularity", 50)
+
+            if popularity > mainstream_threshold:
+                mainstream.append(rec)
+            elif popularity >= mid_threshold:
+                mid_tier.append(rec)
+            else:
+                niche.append(rec)
+
+        # Sort each tier by confidence score
+        mainstream.sort(key=lambda r: r.confidence_score, reverse=True)
+        mid_tier.sort(key=lambda r: r.confidence_score, reverse=True)
+        niche.sort(key=lambda r: r.confidence_score, reverse=True)
+
+        # Build balanced list
+        balanced = []
+
+        # Take from each tier according to ratios (with flexibility)
+        selected_mainstream = mainstream[:mainstream_target]
+        selected_mid = mid_tier[:mid_target]
+        selected_niche = niche[:niche_target]
+
+        balanced.extend(selected_mainstream)
+        balanced.extend(selected_mid)
+        balanced.extend(selected_niche)
+
+        # Fill remaining slots with overflow from any tier (highest confidence first)
+        if len(balanced) < target_count:
+            overflow = (
+                mainstream[mainstream_target:] +
+                mid_tier[mid_target:] +
+                niche[niche_target:]
+            )
+            overflow.sort(key=lambda r: r.confidence_score, reverse=True)
+            balanced.extend(overflow[:target_count - len(balanced)])
+
+        logger.info(
+            f"Popularity tier balancing: {len(selected_mainstream)} mainstream, "
+            f"{len(selected_mid)} mid-tier, {len(selected_niche)} niche "
+            f"(target: {mainstream_target}/{mid_target}/{niche_target})"
+        )
+
+        return balanced[:target_count]

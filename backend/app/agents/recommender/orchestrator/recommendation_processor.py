@@ -9,6 +9,7 @@ import structlog
 
 from ...states.agent_state import TrackRecommendation
 from ..utils.track_deduplicator import deduplicate_track_recommendations
+from ..recommendation_generator.handlers.diversity import DiversityManager
 
 logger = structlog.get_logger(__name__)
 
@@ -18,7 +19,7 @@ class RecommendationProcessor:
 
     def __init__(self):
         """Initialize the recommendation processor."""
-        pass
+        self.diversity_handler = DiversityManager()
 
     def remove_duplicates(self, recommendations: List[TrackRecommendation]) -> List[TrackRecommendation]:
         """Remove duplicate tracks from recommendations.
@@ -222,7 +223,15 @@ class RecommendationProcessor:
         anchor_recs = capped_sources.get("anchor_track", [])
         artist_recs = capped_sources.get("artist_discovery", [])
         reccobeat_recs = capped_sources.get("reccobeat", [])
-        
+
+        # Apply popularity tier balancing to artist discovery tracks
+        # Target: 30% mainstream, 50% mid-tier, 20% niche
+        if artist_recs and len(artist_recs) > 5:  # Only apply if we have enough tracks
+            artist_recs = self.diversity_handler.enforce_popularity_tiers(
+                artist_recs,
+                target_count=len(artist_recs)  # Balance within available artist tracks
+            )
+
         # Combine with anchors first (NEVER re-sort after this!)
         combined_recs = anchor_recs + artist_recs + reccobeat_recs
 

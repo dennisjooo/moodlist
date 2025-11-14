@@ -13,6 +13,7 @@ from ....states.agent_state import AgentState, TrackRecommendation
 from ....tools.spotify_service import SpotifyService
 from ....tools.reccobeat_service import RecoBeatService
 from ....core.cache import cache_manager
+from ...utils.config import config
 from .audio_features import AudioFeaturesHandler
 from .token import TokenManager
 
@@ -80,6 +81,7 @@ class ArtistRecommendationPipeline:
             logger.info("No valid artists remaining after filtering")
             return []
 
+        artist_processing_cap = min(len(mood_matched_artists), config.artist_discovery_result_limit)
         logger.info(f"Generating recommendations from {len(mood_matched_artists)} discovered artists")
 
         # Prepare parameters and refresh token
@@ -99,11 +101,11 @@ class ArtistRecommendationPipeline:
         )
 
         # Handle error cases
-        self._handle_errors(successful_artists, failed_artists, len(mood_matched_artists))
+        self._handle_errors(successful_artists, failed_artists, artist_processing_cap)
 
         logger.info(
             f"Generated {len(all_recommendations)} recommendations from {successful_artists}/"
-            f"{min(len(mood_matched_artists), 20)} artists ({failed_artists} failed)"
+            f"{artist_processing_cap} artists ({failed_artists} failed)"
         )
 
         return [rec.dict() for rec in all_recommendations]
@@ -160,9 +162,10 @@ class ArtistRecommendationPipeline:
             return None, {}, 0
 
         # Maximize diversity: Use more artists with more tracks to account for filtering
-        # Increased from 20 to 30 artists and from 5 to 10 tracks per artist for better overflow coverage
-        artist_count = min(len(state.metadata.get("mood_matched_artists", [])), 30)
-        tracks_per_artist = max(3, min(int((target_artist_recs * 3.5) // artist_count) + 2, 10))
+        artist_count = min(len(state.metadata.get("mood_matched_artists", [])), config.artist_discovery_result_limit)
+        # Guard against zero division when artist_count is zero (should be prevented earlier)
+        safe_artist_count = max(artist_count, 1)
+        tracks_per_artist = max(4, min(int((target_artist_recs * 4.0) // safe_artist_count) + 2, 10))
 
         logger.info(
             f"Fetching {tracks_per_artist} tracks from up to {artist_count} artists "
@@ -193,8 +196,10 @@ class ArtistRecommendationPipeline:
         Returns:
             Tuple of (recommendations, successful_artists, failed_artists)
         """
-        # Use up to 30 artists for maximum coverage (increased from 20)
-        artists_to_process = mood_matched_artists[:30]
+        # Use up to the configured artist discovery limit for coverage
+        artist_limit = min(len(mood_matched_artists), config.artist_discovery_result_limit)
+        artists_to_process = mood_matched_artists[:artist_limit]
+        total_artists = len(artists_to_process)
         
         # Prefetch top tracks in batches to minimize per-artist API calls
         prefetched_top_tracks = await self.spotify_service.get_artist_top_tracks_batch(
@@ -212,7 +217,7 @@ class ArtistRecommendationPipeline:
                     artist_recommendations = await self._fetch_tracks_from_artist(
                         artist_id,
                         idx,
-                        len(mood_matched_artists),
+                        total_artists,
                         access_token,
                         target_features,
                         tracks_per_artist,
@@ -226,7 +231,7 @@ class ArtistRecommendationPipeline:
                 except Exception as e:
                     logger.error(
                         f"Error getting tracks for artist {artist_id} "
-                        f"(artist {idx+1}/{len(artists_to_process)}): {e}",
+                        f"(artist {idx+1}/{total_artists}): {e}",
                         exc_info=True
                     )
                     return [], False
@@ -282,17 +287,19 @@ class ArtistRecommendationPipeline:
         Returns:
             List of TrackRecommendation objects from this artist
         """
+        artist_progress_total = max(total_artists, 1)
+
         # Check if this artist has failed recently (if caching enabled)
         if self.use_failed_artist_caching:
             if await cache_manager.is_artist_failed(artist_id):
                 logger.debug(
                     f"Skipping previously failed artist {artist_id} "
-                    f"(artist {artist_index+1}/{min(total_artists, 20)})"
+                    f"(artist {artist_index+1}/{artist_progress_total})"
                 )
                 return []
 
         logger.info(
-            f"Fetching hybrid tracks for artist {artist_index+1}/{min(total_artists, 20)}: {artist_id}"
+            f"Fetching hybrid tracks for artist {artist_index+1}/{artist_progress_total}: {artist_id}"
         )
 
         # Get diverse tracks using hybrid strategy (top tracks + album deep cuts)
@@ -316,7 +323,7 @@ class ArtistRecommendationPipeline:
         if not artist_tracks:
             logger.warning(
                 f"No tracks returned for artist {artist_id} "
-                f"(artist {artist_index+1}/{min(total_artists, 20)})"
+                f"(artist {artist_index+1}/{artist_progress_total})"
             )
             # Mark this artist as failed (if caching enabled)
             if self.use_failed_artist_caching:
@@ -411,7 +418,7 @@ class ArtistRecommendationPipeline:
             failed_artists: Number of failed artists
             total_artists: Total number of artists attempted
         """
-        total_attempted = min(total_artists, 20)
+        total_attempted = min(total_artists, config.artist_discovery_result_limit)
 
         if failed_artists > total_attempted * 0.5:
             logger.error(
