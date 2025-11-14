@@ -1,6 +1,7 @@
-// WebSocket manager for real-time workflow status updates
-// Cloudflare-friendly alternative to SSE
+// Optimized WebSocket manager using reconnecting-websocket
+// Provides automatic reconnection, better error handling, and simplified logic
 
+import ReconnectingWebSocket, { type CloseEvent } from 'reconnecting-websocket';
 import { config } from '@/lib/config';
 import { logger } from '@/lib/utils/logger';
 import { WorkflowStatus } from './api/workflow';
@@ -13,11 +14,11 @@ export interface WSCallbacks {
 }
 
 interface WSConnection {
-    socket: WebSocket;
+    socket: ReconnectingWebSocket;
     callbacks: WSCallbacks;
-    reconnectAttempts: number;
-    reconnectTimer?: NodeJS.Timeout;
     pingInterval?: NodeJS.Timeout;
+    isReconnecting: boolean;
+    manuallyClosed: boolean;
 }
 
 export class WSManager {
@@ -37,10 +38,7 @@ export class WSManager {
     /**
      * Start WebSocket connection for a workflow session
      */
-    startStreaming(
-        sessionId: string,
-        callbacks: WSCallbacks
-    ): void {
+    startStreaming(sessionId: string, callbacks: WSCallbacks): void {
         // Stop any existing connection first
         if (this.connections.has(sessionId)) {
             logger.debug('WebSocket connection already exists - closing and restarting', {
@@ -54,10 +52,9 @@ export class WSManager {
     }
 
     /**
-     * Establish WebSocket connection
+     * Establish WebSocket connection using reconnecting-websocket
      */
     private connect(sessionId: string, callbacks: WSCallbacks): void {
-        // Use wss:// for https, ws:// for http
         const protocol = config.api.baseUrl.startsWith('https') ? 'wss' : 'ws';
         const wsUrl = config.api.baseUrl.replace(/^https?/, protocol);
         const url = `${wsUrl}/api/agents/recommendations/${sessionId}/ws`;
@@ -68,90 +65,96 @@ export class WSManager {
             url
         });
 
-        try {
-            const socket = new WebSocket(url);
+        const socket = new ReconnectingWebSocket(url, undefined, {
+            startClosed: false,
+            minReconnectionDelay: this.baseReconnectDelay,
+            maxReconnectionDelay: this.maxReconnectDelay,
+            reconnectionDelayGrowFactor: 2,
+            connectionTimeout: 5000,
+            maxRetries: this.maxReconnectAttempts,
+        });
 
-            const connection: WSConnection = {
-                socket,
-                callbacks,
-                reconnectAttempts: 0
-            };
+        const connection: WSConnection = {
+            socket,
+            callbacks,
+            isReconnecting: false,
+            manuallyClosed: false
+        };
 
-            this.connections.set(sessionId, connection);
+        this.connections.set(sessionId, connection);
 
-            // Handle connection open
-            socket.onopen = () => {
-                logger.info('WebSocket connection established successfully', {
-                    component: 'WSManager',
-                    sessionId,
-                    readyState: socket.readyState,
-                    url
-                });
+        socket.addEventListener('open', () => {
+            logger.info('WebSocket connection established successfully', {
+                component: 'WSManager',
+                sessionId,
+                readyState: socket.readyState,
+                url
+            });
 
-                // Reset reconnect attempts on successful connection
-                const wasReconnecting = connection.reconnectAttempts > 0;
-                connection.reconnectAttempts = 0;
-
-                // Start ping interval to keep connection alive
+            // Start ping interval to keep connection alive
+            if (!connection.pingInterval) {
                 connection.pingInterval = setInterval(() => {
                     if (socket.readyState === WebSocket.OPEN) {
                         socket.send('ping');
                     }
                 }, this.pingIntervalMs);
+            }
 
-                // Notify reconnection callback if this was a reconnection
-                if (wasReconnecting && callbacks.onReconnect) {
-                    logger.info('WebSocket reconnected successfully', {
-                        component: 'WSManager',
-                        sessionId
-                    });
-                    callbacks.onReconnect();
-                }
-            };
+            // Notify reconnection callback if this was a reconnection
+            if (connection.isReconnecting && callbacks.onReconnect) {
+                logger.info('WebSocket reconnected successfully', {
+                    component: 'WSManager',
+                    sessionId
+                });
+                callbacks.onReconnect();
+            }
 
-            // Handle incoming messages
-            socket.onmessage = (event: MessageEvent) => {
-                try {
-                    const message = JSON.parse(event.data);
+            connection.isReconnecting = false;
+        });
 
-                    logger.debug('WebSocket message received', {
-                        component: 'WSManager',
-                        sessionId,
-                        type: message.type
-                    });
+        socket.addEventListener('message', (event) => {
+            try {
+                const message = JSON.parse(event.data as string);
 
-                    switch (message.type) {
-                        case 'connected':
-                            logger.info('WebSocket connection confirmed', {
-                                component: 'WSManager',
-                                sessionId
-                            });
-                            break;
+                logger.debug('WebSocket message received', {
+                    component: 'WSManager',
+                    sessionId,
+                    type: message.type
+                });
 
-                        case 'status':
-                            logger.info('Received status update via WebSocket', {
-                                component: 'WSManager',
-                                sessionId,
-                                status: message.data.status,
-                                currentStep: message.data.current_step
-                            });
-                            callbacks.onStatus(message.data as WorkflowStatus);
-                            break;
+                switch (message.type) {
+                    case 'connected':
+                        logger.info('WebSocket connection confirmed', {
+                            component: 'WSManager',
+                            sessionId
+                        });
+                        break;
 
-                        case 'complete':
-                            logger.info('Workflow completed', {
-                                component: 'WSManager',
-                                sessionId,
-                                status: message.data.status
-                            });
-                            callbacks.onStatus(message.data as WorkflowStatus);
-                            if (callbacks.onComplete) {
-                                callbacks.onComplete();
-                            }
-                            this.stopStreaming(sessionId);
-                            break;
+                    case 'status':
+                        logger.info('Received status update via WebSocket', {
+                            component: 'WSManager',
+                            sessionId,
+                            status: message.data.status,
+                            currentStep: message.data.current_step
+                        });
+                        callbacks.onStatus(message.data as WorkflowStatus);
+                        break;
 
-                        case 'error':
+                    case 'complete':
+                        logger.info('Workflow completed', {
+                            component: 'WSManager',
+                            sessionId,
+                            status: message.data.status
+                        });
+                        callbacks.onStatus(message.data as WorkflowStatus);
+                        if (callbacks.onComplete) {
+                            callbacks.onComplete();
+                        }
+                        this.stopStreaming(sessionId);
+                        break;
+
+                    case 'error':
+                        {
                             const error = new Error(message.message || message.error || 'WebSocket error');
                             logger.error('Received error message', error, {
                                 component: 'WSManager',
@@ -160,127 +163,80 @@ export class WSManager {
                             if (callbacks.onError) {
                                 callbacks.onError(error);
                             }
-                            break;
+                        }
+                        break;
 
-                        case 'ping':
-                            // Respond to server ping
-                            socket.send('pong');
-                            break;
+                    case 'ping':
+                        socket.send('pong');
+                        break;
 
-                        case 'pong':
-                            // Server acknowledged our ping
-                            logger.debug('Received pong', {
-                                component: 'WSManager',
-                                sessionId
-                            });
-                            break;
+                    case 'pong':
+                        logger.debug('Received pong', {
+                            component: 'WSManager',
+                            sessionId
+                        });
+                        break;
 
-                        default:
-                            logger.debug('Unknown message type', {
-                                component: 'WSManager',
-                                sessionId,
-                                type: message.type
-                            });
-                    }
-                } catch (error) {
-                    logger.error('Failed to parse WebSocket message', error, {
-                        component: 'WSManager',
-                        sessionId,
-                        data: event.data
-                    });
+                    default:
+                        logger.debug('Unknown message type', {
+                            component: 'WSManager',
+                            sessionId,
+                            type: message.type
+                        });
                 }
-            };
-
-            // Handle errors
-            socket.onerror = (event) => {
-                logger.error('WebSocket error', new Error('WebSocket error event'), {
+            } catch (error) {
+                logger.error('Failed to parse WebSocket message', error, {
                     component: 'WSManager',
                     sessionId,
-                    readyState: socket.readyState
+                    data: event.data
                 });
-            };
-
-            // Handle connection close
-            socket.onclose = (event) => {
-                logger.info('WebSocket connection closed', {
-                    component: 'WSManager',
-                    sessionId,
-                    code: event.code,
-                    reason: event.reason,
-                    wasClean: event.wasClean
-                });
-
-                // Clear ping interval
-                if (connection.pingInterval) {
-                    clearInterval(connection.pingInterval);
-                    connection.pingInterval = undefined;
-                }
-
-                // Attempt reconnection if not a clean close
-                if (!event.wasClean && event.code !== 1000) {
-                    this.handleReconnect(sessionId);
-                }
-            };
-
-        } catch (error) {
-            logger.error('Failed to create WebSocket connection', error, {
-                component: 'WSManager',
-                sessionId
-            });
-            if (callbacks.onError) {
-                callbacks.onError(error instanceof Error ? error : new Error('Failed to create WebSocket connection'));
             }
-        }
-    }
-
-    /**
-     * Handle reconnection with exponential backoff
-     */
-    private handleReconnect(sessionId: string): void {
-        const connection = this.connections.get(sessionId);
-        if (!connection) {
-            return;
-        }
-
-        connection.reconnectAttempts++;
-
-        if (connection.reconnectAttempts > this.maxReconnectAttempts) {
-            logger.error('Max reconnection attempts reached', undefined, {
-                component: 'WSManager',
-                sessionId,
-                attempts: connection.reconnectAttempts
-            });
-
-            if (connection.callbacks.onError) {
-                connection.callbacks.onError(new Error('Failed to reconnect after multiple attempts'));
-            }
-
-            this.stopStreaming(sessionId);
-            return;
-        }
-
-        // Calculate exponential backoff delay
-        const delay = Math.min(
-            this.baseReconnectDelay * Math.pow(2, connection.reconnectAttempts - 1),
-            this.maxReconnectDelay
-        );
-
-        logger.info('Scheduling WebSocket reconnection', {
-            component: 'WSManager',
-            sessionId,
-            attempt: connection.reconnectAttempts,
-            delayMs: delay
         });
 
-        // Schedule reconnection
-        connection.reconnectTimer = setTimeout(() => {
-            logger.debug('Attempting WebSocket reconnection', {
+        socket.addEventListener('error', () => {
+            // reconnecting-websocket handles reconnection automatically
+            logger.error('WebSocket error', new Error('WebSocket error event'), {
                 component: 'WSManager',
                 sessionId,
-                attempt: connection.reconnectAttempts
+                readyState: socket.readyState
             });
-            this.connect(sessionId, connection.callbacks);
-        }, delay);
+        });
+
+        socket.addEventListener('close', (event: CloseEvent) => {
+            logger.info('WebSocket connection closed', {
+                component: 'WSManager',
+                sessionId,
+                code: event.code,
+                reason: event.reason,
+                wasClean: event.wasClean
+            });
+
+            if (connection.pingInterval) {
+                clearInterval(connection.pingInterval);
+                connection.pingInterval = undefined;
+            }
+
+            if (connection.manuallyClosed) {
+                return;
+            }
+
+            connection.isReconnecting = true;
+
+            const retryCount = (socket as ReconnectingWebSocket & { retryCount?: number }).retryCount ?? 0;
+            if (retryCount >= this.maxReconnectAttempts) {
+                logger.error('Max WebSocket reconnection attempts reached', undefined, {
+                    component: 'WSManager',
+                    sessionId,
+                    attempts: retryCount
+                });
+
+                if (callbacks.onError) {
+                    callbacks.onError(new Error('Failed to reconnect after multiple attempts'));
+                }
+
+                this.stopStreaming(sessionId);
+            }
+        });
     }
 
     /**
@@ -297,23 +253,13 @@ export class WSManager {
             sessionId
         });
 
-        // Clear reconnect timer if exists
-        if (connection.reconnectTimer) {
-            clearTimeout(connection.reconnectTimer);
-        }
+        connection.manuallyClosed = true;
 
-        // Clear ping interval
         if (connection.pingInterval) {
             clearInterval(connection.pingInterval);
         }
 
-        // Close WebSocket
-        if (connection.socket.readyState === WebSocket.OPEN ||
-            connection.socket.readyState === WebSocket.CONNECTING) {
-            connection.socket.close(1000, 'Client closing connection');
-        }
-
-        // Remove from connections map
+        connection.socket.close(1000, 'Client closing connection');
         this.connections.delete(sessionId);
     }
 
