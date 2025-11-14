@@ -429,10 +429,11 @@ class OrchestratorAgent(BaseAgent):
         target_count = playlist_target.get("target_count", 20)
         max_count = playlist_target.get("max_count", 30)
 
-        # Use target_count as the limit since we regenerated to meet it
-        # But cap at max_count as a safety measure
-        final_limit = min(target_count, max_count, len(state.recommendations))
-        
+        # Use target_count as the limit (don't cap by current count!)
+        # This allows the recommendation list to be trimmed if over target
+        # But doesn't artificially limit if we're at target
+        final_limit = min(max(target_count, len(state.recommendations)), max_count)
+
         # Enforce 95:5 ratio (95% artist, 5% RecoBeat) at the target count
         state.recommendations = self.recommendation_processor.enforce_source_ratio(
             recommendations=state.recommendations,
