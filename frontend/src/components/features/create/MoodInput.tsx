@@ -54,7 +54,7 @@ export default function MoodInput({ onSubmit, initialMood, disabled = false, loa
                 <span className="text-xs text-muted-foreground/70">Be as specific as you like</span>
               </div>
               <Textarea
-                placeholder="e.g. Late-night coding session with lo-fi beats and a splash of energy"
+                placeholder="e.g. Late-night coding session with lo-fi beats&#10;and a splash of energy"
                 value={mood}
                 onChange={(e) => setMood(e.target.value)}
                 disabled={disabled}

@@ -22,7 +22,9 @@ export function EmptyState() {
                 </FeatureBadge>
                 <h3 className="text-3xl font-semibold tracking-tight">No playlists yet</h3>
                 <p className="text-base text-muted-foreground">
-                    Get started with a mood card or jump straight into a custom prompt—your first mix is just a click away.
+                    Get started with a mood card or jump straight into a custom prompt—
+                    <br />
+                    your first mix is just a click away.
                 </p>
             </motion.div>
 
