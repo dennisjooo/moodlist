@@ -66,6 +66,22 @@ CRITICAL: Determine the cultural/regional context of the music request:
 - preferred_regions: List of regions that match the request (e.g., ["Western", "French", "European"] for "French funk")
 - excluded_regions: List of regions to avoid (e.g., ["Indonesian", "Southeast Asian", "Eastern European"] for "French funk")
 
+CRITICAL: Identify themes and contexts that should be excluded from the playlist:
+- excluded_themes: List of themes/contexts that don't fit the mood (e.g., ["holiday", "christmas", "religious"] for secular romantic R&B)
+  * Common themes to consider excluding:
+    - "holiday" / "christmas" / "festive" (seasonal holiday music)
+    - "religious" / "worship" / "gospel" (unless explicitly requested)
+    - "kids" / "children" (children's music, unless explicitly requested)
+    - "comedy" / "parody" (comedy songs, unless explicitly requested)
+    - "national anthems" / "patriotic" (nationalistic music)
+    - "sports" / "stadium" (sports anthems)
+    - "video game" / "soundtrack" (unless explicitly requested)
+  * Examples:
+    - "romantic R&B" → exclude ["holiday", "christmas", "religious", "kids"]
+    - "workout playlist" → exclude ["comedy", "kids", "holiday", "slow ballads"]
+    - "Christmas party" → DO NOT exclude holiday themes (they're requested!)
+    - "gospel soul" → DO NOT exclude religious themes (they're requested!)
+
 Common regional categories:
 - Western: USA, UK, Canada, Australia (English-speaking mainstream)
 - European: France, Germany, Netherlands, Belgium, Sweden, etc.
@@ -130,6 +146,7 @@ Provide your analysis in valid JSON format with this structure:
   "genre_keywords": ["indie", "alternative", "rock"],
   "preferred_regions": ["Western", "European"],
   "excluded_regions": ["Southeast Asian", "Indonesian"],
+  "excluded_themes": ["holiday", "christmas", "kids"],
   "temporal_context": {
     "decade": "1990s",
     "era": "classic",

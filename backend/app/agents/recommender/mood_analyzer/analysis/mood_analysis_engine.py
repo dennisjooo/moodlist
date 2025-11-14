@@ -118,6 +118,10 @@ class MoodAnalysisEngine:
         analysis["preferred_regions"] = preferred_regions
         analysis["excluded_regions"] = excluded_regions
 
+        # Add theme exclusions (rule-based inference)
+        excluded_themes = self._infer_excluded_themes(prompt_lower)
+        analysis["excluded_themes"] = excluded_themes
+
         return analysis
 
     def _infer_regional_context(self, prompt_lower: str) -> tuple[List[str], List[str]]:
@@ -158,6 +162,54 @@ class MoodAnalysisEngine:
             excluded.extend(['Southeast Asian', 'Indonesian'])
 
         return preferred, excluded
+
+    def _infer_excluded_themes(self, prompt_lower: str) -> List[str]:
+        """Infer themes that should be excluded from the mood prompt.
+
+        Args:
+            prompt_lower: Lowercase mood prompt
+
+        Returns:
+            List of excluded themes
+        """
+        excluded = []
+
+        # Check if specific themes are explicitly requested (then don't exclude them)
+        if any(term in prompt_lower for term in ['christmas', 'holiday', 'xmas', 'festive']):
+            # User wants holiday music, don't exclude it
+            return []
+
+        if any(term in prompt_lower for term in ['gospel', 'worship', 'praise', 'church']):
+            # User wants religious music, don't exclude it
+            return []
+
+        if any(term in prompt_lower for term in ['kids', 'children', 'nursery']):
+            # User wants kids music, don't exclude it
+            return []
+
+        # Default exclusions for most playlists (unless explicitly requested above)
+        # Most people don't want holiday songs in their regular playlists
+        excluded.extend(['holiday', 'christmas'])
+
+        # For specific genres/moods, add more exclusions
+        if any(term in prompt_lower for term in ['romantic', 'date', 'dinner', 'intimate', 'sensual']):
+            # Romantic moods should exclude religious themes
+            excluded.extend(['religious', 'kids'])
+
+        if any(term in prompt_lower for term in ['workout', 'gym', 'exercise', 'running']):
+            # Workout playlists should exclude slow/ballad themes
+            excluded.extend(['religious', 'kids'])
+
+        if any(term in prompt_lower for term in ['party', 'dance', 'club', 'hype']):
+            # Party moods should exclude solemn themes
+            excluded.extend(['religious', 'kids'])
+
+        if any(term in prompt_lower for term in ['chill', 'relax', 'study', 'focus', 'ambient']):
+            # Chill/focus moods should exclude comedy and kids
+            excluded.extend(['comedy', 'kids'])
+
+        # Remove duplicates
+        return list(set(excluded))
 
     def _enhance_features_with_keywords(self, analysis: Dict[str, Any], prompt_lower: str):
         """Enhance feature analysis with specific keywords."""
