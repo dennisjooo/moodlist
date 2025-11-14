@@ -74,9 +74,6 @@ export const TrackItem = memo(function TrackItem({ track, index, onRemove, isRem
                             {Math.round(track.confidence_score * 30 + 70)}%
                         </span>
                     </div>
-                    <Badge variant="outline" className="text-xs capitalize">
-                        {track.source.replace(/_/g, ' ')}
-                    </Badge>
                 </div>
             </div>
 
