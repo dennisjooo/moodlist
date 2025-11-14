@@ -303,6 +303,13 @@ class GetArtistTopTracksTool(RateLimitedTool):
             rate_limit_per_minute=100,  # High limit since global rate limiter handles actual spacing
             min_request_interval=0.1,  # Low interval since global rate limiter enforces 1.5s
         )
+        # Album endpoints (albums, album tracks, track batches) can be much chattier.
+        # Give them their own throttle bucket so the main top-tracks limiter stays healthy.
+        self.configure_scope_limits(
+            scope="album",
+            rate_limit_per_minute=400,
+            min_request_interval=0.0,
+        )
 
     def _get_input_schema(self) -> Type[BaseModel]:
         """Get the input schema for this tool."""
@@ -479,6 +486,28 @@ class GetArtistTopTracksTool(RateLimitedTool):
                 error_type=type(e).__name__
             )
 
+    async def _make_album_request(
+        self,
+        method: str,
+        endpoint: str,
+        params: Optional[Dict[str, Any]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None,
+        use_cache: bool = False,
+        cache_ttl: int = 300,
+    ) -> Dict[str, Any]:
+        """Proxy album/track sampling calls through the dedicated rate-limit scope."""
+        return await self._make_request(
+            method=method,
+            endpoint=endpoint,
+            params=params,
+            json_data=json_data,
+            headers=headers,
+            use_cache=use_cache,
+            cache_ttl=cache_ttl,
+            request_scope="album",
+        )
+
     async def get_hybrid_tracks(
         self,
         access_token: str,
@@ -555,7 +584,7 @@ class GetArtistTopTracksTool(RateLimitedTool):
             # Add small delay before album fetch to avoid rate limits when processing multiple artists
             await asyncio.sleep(0.5)  # 500ms delay to space out album API calls
             albums = await get_artist_albums(
-                make_request=self._make_request,
+                make_request=self._make_album_request,
                 access_token=access_token,
                 artist_id=artist_id,
                 market=market,
@@ -566,7 +595,7 @@ class GetArtistTopTracksTool(RateLimitedTool):
                 logger.info(f"Found {len(albums)} albums, sampling tracks for diversity")
                 # Sample tracks from albums
                 album_tracks = await sample_album_tracks(
-                    make_request=self._make_request,
+                    make_request=self._make_album_request,
                     validate_response=self._validate_response,
                     access_token=access_token,
                     albums=albums,
