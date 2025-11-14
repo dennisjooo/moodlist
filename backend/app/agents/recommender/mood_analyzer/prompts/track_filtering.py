@@ -28,7 +28,8 @@ def get_artist_validation_prompt(
     recommended_artists = ', '.join(mood_analysis.get('artist_recommendations', [])[:10])
     preferred_regions = ', '.join(mood_analysis.get('preferred_regions', []))
     excluded_regions = ', '.join(mood_analysis.get('excluded_regions', []))
-    
+    excluded_themes = ', '.join(mood_analysis.get('excluded_themes', []))
+
     return f"""Validate whether this artist is appropriate for the user's music request.
 
 User's mood request: "{mood_prompt}"
@@ -38,19 +39,21 @@ Target genres: {target_genres}
 Reference artists: {recommended_artists}
 Preferred regions: {preferred_regions}
 Excluded regions: {excluded_regions}
+Excluded themes: {excluded_themes}
 
 Artist to validate:
 - Name: {artist_name}
 - Genres: {genres_str}
 - Popularity: {popularity}
 
-Task: Determine if this artist fits the mood request or is a cultural/genre mismatch.
+Task: Determine if this artist fits the mood request or is a cultural/genre/theme mismatch.
 
 Red flags to watch for:
 1. **Regional Mismatch**: Artist from wrong region (e.g., Indonesian artist for "French funk")
 2. **Genre Drift**: Artist genres don't align (e.g., "disco polo" for "nu-disco")
 3. **Language Incompatibility**: Non-Western artist when Western music requested
 4. **Style Mismatch**: Artist's style doesn't fit the vibe
+5. **Theme Mismatch**: Artist primarily known for excluded themes (e.g., Christmas music when excluded)
 
 Green flags:
 1. Genres overlap with target genres
@@ -89,7 +92,8 @@ def get_batch_track_filter_prompt(
     genre_keywords = ', '.join(mood_analysis.get('genre_keywords', []))
     preferred_regions = ', '.join(mood_analysis.get('preferred_regions', []))
     excluded_regions = ', '.join(mood_analysis.get('excluded_regions', []))
-    
+    excluded_themes = ', '.join(mood_analysis.get('excluded_themes', []))
+
     # Format tracks
     tracks_info = []
     for i, track in enumerate(tracks[:20]):  # Limit to 20 for prompt size
@@ -107,11 +111,12 @@ Mood interpretation: {mood_interpretation}
 Target genres: {genre_keywords}
 Preferred regions: {preferred_regions}
 Excluded regions: {excluded_regions}
+Excluded themes: {excluded_themes}
 
 Tracks to filter:
 {tracks_context}
 
-Task: Identify tracks that are cultural/linguistic mismatches.
+Task: Identify tracks that are cultural/linguistic/thematic mismatches.
 
 Common mismatches to flag:
 - Indonesian/Malaysian tracks when requesting Western genres
@@ -119,11 +124,16 @@ Common mismatches to flag:
 - Polish/Eastern European tracks when requesting French/Nu-Disco
 - K-pop when requesting non-Asian genres (unless K-pop requested)
 - Latin American tracks when requesting European electronic music
+- Holiday/Christmas songs when not requesting holiday music (e.g., "O Holy Night", "Jingle Bells", "Silent Night")
+- Religious/worship songs when requesting secular music
+- Children's songs when not requesting kids music
+- Comedy/parody tracks when requesting serious music
 
 Tracks should pass if:
 - Language/region matches the mood request
 - Western/English tracks for ambiguous requests
 - Culturally appropriate for the specified genre
+- No thematic conflicts with excluded themes (check track titles for obvious indicators)
 
 Respond in JSON format:
 {{

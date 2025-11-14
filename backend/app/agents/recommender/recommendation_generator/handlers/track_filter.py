@@ -50,6 +50,11 @@ class TrackFilter:
         if not genre_validation[0]:
             return genre_validation
 
+        # Check 4: Theme exclusions (holiday songs, religious, etc.)
+        theme_validation = self._validate_theme_compatibility(context)
+        if not theme_validation[0]:
+            return theme_validation
+
         # If we got here, no obvious red flags
         return (True, "No obvious mismatches detected")
 
@@ -226,6 +231,57 @@ class TrackFilter:
                     return (False, f"Genre conflict: track appears to be {track_genres}, mood is {mood_genres}")
 
         return (True, "Genres compatible")
+
+    def _validate_theme_compatibility(self, context: Dict[str, Any]) -> tuple[bool, str]:
+        """Validate that track doesn't contain excluded themes.
+
+        Args:
+            context: Validation context
+
+        Returns:
+            (is_valid, reason) - True if themes compatible
+        """
+        mood_analysis = context["mood_analysis"]
+        excluded_themes = mood_analysis.get("excluded_themes", [])
+
+        if not excluded_themes:
+            return (True, "No themes excluded")
+
+        # Define keyword patterns for different themes
+        theme_indicators = {
+            "holiday": ["christmas", "xmas", "santa", "jingle", "sleigh", "noel", "holiday",
+                       "winter wonderland", "silent night", "holy night", "feliz navidad",
+                       "deck the halls", "carol", "festive"],
+            "christmas": ["christmas", "xmas", "santa", "jingle", "sleigh", "noel",
+                         "silent night", "holy night", "feliz navidad", "deck the halls"],
+            "religious": ["holy", "prayer", "worship", "gospel", "praise", "blessed", "amen",
+                         "hallelujah", "church", "hymn", "psalm", "sacred"],
+            "kids": ["baby shark", "wheels on the bus", "itsy bitsy", "twinkle twinkle",
+                    "abc song", "nursery rhyme", "children's", "kids bop"],
+            "children": ["baby shark", "wheels on the bus", "itsy bitsy", "twinkle twinkle",
+                        "abc song", "nursery rhyme", "children's", "kids bop"],
+            "comedy": ["parody", "comedy", "funny", "joke", "weird al", "lonely island"],
+            "parody": ["parody", "weird al", "lonely island", "comedy"],
+            "national anthems": ["national anthem", "star spangled banner", "god save"],
+            "patriotic": ["national anthem", "patriotic", "star spangled banner"],
+            "sports": ["stadium anthem", "we will rock you", "we are the champions"],
+            "stadium": ["stadium anthem", "we will rock you", "we are the champions"],
+            "video game": ["8-bit", "chiptune", "minecraft", "fortnite", "game soundtrack"],
+            "soundtrack": ["movie soundtrack", "film score", "ost"],
+        }
+
+        # Check track name against excluded themes
+        track_lower = context["track_lower"]
+
+        for excluded_theme in excluded_themes:
+            theme_lower = excluded_theme.lower()
+            indicators = theme_indicators.get(theme_lower, [theme_lower])
+
+            for indicator in indicators:
+                if indicator in track_lower:
+                    return (False, f"Theme exclusion: track contains '{indicator}' which matches excluded theme '{excluded_theme}'")
+
+        return (True, "No excluded themes detected")
 
     def _filter_and_rank_recommendations(
         self,
