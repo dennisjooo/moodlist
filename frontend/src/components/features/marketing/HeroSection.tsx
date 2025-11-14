@@ -2,13 +2,13 @@
 
 import { SpotifyLoginButton } from '@/components/features/auth/SpotifyLoginButton';
 import TypewriterText from '@/components/TypewriterText';
-import { FeatureBadge } from '@/components/ui/feature-badge';
 import { Button } from '@/components/ui/button';
-import { Music, ArrowDown, Info } from 'lucide-react';
+import { FeatureBadge } from '@/components/ui/feature-badge';
+import { config } from '@/lib/config';
+import { useAuth } from '@/lib/store/authStore';
+import { ArrowDown, Music } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/lib/store/authStore';
-import { config } from '@/lib/config';
 
 export interface HeroSectionProps {
     isLoggedIn?: boolean;
@@ -78,8 +78,9 @@ export function HeroSection({ isLoggedIn: serverIsLoggedIn }: HeroSectionProps) 
                             />
                         </span>
                     </h1>
-                    <p className="text-lg leading-8 text-muted-foreground max-w-2xl mb-12">
+                    <p className="text-lg leading-8 text-muted-foreground max-w-3xl mb-12">
                         Describe how you&apos;re feeling and we&apos;ll create the perfect Spotify playlist for your moment.
+                        <br />
                         Powered by AI, personalized for you.
                     </p>
 

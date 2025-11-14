@@ -41,15 +41,21 @@ export function LimitedAccessDialog({ open, onOpenChange }: LimitedAccessDialogP
                     <AlertDialogDescription asChild>
                         <div className="text-left space-y-3 pt-2">
                             <div>
-                                MoodList is currently in <strong>limited beta</strong>. Our Spotify API is in development mode, which means we can only support a small number of users right now (up to 25 manually whitelisted accounts).
+                                MoodList is currently in <strong>limited beta</strong>. Our Spotify API is in development mode, which means we can only support a small number of users right now.
+                                <br />
+                                (up to 25 manually whitelisted accounts)
                             </div>
                             <div>
-                                If you&apos;ve already been added to our whitelist, you can proceed with login. Otherwise, you&apos;ll see an error from Spotify.
+                                If you&apos;ve already been added to our whitelist, you can proceed with login.
+                                <br />
+                                Otherwise, you&apos;ll see an error from Spotify.
                             </div>
                             <div className="rounded-lg border border-border/60 bg-muted/30 p-3 text-sm space-y-2">
                                 <div className="font-medium">Want access?</div>
                                 <div className="text-muted-foreground">
-                                    We currently don&apos; have a restriction from Spotify to 25 users. If you're interested in being added to the beta whitelist, please reach out to us.
+                                    We currently don&apos; have a restriction from Spotify to 25 users.
+                                    <br />
+                                    If you're interested in being added to the beta whitelist, please reach out to us.
                                 </div>
                                 {betaContactUrl && (
                                     <Button

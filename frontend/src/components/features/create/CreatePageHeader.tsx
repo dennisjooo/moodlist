@@ -19,7 +19,9 @@ export function CreatePageHeader() {
           Craft the soundtrack to your moment
         </h1>
         <p className="mx-auto max-w-2xl text-sm text-muted-foreground sm:text-base">
-          Share the vibe you&apos;re chasing and our AI blends it into a bespoke Spotify playlist—complete with tracks that match your energy.
+          Share the vibe you&apos;re chasing and our AI blends it into a bespoke Spotify playlist—
+          <br />
+          complete with tracks that match your energy.
         </p>
       </div>
     </div>
