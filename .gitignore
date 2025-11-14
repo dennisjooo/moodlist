@@ -5,3 +5,4 @@ TODO.md
 .cursor/
 *.json
 deployed.env
+logs/
