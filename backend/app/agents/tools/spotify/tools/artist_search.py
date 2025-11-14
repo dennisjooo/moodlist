@@ -310,6 +310,8 @@ class GetArtistTopTracksTool(RateLimitedTool):
             rate_limit_per_minute=400,
             min_request_interval=0.0,
         )
+        # Limit how many artists can sample albums at once to avoid thundering-herd sleeps.
+        self._album_sampling_semaphore = asyncio.Semaphore(3)
 
     def _get_input_schema(self) -> Type[BaseModel]:
         """Get the input schema for this tool."""
@@ -580,32 +582,31 @@ class GetArtistTopTracksTool(RateLimitedTool):
 
         # Step 2: Get album tracks for diversity (if ratio allows)
         if album_tracks_count > 0:
-            logger.info(f"Fetching albums for artist {artist_id}")
-            # Add small delay before album fetch to avoid rate limits when processing multiple artists
-            await asyncio.sleep(0.5)  # 500ms delay to space out album API calls
-            albums = await get_artist_albums(
-                make_request=self._make_album_request,
-                access_token=access_token,
-                artist_id=artist_id,
-                market=market,
-                limit=5  # Reduced from 10 to 5 albums to reduce API calls and avoid rate limits
-            )
-
-            if albums:
-                logger.info(f"Found {len(albums)} albums, sampling tracks for diversity")
-                # Sample tracks from albums
-                album_tracks = await sample_album_tracks(
+            async with self._album_sampling_semaphore:
+                logger.info(f"Fetching albums for artist {artist_id}")
+                albums = await get_artist_albums(
                     make_request=self._make_album_request,
-                    validate_response=self._validate_response,
                     access_token=access_token,
-                    albums=albums,
+                    artist_id=artist_id,
                     market=market,
-                    max_tracks=album_tracks_count,
-                    track_ids_seen=track_ids_seen,
-                    min_popularity=min_popularity,
-                    max_popularity=max_popularity
+                    limit=5  # Reduced from 10 to 5 albums to reduce API calls and avoid rate limits
                 )
-                all_tracks.extend(album_tracks)
+
+                if albums:
+                    logger.info(f"Found {len(albums)} albums, sampling tracks for diversity")
+                    # Sample tracks from albums
+                    album_tracks = await sample_album_tracks(
+                        make_request=self._make_album_request,
+                        validate_response=self._validate_response,
+                        access_token=access_token,
+                        albums=albums,
+                        market=market,
+                        max_tracks=album_tracks_count,
+                        track_ids_seen=track_ids_seen,
+                        min_popularity=min_popularity,
+                        max_popularity=max_popularity
+                    )
+                    all_tracks.extend(album_tracks)
 
         # Deduplicate and limit
         unique_tracks = []
