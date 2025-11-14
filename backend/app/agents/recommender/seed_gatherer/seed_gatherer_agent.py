@@ -10,6 +10,8 @@ Refactored for better separation of concerns.
 """
 
 import time
+from typing import List
+
 import structlog
 
 from ...core.base_agent import BaseAgent
@@ -232,8 +234,13 @@ class SeedGathererAgent(BaseAgent):
 
             if cached_anchors is not None:
                 logger.info(f"Cache hit for anchor tracks - using {len(cached_anchors)} cached anchors")
-                anchor_ids = [track.get("id") for track in cached_anchors if track.get("id")]
-                state.metadata["anchor_tracks"] = cached_anchors
+                normalized_anchors = self._normalize_anchor_tracks(
+                    cached_anchors,
+                    state,
+                    intent_analysis
+                )
+                anchor_ids = [track.get("id") for track in normalized_anchors if track.get("id")]
+                state.metadata["anchor_tracks"] = normalized_anchors
                 state.metadata["anchor_track_ids"] = anchor_ids
                 return
 
@@ -244,20 +251,26 @@ class SeedGathererAgent(BaseAgent):
             # Call anchor selection
             anchor_tracks, anchor_ids = await self.anchor_track_selector.select_anchor_tracks(**anchor_params)
 
+            normalized_anchors = self._normalize_anchor_tracks(
+                anchor_tracks,
+                state,
+                intent_analysis
+            )
+
             # Store results
-            state.metadata["anchor_tracks"] = anchor_tracks
-            state.metadata["anchor_track_ids"] = anchor_ids
+            state.metadata["anchor_tracks"] = normalized_anchors
+            state.metadata["anchor_track_ids"] = [track.get("id") for track in normalized_anchors if track.get("id")]
 
             # Optimization: Cache the anchor tracks
-            if anchor_tracks:
+            if normalized_anchors:
                 await cache_manager.set_anchor_tracks(
                     user_id=state.user_id,
                     mood_prompt=state.mood_prompt,
-                    anchor_tracks=anchor_tracks
+                    anchor_tracks=normalized_anchors
                 )
-                logger.info(f"Cached {len(anchor_tracks)} anchor tracks")
+                logger.info(f"Cached {len(normalized_anchors)} anchor tracks")
 
-            logger.info(f"✓ Selected {len(anchor_tracks)} anchor tracks")
+            logger.info(f"✓ Selected {len(normalized_anchors)} anchor tracks")
 
         except Exception as e:
             logger.warning(f"Failed to select anchor tracks: {e}")
@@ -303,6 +316,54 @@ class SeedGathererAgent(BaseAgent):
             "limit": anchor_limit,
             "user_mentioned_artists": user_mentioned_artists
         }
+
+    def _normalize_anchor_tracks(
+        self,
+        anchor_tracks: List[dict],
+        state: AgentState,
+        intent_analysis: dict
+    ) -> List[dict]:
+        """Ensure anchor metadata correctly reflects actual user mentions."""
+        if not anchor_tracks:
+            return []
+
+        user_track_ids = set(state.metadata.get("user_mentioned_track_ids", []))
+        user_mentioned_artists = {
+            artist.lower()
+            for artist in intent_analysis.get("user_mentioned_artists", [])
+            if isinstance(artist, str)
+        }
+
+        normalized_tracks: List[dict] = []
+        for anchor in anchor_tracks:
+            if not isinstance(anchor, dict):
+                continue
+
+            normalized = dict(anchor)  # shallow copy
+            track_id = normalized.get("id") or normalized.get("track_id")
+
+            is_user_track = bool(track_id and track_id in user_track_ids)
+            normalized["user_mentioned"] = is_user_track
+            if is_user_track:
+                normalized["anchor_type"] = "user"
+                normalized["protected"] = True
+
+            artist_names = []
+            for artist in normalized.get("artists", []):
+                if isinstance(artist, dict):
+                    name = artist.get("name")
+                else:
+                    name = artist
+                if name:
+                    artist_names.append(name)
+
+            normalized["user_mentioned_artist"] = any(
+                name.lower() in user_mentioned_artists for name in artist_names
+            )
+
+            normalized_tracks.append(normalized)
+
+        return normalized_tracks
 
     def _calculate_anchor_limit(self, user_mentioned_artists: list) -> int:
         """Calculate appropriate anchor limit based on user-mentioned artists.
