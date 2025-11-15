@@ -13,6 +13,9 @@ import { StatusIcon } from './StatusIcon';
 import { StatusMessage } from './StatusMessage';
 import { WorkflowInsights } from './WorkflowInsights';
 import { CancelWorkflowDialog } from './CancelWorkflowDialog';
+import { PerceivedProgressBar } from './PerceivedProgressBar';
+import { TrackCardSkeleton } from './TrackCardSkeleton';
+import { UpdatePulse } from './UpdatePulse';
 import { useWorkflowCancellation } from '@/lib/hooks';
 import { useEffect } from 'react';
 
@@ -52,6 +55,19 @@ export function WorkflowProgress() {
 
     const isActive = workflowState.status !== 'completed' && workflowState.status !== 'failed';
 
+    const previewTracks = workflowState.recommendations.slice(0, 3);
+    const shouldShowSkeleton = Boolean(
+        isActive &&
+        (!previewTracks || previewTracks.length === 0) &&
+        workflowState.status &&
+        (
+            workflowState.status.includes('gathering_seeds') ||
+            workflowState.status.includes('generating_recommendations') ||
+            workflowState.status.includes('evaluating_quality') ||
+            workflowState.status.includes('optimizing_recommendations')
+        )
+    );
+
     return (
         <>
             <Card className={cn("w-full overflow-hidden", isCancelling && "opacity-60 pointer-events-none")}>
@@ -60,6 +76,12 @@ export function WorkflowProgress() {
                         <CardTitle className="text-base flex items-center gap-2">
                             <StatusIcon status={workflowState.status} />
                             {isCancelling ? 'Cancelling...' : 'Playlist Generation'}
+                            {isActive && (
+                                <UpdatePulse
+                                    triggerKey={`${workflowState.status}-${workflowState.currentStep}-${workflowState.recommendations.length}`}
+                                    className="ml-1"
+                                />
+                            )}
                         </CardTitle>
                         {workflowState.sessionId && isActive && !isCancelling && (
                             <Button variant="outline" size="sm" onClick={handleCancelClick}>
@@ -93,6 +115,14 @@ export function WorkflowProgress() {
                         </div>
 
                         <ProgressTimeline status={workflowState.status} />
+                        
+                        {/* Perceived Progress Bar */}
+                        {isActive && (
+                            <PerceivedProgressBar
+                                status={workflowState.status}
+                                showPercentage={false}
+                            />
+                        )}
                     </div>
 
                     {/* Mood Analysis Display */}
@@ -109,6 +139,49 @@ export function WorkflowProgress() {
                         metadata={workflowState.metadata}
                         error={workflowState.error}
                     />
+
+                    {/* Perceived track loading */}
+                    {shouldShowSkeleton && (
+                        <div className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-3">
+                            <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                                <span>Curating tracks</span>
+                                <span className="normal-case tracking-normal text-[11px] text-muted-foreground/80">Your playlist is taking shape</span>
+                            </div>
+                            <TrackCardSkeleton count={3} />
+                        </div>
+                    )}
+
+                    {!shouldShowSkeleton && previewTracks && previewTracks.length > 0 && isActive && (
+                        <div className="rounded-lg border border-border/50 bg-background/60 backdrop-blur-sm p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Tracks already queued</p>
+                                <span className="text-xs text-muted-foreground">
+                                    {workflowState.recommendations.length} ready so far
+                                </span>
+                            </div>
+                            <div className="space-y-2">
+                                {previewTracks.map((track, index) => (
+                                    <div
+                                        key={track.track_id || `${track.track_name}-${index}`}
+                                        className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-muted/30 px-3 py-2 animate-in fade-in duration-300"
+                                        style={{ animationDelay: `${index * 80}ms` }}
+                                    >
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-medium truncate">
+                                                {track.track_name}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground truncate">
+                                                {track.artists.join(', ')}
+                                            </p>
+                                        </div>
+                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-primary/80 bg-primary/10 px-2 py-1 rounded-full">
+                                            New
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Completion Actions */}
                     {workflowState.status === 'completed' && workflowState.playlist && (
