@@ -7,7 +7,6 @@ import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { useWorkflowCancellation } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 import { AlertCircle } from 'lucide-react';
-import { AnchorTracksDisplay } from './AnchorTracksDisplay';
 import { CancelWorkflowDialog } from './CancelWorkflowDialog';
 import { MoodAnalysisDisplay } from './MoodAnalysisDisplay';
 import { ProgressTimeline } from './ProgressTimeline';
@@ -43,13 +42,6 @@ export function WorkflowProgress() {
     }
 
     const isActive = workflowState.status !== 'completed' && workflowState.status !== 'failed';
-
-    // Show anchor tracks when available and no recommendations yet
-    const shouldShowAnchors =
-        isActive &&
-        workflowState.anchorTracks &&
-        workflowState.anchorTracks.length > 0 &&
-        workflowState.recommendations.length === 0;
 
     return (
         <>
@@ -131,11 +123,6 @@ export function WorkflowProgress() {
                         metadata={workflowState.metadata}
                         error={workflowState.error}
                     />
-
-                    {/* Anchor Tracks Display */}
-                    {shouldShowAnchors && (
-                        <AnchorTracksDisplay anchorTracks={workflowState.anchorTracks!} />
-                    )}
 
                     {/* Action Buttons */}
                     {workflowState.status === 'completed' && workflowState.playlist && (

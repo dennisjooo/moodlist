@@ -1,11 +1,9 @@
 import { Badge } from '@/components/ui/badge';
 import { BackButton } from '@/components/shared';
 import { CreateSessionLayout, createSessionCardClassName } from '@/components/features/create/CreateSessionLayout';
-import WorkflowProgress from '@/components/WorkflowProgress';
 import { Sparkles } from 'lucide-react';
 import { isTerminalStatus } from '@/lib/utils/workflow';
-import { useWorkflow } from '@/lib/contexts/WorkflowContext';
-import { RealtimeTrackList } from './RealtimeTrackList';
+import { CreateSessionProgressCard } from './CreateSessionProgressCard';
 interface ColorScheme {
     primary: string;
     secondary: string;
@@ -28,10 +26,6 @@ export function CreateSessionProgress({
     onBack,
 }: CreateSessionProgressProps) {
     const isTerminal = isTerminalStatus(status);
-    const { workflowState } = useWorkflow();
-    
-    // Show tracks when we have some recommendations and we're in an active state
-    const showTracks = workflowState.recommendations.length > 0 && !isTerminal;
 
     return (
         <CreateSessionLayout colorScheme={colorScheme} dimmed={isCancelling}>
@@ -62,30 +56,13 @@ export function CreateSessionProgress({
                             <p className="mx-auto max-w-2xl text-sm text-muted-foreground">
                                 {isCancelling
                                     ? 'Please wait while we cancel your request.'
-                                    : (
-                                        <>
-                                            We are weaving together tracks that match the feeling you shared.
-                                            <br />
-                                            {showTracks ? 'Watch as we build your perfect mix.' : 'Hang tight while the mix comes to life.'}
-                                        </>
-                                    )}
+                                    : 'We are weaving together tracks that match the feeling you shared. Watch as we build your perfect mix.'}
                             </p>
                         </div>
                     </div>
                 )}
 
-                {sessionId && status !== 'completed' && (
-                    <div className="space-y-4">
-                        <WorkflowProgress />
-                        
-                        {/* Show real-time track list when tracks start arriving */}
-                        {showTracks && (
-                            <div className="mt-8">
-                                <RealtimeTrackList tracks={workflowState.recommendations} />
-                            </div>
-                        )}
-                    </div>
-                )}
+                {sessionId && status !== 'completed' && <CreateSessionProgressCard />}
             </div>
         </CreateSessionLayout>
     );

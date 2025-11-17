@@ -1,6 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { Track } from '@/lib/types/workflow';
 import { cn } from '@/lib/utils';
@@ -25,13 +26,14 @@ function TrackCard({
     <div
       key={track.track_id}
       className={cn(
-        'flex items-center gap-3 p-3 rounded-lg border bg-card/60 backdrop-blur-sm',
-        'transition-all duration-300',
-        isNew && 'animate-in slide-in-from-left-5 fade-in duration-500'
+        'flex items-center gap-3 p-3 rounded-lg border border-border/40',
+        'bg-gradient-to-br from-card via-card/95 to-card/90',
+        'transition-all duration-300 hover:shadow-sm hover:border-border/60',
+        isNew && 'animate-in slide-in-from-top-2 fade-in duration-500'
       )}
     >
       {/* Track Number */}
-      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-sm font-semibold">
+      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 via-primary/15 to-primary/10 flex items-center justify-center text-sm font-semibold">
         {index + 1}
       </div>
 
@@ -48,11 +50,6 @@ function TrackCard({
               {Math.round(track.confidence_score * 30 + 70)}%
             </span>
           </div>
-          {track.source && (
-            <Badge variant="outline" className="text-[10px] h-5 px-1.5">
-              {track.source}
-            </Badge>
-          )}
         </div>
       </div>
     </div>
@@ -109,60 +106,68 @@ export function RealtimeTrackList({
     return () => scrollElement.removeEventListener('scroll', handleScroll);
   }, []);
 
-  if (tracks.length === 0) {
-    return (
-      <div
-        className={cn(
-          'flex flex-col items-center justify-center py-12 text-center',
-          className
-        )}
-      >
-        <div className="rounded-full bg-primary/10 p-6 mb-4">
-          <Music className="w-8 h-8 text-primary" />
-        </div>
-        <h3 className="text-lg font-semibold mb-2">Gathering tracks...</h3>
-        <p className="text-sm text-muted-foreground max-w-sm">
-          Your personalized playlist is being crafted. Tracks will appear here
-          as they&apos;re discovered.
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div className={cn('space-y-3', className)}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-primary" />
-          <h3 className="text-sm font-semibold">
-            Found {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}
-          </h3>
+    <Card
+      className={cn(
+        'w-full overflow-hidden transition-all duration-300',
+        'border-border/60 shadow-sm hover:shadow-md',
+        'bg-gradient-to-br from-card via-card to-card/95',
+        className
+      )}
+    >
+      <CardHeader className="pb-3 border-b border-border/40 bg-gradient-to-r from-muted/20 to-transparent">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-base flex items-center gap-2.5 font-semibold">
+            <Sparkles className="w-4 h-4 text-primary" />
+            <span className="bg-gradient-to-br from-foreground to-foreground/80 bg-clip-text">
+              Live Tracks
+            </span>
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs border-border/40">
+              {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}
+            </Badge>
+          </div>
         </div>
-        <Badge variant="outline" className="text-xs">
-          Live Updates
-        </Badge>
-      </div>
+      </CardHeader>
 
-      <ScrollArea
-        ref={scrollAreaRef}
-        className="h-[500px] rounded-lg border bg-background/50 p-2"
-      >
-        <div className="space-y-2">
-          {tracks.map((track, index) => (
-            <TrackCard
-              key={track.track_id}
-              track={track}
-              index={index}
-              isNew={index >= previousCount - 1}
-            />
-          ))}
-        </div>
-      </ScrollArea>
+      <CardContent className="p-0">
+        {tracks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-6 text-center px-4">
+            <div className="rounded-full bg-gradient-to-br from-primary/20 via-primary/15 to-primary/10 p-6 mb-4">
+              <Music className="w-8 h-8 text-primary" />
+            </div>
+            <h3 className="text-base font-semibold mb-2">Gathering tracks...</h3>
+            <p className="text-sm text-muted-foreground max-w-sm">
+              Your personalized playlist is being crafted. Tracks will appear here
+              as they&apos;re discovered.
+            </p>
+          </div>
+        ) : (
+          <>
+            <ScrollArea
+              ref={scrollAreaRef}
+              className="h-[calc(100vh-28rem)] lg:h-[600px]"
+            >
+              <div className="space-y-2 p-4">
+                {tracks.map((track, index) => (
+                  <TrackCard
+                    key={track.track_id}
+                    track={track}
+                    index={index}
+                    isNew={index >= previousCount - 1}
+                  />
+                ))}
+              </div>
+            </ScrollArea>
 
-      <div className="flex items-center justify-center text-xs text-muted-foreground gap-2">
-        <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-        Listening for new tracks...
-      </div>
-    </div>
+            <div className="flex items-center justify-center text-xs text-muted-foreground gap-2 py-3 border-t border-border/40 bg-gradient-to-r from-muted/20 to-transparent">
+              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              Listening for new tracks...
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
