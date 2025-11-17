@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import type { AnchorTrack } from '@/types/workflow';
+import type { AnchorTrack } from '@/lib/types/workflow';
 
 interface AnchorTracksDisplayProps {
     anchorTracks: AnchorTrack[];
