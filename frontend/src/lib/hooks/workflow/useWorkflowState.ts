@@ -1,10 +1,40 @@
-import type { WorkflowResults, WorkflowStatus } from '@/lib/api/workflow';
-import type { WorkflowState } from '@/lib/types/workflow';
+'use client';
+import type { WorkflowStatus, WorkflowResults } from '@/lib/api/workflow';
+import type { AnchorTrack, WorkflowState } from '@/lib/types/workflow';
 import { logger } from '@/lib/utils/logger';
 import { shouldAcceptStatusUpdate } from '@/lib/utils/workflow';
 import { useCallback, useRef, useState } from 'react';
 import { useToast } from '../ui/useToast';
 import { workflowEvents } from './useActiveWorkflows';
+
+/**
+ * Normalize anchor tracks from backend format to frontend format
+ */
+function normalizeAnchorTracks(tracks?: Array<{
+    id: string;
+    name: string;
+    artists: Array<{ name: string }> | string[];
+    album?: { name: string };
+    user_mentioned?: boolean;
+    user_mentioned_artist?: boolean;
+    anchor_type?: 'user' | 'genre';
+    protected?: boolean;
+}>): AnchorTrack[] | undefined {
+    if (!tracks || tracks.length === 0) return undefined;
+
+    return tracks.map(track => ({
+        id: track.id,
+        name: track.name,
+        artists: Array.isArray(track.artists)
+            ? track.artists.map(a => typeof a === 'string' ? a : a.name)
+            : [],
+        album: typeof track.album === 'object' ? track.album?.name : track.album,
+        user_mentioned: track.user_mentioned,
+        user_mentioned_artist: track.user_mentioned_artist,
+        anchor_type: track.anchor_type,
+        protected: track.protected,
+    }));
+}
 
 const initialWorkflowState: WorkflowState = {
     sessionId: null,
@@ -13,6 +43,7 @@ const initialWorkflowState: WorkflowState = {
     moodPrompt: '',
     moodAnalysis: undefined,
     recommendations: [],
+    anchorTracks: undefined,
     error: null,
     isLoading: false,
     awaitingInput: false,
@@ -85,6 +116,7 @@ export function useWorkflowState() {
                 awaitingInput: status.awaiting_input,
                 error: status.error || null,
                 moodAnalysis: status.mood_analysis || prev.moodAnalysis,
+                anchorTracks: normalizeAnchorTracks(status.anchor_tracks) || prev.anchorTracks,
                 metadata: status.metadata || prev.metadata,
                 totalLLMCost: status.total_llm_cost_usd ?? prev.totalLLMCost,
                 totalPromptTokens: status.total_prompt_tokens ?? prev.totalPromptTokens,
@@ -138,6 +170,7 @@ export function useWorkflowState() {
             error: status.error || null,
             moodAnalysis: results?.mood_analysis || prev.moodAnalysis,
             recommendations: results?.recommendations || prev.recommendations,
+            anchorTracks: normalizeAnchorTracks(status.anchor_tracks) || prev.anchorTracks,
             playlist: results?.playlist || prev.playlist,
             totalLLMCost: status.total_llm_cost_usd ?? prev.totalLLMCost,
             totalPromptTokens: status.total_prompt_tokens ?? prev.totalPromptTokens,

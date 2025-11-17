@@ -32,6 +32,9 @@ def serialize_workflow_state(
 ) -> Dict[str, Any]:
     """Serialize in-memory workflow state into an API response."""
 
+    # Extract anchor tracks from metadata for frontend display
+    anchor_tracks = state.metadata.get("anchor_tracks", [])
+    
     payload = {
         "session_id": session_id,
         "status": state.status.value,
@@ -47,6 +50,7 @@ def serialize_workflow_state(
         "error": state.error_message,
         "created_at": state.created_at.isoformat(),
         "updated_at": state.updated_at.isoformat(),
+        "anchor_tracks": anchor_tracks,
         "metadata": {
             "iteration": state.metadata.get("iteration"),
             "cohesion_score": state.metadata.get("cohesion_score"),
