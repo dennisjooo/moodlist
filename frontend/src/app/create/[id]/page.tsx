@@ -15,7 +15,6 @@ import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { logger } from '@/lib/utils/logger';
 import { usePageCancellation, workflowEvents } from '@/lib/hooks';
 import { CreateSessionSkeleton } from '@/components/shared/LoadingStates';
-import { CreateSessionEditor } from '@/components/features/create/CreateSessionEditor';
 import { CreateSessionProgress } from '@/components/features/create/CreateSessionProgress';
 import { CreateSessionError } from '@/components/features/create/CreateSessionError';
 import { useParams, useRouter } from 'next/navigation';
@@ -149,44 +148,12 @@ function CreateSessionPageContent() {
         }
     }, [workflowState.status, workflowState.recommendations.length, workflowState.sessionId, router]);
 
-    const handleEditComplete = () => {
-        // Navigate to playlist view to show final results
-        // Clear notification indicator in case workflow is already completed
-        if (workflowState.sessionId) {
-            workflowEvents.removed(workflowState.sessionId);
-        }
-        router.push(`/playlist/${sessionId}`);
-    };
-
-    const handleEditCancel = () => {
-        // Go back to results view
-        // Clear notification indicator in case workflow is already completed
-        if (workflowState.sessionId) {
-            workflowEvents.removed(workflowState.sessionId);
-        }
-        router.push(`/playlist/${sessionId}`);
-    };
-
+  
     // Determine which component to render based on workflow state
     const renderContent = () => {
         // Loading state - only show minimal loading indicator during initial auth/status check
         if (isLoadingSession) {
             return <CreateSessionSkeleton onBack={handleBack} />;
-        }
-
-        // Show editor if workflow is awaiting user input
-        if (workflowState.awaitingInput && workflowState.recommendations.length > 0 && workflowState.sessionId) {
-            const colorScheme = workflowState.moodAnalysis?.color_scheme;
-            return (
-                <CreateSessionEditor
-                    sessionId={workflowState.sessionId}
-                    recommendations={workflowState.recommendations}
-                    colorScheme={colorScheme}
-                    onBack={handleBack}
-                    onSave={handleEditComplete}
-                    onCancel={handleEditCancel}
-                />
-            );
         }
 
         // Determine if workflow is in a terminal state
