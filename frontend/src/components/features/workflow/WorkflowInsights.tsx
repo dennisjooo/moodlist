@@ -1,10 +1,11 @@
 'use client';
 
-import { Music, Sparkles } from 'lucide-react';
+import { Music, Sparkles, TrendingUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { WorkflowState } from '@/lib/types/workflow';
 import { isTerminalStatus } from '@/lib/utils/workflow';
 import { MUSIC_FACTS } from '@/lib/constants/music';
+import { AnimatedCounter } from './AnimatedCounter';
 
 interface WorkflowInsightsProps {
     status: WorkflowState['status'];
@@ -67,10 +68,22 @@ export function WorkflowInsights({ status, moodAnalysis, recommendations, metada
             case 'generating_recommendations':
                 if (recommendations && recommendations.length > 0) {
                     return (
-                        <p className="text-sm text-foreground flex items-center gap-2">
-                            <Music className="w-3.5 h-3.5" />
-                            <span>Found <span className="font-medium">{recommendations.length}</span> perfect tracks</span>
-                        </p>
+                        <div className="flex flex-col gap-1">
+                            <p className="text-sm text-foreground flex items-center gap-2">
+                                <Music className="w-3.5 h-3.5" />
+                                <span className="flex items-center gap-1.5">
+                                    Found
+                                    <AnimatedCounter
+                                        value={recommendations.length}
+                                        className="font-semibold text-primary"
+                                    />
+                                    perfect tracks
+                                </span>
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                                Previewing the first wave while the rest finish rendering.
+                            </p>
+                        </div>
                     );
                 }
                 return (
@@ -84,8 +97,15 @@ export function WorkflowInsights({ status, moodAnalysis, recommendations, metada
                     <div className="space-y-1.5">
                         {recommendations && recommendations.length > 0 && (
                             <p className="text-sm text-foreground flex items-center gap-2">
-                                <Music className="w-3.5 h-3.5" />
-                                <span>Evaluating <span className="font-medium">{recommendations.length}</span> tracks</span>
+                                <TrendingUp className="w-3.5 h-3.5 text-green-500" />
+                                <span className="flex items-center gap-1.5">
+                                    Evaluating
+                                    <AnimatedCounter
+                                        value={recommendations.length}
+                                        className="font-semibold"
+                                    />
+                                    tracks
+                                </span>
                             </p>
                         )}
                         <p className="text-sm text-muted-foreground">
@@ -100,12 +120,24 @@ export function WorkflowInsights({ status, moodAnalysis, recommendations, metada
                         {recommendations && recommendations.length > 0 && (
                             <p className="text-sm text-foreground flex items-center gap-2">
                                 <Music className="w-3.5 h-3.5" />
-                                <span>Refining <span className="font-medium">{recommendations.length}</span> tracks</span>
+                                <span className="flex items-center gap-1.5">
+                                    Refining
+                                    <AnimatedCounter
+                                        value={recommendations.length}
+                                        className="font-semibold"
+                                    />
+                                    tracks
+                                </span>
                             </p>
                         )}
                         {metadata?.iteration ? (
                             <p className="text-sm text-muted-foreground">
-                                Optimization pass {metadata.iteration} - Making it even better!
+                                Optimization pass{' '}
+                                <AnimatedCounter
+                                    value={metadata.iteration}
+                                    className="font-semibold text-primary"
+                                />
+                                {' '}— Making it even better!
                             </p>
                         ) : (
                             <p className="text-sm text-muted-foreground">
@@ -121,7 +153,14 @@ export function WorkflowInsights({ status, moodAnalysis, recommendations, metada
                         {recommendations && recommendations.length > 0 && (
                             <p className="text-sm text-foreground flex items-center gap-2">
                                 <Music className="w-3.5 h-3.5" />
-                                <span>Arranging <span className="font-medium">{recommendations.length}</span> tracks</span>
+                                <span className="flex items-center gap-1.5">
+                                    Arranging
+                                    <AnimatedCounter
+                                        value={recommendations.length}
+                                        className="font-semibold"
+                                    />
+                                    tracks
+                                </span>
                             </p>
                         )}
                         <p className="text-sm text-muted-foreground">
@@ -137,8 +176,14 @@ export function WorkflowInsights({ status, moodAnalysis, recommendations, metada
 
             case 'creating_playlist':
                 return (
-                    <p className="text-sm text-foreground">
-                        Packaging {recommendations?.length || 0} tracks into your personal Spotify playlist...
+                    <p className="text-sm text-foreground flex items-center gap-1.5">
+                        <Music className="w-3.5 h-3.5" />
+                        Packaging
+                        <AnimatedCounter
+                            value={recommendations?.length || 0}
+                            className="font-semibold"
+                        />
+                        tracks into your personal Spotify playlist...
                     </p>
                 );
 
