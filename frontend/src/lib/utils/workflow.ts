@@ -111,6 +111,14 @@ export function getStatusMessage(status: string | null, currentStep?: string): s
 }
 
 /**
+ * Formats a workflow step string to a user-friendly format
+ */
+export function formatStep(step?: string | null): string | undefined {
+    if (!step) return undefined;
+    return step.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+}
+
+/**
  * Checks if a workflow should stream updates (only on create pages)
  */
 export function shouldStreamWorkflow(pathname: string | null, sessionId: string | null): boolean {

@@ -6,6 +6,8 @@ export { usePageCancellation } from './usePageCancellation';
 export { useWorkflowActions } from './useWorkflowActions';
 export { useWorkflowApi } from './useWorkflowApi';
 export { useWorkflowCancellation } from './useWorkflowCancellation';
+export { useWorkflowInsights } from './useWorkflowInsights';
+export type { WorkflowInsightEvent } from './useWorkflowInsights';
 export { useWorkflowPolling } from './useWorkflowPolling';
 export { useWorkflowSession } from './useWorkflowSession';
 export { useWorkflowSSE } from './useWorkflowSSE';

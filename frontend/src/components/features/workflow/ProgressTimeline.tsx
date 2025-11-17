@@ -1,8 +1,6 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { logger } from '@/lib/utils/logger';
-import { useEffect } from 'react';
 import { WORKFLOW_STAGES } from './workflowStageConfig';
 
 interface ProgressTimelineProps {
@@ -10,13 +8,6 @@ interface ProgressTimelineProps {
 }
 
 export function ProgressTimeline({ status }: ProgressTimelineProps) {
-    // Debug: Log when status prop changes
-    useEffect(() => {
-        logger.debug('ProgressTimeline status prop changed', {
-            to: status,
-        });
-    }, [status]);
-
     const getCurrentStageIndex = (status: string | null): number => {
         if (!status) return 0;
 
@@ -24,17 +15,10 @@ export function ProgressTimeline({ status }: ProgressTimelineProps) {
         // This ensures that longer/more specific stage names are matched first
         for (let i = WORKFLOW_STAGES.length - 1; i >= 0; i--) {
             if (status.includes(WORKFLOW_STAGES[i].key)) {
-                logger.debug('ProgressTimeline matched stage', {
-                    status,
-                    matchedStage: WORKFLOW_STAGES[i].key,
-                    stageIndex: i,
-                    stageLabel: WORKFLOW_STAGES[i].label
-                });
                 return i;
             }
         }
 
-        logger.debug('ProgressTimeline no stage matched', { status });
         return 0;
     };
 
@@ -68,17 +52,6 @@ export function ProgressTimeline({ status }: ProgressTimelineProps) {
 
     const visibleStages = getVisibleStages();
     const currentStageIndex = getCurrentStageIndex(status);
-
-    logger.debug('ProgressTimeline render state', {
-        status,
-        currentStageIndex,
-        visibleStages: visibleStages.map((s, i) => ({
-            index: i,
-            key: s.key,
-            label: s.label,
-            globalIndex: WORKFLOW_STAGES.findIndex(ws => ws.key === s.key)
-        }))
-    });
 
     return (
         <div className="relative">

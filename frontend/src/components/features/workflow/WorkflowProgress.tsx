@@ -1,18 +1,15 @@
 'use client';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { useWorkflowCancellation } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
-import { logger } from '@/lib/utils/logger';
 import { AlertCircle } from 'lucide-react';
-import { useEffect } from 'react';
+import { AnchorTracksDisplay } from './AnchorTracksDisplay';
 import { CancelWorkflowDialog } from './CancelWorkflowDialog';
 import { MoodAnalysisDisplay } from './MoodAnalysisDisplay';
-import { PerceivedProgressBar } from './PerceivedProgressBar';
 import { ProgressTimeline } from './ProgressTimeline';
 import { StatusIcon } from './StatusIcon';
 import { StatusMessage } from './StatusMessage';
@@ -33,14 +30,6 @@ export function WorkflowProgress() {
         clearError,
     });
 
-    // Debug: Log when workflowState changes
-    useEffect(() => {
-        logger.debug('WorkflowProgress render', {
-            status: workflowState.status,
-            step: workflowState.currentStep,
-        });
-    }, [workflowState.status, workflowState.currentStep]);
-
     const handleRetry = () => {
         clearError();
         // The workflow will automatically restart polling
@@ -55,44 +44,61 @@ export function WorkflowProgress() {
 
     const isActive = workflowState.status !== 'completed' && workflowState.status !== 'failed';
 
-    const previewTracks = workflowState.recommendations.slice(0, 3);
-    const anchorTracks = workflowState.anchorTracks || [];
-    
     // Show anchor tracks when available and no recommendations yet
-    const hasAnchors = anchorTracks.length > 0;
-    const hasRecommendations = previewTracks.length > 0;
+    const shouldShowAnchors =
+        isActive &&
+        workflowState.anchorTracks &&
+        workflowState.anchorTracks.length > 0 &&
+        workflowState.recommendations.length === 0;
 
     return (
         <>
-            <Card className={cn("w-full", isCancelling && "opacity-60 pointer-events-none")}>
-                <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                        <CardTitle className="text-base flex items-center gap-2">
+            <Card className={cn(
+                "w-full overflow-hidden transition-all duration-300",
+                "border-border/60 shadow-sm hover:shadow-md",
+                "bg-gradient-to-br from-card via-card to-card/95",
+                isCancelling && "opacity-60 pointer-events-none"
+            )}>
+                <CardHeader className="pb-3 border-b border-border/40 bg-gradient-to-r from-muted/20 to-transparent">
+                    <div className="flex items-center justify-between gap-3">
+                        <CardTitle className="text-base flex items-center gap-2.5 font-semibold">
                             <StatusIcon status={workflowState.status} />
-                            {isCancelling ? 'Cancelling...' : 'Playlist Generation'}
+                            <span className="bg-gradient-to-br from-foreground to-foreground/80 bg-clip-text">
+                                {isCancelling ? 'Cancelling...' : 'Playlist Generation'}
+                            </span>
                             {isActive && (
                                 <UpdatePulse
                                     triggerKey={`${workflowState.status}-${workflowState.currentStep}-${workflowState.recommendations.length}`}
-                                    className="ml-1"
+                                    className="ml-0.5"
                                 />
                             )}
                         </CardTitle>
                         {workflowState.sessionId && isActive && !isCancelling && (
-                            <Button variant="outline" size="sm" onClick={handleCancelClick}>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleCancelClick}
+                                className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50 transition-colors"
+                            >
                                 Cancel
                             </Button>
                         )}
                     </div>
                 </CardHeader>
 
-                <CardContent className="space-y-3">
+                <CardContent className="space-y-4 pt-4">
                     {/* Error Alert */}
                     {workflowState.error && (
-                        <Alert variant="destructive">
+                        <Alert variant="destructive" className="border-destructive/50 bg-destructive/5">
                             <AlertCircle className="h-4 w-4" />
-                            <AlertDescription className="flex items-center justify-between">
-                                <span>{workflowState.error}</span>
-                                <Button variant="outline" size="sm" onClick={handleRetry}>
+                            <AlertDescription className="flex items-center justify-between gap-3">
+                                <span className="flex-1 text-sm">{workflowState.error}</span>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleRetry}
+                                    className="shrink-0 border-destructive/30 hover:bg-destructive hover:text-destructive-foreground"
+                                >
                                     Retry
                                 </Button>
                             </AlertDescription>
@@ -100,23 +106,13 @@ export function WorkflowProgress() {
                     )}
 
                     {/* Status Message and Timeline */}
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between gap-4">
-                            <StatusMessage
-                                status={workflowState.status}
-                                currentStep={workflowState.currentStep}
-                            />
-                        </div>
+                    <div className="space-y-3.5 rounded-lg bg-gradient-to-br from-muted/30 via-muted/20 to-transparent p-4 border border-border/30">
+                        <StatusMessage
+                            status={workflowState.status}
+                            currentStep={workflowState.currentStep}
+                        />
 
                         <ProgressTimeline status={workflowState.status} />
-                        
-                        {/* Perceived Progress Bar */}
-                        {isActive && (
-                            <PerceivedProgressBar
-                                status={workflowState.status}
-                                showPercentage={false}
-                            />
-                        )}
                     </div>
 
                     {/* Mood Analysis Display */}
@@ -136,71 +132,37 @@ export function WorkflowProgress() {
                         error={workflowState.error}
                     />
 
-                    {/* Show anchor tracks when they're ready (before recommendations) */}
-                    {hasAnchors && !hasRecommendations && isActive && (
-                        <div className="rounded-lg border border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-orange-500/5 p-3 space-y-3">
-                            <div className="flex items-center justify-between">
-                                <p className="text-xs uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300 font-medium">Foundation Tracks</p>
-                                <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-700 dark:text-amber-300">
-                                    Anchor
-                                </Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                                Hand-picked songs we&apos;re using as the blueprint for your vibe
-                            </p>
-                            <div className="space-y-2">
-                                {anchorTracks.map((track, index) => (
-                                    <div
-                                        key={track.id || `${track.name}-${index}`}
-                                        className="flex items-center gap-3 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 animate-in fade-in duration-300"
-                                        style={{ animationDelay: `${index * 80}ms` }}
-                                    >
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-semibold text-foreground truncate">
-                                                {track.name}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground truncate">
-                                                {track.artists.join(', ')}
-                                            </p>
-                                            {track.albumName && (
-                                                <p className="text-[10px] text-muted-foreground/70 truncate">
-                                                    {track.albumName}
-                                                </p>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-col items-end gap-1">
-                                            {track.user_mentioned && (
-                                                <Badge variant="secondary" className="text-[10px]">
-                                                    Your pick
-                                                </Badge>
-                                            )}
-                                            {track.anchor_type === 'genre' && !track.user_mentioned && (
-                                                <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-700 dark:text-amber-300">
-                                                    Genre fit
-                                                </Badge>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                    {/* Anchor Tracks Display */}
+                    {shouldShowAnchors && (
+                        <AnchorTracksDisplay anchorTracks={workflowState.anchorTracks!} />
                     )}
 
-                    {/* Completion Actions */}
+                    {/* Action Buttons */}
                     {workflowState.status === 'completed' && workflowState.playlist && (
-                        <div className="flex gap-2 pt-1">
-                            <Button variant="outline" onClick={handleCancelClick}>
-                                Start New
+                        <div className="pt-2 border-t border-border/40">
+                            <Button
+                                variant="outline"
+                                onClick={handleCancelClick}
+                                className="w-full bg-gradient-to-r from-primary/5 to-primary/10 hover:from-primary/10 hover:to-primary/20 border-primary/20 hover:border-primary/30 transition-all"
+                            >
+                                Start New Playlist
                             </Button>
                         </div>
                     )}
 
                     {workflowState.status === 'failed' && (
-                        <div className="flex gap-2 pt-1">
-                            <Button onClick={handleRetry} className="flex-1">
+                        <div className="flex gap-3 pt-2 border-t border-border/40">
+                            <Button
+                                onClick={handleRetry}
+                                className="flex-1 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-sm"
+                            >
                                 Try Again
                             </Button>
-                            <Button variant="outline" onClick={handleCancelClick}>
+                            <Button
+                                variant="outline"
+                                onClick={handleCancelClick}
+                                className="hover:bg-muted/50 transition-colors"
+                            >
                                 Cancel
                             </Button>
                         </div>
