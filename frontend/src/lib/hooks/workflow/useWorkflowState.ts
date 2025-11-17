@@ -93,7 +93,8 @@ export function useWorkflowState() {
             component: 'useWorkflowState',
             newStatus: status.status,
             currentStep: status.current_step,
-            hasMoodAnalysis: !!status.mood_analysis
+            hasMoodAnalysis: !!status.mood_analysis,
+            recommendationCount: status.recommendations?.length || 0
         });
 
         setWorkflowState(prev => {
@@ -117,6 +118,10 @@ export function useWorkflowState() {
                     ...prev,
                     metadata: status.metadata || prev.metadata,
                     moodAnalysis: status.mood_analysis || prev.moodAnalysis,
+                    // Still merge recommendations even if status is backwards, but only add new ones
+                    recommendations: status.recommendations && status.recommendations.length > prev.recommendations.length
+                        ? status.recommendations
+                        : prev.recommendations,
                 };
             }
 
@@ -124,7 +129,8 @@ export function useWorkflowState() {
                 component: 'useWorkflowState',
                 from: prev.status,
                 to: status.status,
-                currentStep: status.current_step
+                currentStep: status.current_step,
+                recommendationCount: status.recommendations?.length
             });
 
             // Dispatch workflow update event asynchronously to avoid setState during render
@@ -137,6 +143,17 @@ export function useWorkflowState() {
                 });
             }, 0);
 
+            // Merge recommendations incrementally - always take the latest array if it has more items
+            let mergedRecommendations = prev.recommendations;
+            if (status.recommendations && status.recommendations.length > prev.recommendations.length) {
+                mergedRecommendations = status.recommendations;
+                logger.debug('Merged recommendations', {
+                    component: 'useWorkflowState',
+                    previousCount: prev.recommendations.length,
+                    newCount: status.recommendations.length
+                });
+            }
+
             return {
                 ...prev,
                 status: status.status,
@@ -144,6 +161,7 @@ export function useWorkflowState() {
                 awaitingInput: status.awaiting_input,
                 error: status.error || null,
                 moodAnalysis: status.mood_analysis || prev.moodAnalysis,
+                recommendations: mergedRecommendations,
                 anchorTracks: normalizeAnchorTracks(status.anchor_tracks) || prev.anchorTracks,
                 metadata: status.metadata || prev.metadata,
                 totalLLMCost: status.total_llm_cost_usd ?? prev.totalLLMCost,

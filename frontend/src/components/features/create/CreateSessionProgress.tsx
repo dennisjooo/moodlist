@@ -4,7 +4,8 @@ import { CreateSessionLayout, createSessionCardClassName } from '@/components/fe
 import WorkflowProgress from '@/components/WorkflowProgress';
 import { Sparkles } from 'lucide-react';
 import { isTerminalStatus } from '@/lib/utils/workflow';
-
+import { useWorkflow } from '@/lib/contexts/WorkflowContext';
+import { RealtimeTrackList } from './RealtimeTrackList';
 interface ColorScheme {
     primary: string;
     secondary: string;
@@ -27,6 +28,10 @@ export function CreateSessionProgress({
     onBack,
 }: CreateSessionProgressProps) {
     const isTerminal = isTerminalStatus(status);
+    const { workflowState } = useWorkflow();
+    
+    // Show tracks when we have some recommendations and we're in an active state
+    const showTracks = workflowState.recommendations.length > 0 && !isTerminal;
 
     return (
         <CreateSessionLayout colorScheme={colorScheme} dimmed={isCancelling}>
@@ -61,7 +66,7 @@ export function CreateSessionProgress({
                                         <>
                                             We are weaving together tracks that match the feeling you shared.
                                             <br />
-                                            Hang tight while the mix comes to life.
+                                            {showTracks ? 'Watch as we build your perfect mix.' : 'Hang tight while the mix comes to life.'}
                                         </>
                                     )}
                             </p>
@@ -72,6 +77,13 @@ export function CreateSessionProgress({
                 {sessionId && status !== 'completed' && (
                     <div className="space-y-4">
                         <WorkflowProgress />
+                        
+                        {/* Show real-time track list when tracks start arriving */}
+                        {showTracks && (
+                            <div className="mt-8">
+                                <RealtimeTrackList tracks={workflowState.recommendations} />
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

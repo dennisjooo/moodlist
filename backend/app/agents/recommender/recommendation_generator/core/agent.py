@@ -101,6 +101,10 @@ class RecommendationGeneratorAgent(BaseAgent):
             # Deduplicate and add to state
             self._deduplicate_and_add_recommendations(final_recommendations, state)
 
+            # Notify progress with updated recommendations count
+            state.current_step = "generating_recommendations_complete"
+            await self._notify_progress(state)
+
             # Update state with final metadata
             self._update_state_metadata(state, processed_recommendations)
 
@@ -181,6 +185,7 @@ class RecommendationGeneratorAgent(BaseAgent):
         seen_track_ids = set()
         seen_normalized_names = set()
         seen_spotify_uris = set()
+        new_tracks_added = False
 
         for rec in recommendations:
             # Check for duplicates
@@ -189,7 +194,22 @@ class RecommendationGeneratorAgent(BaseAgent):
 
             # No duplicates found, add the track
             state.add_recommendation(rec)
+            new_tracks_added = True
             self._mark_as_seen(rec, seen_track_ids, seen_normalized_names, seen_spotify_uris)
+
+        if new_tracks_added:
+            # Send a progress update so real-time clients see tracks appear immediately
+            state.current_step = "generating_recommendations_streaming"
+            try:
+                import asyncio
+                asyncio.create_task(self._notify_progress(state))
+            except RuntimeError:
+                # Fallback if create_task is not available (e.g., synchronous tests)
+                try:
+                    loop = asyncio.get_event_loop()
+                    loop.create_task(self._notify_progress(state))
+                except Exception:
+                    pass
 
     def _is_duplicate(
         self,
