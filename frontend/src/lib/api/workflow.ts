@@ -41,10 +41,13 @@ export interface WorkflowStatus {
         };
     };
     anchor_tracks?: Array<{
-        id: string;
-        name: string;
-        artists: Array<{ name: string }> | string[];
-        album?: { name: string };
+        id?: string;
+        track_id?: string;
+        name?: string;
+        track_name?: string;
+        track?: Record<string, any>;
+        artists?: Array<{ name: string }> | string[];
+        album?: { name?: string; images?: Array<{ url: string }> } | string;
         user_mentioned?: boolean;
         user_mentioned_artist?: boolean;
         anchor_type?: 'user' | 'genre';
