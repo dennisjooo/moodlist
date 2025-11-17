@@ -46,7 +46,7 @@ function normalizeAnchorTracks(tracks?: Array<{
 
         let albumCoverUrl: string | undefined;
         if (albumData && typeof albumData === 'object' && Array.isArray(albumData.images)) {
-            albumCoverUrl = albumData.images.find(image => Boolean(image?.url))?.url;
+            albumCoverUrl = albumData.images.find((image: { url: string }) => Boolean(image?.url))?.url;
         }
 
         return {
