@@ -3,21 +3,11 @@
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
 import { useEffect } from 'react';
+import { WORKFLOW_STAGES } from './workflowStageConfig';
 
 interface ProgressTimelineProps {
     status: string | null;
 }
-
-const WORKFLOW_STAGES = [
-    { key: 'analyzing_mood', label: 'Analyzing mood' },
-    { key: 'gathering_seeds', label: 'Finding seeds' },
-    { key: 'generating_recommendations', label: 'Generating playlist' },
-    { key: 'evaluating_quality', label: 'Evaluating' },
-    { key: 'optimizing_recommendations', label: 'Optimizing' },
-    { key: 'ordering_playlist', label: 'Ordering tracks' },
-    { key: 'creating_playlist', label: 'Creating playlist' },
-    { key: 'completed', label: 'Complete' },
-];
 
 export function ProgressTimeline({ status }: ProgressTimelineProps) {
     // Debug: Log when status prop changes
