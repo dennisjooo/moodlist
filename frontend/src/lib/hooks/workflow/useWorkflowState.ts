@@ -1,10 +1,68 @@
-import type { WorkflowResults, WorkflowStatus } from '@/lib/api/workflow';
-import type { WorkflowState } from '@/lib/types/workflow';
+'use client';
+import type { WorkflowStatus, WorkflowResults } from '@/lib/api/workflow';
+import type { AnchorTrack, WorkflowState } from '@/lib/types/workflow';
 import { logger } from '@/lib/utils/logger';
 import { shouldAcceptStatusUpdate } from '@/lib/utils/workflow';
 import { useCallback, useRef, useState } from 'react';
 import { useToast } from '../ui/useToast';
 import { workflowEvents } from './useActiveWorkflows';
+
+/**
+ * Normalize anchor tracks from backend format to frontend format
+ */
+function normalizeAnchorTracks(tracks?: Array<{
+    id?: string;
+    track_id?: string;
+    name?: string;
+    track_name?: string;
+    track?: Record<string, any>;
+    artists?: Array<{ name: string }> | string[];
+    album?: { name?: string; images?: Array<{ url: string }> } | string;
+    user_mentioned?: boolean;
+    user_mentioned_artist?: boolean;
+    anchor_type?: 'user' | 'genre';
+    protected?: boolean;
+}>): AnchorTrack[] | undefined {
+    if (!tracks || tracks.length === 0) return undefined;
+
+    return tracks.map(raw => {
+        const base = raw.track && typeof raw.track === 'object' ? raw.track : raw;
+        const id = base.id ?? raw.id ?? raw.track_id;
+        const name = base.name ?? raw.name ?? raw.track_name ?? '';
+
+        const artistsRaw = base.artists ?? raw.artists ?? [];
+        const artistNames = Array.isArray(artistsRaw)
+            ? artistsRaw
+                .map(artist => typeof artist === 'string' ? artist : artist?.name)
+                .filter((artist): artist is string => Boolean(artist))
+            : [];
+
+        const albumData = base.album ?? raw.album;
+        const albumName = typeof albumData === 'object' && albumData !== null
+            ? albumData.name ?? undefined
+            : typeof albumData === 'string'
+                ? albumData
+                : undefined;
+
+        let albumCoverUrl: string | undefined;
+        if (albumData && typeof albumData === 'object' && Array.isArray(albumData.images)) {
+            albumCoverUrl = albumData.images.find(image => Boolean(image?.url))?.url;
+        }
+
+        return {
+            id: id ?? name,
+            name,
+            artists: artistNames,
+            album: albumName,
+            albumName,
+            albumCoverUrl,
+            user_mentioned: raw.user_mentioned,
+            user_mentioned_artist: raw.user_mentioned_artist,
+            anchor_type: raw.anchor_type,
+            protected: raw.protected,
+        } satisfies AnchorTrack;
+    });
+}
 
 const initialWorkflowState: WorkflowState = {
     sessionId: null,
@@ -13,6 +71,7 @@ const initialWorkflowState: WorkflowState = {
     moodPrompt: '',
     moodAnalysis: undefined,
     recommendations: [],
+    anchorTracks: undefined,
     error: null,
     isLoading: false,
     awaitingInput: false,
@@ -85,6 +144,7 @@ export function useWorkflowState() {
                 awaitingInput: status.awaiting_input,
                 error: status.error || null,
                 moodAnalysis: status.mood_analysis || prev.moodAnalysis,
+                anchorTracks: normalizeAnchorTracks(status.anchor_tracks) || prev.anchorTracks,
                 metadata: status.metadata || prev.metadata,
                 totalLLMCost: status.total_llm_cost_usd ?? prev.totalLLMCost,
                 totalPromptTokens: status.total_prompt_tokens ?? prev.totalPromptTokens,
@@ -138,6 +198,7 @@ export function useWorkflowState() {
             error: status.error || null,
             moodAnalysis: results?.mood_analysis || prev.moodAnalysis,
             recommendations: results?.recommendations || prev.recommendations,
+            anchorTracks: normalizeAnchorTracks(status.anchor_tracks) || prev.anchorTracks,
             playlist: results?.playlist || prev.playlist,
             totalLLMCost: status.total_llm_cost_usd ?? prev.totalLLMCost,
             totalPromptTokens: status.total_prompt_tokens ?? prev.totalPromptTokens,

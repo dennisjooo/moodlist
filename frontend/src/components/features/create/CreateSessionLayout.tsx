@@ -46,9 +46,11 @@ export function CreateSessionLayout({
 
       <Navigation />
 
-      <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
-        <div className="flex w-full flex-col justify-center space-y-3">{children}</div>
-      </main>
+      <div className="relative z-10 flex-1 overflow-y-auto">
+        <main className="mx-auto flex w-full max-w-4xl px-4 py-4 sm:px-6 sm:py-6">
+          <div className="flex w-full flex-col justify-center space-y-3">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }

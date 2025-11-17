@@ -139,6 +139,10 @@ class OrchestratorAgent(BaseAgent):
             state.metadata["quality_scores"] = []
         if "improvement_actions" not in state.metadata:
             state.metadata["improvement_actions"] = []
+        if "best_quality_evaluation" not in state.metadata:
+            state.metadata["best_quality_evaluation"] = None
+        if "best_recommendations_snapshot" not in state.metadata:
+            state.metadata["best_recommendations_snapshot"] = None
 
     async def perform_initial_generation(self, state: AgentState) -> AgentState:
         """Perform initial seed gathering and recommendation generation."""
@@ -182,7 +186,10 @@ class OrchestratorAgent(BaseAgent):
         step_start = datetime.now(timezone.utc)
         quick_eval = await self.quality_evaluator.evaluate_playlist_quality(state)
         iterative_timings["quality_evaluation"] += (datetime.now(timezone.utc) - step_start).total_seconds()
-        
+
+        # Track best quality evaluation
+        self._update_best_quality_evaluation(state, quick_eval)
+
         if quick_eval['overall_score'] >= 0.75 and quick_eval['cohesion_score'] >= 0.60:
             logger.info(
                 f"✓ Skipping iterative improvement - quality already excellent "
@@ -262,6 +269,9 @@ class OrchestratorAgent(BaseAgent):
         quality_evaluation = await self.quality_evaluator.evaluate_playlist_quality(state)
         state.metadata["quality_scores"].append(quality_evaluation)
 
+        # Track best quality evaluation
+        self._update_best_quality_evaluation(state, quality_evaluation)
+
         current_score = quality_evaluation['overall_score']
         
         logger.info(
@@ -296,6 +306,34 @@ class OrchestratorAgent(BaseAgent):
 
         return quality_evaluation
 
+    def _update_best_quality_evaluation(self, state: AgentState, quality_evaluation: Dict[str, Any]) -> None:
+        """Update the best quality evaluation if this one is better.
+        
+        Also snapshots the recommendations at this point so we can restore them
+        if quality degrades in later iterations.
+        """
+        import copy
+        
+        current_best = state.metadata.get("best_quality_evaluation")
+
+        if current_best is None:
+            # First evaluation - set as best
+            state.metadata["best_quality_evaluation"] = quality_evaluation
+            state.metadata["best_recommendations_snapshot"] = copy.deepcopy(state.recommendations)
+            logger.info(
+                f"Set initial best quality evaluation: {quality_evaluation['overall_score']:.3f} "
+                f"with {len(state.recommendations)} recommendations"
+            )
+        elif quality_evaluation['overall_score'] > current_best['overall_score']:
+            # Found better quality - update best and snapshot recommendations
+            state.metadata["best_quality_evaluation"] = quality_evaluation
+            state.metadata["best_recommendations_snapshot"] = copy.deepcopy(state.recommendations)
+            logger.info(
+                f"Updated best quality evaluation: {quality_evaluation['overall_score']:.3f} "
+                f"(previous: {current_best['overall_score']:.3f}) "
+                f"with {len(state.recommendations)} recommendations"
+            )
+
     async def apply_improvement_strategies(
         self,
         state: AgentState,
@@ -322,6 +360,9 @@ class OrchestratorAgent(BaseAgent):
         """Perform final processing and cleanup with outlier filtering."""
         logger.info("Starting final processing and cleanup...")
         
+        # Check if we should restore the best recommendations snapshot
+        state = await self.restore_best_recommendations_if_needed(state, quality_evaluation)
+        
         # Remove duplicates and enrich tracks
         state = await self.handle_duplicates_and_enrichment(state)
         
@@ -341,6 +382,77 @@ class OrchestratorAgent(BaseAgent):
 
         return state
 
+    async def restore_best_recommendations_if_needed(
+        self, 
+        state: AgentState, 
+        quality_evaluation: Optional[Dict[str, Any]]
+    ) -> AgentState:
+        """Restore the best recommendations snapshot if quality has degraded.
+        
+        This prevents situations where iterative improvements accidentally make
+        the playlist worse. We always use the highest quality version achieved
+        during the workflow.
+        
+        Args:
+            state: Current agent state
+            quality_evaluation: Most recent quality evaluation (may be None)
+            
+        Returns:
+            Updated state with best recommendations restored if needed
+        """
+        import copy
+        
+        best_evaluation = state.metadata.get("best_quality_evaluation")
+        best_snapshot = state.metadata.get("best_recommendations_snapshot")
+        
+        # Skip if we don't have a best snapshot yet
+        if best_evaluation is None or best_snapshot is None:
+            logger.debug("No best recommendations snapshot available, continuing with current")
+            return state
+        
+        # If we have a recent quality evaluation, compare it
+        if quality_evaluation is not None:
+            current_score = quality_evaluation.get('overall_score', 0.0)
+            best_score = best_evaluation.get('overall_score', 0.0)
+            
+            if current_score < best_score:
+                # Quality has degraded - restore best snapshot
+                logger.warning(
+                    f"Quality degraded from {best_score:.3f} to {current_score:.3f}. "
+                    f"Restoring best recommendations snapshot with {len(best_snapshot)} tracks."
+                )
+                state.recommendations = copy.deepcopy(best_snapshot)
+                state.metadata["quality_restored"] = True
+                state.metadata["quality_restored_from"] = current_score
+                state.metadata["quality_restored_to"] = best_score
+            else:
+                logger.info(
+                    f"Current quality ({current_score:.3f}) is equal or better than best ({best_score:.3f}). "
+                    f"Keeping current recommendations."
+                )
+        else:
+            # No current evaluation but we have iterations - evaluate current state
+            current_evaluation = await self.quality_evaluator.evaluate_playlist_quality(state)
+            current_score = current_evaluation.get('overall_score', 0.0)
+            best_score = best_evaluation.get('overall_score', 0.0)
+            
+            if current_score < best_score:
+                logger.warning(
+                    f"Quality degraded from {best_score:.3f} to {current_score:.3f}. "
+                    f"Restoring best recommendations snapshot with {len(best_snapshot)} tracks."
+                )
+                state.recommendations = copy.deepcopy(best_snapshot)
+                state.metadata["quality_restored"] = True
+                state.metadata["quality_restored_from"] = current_score
+                state.metadata["quality_restored_to"] = best_score
+            else:
+                logger.info(
+                    f"Current quality ({current_score:.3f}) is equal or better than best ({best_score:.3f}). "
+                    f"Keeping current recommendations."
+                )
+        
+        return state
+
     async def handle_duplicates_and_enrichment(self, state: AgentState) -> AgentState:
         """Remove duplicates and enrich tracks with Spotify data."""
         # Remove duplicates
@@ -353,9 +465,18 @@ class OrchestratorAgent(BaseAgent):
 
     async def filter_outliers_with_protection(self, state: AgentState) -> AgentState:
         """Filter outliers while protecting user-mentioned tracks."""
-        # Run final quality evaluation to get fresh outlier list
-        final_evaluation = await self.quality_evaluator.evaluate_playlist_quality(state)
-        state.metadata["final_quality_evaluation"] = final_evaluation
+        # Use the best quality evaluation from the workflow instead of running a new one
+        # This prevents quality degradation in final processing
+        best_evaluation = state.metadata.get("best_quality_evaluation")
+        if best_evaluation is not None:
+            logger.info(f"Using best quality evaluation for final processing: {best_evaluation['overall_score']:.3f}")
+            state.metadata["final_quality_evaluation"] = best_evaluation
+            final_evaluation = best_evaluation
+        else:
+            # Fallback to fresh evaluation if no best evaluation exists
+            logger.warning("No best quality evaluation found, running fresh evaluation")
+            final_evaluation = await self.quality_evaluator.evaluate_playlist_quality(state)
+            state.metadata["final_quality_evaluation"] = final_evaluation
         
         # Filter out outliers from final recommendations (but keep protected tracks)
         outlier_ids = set(final_evaluation.get("outlier_tracks", []))
