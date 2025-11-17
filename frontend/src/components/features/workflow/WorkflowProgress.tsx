@@ -152,7 +152,7 @@ export function WorkflowProgress() {
 
                     {/* Show anchor tracks when they're ready (before recommendations) */}
                     {hasAnchors && !hasRecommendations && isActive && (
-                        <div className="rounded-lg border border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-orange-500/5 p-3 space-y-3 overflow-hidden">
+                        <div className="rounded-lg border border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-orange-500/5 p-3 space-y-3">
                             <div className="flex items-center justify-between">
                                 <p className="text-xs uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300 font-medium">Foundation Tracks</p>
                                 <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-700 dark:text-amber-300">
