@@ -1,24 +1,23 @@
 'use client';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
+import { useWorkflowCancellation } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
-import { AlertCircle, Music } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
+import { useEffect } from 'react';
+import { CancelWorkflowDialog } from './CancelWorkflowDialog';
 import { MoodAnalysisDisplay } from './MoodAnalysisDisplay';
+import { PerceivedProgressBar } from './PerceivedProgressBar';
 import { ProgressTimeline } from './ProgressTimeline';
 import { StatusIcon } from './StatusIcon';
 import { StatusMessage } from './StatusMessage';
-import { WorkflowInsights } from './WorkflowInsights';
-import { CancelWorkflowDialog } from './CancelWorkflowDialog';
-import { PerceivedProgressBar } from './PerceivedProgressBar';
-import { TrackCardSkeleton } from './TrackCardSkeleton';
 import { UpdatePulse } from './UpdatePulse';
-import { useWorkflowCancellation } from '@/lib/hooks';
-import { useEffect } from 'react';
+import { WorkflowInsights } from './WorkflowInsights';
 
 export function WorkflowProgress() {
     const { workflowState, stopWorkflow, clearError } = useWorkflow();
@@ -57,24 +56,11 @@ export function WorkflowProgress() {
     const isActive = workflowState.status !== 'completed' && workflowState.status !== 'failed';
 
     const previewTracks = workflowState.recommendations.slice(0, 3);
-    const anchorTracks = workflowState.anchorTracks?.slice(0, 3) || [];
+    const anchorTracks = workflowState.anchorTracks || [];
     
     // Show anchor tracks when available and no recommendations yet
     const hasAnchors = anchorTracks.length > 0;
     const hasRecommendations = previewTracks.length > 0;
-    
-    const shouldShowSkeleton = Boolean(
-        isActive &&
-        !hasAnchors &&
-        !hasRecommendations &&
-        workflowState.status &&
-        (
-            workflowState.status.includes('gathering_seeds') ||
-            workflowState.status.includes('generating_recommendations') ||
-            workflowState.status.includes('evaluating_quality') ||
-            workflowState.status.includes('optimizing_recommendations')
-        )
-    );
 
     return (
         <>
@@ -169,19 +155,6 @@ export function WorkflowProgress() {
                                         className="flex items-center gap-3 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 animate-in fade-in duration-300"
                                         style={{ animationDelay: `${index * 80}ms` }}
                                     >
-                                        <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-md border border-amber-500/20 bg-amber-500/20">
-                                            {track.albumCoverUrl ? (
-                                                <img
-                                                    src={track.albumCoverUrl}
-                                                    alt={track.name || 'Anchor track cover art'}
-                                                    className="h-full w-full object-cover"
-                                                />
-                                            ) : (
-                                                <div className="flex h-full w-full items-center justify-center text-amber-700/80">
-                                                    <Music className="h-5 w-5" />
-                                                </div>
-                                            )}
-                                        </div>
                                         <div className="min-w-0 flex-1">
                                             <p className="text-sm font-semibold text-foreground truncate">
                                                 {track.name}
@@ -207,50 +180,6 @@ export function WorkflowProgress() {
                                                 </Badge>
                                             )}
                                         </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Perceived track loading (only when no anchors and no recommendations) */}
-                    {shouldShowSkeleton && (
-                        <div className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-3">
-                            <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                                <span>Curating tracks</span>
-                                <span className="normal-case tracking-normal text-[11px] text-muted-foreground/80">Your playlist is taking shape</span>
-                            </div>
-                            <TrackCardSkeleton count={3} />
-                        </div>
-                    )}
-
-                    {/* Show recommendations when they arrive */}
-                    {hasRecommendations && isActive && (
-                        <div className="rounded-lg border border-border/50 bg-background/60 backdrop-blur-sm p-3 space-y-2">
-                            <div className="flex items-center justify-between">
-                                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Tracks already queued</p>
-                                <span className="text-xs text-muted-foreground">
-                                    {workflowState.recommendations.length} ready so far
-                                </span>
-                            </div>
-                            <div className="space-y-2">
-                                {previewTracks.map((track, index) => (
-                                    <div
-                                        key={track.track_id || `${track.track_name}-${index}`}
-                                        className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-muted/30 px-3 py-2 animate-in fade-in duration-300"
-                                        style={{ animationDelay: `${index * 80}ms` }}
-                                    >
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-medium truncate">
-                                                {track.track_name}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground truncate">
-                                                {track.artists.join(', ')}
-                                            </p>
-                                        </div>
-                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-primary/80 bg-primary/10 px-2 py-1 rounded-full">
-                                            New
-                                        </span>
                                     </div>
                                 ))}
                             </div>
