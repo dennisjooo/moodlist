@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { WORKFLOW_STAGES } from './workflowStageConfig';
+import { WORKFLOW_STAGES } from '@/lib/constants/workflowStage';
 
 interface ProgressTimelineProps {
     status: string | null;
@@ -96,4 +96,3 @@ export function ProgressTimeline({ status }: ProgressTimelineProps) {
         </div>
     );
 }
-

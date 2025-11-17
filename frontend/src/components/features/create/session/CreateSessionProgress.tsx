@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { BackButton } from '@/components/shared';
-import { CreateSessionLayout, createSessionCardClassName } from '@/components/features/create/CreateSessionLayout';
+import { CreateSessionLayout, createSessionCardClassName } from '@/components/features/create/session/CreateSessionLayout';
 import { Sparkles } from 'lucide-react';
 import { isTerminalStatus } from '@/lib/utils/workflow';
 import { CreateSessionProgressCard } from './CreateSessionProgressCard';

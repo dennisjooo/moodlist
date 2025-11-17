@@ -1,6 +1,6 @@
 import { WorkflowProgressSkeleton } from '@/components/shared/LoadingStates';
 import { BackButton } from '@/components/shared';
-import { CreateSessionLayout, createSessionCardClassName } from '@/components/features/create/CreateSessionLayout';
+import { CreateSessionLayout, createSessionCardClassName } from '@/components/features/create/session/CreateSessionLayout';
 
 interface ColorScheme {
     primary: string;

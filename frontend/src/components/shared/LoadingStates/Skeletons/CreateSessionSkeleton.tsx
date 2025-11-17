@@ -1,6 +1,6 @@
 import { WorkflowProgressSkeleton } from './WorkflowProgressSkeleton';
 import { BackButton } from '@/components/shared';
-import { CreateSessionLayout, createSessionCardClassName } from '@/components/features/create/CreateSessionLayout';
+import { CreateSessionLayout, createSessionCardClassName } from '@/components/features/create/session/CreateSessionLayout';
 
 interface CreateSessionSkeletonProps {
     onBack: () => void;

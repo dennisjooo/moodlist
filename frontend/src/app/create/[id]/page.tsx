@@ -15,8 +15,8 @@ import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { logger } from '@/lib/utils/logger';
 import { usePageCancellation, workflowEvents } from '@/lib/hooks';
 import { CreateSessionSkeleton } from '@/components/shared/LoadingStates';
-import { CreateSessionProgress } from '@/components/features/create/CreateSessionProgress';
-import { CreateSessionError } from '@/components/features/create/CreateSessionError';
+import { CreateSessionProgress } from '@/components/features/create/session/CreateSessionProgress';
+import { CreateSessionError } from '@/components/features/create/session/CreateSessionError';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -219,4 +219,3 @@ export default function CreateSessionPage() {
         </AuthGuard>
     );
 }
-
