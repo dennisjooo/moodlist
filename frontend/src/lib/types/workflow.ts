@@ -24,6 +24,19 @@ export type SearchTrack = {
     preview_url?: string;
 };
 
+export interface AnchorTrack {
+    id: string;
+    name: string;
+    artists: string[];
+    album?: string;
+    albumName?: string;
+    albumCoverUrl?: string;
+    user_mentioned?: boolean;
+    user_mentioned_artist?: boolean;
+    anchor_type?: 'user' | 'genre';
+    protected?: boolean;
+}
+
 export interface WorkflowState {
     sessionId: string | null;
     status: WorkflowStatus['status'] | 'started' | null;
@@ -31,6 +44,7 @@ export interface WorkflowState {
     moodPrompt: string;
     moodAnalysis?: WorkflowResults['mood_analysis'];
     recommendations: WorkflowResults['recommendations'];
+    anchorTracks?: AnchorTrack[];
     playlist?: WorkflowResults['playlist'];
     error: string | null;
     isLoading: boolean;
