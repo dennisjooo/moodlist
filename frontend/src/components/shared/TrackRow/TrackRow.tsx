@@ -65,9 +65,10 @@ interface TrackRowProps {
   showSource?: boolean;
   badge?: BadgeConfig;
   showRating?: boolean;
+  showIndex?: boolean;
 }
 
-function TrackRow({ track, index, isFocused, isNew, showSource, badge, showRating = true }: TrackRowProps) {
+function TrackRow({ track, index, isFocused, isNew, showSource, badge, showRating = true, showIndex = true }: TrackRowProps) {
   const prefersReducedMotion = useReducedMotion();
   const workflowTrack = track as WorkflowTrack;
 
@@ -89,9 +90,11 @@ function TrackRow({ track, index, isFocused, isNew, showSource, badge, showRatin
         initial="hidden"
         animate="visible"
       >
-        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">
-          {index + 1}
-        </div>
+        {showIndex && (
+          <div className="flex-shrink-0 w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">
+            {index + 1}
+          </div>
+        )}
 
         <div className="flex-1 min-w-0">
           <h4 className="font-medium text-sm truncate">{getTrackName(track)}</h4>

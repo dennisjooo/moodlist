@@ -10,5 +10,5 @@ interface TrackCardProps {
 }
 
 export function TrackCard({ track, index, isNew }: TrackCardProps) {
-    return <TrackRow track={track} index={index} isNew={isNew} showSource />;
+    return <TrackRow track={track} index={index} isNew={isNew} showSource showRating={false} showIndex={false}/>;
 }

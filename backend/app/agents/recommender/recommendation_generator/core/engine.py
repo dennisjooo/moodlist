@@ -83,8 +83,9 @@ class RecommendationEngine:
         all_recommendations.extend(artist_recs)
         all_recommendations.extend(seed_recs)
 
-        # Include anchor tracks from genre search
-        all_recommendations = self.anchor_handler.include_anchor_tracks(state, all_recommendations)
+        # Note: Anchor tracks are already added to state at the start of recommendation generation
+        # We don't include them here again to avoid duplicates
+        # all_recommendations = self.anchor_handler.include_anchor_tracks(state, all_recommendations)
 
         # Clean up temp metadata
         state.metadata.pop("_temp_seed_target", None)

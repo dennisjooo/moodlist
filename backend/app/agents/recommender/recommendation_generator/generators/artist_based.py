@@ -42,6 +42,10 @@ class ArtistBasedGenerator:
         Returns:
             List of recommendations from discovered artists
         """
+        # Pass through progress callback if available (from parent agent)
+        if hasattr(self, '_progress_callback'):
+            self.pipeline._progress_callback = self._progress_callback
+
         # Use shared pipeline with our recommendation creation logic
         return await self.pipeline.process_artists(
             state=state,

@@ -54,7 +54,8 @@ class ArtistRecommendationPipeline:
         self,
         state: AgentState,
         create_recommendation_fn: Callable[[Dict[str, Any], Dict[str, Any], Dict[str, Dict[str, Any]]], Optional[TrackRecommendation]],
-        calculate_score_fn: Callable[[Optional[Dict[str, Any]], Dict[str, Any]], float]
+        calculate_score_fn: Callable[[Optional[Dict[str, Any]], Dict[str, Any]], float],
+        add_to_state_incrementally: bool = True
     ) -> List[Dict[str, Any]]:
         """Process mood-matched artists and generate recommendations.
 
@@ -62,10 +63,15 @@ class ArtistRecommendationPipeline:
             state: Current agent state
             create_recommendation_fn: Callback to create a recommendation from a track
             calculate_score_fn: Callback to calculate a score for a track
+            add_to_state_incrementally: Whether to add recs to state as we go (for real-time updates)
 
         Returns:
             List of recommendation dictionaries
         """
+        # Store state reference for progress updates
+        self._state = state
+        self._add_to_state_incrementally = add_to_state_incrementally
+
         # Get mood-matched artists from state metadata
         mood_matched_artists = state.metadata.get("mood_matched_artists", [])
 
@@ -200,7 +206,7 @@ class ArtistRecommendationPipeline:
         artist_limit = min(len(mood_matched_artists), config.artist_discovery_result_limit)
         artists_to_process = mood_matched_artists[:artist_limit]
         total_artists = len(artists_to_process)
-        
+
         # Prefetch top tracks in batches to minimize per-artist API calls
         prefetched_top_tracks = await self.spotify_service.get_artist_top_tracks_batch(
             access_token=access_token,
@@ -210,8 +216,13 @@ class ArtistRecommendationPipeline:
         # Process artists in parallel with bounded concurrency (raised to 12 for better throughput within rate limits)
         semaphore = asyncio.Semaphore(12)
 
+        # Track progress for real-time updates
+        completed_artists = 0
+        progress_lock = asyncio.Lock()
+
         async def process_artist_bounded(idx: int, artist_id: str) -> Tuple[List[TrackRecommendation], bool]:
             """Process a single artist with concurrency control."""
+            nonlocal completed_artists
             async with semaphore:
                 try:
                     artist_recommendations = await self._fetch_tracks_from_artist(
@@ -226,38 +237,85 @@ class ArtistRecommendationPipeline:
                         prefetched_top_tracks
                     )
                     success = len(artist_recommendations) > 0
+
+                    # Send progress update for EVERY artist (maximum real-time feedback)
+                    async with progress_lock:
+                        completed_artists += 1
+                        await self._send_progress_update(completed_artists, total_artists)
+
                     return artist_recommendations, success
-                    
+
                 except Exception as e:
                     logger.error(
                         f"Error getting tracks for artist {artist_id} "
                         f"(artist {idx+1}/{total_artists}): {e}",
                         exc_info=True
                     )
+
+                    # Still update progress counter on failure
+                    async with progress_lock:
+                        completed_artists += 1
+                        await self._send_progress_update(completed_artists, total_artists)
+
                     return [], False
-        
+
         # Create tasks for all artists
         tasks = [
             process_artist_bounded(idx, artist_id)
             for idx, artist_id in enumerate(artists_to_process)
         ]
-        
+
         # Execute all tasks in parallel with bounded concurrency
-        results = await asyncio.gather(*tasks)
-        
-        # Aggregate results
+        # Use as_completed to get results as they finish (for real-time updates)
         all_recommendations = []
         successful_artists = 0
         failed_artists = 0
-        
-        for artist_recommendations, success in results:
+
+        # Process results as they complete for real-time feedback
+        for completed_task in asyncio.as_completed(tasks):
+            artist_recommendations, success = await completed_task
             all_recommendations.extend(artist_recommendations)
+
+            # Add to state incrementally for real-time frontend updates
+            if self._add_to_state_incrementally and artist_recommendations and hasattr(self, '_state'):
+                for rec in artist_recommendations:
+                    self._state.add_recommendation(rec)
+
+                # Send progress update with current count
+                if hasattr(self, '_progress_callback') and callable(self._progress_callback):
+                    try:
+                        await self._progress_callback(self._state)
+                    except Exception as e:
+                        logger.debug(f"Could not send incremental progress update: {e}")
+
             if success:
                 successful_artists += 1
             else:
                 failed_artists += 1
 
         return all_recommendations, successful_artists, failed_artists
+
+    async def _send_progress_update(self, completed: int, total: int) -> None:
+        """Send progress update for artist processing.
+
+        Args:
+            completed: Number of completed artists
+            total: Total number of artists
+        """
+        logger.info(f"Artist processing progress: {completed}/{total} artists processed")
+
+        # Send progress notification through state if available
+        if hasattr(self, '_state') and self._state:
+            # Update the current step with progress info
+            self._state.current_step = f"generating_recommendations_processing_artists_{completed}_{total}"
+
+            # Try to get the notify_progress callback from the base agent
+            # This callback is set by the orchestrator when it passes the progress callback down
+            if hasattr(self, '_progress_callback') and callable(self._progress_callback):
+                try:
+                    await self._progress_callback(self._state)
+                except Exception as e:
+                    logger.debug(f"Could not send progress update: {e}")
 
     async def _fetch_tracks_from_artist(
         self,

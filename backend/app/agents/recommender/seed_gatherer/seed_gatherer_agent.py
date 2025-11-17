@@ -130,6 +130,10 @@ class SeedGathererAgent(BaseAgent):
             )
             timing_metrics["fetch_top_tracks"] = time.time() - step_start
 
+            # Progress update after fetching tracks
+            state.current_step = "gathering_seeds_tracks_fetched"
+            await self._notify_progress(state)
+
             # STEP 5: Get user's top artists for additional context
             state.current_step = "gathering_seeds_fetching_top_artists"
             await self._notify_progress(state)
@@ -143,6 +147,10 @@ class SeedGathererAgent(BaseAgent):
                 user_id=state.user_id
             )
             timing_metrics["fetch_top_artists"] = time.time() - step_start
+
+            # Progress update after fetching artists
+            state.current_step = "gathering_seeds_artists_fetched"
+            await self._notify_progress(state)
 
             # STEP 6: Build optimized seed pool
             step_start = time.time()
@@ -487,14 +495,22 @@ class SeedGathererAgent(BaseAgent):
         # Enrich top tracks with audio features
         state.current_step = "gathering_seeds_analyzing_features"
         await self._notify_progress(state)
-            
+
         top_tracks = await self.audio_enricher.enrich_tracks_with_features(top_tracks)
+
+        # Progress update after enrichment
+        state.current_step = "gathering_seeds_features_analyzed"
+        await self._notify_progress(state)
 
         # Select seed tracks using audio feature scoring
         state.current_step = "gathering_seeds_selecting_seeds"
         await self._notify_progress(state)
-        
+
         scored_tracks = self.seed_selector.select_seed_tracks(top_tracks, target_features)
+
+        # Progress update after scoring
+        state.current_step = "gathering_seeds_tracks_scored"
+        await self._notify_progress(state)
 
         # Get playlist target to determine seed count
         playlist_target = state.metadata.get("playlist_target", {})

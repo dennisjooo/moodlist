@@ -142,7 +142,7 @@ export function TracksPanel({ tracks, showAnchors, anchorTracks }: TracksPanelPr
                 <div className="space-y-2 p-2 pr-4">
                     {tracks.map((track, index) => (
                         <TrackCard
-                            key={track.track_id}
+                            key={`${track.track_id}-${index}`}
                             track={track}
                             index={index}
                             isNew={index >= previousCount - 1}
