@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/utils/logger';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Music } from 'lucide-react';
 import { MoodAnalysisDisplay } from './MoodAnalysisDisplay';
 import { ProgressTimeline } from './ProgressTimeline';
 import { StatusIcon } from './StatusIcon';
@@ -78,8 +78,8 @@ export function WorkflowProgress() {
 
     return (
         <>
-            <Card className={cn("w-full overflow-hidden", isCancelling && "opacity-60 pointer-events-none")}>
-                <CardHeader className="pb-2 overflow-hidden">
+            <Card className={cn("w-full", isCancelling && "opacity-60 pointer-events-none")}>
+                <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                         <CardTitle className="text-base flex items-center gap-2">
                             <StatusIcon status={workflowState.status} />
@@ -99,7 +99,7 @@ export function WorkflowProgress() {
                     </div>
                 </CardHeader>
 
-                <CardContent className="space-y-3 overflow-hidden">
+                <CardContent className="space-y-3">
                     {/* Error Alert */}
                     {workflowState.error && (
                         <Alert variant="destructive">
@@ -152,36 +152,61 @@ export function WorkflowProgress() {
 
                     {/* Show anchor tracks when they're ready (before recommendations) */}
                     {hasAnchors && !hasRecommendations && isActive && (
-                        <div className="rounded-lg border border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-orange-500/5 p-3 space-y-2">
+                        <div className="rounded-lg border border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-orange-500/5 p-3 space-y-3 overflow-hidden">
                             <div className="flex items-center justify-between">
-                                <p className="text-xs uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400 font-medium">Foundation Tracks</p>
-                                <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-700 dark:text-amber-400">
+                                <p className="text-xs uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300 font-medium">Foundation Tracks</p>
+                                <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-700 dark:text-amber-300">
                                     Anchor
                                 </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                Using these tracks as starting points to find similar music
+                                Hand-picked songs we&apos;re using as the blueprint for your vibe
                             </p>
                             <div className="space-y-2">
                                 {anchorTracks.map((track, index) => (
                                     <div
                                         key={track.id || `${track.name}-${index}`}
-                                        className="flex items-center justify-between gap-3 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 animate-in fade-in duration-300"
+                                        className="flex items-center gap-3 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 animate-in fade-in duration-300"
                                         style={{ animationDelay: `${index * 80}ms` }}
                                     >
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-medium truncate">
+                                        <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-md border border-amber-500/20 bg-amber-500/20">
+                                            {track.albumCoverUrl ? (
+                                                <img
+                                                    src={track.albumCoverUrl}
+                                                    alt={track.name || 'Anchor track cover art'}
+                                                    className="h-full w-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="flex h-full w-full items-center justify-center text-amber-700/80">
+                                                    <Music className="h-5 w-5" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-semibold text-foreground truncate">
                                                 {track.name}
                                             </p>
                                             <p className="text-xs text-muted-foreground truncate">
                                                 {track.artists.join(', ')}
                                             </p>
+                                            {track.albumName && (
+                                                <p className="text-[10px] text-muted-foreground/70 truncate">
+                                                    {track.albumName}
+                                                </p>
+                                            )}
                                         </div>
-                                        {track.user_mentioned && (
-                                            <Badge variant="secondary" className="text-[10px] shrink-0">
-                                                Your Pick
-                                            </Badge>
-                                        )}
+                                        <div className="flex flex-col items-end gap-1">
+                                            {track.user_mentioned && (
+                                                <Badge variant="secondary" className="text-[10px]">
+                                                    Your pick
+                                                </Badge>
+                                            )}
+                                            {track.anchor_type === 'genre' && !track.user_mentioned && (
+                                                <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-700 dark:text-amber-300">
+                                                    Genre fit
+                                                </Badge>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                             </div>

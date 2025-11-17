@@ -29,6 +29,8 @@ export interface AnchorTrack {
     name: string;
     artists: string[];
     album?: string;
+    albumName?: string;
+    albumCoverUrl?: string;
     user_mentioned?: boolean;
     user_mentioned_artist?: boolean;
     anchor_type?: 'user' | 'genre';

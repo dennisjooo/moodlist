@@ -11,10 +11,13 @@ import { workflowEvents } from './useActiveWorkflows';
  * Normalize anchor tracks from backend format to frontend format
  */
 function normalizeAnchorTracks(tracks?: Array<{
-    id: string;
-    name: string;
-    artists: Array<{ name: string }> | string[];
-    album?: { name: string };
+    id?: string;
+    track_id?: string;
+    name?: string;
+    track_name?: string;
+    track?: Record<string, any>;
+    artists?: Array<{ name: string }> | string[];
+    album?: { name?: string; images?: Array<{ url: string }> } | string;
     user_mentioned?: boolean;
     user_mentioned_artist?: boolean;
     anchor_type?: 'user' | 'genre';
@@ -22,18 +25,43 @@ function normalizeAnchorTracks(tracks?: Array<{
 }>): AnchorTrack[] | undefined {
     if (!tracks || tracks.length === 0) return undefined;
 
-    return tracks.map(track => ({
-        id: track.id,
-        name: track.name,
-        artists: Array.isArray(track.artists)
-            ? track.artists.map(a => typeof a === 'string' ? a : a.name)
-            : [],
-        album: typeof track.album === 'object' ? track.album?.name : track.album,
-        user_mentioned: track.user_mentioned,
-        user_mentioned_artist: track.user_mentioned_artist,
-        anchor_type: track.anchor_type,
-        protected: track.protected,
-    }));
+    return tracks.map(raw => {
+        const base = raw.track && typeof raw.track === 'object' ? raw.track : raw;
+        const id = base.id ?? raw.id ?? raw.track_id;
+        const name = base.name ?? raw.name ?? raw.track_name ?? '';
+
+        const artistsRaw = base.artists ?? raw.artists ?? [];
+        const artistNames = Array.isArray(artistsRaw)
+            ? artistsRaw
+                .map(artist => typeof artist === 'string' ? artist : artist?.name)
+                .filter((artist): artist is string => Boolean(artist))
+            : [];
+
+        const albumData = base.album ?? raw.album;
+        const albumName = typeof albumData === 'object' && albumData !== null
+            ? albumData.name ?? undefined
+            : typeof albumData === 'string'
+                ? albumData
+                : undefined;
+
+        let albumCoverUrl: string | undefined;
+        if (albumData && typeof albumData === 'object' && Array.isArray(albumData.images)) {
+            albumCoverUrl = albumData.images.find(image => Boolean(image?.url))?.url;
+        }
+
+        return {
+            id: id ?? name,
+            name,
+            artists: artistNames,
+            album: albumName,
+            albumName,
+            albumCoverUrl,
+            user_mentioned: raw.user_mentioned,
+            user_mentioned_artist: raw.user_mentioned_artist,
+            anchor_type: raw.anchor_type,
+            protected: raw.protected,
+        } satisfies AnchorTrack;
+    });
 }
 
 const initialWorkflowState: WorkflowState = {
