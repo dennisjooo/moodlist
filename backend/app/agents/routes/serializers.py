@@ -33,7 +33,7 @@ def serialize_workflow_state(
     """Serialize in-memory workflow state into an API response."""
 
     # Extract anchor tracks from metadata for frontend display
-    anchor_tracks = state.metadata.get("anchor_tracks", [])
+    anchor_tracks = list(set(state.metadata.get("anchor_tracks", [])))
     
     # Serialize recommendations for real-time display
     recommendations = []
