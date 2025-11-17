@@ -6,6 +6,7 @@ import type { AnchorTrack, Track } from '@/lib/types/workflow';
 import { Music, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { TrackCard } from './TrackCard';
+import TrackRow from '@/components/shared/TrackRow';
 
 interface TracksPanelProps {
     tracks: Track[];
@@ -75,37 +76,27 @@ export function TracksPanel({ tracks, showAnchors, anchorTracks }: TracksPanelPr
                 <ScrollArea className="h-[400px]">
                     <div className="space-y-2 p-2 pr-4">
                         {anchorTracks.map((track, index) => (
-                            <div
+                            <TrackRow
                                 key={`${track.id}-${index}`}
-                                className="group flex items-center gap-3 rounded-lg border border-border/40 bg-gradient-to-r from-muted/40 to-muted/20 hover:from-muted/50 hover:to-muted/30 px-3.5 py-2.5 animate-in fade-in duration-300 transition-all hover:shadow-sm hover:border-border/60"
-                                style={{ animationDelay: `${index * 80}ms` }}
-                            >
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-semibold text-foreground truncate transition-colors">
-                                        {track.name}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground truncate">
-                                        {track.artists.join(', ')}
-                                    </p>
-                                    {track.albumName && (
-                                        <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">
-                                            {track.albumName}
-                                        </p>
-                                    )}
-                                </div>
-                                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                    {track.user_mentioned && (
-                                        <Badge variant="secondary" className="text-[10px] px-2 py-0.5 bg-primary/10 border-primary/20 font-medium">
-                                            Your pick
-                                        </Badge>
-                                    )}
-                                    {track.anchor_type === 'genre' && !track.user_mentioned && (
-                                        <Badge variant="outline" className="text-[10px] px-2 py-0.5 border-border/50 bg-muted/50 font-medium">
-                                            Genre fit
-                                        </Badge>
-                                    )}
-                                </div>
-                            </div>
+                                track={track}
+                                index={index}
+                                showRating={false}
+                                badge={
+                                    track.user_mentioned
+                                        ? {
+                                              label: 'Your pick',
+                                              variant: 'secondary',
+                                              className: 'text-[10px] px-2 py-0.5 bg-primary/10 border-primary/20 font-medium',
+                                          }
+                                        : track.anchor_type === 'genre'
+                                        ? {
+                                              label: 'Genre fit',
+                                              variant: 'outline',
+                                              className: 'text-[10px] px-2 py-0.5 border-border/50 bg-muted/50 font-medium',
+                                          }
+                                        : undefined
+                                }
+                            />
                         ))}
                     </div>
                 </ScrollArea>

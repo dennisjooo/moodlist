@@ -5,7 +5,7 @@ import { motion } from '@/components/ui/lazy-motion';
 import { CARD_FADE_IN_UP_LONG_DELAY_VARIANTS, TRACK_LIST_STAGGER_CONTAINER_VARIANTS } from '@/lib/constants/animations';
 import { VirtualTrackList } from '@/components/shared/VirtualTrackList';
 import { Track } from '@/lib/types/track';
-import TrackRow from './TrackRow';
+import TrackRow from '@/components/shared/TrackRow';
 
 interface TrackListViewProps {
   tracks: Track[];
