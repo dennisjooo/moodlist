@@ -2,6 +2,7 @@
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { cn } from '@/lib/utils';
@@ -56,9 +57,16 @@ export function WorkflowProgress() {
     const isActive = workflowState.status !== 'completed' && workflowState.status !== 'failed';
 
     const previewTracks = workflowState.recommendations.slice(0, 3);
+    const anchorTracks = workflowState.anchorTracks?.slice(0, 3) || [];
+    
+    // Show anchor tracks when available and no recommendations yet
+    const hasAnchors = anchorTracks.length > 0;
+    const hasRecommendations = previewTracks.length > 0;
+    
     const shouldShowSkeleton = Boolean(
         isActive &&
-        (!previewTracks || previewTracks.length === 0) &&
+        !hasAnchors &&
+        !hasRecommendations &&
         workflowState.status &&
         (
             workflowState.status.includes('gathering_seeds') ||
@@ -134,13 +142,53 @@ export function WorkflowProgress() {
                     {/* Workflow Insights */}
                     <WorkflowInsights
                         status={workflowState.status}
+                        currentStep={workflowState.currentStep}
                         moodAnalysis={workflowState.moodAnalysis}
                         recommendations={workflowState.recommendations}
+                        anchorTracks={workflowState.anchorTracks}
                         metadata={workflowState.metadata}
                         error={workflowState.error}
                     />
 
-                    {/* Perceived track loading */}
+                    {/* Show anchor tracks when they're ready (before recommendations) */}
+                    {hasAnchors && !hasRecommendations && isActive && (
+                        <div className="rounded-lg border border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-orange-500/5 p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400 font-medium">Foundation Tracks</p>
+                                <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-700 dark:text-amber-400">
+                                    Anchor
+                                </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Using these tracks as starting points to find similar music
+                            </p>
+                            <div className="space-y-2">
+                                {anchorTracks.map((track, index) => (
+                                    <div
+                                        key={track.id || `${track.name}-${index}`}
+                                        className="flex items-center justify-between gap-3 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 animate-in fade-in duration-300"
+                                        style={{ animationDelay: `${index * 80}ms` }}
+                                    >
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-medium truncate">
+                                                {track.name}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground truncate">
+                                                {track.artists.join(', ')}
+                                            </p>
+                                        </div>
+                                        {track.user_mentioned && (
+                                            <Badge variant="secondary" className="text-[10px] shrink-0">
+                                                Your Pick
+                                            </Badge>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Perceived track loading (only when no anchors and no recommendations) */}
                     {shouldShowSkeleton && (
                         <div className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-3">
                             <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-muted-foreground">
@@ -151,7 +199,8 @@ export function WorkflowProgress() {
                         </div>
                     )}
 
-                    {!shouldShowSkeleton && previewTracks && previewTracks.length > 0 && isActive && (
+                    {/* Show recommendations when they arrive */}
+                    {hasRecommendations && isActive && (
                         <div className="rounded-lg border border-border/50 bg-background/60 backdrop-blur-sm p-3 space-y-2">
                             <div className="flex items-center justify-between">
                                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Tracks already queued</p>
