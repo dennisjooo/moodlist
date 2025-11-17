@@ -35,12 +35,30 @@ def serialize_workflow_state(
     # Extract anchor tracks from metadata for frontend display
     anchor_tracks = state.metadata.get("anchor_tracks", [])
     
+    # Serialize recommendations for real-time display
+    recommendations = []
+    for rec in state.recommendations:
+        recommendations.append({
+            "track_id": rec.track_id,
+            "track_name": rec.track_name,
+            "artists": rec.artists,
+            "spotify_uri": rec.spotify_uri,
+            "confidence_score": rec.confidence_score,
+            "reasoning": rec.reasoning,
+            "source": rec.source,
+            "user_mentioned": getattr(rec, "user_mentioned", False),
+            "user_mentioned_artist": getattr(rec, "user_mentioned_artist", False),
+            "anchor_type": getattr(rec, "anchor_type", None),
+            "protected": getattr(rec, "protected", False),
+        })
+    
     payload = {
         "session_id": session_id,
         "status": state.status.value,
         "current_step": state.current_step,
         "mood_prompt": state.mood_prompt,
         "mood_analysis": state.mood_analysis,
+        "recommendations": recommendations,
         "recommendation_count": len(state.recommendations),
         "seed_track_count": len(state.seed_tracks),
         "user_top_tracks_count": len(state.user_top_tracks),

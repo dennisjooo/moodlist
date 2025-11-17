@@ -1,17 +1,17 @@
 'use client';
 
 import { SpotifyLoginButton } from '@/components/features/auth/SpotifyLoginButton';
-import { WorkflowNotificationIndicator } from '@/components/features/workflow/WorkflowNotificationIndicator';
+import { WorkflowNotificationIndicator } from '@/components/layout/Navigation/WorkflowNotificationIndicator';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { useAuth } from '@/lib/store/authStore';
+import { Skeleton } from '@/components/ui/skeleton';
 import { config } from '@/lib/config';
 import { getCookie } from '@/lib/cookies';
+import { useAuth } from '@/lib/store/authStore';
 import { NavItem } from '@/lib/types/navigation';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useEffect, useState } from 'react';
-import { LOGIN_BUTTON_CLASSES } from './constants';
 import { AuthMenu } from './AuthMenu';
 import { Brand } from './Brand';
+import { LOGIN_BUTTON_CLASSES } from '../../../lib/constants/navConstant';
 import { DesktopLinks } from './DesktopLinks';
 import { MobileMenu } from './MobileMenu';
 

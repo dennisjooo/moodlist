@@ -1,2 +1,2 @@
 // Re-export from new location for backwards compatibility
-export { default } from '@/components/features/create/MoodInput';
+export { default } from '@/components/features/create/inputs/MoodInput';

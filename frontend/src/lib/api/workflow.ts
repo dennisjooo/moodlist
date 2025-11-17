@@ -53,6 +53,19 @@ export interface WorkflowStatus {
         anchor_type?: 'user' | 'genre';
         protected?: boolean;
     }>;
+    recommendations?: Array<{
+        track_id: string;
+        track_name: string;
+        artists: string[];
+        spotify_uri?: string;
+        confidence_score: number;
+        reasoning: string;
+        source: string;
+        user_mentioned?: boolean;
+        user_mentioned_artist?: boolean;
+        anchor_type?: string | null;
+        protected?: boolean;
+    }>;
     recommendation_count: number;
     seed_track_count?: number;
     user_top_tracks_count?: number;

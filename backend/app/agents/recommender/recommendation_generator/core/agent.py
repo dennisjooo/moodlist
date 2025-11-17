@@ -74,16 +74,27 @@ class RecommendationGeneratorAgent(BaseAgent):
             # Update: Fetching recommendations
             state.current_step = "generating_recommendations_fetching"
             await self._notify_progress(state)
-            
+
+            # Add anchor tracks to state first (so they show up immediately)
+            await self._add_anchor_tracks_to_state(state)
+
             # Get raw recommendations
             recommendations = await self._get_recommendations(state)
+
+            # Progress update after fetching
+            state.current_step = f"generating_recommendations_fetched_{len(recommendations)}"
+            await self._notify_progress(state)
 
             # Update: Processing and ranking
             state.current_step = "generating_recommendations_processing"
             await self._notify_progress(state)
-            
+
             # Process recommendations (filter, rank, diversify)
             processed_recommendations = await self._process_recommendations(recommendations, state)
+
+            # Progress update after processing
+            state.current_step = f"generating_recommendations_processed_{len(processed_recommendations)}"
+            await self._notify_progress(state)
 
             # Update: Applying diversity
             state.current_step = "generating_recommendations_diversifying"
@@ -101,6 +112,10 @@ class RecommendationGeneratorAgent(BaseAgent):
             # Deduplicate and add to state
             self._deduplicate_and_add_recommendations(final_recommendations, state)
 
+            # Notify progress with updated recommendations count
+            state.current_step = "generating_recommendations_complete"
+            await self._notify_progress(state)
+
             # Update state with final metadata
             self._update_state_metadata(state, processed_recommendations)
 
@@ -112,6 +127,29 @@ class RecommendationGeneratorAgent(BaseAgent):
 
         return state
 
+    async def _add_anchor_tracks_to_state(self, state: AgentState) -> None:
+        """Add anchor tracks to state immediately for real-time display.
+
+        Args:
+            state: Current agent state
+        """
+        from ..handlers.anchor_track import AnchorTrackHandler
+
+        anchor_tracks = state.metadata.get("anchor_tracks", [])
+        if not anchor_tracks:
+            return
+
+        handler = AnchorTrackHandler()
+        for anchor_track in anchor_tracks:
+            recommendation = handler._create_anchor_recommendation(anchor_track)
+            state.add_recommendation(recommendation)
+
+        logger.info(f"Added {len(anchor_tracks)} anchor tracks to state for real-time display")
+
+        # Send progress update to show anchors immediately
+        state.current_step = f"generating_recommendations_anchors_{len(anchor_tracks)}"
+        await self._notify_progress(state)
+
     async def _get_recommendations(self, state: AgentState) -> List[Dict[str, Any]]:
         """Get raw recommendations based on available seeds.
 
@@ -121,6 +159,12 @@ class RecommendationGeneratorAgent(BaseAgent):
         Returns:
             Raw recommendations list
         """
+        # Pass through progress callback to sub-components
+        if hasattr(self, '_progress_callback'):
+            # Pass to artist-based generator
+            if hasattr(self.recommendation_engine, 'artist_generator'):
+                self.recommendation_engine.artist_generator._progress_callback = self._progress_callback
+
         if not state.seed_tracks:
             logger.warning("No seed tracks available for recommendations")
             return await self.recommendation_engine._generate_fallback_recommendations(state)
@@ -181,6 +225,8 @@ class RecommendationGeneratorAgent(BaseAgent):
         seen_track_ids = set()
         seen_normalized_names = set()
         seen_spotify_uris = set()
+        new_tracks_added = False
+        tracks_added_count = 0
 
         for rec in recommendations:
             # Check for duplicates
@@ -189,7 +235,27 @@ class RecommendationGeneratorAgent(BaseAgent):
 
             # No duplicates found, add the track
             state.add_recommendation(rec)
+            new_tracks_added = True
+            tracks_added_count += 1
             self._mark_as_seen(rec, seen_track_ids, seen_normalized_names, seen_spotify_uris)
+
+            # Note: We don't send progress updates here because tracks are already
+            # being added incrementally during artist processing. These updates would
+            # be redundant and spammy.
+
+        if new_tracks_added:
+            # Send final progress update with total count
+            state.current_step = f"generating_recommendations_streaming_{len(state.recommendations)}"
+            try:
+                import asyncio
+                asyncio.create_task(self._notify_progress(state))
+            except RuntimeError:
+                # Fallback if create_task is not available (e.g., synchronous tests)
+                try:
+                    loop = asyncio.get_event_loop()
+                    loop.create_task(self._notify_progress(state))
+                except Exception:
+                    pass
 
     def _is_duplicate(
         self,

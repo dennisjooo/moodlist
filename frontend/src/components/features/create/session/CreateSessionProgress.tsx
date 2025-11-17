@@ -1,10 +1,9 @@
 import { Badge } from '@/components/ui/badge';
 import { BackButton } from '@/components/shared';
-import { CreateSessionLayout, createSessionCardClassName } from '@/components/features/create/CreateSessionLayout';
-import WorkflowProgress from '@/components/WorkflowProgress';
+import { CreateSessionLayout, createSessionCardClassName } from '@/components/features/create/session/CreateSessionLayout';
 import { Sparkles } from 'lucide-react';
 import { isTerminalStatus } from '@/lib/utils/workflow';
-
+import { CreateSessionProgressCard } from './CreateSessionProgressCard';
 interface ColorScheme {
     primary: string;
     secondary: string;
@@ -61,7 +60,7 @@ export function CreateSessionProgress({
                                         <>
                                             We are weaving together tracks that match the feeling you shared.
                                             <br />
-                                            Hang tight while the mix comes to life.
+                                            Watch as we build your perfect mix.
                                         </>
                                     )}
                             </p>
@@ -69,11 +68,7 @@ export function CreateSessionProgress({
                     </div>
                 )}
 
-                {sessionId && status !== 'completed' && (
-                    <div className="space-y-4">
-                        <WorkflowProgress />
-                    </div>
-                )}
+                {sessionId && status !== 'completed' && <CreateSessionProgressCard />}
             </div>
         </CreateSessionLayout>
     );

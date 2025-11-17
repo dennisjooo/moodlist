@@ -9,9 +9,9 @@ import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 import { Suspense, useState } from 'react';
 import { useCreatePageLogic } from '@/lib/hooks';
-import { CreatePageLayout } from '@/components/features/create/CreatePageLayout';
-import { CreatePageHeader } from '@/components/features/create/CreatePageHeader';
-import { QuotaDisplay } from '@/components/features/create/QuotaDisplay';
+import { CreatePageLayout } from '@/components/features/create/layout/CreatePageLayout';
+import { CreatePageHeader } from '@/components/features/create/layout/CreatePageHeader';
+import { QuotaDisplay } from '@/components/features/create/inputs/QuotaDisplay';
 
 const PlaylistEditor = dynamic(() => import('@/components/PlaylistEditor'), {
   loading: () => <EditorSkeleton />,
