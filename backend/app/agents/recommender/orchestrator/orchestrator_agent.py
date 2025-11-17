@@ -468,15 +468,27 @@ class OrchestratorAgent(BaseAgent):
         # Use the best quality evaluation from the workflow instead of running a new one
         # This prevents quality degradation in final processing
         best_evaluation = state.metadata.get("best_quality_evaluation")
-        if best_evaluation is not None:
-            logger.info(f"Using best quality evaluation for final processing: {best_evaluation['overall_score']:.3f}")
-            state.metadata["final_quality_evaluation"] = best_evaluation
-            final_evaluation = best_evaluation
-        else:
-            # Fallback to fresh evaluation if no best evaluation exists
-            logger.warning("No best quality evaluation found, running fresh evaluation")
+        final_evaluation = best_evaluation
+
+        # If we don't have an evaluation or it doesn't cover the current playlist,
+        # re-run evaluation so newly added tracks get scored/filtered.
+        current_ids = {rec.track_id for rec in state.recommendations}
+        needs_fresh_eval = (
+            best_evaluation is None
+            or not current_ids.issubset(set(best_evaluation.get("track_scores", {}).keys()))
+            or best_evaluation.get("recommendations_count") != len(state.recommendations)
+        )
+
+        if needs_fresh_eval:
+            logger.info("Running fresh quality evaluation for final playlist to sync outlier filtering")
             final_evaluation = await self.quality_evaluator.evaluate_playlist_quality(state)
-            state.metadata["final_quality_evaluation"] = final_evaluation
+            # Track the extra evaluation for transparency and future analysis
+            state.metadata.setdefault("quality_scores", []).append(final_evaluation)
+            self._update_best_quality_evaluation(state, final_evaluation)
+        else:
+            logger.info(f"Using best quality evaluation for final processing: {best_evaluation['overall_score']:.3f}")
+
+        state.metadata["final_quality_evaluation"] = final_evaluation
         
         # Filter out outliers from final recommendations (but keep protected tracks)
         outlier_ids = set(final_evaluation.get("outlier_tracks", []))
