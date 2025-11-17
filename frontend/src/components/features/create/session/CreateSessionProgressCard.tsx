@@ -1,19 +1,15 @@
 'use client';
 
-import {
-	CancelWorkflowDialog,
-	MoodAnalysisDisplay,
-	WorkflowInsights,
-} from '@/components/features/create/session/SessionProgressCard';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useWorkflow } from '@/lib/contexts/WorkflowContext';
 import { useWorkflowCancellation } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
-import { SessionActions } from './SessionProgressCard/SessionActions';
-import { SessionHeader } from './SessionProgressCard/SessionHeader';
-import { StatusSection } from './SessionProgressCard/StatusSection';
-import { TracksPanel } from './SessionProgressCard/TracksPanel';
-import { WorkflowErrorAlert } from './SessionProgressCard/WorkflowErrorAlert';
+import { CancelWorkflowDialog, SessionActions } from './ProgressCard/actions';
+import { WorkflowErrorAlert } from './ProgressCard/feedback';
+import { SessionHeader } from './ProgressCard/header';
+import { StatusSection } from './ProgressCard/status';
+import { TracksPanel } from './ProgressCard/tracks';
+import { MoodAnalysisDisplay, WorkflowInsights } from './ProgressCard/workflow';
 
 export function CreateSessionProgressCard() {
 	const { workflowState, stopWorkflow, clearError } = useWorkflow();

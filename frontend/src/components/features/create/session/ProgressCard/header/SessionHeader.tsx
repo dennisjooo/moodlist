@@ -1,8 +1,9 @@
 'use client';
 
-import { StatusIcon, UpdatePulse } from '@/components/features/create/session/SessionProgressCard';
 import { Button } from '@/components/ui/button';
 import { CardTitle } from '@/components/ui/card';
+import { StatusIcon } from './StatusIcon';
+import { UpdatePulse } from './UpdatePulse';
 
 interface SessionHeaderProps {
 	status: string | null;

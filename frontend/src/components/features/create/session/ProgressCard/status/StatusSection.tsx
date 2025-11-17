@@ -1,6 +1,7 @@
 'use client';
 
-import { ProgressTimeline, StatusMessage } from '@/components/features/create/session/SessionProgressCard';
+import { ProgressTimeline } from './ProgressTimeline';
+import { StatusMessage } from './StatusMessage';
 
 interface StatusSectionProps {
 	status: string | null;
