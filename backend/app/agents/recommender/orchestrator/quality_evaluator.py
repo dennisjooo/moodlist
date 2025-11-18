@@ -106,10 +106,10 @@ class QualityEvaluator:
         unique_artists = set()
         for rec in recommendations:
             unique_artists.update(rec.artists)
-        
-        # Good diversity: at least 60% unique artists relative to track count
+
+        # Good diversity: at least 70% unique artists relative to track count
         artist_diversity_ratio = len(unique_artists) / max(len(recommendations), 1)
-        evaluation["diversity_score"] = min(artist_diversity_ratio / 0.6, 1.0)
+        evaluation["diversity_score"] = min(artist_diversity_ratio / 0.7, 1.0)
 
         # Calculate overall score (weighted average)
         evaluation["overall_score"] = (

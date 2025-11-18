@@ -121,7 +121,7 @@ class DiversityManager:
         diversity_penalty = 0
         for artist in rec.artists:
             if artist_counts[artist] > 1:
-                diversity_penalty += 0.1 * (artist_counts[artist] - 1)
+                diversity_penalty += 0.05 * (artist_counts[artist] - 1)
         return diversity_penalty
 
     def _create_diversified_recommendation(

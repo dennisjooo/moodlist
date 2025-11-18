@@ -30,7 +30,7 @@ class LimitsConfig:
     fallback_artist_search_limit: int = 12  # Spotify limit when probing fallback keywords
     llm_batch_validation_trigger: int = 10  # Min artist count before running batch LLM filtering
     llm_minimum_filtered_artists: int = 5  # Minimum acceptable LLM output before falling back
-    artist_discovery_result_limit: int = 40  # Final number of artists to keep for downstream steps (increased from 20 for diversity)
+    artist_discovery_result_limit: int = 50  # Final number of artists to keep for downstream steps (increased from 40 for better variety)
     genre_artist_search_limit: int = 30  # Artists to fetch per-genre via direct search
     genre_track_search_limit: int = 15  # Track-based artist discoveries per genre
     heuristic_pruning_min_artists: int = 15  # Skip pruning when artist pool is already small
