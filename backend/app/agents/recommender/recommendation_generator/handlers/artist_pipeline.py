@@ -208,9 +208,11 @@ class ArtistRecommendationPipeline:
         total_artists = len(artists_to_process)
 
         # Prefetch top tracks in batches to minimize per-artist API calls
+        # Use configured concurrency for better throughput while respecting rate limits
         prefetched_top_tracks = await self.spotify_service.get_artist_top_tracks_batch(
             access_token=access_token,
             artist_ids=artists_to_process,
+            max_concurrency=config.artist_top_tracks_max_concurrency,
         )
 
         # Process artists in parallel with bounded concurrency (raised to 12 for better throughput within rate limits)

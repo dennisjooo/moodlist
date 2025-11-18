@@ -23,7 +23,7 @@ class LimitsConfig:
     mentioned_artist_track_limit: int = 5  # Top tracks kept for user-mentioned artists
     default_artist_track_limit: int = 3  # Top tracks kept for non-mentioned artists
     artist_search_limit: int = 3  # Number of Spotify artist search results to inspect per query
-    artist_top_tracks_max_concurrency: int = 4  # Parallel calls when hydrating artist top tracks
+    artist_top_tracks_max_concurrency: int = 6  # Parallel calls when hydrating artist top tracks (increased for better throughput)
 
     # Artist discovery controls
     fallback_search_keyword_limit: int = 5  # How many fallback search keywords to try
