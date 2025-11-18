@@ -30,13 +30,13 @@ class PlaylistTargetPlanner:
         Returns:
             Playlist target plan with size, thresholds, and reasoning
         """
-        # Base targets with some randomness to add variety
-        base_target = 22
-        random_modifier = random.randint(-2, 3)  # -2 to +3 variation
+        # Base targets centered around ~20 tracks
+        base_target = 20
+        random_modifier = random.randint(-2, 2)  # -2 to +2 variation
 
         target_count = base_target + random_modifier
-        min_count = 18
-        max_count = 28
+        min_count = 16
+        max_count = 24
         quality_threshold = 0.75
 
         # Analyze mood complexity and specificity
@@ -45,30 +45,30 @@ class PlaylistTargetPlanner:
 
         # Adjust based on mood specificity
         if feature_count <= 4 or high_weight_features <= 2:
-            # Broad mood (e.g., "chill") - more tracks possible
-            target_count = 26 + random.randint(-2, 4)  # 24-30 range
-            max_count = 32
+            # Broad mood (e.g., "chill") - slightly larger but still ~20
+            target_count = 22 + random.randint(-2, 2)  # 20-24 range
+            max_count = 26
             quality_threshold = 0.7
-            reasoning = "Broad mood allows for larger, more diverse playlist"
+            reasoning = "Broad mood allows for diverse selection around ~20 tracks"
         elif feature_count >= 8 or high_weight_features >= 4:
-            # Very specific mood (e.g., "super indie acoustic") - still aim for decent size
-            target_count = 21 + random.randint(-2, 2)  # 19-23 range
+            # Very specific mood - focused selection
+            target_count = 19 + random.randint(-1, 2)  # 18-21 range
             min_count = 16
             quality_threshold = 0.78
-            reasoning = "Specific mood requires focused, high-quality selection"
+            reasoning = "Specific mood requires focused, high-quality ~20 track selection"
         else:
             # Moderate specificity
-            target_count = 22 + random.randint(-2, 3)  # 20-25 range
+            target_count = 20 + random.randint(-2, 2)  # 18-22 range
             quality_threshold = 0.75
             reasoning = "Balanced target for moderate mood specificity"
 
         # Check for niche indicators in prompt
         niche_keywords = ["indie", "underground", "obscure", "niche", "rare"]
         if any(keyword in mood_prompt.lower() for keyword in niche_keywords):
-            # For niche moods, aim for a good size but be flexible
-            target_count = max(20, target_count - random.randint(1, 3))
+            # For niche moods, slightly smaller but still ~20
+            target_count = max(18, target_count - random.randint(0, 2))
             min_count = 16
-            reasoning += " (niche mood - flexible quality threshold)"
+            reasoning += " (niche mood - focused ~20 track selection)"
 
         return {
             "target_count": target_count,
