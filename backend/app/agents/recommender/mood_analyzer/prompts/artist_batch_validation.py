@@ -52,18 +52,26 @@ Artists to evaluate:
 Task: Identify which artists should be KEPT for this music request, and which should be filtered out.
 
 Consider:
-1. **Genre Alignment**: Do the artist's genres match the requested mood/genres?
-2. **Cultural Context**: Does the artist's origin/style fit the cultural aesthetic requested?
+1. **Regional Fit (CRITICAL)**: Does the artist match the preferred_regions and avoid excluded_regions?
+   - Check the artist's genres for regional indicators (e.g., "indonesian pop", "k-pop", "french rap")
+   - ANY artist from an EXCLUDED REGION must be filtered out
+   - Examples:
+     * Indonesian/Malay/Southeast Asian artists (Tulus, Nadin Amizah, Hindia, Sal Priadi) → Filter if "Southeast Asian" in excluded_regions
+     * Korean/K-pop artists → Filter if "East Asian" in excluded_regions
+     * Latin/Spanish artists → Filter if "Latin American" in excluded_regions
+
+2. **Genre Alignment**: Do the artist's genres match the requested mood/genres?
+
+3. **Cultural Context**: Does the artist's origin/style fit the cultural aesthetic requested?
    - Example: For "French funk", Indonesian pop artists are a mismatch
    - Example: For "K-pop", Korean artists are appropriate
-3. **Regional Fit**: Does the artist match the preferred_regions and avoid excluded_regions?
+
 4. **Musical Style**: Does the artist's sound align with the mood interpretation?
 
-Be thoughtful and context-aware:
-- Don't exclude artists based solely on their country of origin
-- Focus on whether their MUSICAL STYLE fits the request
-- Consider that music crosses borders - some artists blend cultures authentically
-- If user explicitly mentioned a region/culture, prioritize artists from that context
+**STRICT REGIONAL FILTERING RULES**:
+- If excluded_regions is specified, ANY artist from those regions MUST be filtered
+- Regional indicators in genres are definitive - if genre contains "indonesian", "malay", "k-pop", etc., treat it as that region
+- Don't make exceptions for popular artists - regional filtering applies to everyone
 
 Respond in JSON format:
 {{

@@ -10,6 +10,7 @@ from langchain_core.language_models.base import BaseLanguageModel
 from ...utils.llm_response_parser import LLMResponseParser
 from ...utils.config import config
 from ...utils.artist_utils import ArtistDeduplicator
+from ...utils.regional_filter import RegionalFilter
 from ..prompts import (
     get_artist_filtering_prompt,
     get_batch_artist_validation_prompt,
@@ -437,7 +438,7 @@ class ArtistDiscovery:
 
         Args:
             artists: List of candidate artists
-            mood_analysis: Mood analysis containing genre keywords
+            mood_analysis: Mood analysis containing genre keywords and regional preferences
 
         Returns:
             Pruned list of artists
@@ -449,24 +450,39 @@ class ArtistDiscovery:
         pruned = []
         genre_keywords = set(g.lower() for g in mood_analysis.get("genre_keywords", []))
 
+        # Get regional preferences for filtering
+        excluded_regions = mood_analysis.get("excluded_regions", [])
+
         for artist in artists:
+            artist_name = artist.get('name', '')
+
             # Rule 1: Filter out artists with very low popularity (< 15)
             # These are likely obscure or have data quality issues
             popularity = artist.get("popularity")
             if popularity is None:
                 popularity = 0
             if popularity < config.heuristic_min_artist_popularity:
-                logger.debug(f"Filtered artist {artist.get('name')} - low popularity: {popularity}")
+                logger.debug(f"Filtered artist {artist_name} - low popularity: {popularity}")
                 continue
 
             # Rule 2: Filter out artists with no genre information
             # These are likely incomplete/stale data
             artist_genres = artist.get("genres", [])
             if not artist_genres:
-                logger.debug(f"Filtered artist {artist.get('name')} - no genres")
+                logger.debug(f"Filtered artist {artist_name} - no genres")
                 continue
 
-            # Rule 3: If we have genre keywords from mood analysis, prioritize matches
+            # Rule 3: Regional filtering - check if artist should be excluded based on region
+            if excluded_regions:
+                artist_region = RegionalFilter.detect_artist_region(artist_name, artist_genres)
+                if artist_region and RegionalFilter.is_region_excluded(artist_region, excluded_regions):
+                    logger.info(
+                        f"Filtered artist '{artist_name}' - region '{artist_region}' "
+                        f"is in excluded regions: {excluded_regions}"
+                    )
+                    continue
+
+            # Rule 4: If we have genre keywords from mood analysis, prioritize matches
             # but don't exclude non-matches (keep for diversity)
             artist_genres_lower = set(g.lower() for g in artist_genres)
             has_genre_match = bool(genre_keywords & artist_genres_lower)
