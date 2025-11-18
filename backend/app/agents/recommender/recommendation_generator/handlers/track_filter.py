@@ -4,6 +4,8 @@ import structlog
 from typing import Any, Dict, List, Optional
 
 from ....states.agent_state import TrackRecommendation
+from ...utils.regional_filter import RegionalFilter
+from ...utils.audio_feature_matcher import AudioFeatureMatcher
 
 logger = structlog.get_logger(__name__)
 
@@ -128,112 +130,18 @@ class TrackFilter:
         preferred_regions = mood_analysis.get("preferred_regions", [])
         excluded_regions = mood_analysis.get("excluded_regions", [])
 
-        # If no regional constraints, skip
-        if not preferred_regions and not excluded_regions:
-            return (True, "No regional constraints")
+        # Detect track's region using centralized utility
+        track_region = RegionalFilter.detect_track_region(
+            track_name=context["track_name"],
+            artists=context["artists_lower"]
+        )
 
-        # Detect track's region
-        track_region = self._detect_track_region(context["track_and_artists"])
-
-        # If we can't detect region, allow it (better to be lenient)
-        if not track_region:
-            return (True, "Region could not be determined")
-
-        # Check if track region is explicitly excluded
-        if excluded_regions:
-            excluded_lower = [r.lower() for r in excluded_regions]
-            if track_region.lower() in excluded_lower or any(exc in track_region.lower() for exc in excluded_lower):
-                return (False, f"Regional mismatch: track is {track_region}, which is in excluded regions {excluded_regions}")
-
-        # Check if track region matches preferred (if specified)
-        if preferred_regions:
-            preferred_lower = [r.lower() for r in preferred_regions]
-            # Be flexible - "Western" should match English/American/European, etc.
-            if not self._region_matches_preferred(track_region, preferred_lower):
-                return (False, f"Regional mismatch: track is {track_region}, expected one of {preferred_regions}")
-
-        return (True, "Region matches mood intent")
-
-    def _detect_track_region(self, track_and_artists: str) -> Optional[str]:
-        """Detect the likely region/origin of a track based on language indicators.
-
-        Args:
-            track_and_artists: Combined track name and artist string (lowercase)
-
-        Returns:
-            Detected region or None
-        """
-        language_indicators = self._get_language_indicators()
-
-        # Check for each language's indicators
-        for region, indicators in language_indicators.items():
-            for indicator in indicators:
-                if isinstance(indicator, str):
-                    if indicator in track_and_artists:
-                        return self._map_language_to_region(region)
-                else:
-                    # Unicode range check for CJK languages
-                    for char in track_and_artists:
-                        if indicator <= char <= indicators[indicators.index(indicator) + 1]:
-                            return self._map_language_to_region(region)
-
-        return None
-
-    def _map_language_to_region(self, language: str) -> str:
-        """Map detected language to broader region.
-
-        Args:
-            language: Detected language
-
-        Returns:
-            Region name
-        """
-        mapping = {
-            "spanish": "Latin American",
-            "portuguese": "Latin American",
-            "korean": "East Asian",
-            "japanese": "East Asian",
-            "chinese": "East Asian",
-            "indonesian": "Southeast Asian",
-            "malay": "Southeast Asian",
-            "german": "European",
-            "french": "European"
-        }
-        return mapping.get(language, language.capitalize())
-
-    def _region_matches_preferred(self, track_region: str, preferred_lower: list) -> bool:
-        """Check if track region matches any preferred region with flexibility.
-
-        Args:
-            track_region: Detected track region
-            preferred_lower: List of preferred regions (lowercase)
-
-        Returns:
-            True if region matches
-        """
-        track_region_lower = track_region.lower()
-
-        # Direct match
-        if track_region_lower in preferred_lower:
-            return True
-
-        # Flexible matching - "Western" includes English-speaking regions
-        if "western" in preferred_lower:
-            western_regions = ["american", "european", "british", "canadian", "australian"]
-            if any(w in track_region_lower for w in western_regions):
-                return True
-
-        # "European" includes specific European languages
-        if "european" in preferred_lower:
-            european_regions = ["french", "german", "italian", "spanish", "portuguese", "british"]
-            if any(e in track_region_lower for e in european_regions):
-                return True
-
-        # Partial match (e.g., "Latin American" matches "latin")
-        if any(pref in track_region_lower or track_region_lower in pref for pref in preferred_lower):
-            return True
-
-        return False
+        # Validate using centralized utility
+        return RegionalFilter.validate_regional_compatibility(
+            detected_region=track_region,
+            preferred_regions=preferred_regions,
+            excluded_regions=excluded_regions
+        )
 
     def _validate_language_compatibility(self, context: Dict[str, Any]) -> tuple[bool, str]:
         """Validate that track language is compatible with mood language.
@@ -289,24 +197,6 @@ class TrackFilter:
             elif any(lang_word in keyword_lower for lang_word in ["portuguese", "brazilian", "bossa"]):
                 return "portuguese"
         return None
-
-    def _get_language_indicators(self) -> Dict[str, List[Any]]:
-        """Get language detection indicators.
-
-        Returns:
-            Dictionary mapping languages to indicator lists
-        """
-        return {
-            "spanish": ["el ", "la ", "los ", "las ", "mi ", "tu ", "de ", "con ", "por ", "para "],
-            "korean": ["\u3131", "\u314f", "\uac00", "\ud7a3"],  # Hangul character ranges
-            "japanese": ["\u3040", "\u309f", "\u30a0", "\u30ff"],  # Hiragana/Katakana
-            "chinese": ["\u4e00", "\u9fff"],  # Common CJK
-            "portuguese": ["meu ", "minha ", "você ", "está ", "muito ", "bem "],
-            "indonesian": ["aku ", "kamu ", "yang ", "dengan ", "untuk ", "dari ", "ini ", "itu ", "dan ", "atau "],
-            "malay": ["saya ", "kita ", "kami ", "awak ", "dengan ", "untuk ", "dari "],
-            "german": ["der ", "die ", "das ", "ich ", "du ", "und ", "mit "],
-            "french": ["le ", "la ", "les ", "de ", "je ", "tu ", "avec ", "pour "]
-        }
 
     def _validate_genre_compatibility(self, context: Dict[str, Any]) -> tuple[bool, str]:
         """Validate that track genres are compatible with mood genres.
@@ -371,44 +261,11 @@ class TrackFilter:
         mood_analysis = context["mood_analysis"]
         excluded_themes = mood_analysis.get("excluded_themes", [])
 
-        if not excluded_themes:
-            return (True, "No themes excluded")
-
-        # Define keyword patterns for different themes
-        theme_indicators = {
-            "holiday": ["christmas", "xmas", "santa", "jingle", "sleigh", "noel", "holiday",
-                       "winter wonderland", "silent night", "holy night", "feliz navidad",
-                       "deck the halls", "carol", "festive"],
-            "christmas": ["christmas", "xmas", "santa", "jingle", "sleigh", "noel",
-                         "silent night", "holy night", "feliz navidad", "deck the halls"],
-            "religious": ["holy", "prayer", "worship", "gospel", "praise", "blessed", "amen",
-                         "hallelujah", "church", "hymn", "psalm", "sacred"],
-            "kids": ["baby shark", "wheels on the bus", "itsy bitsy", "twinkle twinkle",
-                    "abc song", "nursery rhyme", "children's", "kids bop"],
-            "children": ["baby shark", "wheels on the bus", "itsy bitsy", "twinkle twinkle",
-                        "abc song", "nursery rhyme", "children's", "kids bop"],
-            "comedy": ["parody", "comedy", "funny", "joke", "weird al", "lonely island"],
-            "parody": ["parody", "weird al", "lonely island", "comedy"],
-            "national anthems": ["national anthem", "star spangled banner", "god save"],
-            "patriotic": ["national anthem", "patriotic", "star spangled banner"],
-            "sports": ["stadium anthem", "we will rock you", "we are the champions"],
-            "stadium": ["stadium anthem", "we will rock you", "we are the champions"],
-            "video game": ["8-bit", "chiptune", "minecraft", "fortnite", "game soundtrack"],
-            "soundtrack": ["movie soundtrack", "film score", "ost"],
-        }
-
-        # Check track name against excluded themes
-        track_lower = context["track_lower"]
-
-        for excluded_theme in excluded_themes:
-            theme_lower = excluded_theme.lower()
-            indicators = theme_indicators.get(theme_lower, [theme_lower])
-
-            for indicator in indicators:
-                if indicator in track_lower:
-                    return (False, f"Theme exclusion: track contains '{indicator}' which matches excluded theme '{excluded_theme}'")
-
-        return (True, "No excluded themes detected")
+        # Use centralized theme filtering
+        return RegionalFilter.validate_theme_compatibility(
+            track_name=context["track_name"],
+            excluded_themes=excluded_themes
+        )
 
     def _filter_and_rank_recommendations(
         self,
@@ -563,161 +420,13 @@ class TrackFilter:
         Returns:
             Tuple of (violations_list, critical_violations_count)
         """
-        violations = []
-        critical_violations = 0
-
-        for feature_name, target_value in target_features.items():
-            if feature_name not in recommendation.audio_features:
-                continue
-
-            violation_info = self._evaluate_single_feature(
-                feature_name,
-                target_value,
-                recommendation.audio_features[feature_name],
-                tolerance_extensions,
-                critical_features
-            )
-
-            if violation_info:
-                violations.append(violation_info["description"])
-                if violation_info["is_critical"]:
-                    critical_violations += 1
-
-        return violations, critical_violations
-
-    def _evaluate_single_feature(
-        self,
-        feature_name: str,
-        target_value: Any,
-        actual_value: float,
-        tolerance_extensions: Dict[str, Optional[float]],
-        critical_features: List[str]
-    ) -> Optional[Dict[str, Any]]:
-        """Evaluate a single feature against its target.
-
-        Args:
-            feature_name: Name of the feature
-            target_value: Target value (range or single value)
-            actual_value: Actual value from track
-            tolerance_extensions: Tolerance configuration
-            critical_features: List of critical feature names
-
-        Returns:
-            Violation info dict or None if no violation
-        """
-        tolerance = tolerance_extensions.get(feature_name)
-
-        # Handle range-based targets (preferred)
-        if isinstance(target_value, list) and len(target_value) == 2:
-            return self._check_range_violation(
-                feature_name, target_value, actual_value, tolerance, critical_features
-            )
-
-        # Handle single-value targets
-        elif isinstance(target_value, (int, float)):
-            return self._check_single_value_violation(
-                feature_name, target_value, actual_value, tolerance, critical_features
-            )
-
-        return None
-
-    def _check_range_violation(
-        self,
-        feature_name: str,
-        target_range: List[float],
-        actual_value: float,
-        tolerance: Optional[float],
-        critical_features: List[str]
-    ) -> Optional[Dict[str, Any]]:
-        """Check if a value violates a range-based target.
-
-        Args:
-            feature_name: Name of the feature
-            target_range: [min, max] target range
-            actual_value: Actual value from track
-            tolerance: Tolerance extension value
-            critical_features: List of critical feature names
-
-        Returns:
-            Violation info dict or None if no violation
-        """
-        min_val, max_val = target_range
-
-        # Extend the range by tolerance on both sides
-        if tolerance is not None:
-            extended_min = max(0, min_val - tolerance)
-            extended_max = min(1 if feature_name != "tempo" else 250, max_val + tolerance)
-        else:
-            extended_min, extended_max = min_val, max_val
-
-        # Check if value falls within extended range
-        if actual_value < extended_min or actual_value > extended_max:
-            distance_below = extended_min - actual_value if actual_value < extended_min else 0
-            distance_above = actual_value - extended_max if actual_value > extended_max else 0
-            distance = max(distance_below, distance_above)
-
-            # Only filter if it's a critical feature and significantly out of range
-            is_critical = (
-                feature_name in critical_features and
-                tolerance is not None and
-                distance > tolerance * 2
-            )
-
-            return {
-                "description": (
-                    f"{feature_name}: range=[{min_val:.2f}, {max_val:.2f}], "
-                    f"extended=[{extended_min:.2f}, {extended_max:.2f}], "
-                    f"actual={actual_value:.2f}, out_by={distance:.2f}"
-                ),
-                "is_critical": is_critical
-            }
-
-        return None
-
-    def _check_single_value_violation(
-        self,
-        feature_name: str,
-        target_value: float,
-        actual_value: float,
-        tolerance: Optional[float],
-        critical_features: List[str]
-    ) -> Optional[Dict[str, Any]]:
-        """Check if a value violates a single-value target.
-
-        Args:
-            feature_name: Name of the feature
-            target_value: Target value
-            actual_value: Actual value from track
-            tolerance: Tolerance value
-            critical_features: List of critical feature names
-
-        Returns:
-            Violation info dict or None if no violation
-        """
-        if tolerance is None:
-            # Binary or discrete features - skip strict filtering
-            if feature_name in ["mode", "key"]:
-                return None
-            return None
-
-        # Check distance from target
-        difference = abs(actual_value - target_value)
-        if difference > tolerance:
-            # Only filter critical features if very far off
-            is_critical = (
-                feature_name in critical_features and
-                difference > tolerance * 2
-            )
-
-            return {
-                "description": (
-                    f"{feature_name}: target={target_value:.2f}, "
-                    f"actual={actual_value:.2f}, diff={difference:.2f}"
-                ),
-                "is_critical": is_critical
-            }
-
-        return None
+        # Use centralized violation checking
+        return AudioFeatureMatcher.check_feature_violations(
+            audio_features=recommendation.audio_features,
+            target_features=target_features,
+            tolerance_extensions=tolerance_extensions,
+            critical_features=critical_features
+        )
 
     def _should_filter_recommendation(
         self,

@@ -7,7 +7,9 @@ from ....tools.reccobeat_service import RecoBeatService
 from ....tools.spotify_service import SpotifyService
 from ....states.agent_state import AgentState, TrackRecommendation
 from ...utils import TrackRecommendationFactory
+from ...utils.audio_feature_matcher import AudioFeatureMatcher
 from ..handlers.artist_pipeline import ArtistRecommendationPipeline
+from ..handlers.track_filter import TrackFilter
 from .base_strategy import RecommendationStrategy
 
 logger = structlog.get_logger(__name__)
@@ -30,6 +32,7 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
         super().__init__("artist_discovery")
         self.reccobeat_service = reccobeat_service
         self.spotify_service = spotify_service
+        self.track_filter = TrackFilter()
 
         # Use shared pipeline (with failed artist caching)
         self.pipeline = ArtistRecommendationPipeline(
@@ -52,6 +55,9 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
         Returns:
             List of recommendation data dictionaries
         """
+        # Store state for access to mood_analysis during filtering
+        self._current_state = state
+
         # Use shared pipeline with our recommendation creation logic
         return await self.pipeline.process_artists(
             state=state,
@@ -101,6 +107,23 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
             logger.debug(f"Skipping track without ID: {track}")
             return None
 
+        # Validate track relevance (regional/language/theme filtering)
+        track_name = track.get("name", "")
+        artists = [artist.get("name", "") for artist in track.get("artists", [])]
+        mood_analysis = self._current_state.mood_analysis if hasattr(self, '_current_state') else None
+
+        if mood_analysis:
+            is_valid, reason = self.track_filter.validate_track_relevance(
+                track_name=track_name,
+                artists=artists,
+                mood_analysis=mood_analysis
+            )
+            if not is_valid:
+                logger.info(
+                    f"Filtering artist track '{track_name}' by {', '.join(artists)}: {reason}"
+                )
+                return None
+
         # Get audio features from pre-fetched batch
         audio_features = audio_features_map.get(track_id, {})
 
@@ -142,69 +165,12 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
         Returns:
             Confidence score
         """
-        if target_features and audio_features:
-            return self._calculate_track_cohesion(audio_features, target_features)
-        else:
-            return 0.75  # Higher default for artist tracks without features
-
-    def _calculate_track_cohesion(
-        self,
-        audio_features: Dict[str, Any],
-        target_features: Dict[str, Any]
-    ) -> float:
-        """Calculate how well a track's audio features match target mood features.
-
-        Args:
-            audio_features: Track's audio features
-            target_features: Target mood features
-
-        Returns:
-            Cohesion score (0-1)
-        """
-        if not audio_features or not target_features:
-            return 0.5
-
-        scores = []
-
-        # Define tolerance thresholds
-        tolerance_thresholds = {
-            "energy": 0.3,
-            "valence": 0.3,
-            "danceability": 0.3,
-            "acousticness": 0.4,
-            "instrumentalness": 0.25,
-            "speechiness": 0.25,
-            "tempo": 40.0,
-            "loudness": 6.0,
-            "liveness": 0.4,
-            "popularity": 30
-        }
-
-        for feature_name, target_value in target_features.items():
-            if feature_name not in audio_features:
-                continue
-
-            actual_value = audio_features[feature_name]
-            tolerance = tolerance_thresholds.get(feature_name)
-
-            if tolerance is None:
-                continue
-
-            # Convert target value to single number if it's a range
-            if isinstance(target_value, list) and len(target_value) == 2:
-                target_single = sum(target_value) / 2
-            elif isinstance(target_value, (int, float)):
-                target_single = float(target_value)
-            else:
-                continue
-
-            # Calculate difference and score
-            difference = abs(actual_value - target_single)
-            match_score = max(0.0, 1.0 - (difference / tolerance))
-            scores.append(match_score)
-
-        # Return average match score
-        if scores:
-            return sum(scores) / len(scores)
-        else:
-            return 0.5
+        # Use centralized cohesion calculation with relaxed tolerances
+        # Artist discovery uses more lenient matching to get enough tracks
+        return AudioFeatureMatcher.calculate_cohesion(
+            audio_features=audio_features,
+            target_features=target_features,
+            feature_weights=None,  # No weights = simple average
+            source="artist_discovery",
+            tolerance_mode="relaxed"
+        )

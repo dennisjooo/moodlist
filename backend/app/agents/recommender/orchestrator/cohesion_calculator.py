@@ -4,6 +4,7 @@ import structlog
 from typing import Any, Dict, List, Optional
 
 from ...states.agent_state import TrackRecommendation
+from ..utils.audio_feature_matcher import AudioFeatureMatcher
 
 logger = structlog.get_logger(__name__)
 
@@ -111,69 +112,20 @@ class CohesionCalculator:
             track: Track recommendation to evaluate
             target_features: Target audio features from mood analysis
             feature_weights: Feature importance weights
-            tolerance_thresholds: Tolerance thresholds for each feature
+            tolerance_thresholds: Tolerance thresholds for each feature (IGNORED - using centralized)
 
         Returns:
             Cohesion score for the track (0-1)
         """
-        # IMPORTANT: RecoBeat tracks are biased - they were GENERATED using these target features
-        # So they'll naturally score higher on cohesion even if they're garbage (circular dependency)
-        # Artist tracks are from Spotify's curated top tracks, more trustworthy
-        is_reccobeat = track.source == "reccobeat"
-
-        if not track.audio_features:
-            # Artist tracks without features get higher default (curated by Spotify)
-            # RecoBeat tracks without features get lower default (less trustworthy)
-            return 0.65 if is_reccobeat else 0.75
-
-        violations = []
-        weighted_violations = 0.0
-        weighted_matches = []
-
-        for feature_name, target_value in target_features.items():
-            if feature_name not in track.audio_features:
-                continue
-
-            actual_value = track.audio_features[feature_name]
-            tolerance = tolerance_thresholds.get(feature_name)
-
-            if tolerance is None:
-                continue
-
-            # Get weight for this feature (default to 0.5 if not specified)
-            weight = feature_weights.get(feature_name, 0.5)
-
-            # Convert target value to single number if it's a range
-            if isinstance(target_value, list) and len(target_value) == 2:
-                target_single = sum(target_value) / 2
-            elif isinstance(target_value, (int, float)):
-                target_single = float(target_value)
-            else:
-                continue
-
-            # Calculate difference
-            difference = abs(actual_value - target_single)
-
-            # Calculate match score for this feature (1.0 = perfect, 0.0 = max difference)
-            match_score = max(0.0, 1.0 - (difference / tolerance))
-
-            # Weight the match score
-            weighted_matches.append((match_score, weight))
-
-            # Check for violations with weighted importance
-            if difference > tolerance:
-                violations.append(feature_name)
-                weighted_violations += weight
-
-        # Calculate weighted average track cohesion score
-        if weighted_matches:
-            total_weight = sum(w for _, w in weighted_matches)
-            weighted_sum = sum(score * w for score, w in weighted_matches)
-            track_cohesion = weighted_sum / total_weight if total_weight > 0 else 0.0
-        else:
-            track_cohesion = 0.7  # Neutral score if no features to compare
-
-        return track_cohesion
+        # Use centralized cohesion calculation with base tolerances
+        # NOTE: tolerance_thresholds parameter is kept for backwards compatibility but not used
+        return AudioFeatureMatcher.calculate_cohesion(
+            audio_features=track.audio_features,
+            target_features=target_features,
+            feature_weights=feature_weights,
+            source=track.source,
+            tolerance_mode="base"
+        )
 
     def detect_outliers(
         self,
