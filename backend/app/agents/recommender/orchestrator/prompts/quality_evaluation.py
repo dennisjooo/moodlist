@@ -11,7 +11,10 @@ def get_quality_evaluation_prompt(
     target_count: int,
     evaluation: dict,
     user_mentioned_tracks: list = None,
-    temporal_context: dict = None
+    temporal_context: dict = None,
+    excluded_themes: list = None,
+    preferred_regions: list = None,
+    excluded_regions: list = None
 ) -> str:
     """Get the prompt for evaluating playlist quality.
 
@@ -26,6 +29,9 @@ def get_quality_evaluation_prompt(
         evaluation: Algorithmic evaluation results
         user_mentioned_tracks: List of tracks explicitly mentioned by user (protected)
         temporal_context: Temporal/era context from mood analysis (optional)
+        excluded_themes: Themes that must be excluded (e.g., holiday, religious)
+        preferred_regions: Regions that match the mood request (e.g., ["Western", "French"])
+        excluded_regions: Regions to avoid (e.g., ["Indonesian", "Southeast Asian"])
 
     Returns:
         Prompt string for LLM quality evaluation
@@ -41,6 +47,32 @@ def get_quality_evaluation_prompt(
 These are EXPLICIT user requests and override all other requirements.
 
 Note: Tracks from user-mentioned artists (not explicit track mentions) have already been filtered by temporal context.
+"""
+
+    excluded_section = ""
+    if excluded_themes:
+        excluded_section = f"""
+**EXCLUDED THEMES**: {', '.join(excluded_themes)}.
+Any track title/artist indicative of these themes (e.g., holiday keywords like "Christmas", "Santa", "Jingle") MUST be flagged as outliers."""
+
+    # Build regional context section if applicable
+    regional_section = ""
+    if preferred_regions or excluded_regions:
+        regional_parts = []
+        if preferred_regions:
+            regional_parts.append(f"**PREFERRED REGIONS**: {', '.join(preferred_regions)}")
+        if excluded_regions:
+            regional_parts.append(f"**EXCLUDED REGIONS**: {', '.join(excluded_regions)}")
+
+        regional_section = f"""
+{chr(10).join(regional_parts)}
+
+⚠️ **CRITICAL REGION FILTERING**: Any track/artist from EXCLUDED REGIONS must be flagged as an outlier.
+Examples of regional mismatches to REJECT:
+- Indonesian/Malay artists (Tulus, Nadin Amizah, Sal Priadi, Juicy Luicy) in Western indie playlists
+- Spanish/Latin artists in French playlists
+- K-pop in British indie playlists
+- Southeast Asian music in Western electronic playlists
 """
 
     # Build temporal context section if applicable
@@ -64,7 +96,7 @@ ALL tracks should be from this time period. Modern tracks or tracks from other e
 **User's Mood Request**: "{mood_prompt}"
 
 **Mood Analysis**: {mood_interpretation}
-{user_favorites_section}{temporal_section}
+{user_favorites_section}{regional_section}{temporal_section}{excluded_section}
 **Expected Artists**: {', '.join(artist_recommendations[:8])}
 **Expected Genres**: {', '.join(genre_keywords[:5])}
 
@@ -81,26 +113,19 @@ ALL tracks should be from this time period. Modern tracks or tracks from other e
 - Overall Score: {evaluation['overall_score']:.2f}/1.0
 
 **Task**: BE STRICT - Evaluate if this playlist truly matches the user's mood. Consider:
-1. **Language Match**: Do track/artist names match the expected language/region? (e.g., Spanish tracks for French funk = REJECT)
+1. **Regional/Language Match**: Do track/artist names match the PREFERRED REGIONS and avoid EXCLUDED REGIONS? Check artist origins and language.
 2. **Genre Match**: Do tracks fit the genre/style requested? Flag any that feel wrong.
 3. **Artist Match**: Are artists similar to the expected ones listed above?
 4. **Temporal Coherence**: If a specific era/decade was requested (e.g., "90s", "80s", "classic"), do ALL tracks match that time period? Modern tracks in era-specific requests = OUT OF PLACE
 5. **Flow**: Would these tracks flow well together without jarring shifts?
 
-**CRITICAL**: Flag ANY track that doesn't match the language, genre, cultural style, OR temporal context of the mood request.
-For example:
-- Latin/Spanish music in a French playlist = OUT OF PLACE
-- K-pop in a British indie playlist = OUT OF PLACE
-- Regional Mexican music in an electronic playlist = OUT OF PLACE
-- Indonesian/Malay tracks in an English trap/R&B playlist = OUT OF PLACE
-- Italian rap in a US hip-hop playlist = OUT OF PLACE
-- Unknown artists with no genre fit = OUT OF PLACE
-- 2011 tracks in a "90s West Coast" playlist = OUT OF PLACE (temporal mismatch)
-- 2020s indie tracks in a "classic rock" playlist = OUT OF PLACE (era mismatch)
-- Modern production in a "vintage soul" request = OUT OF PLACE (sonic anachronism)
+**CRITICAL FILTERING RULES**:
+- ANY track/artist from an EXCLUDED REGION = AUTOMATIC OUTLIER (must be flagged in specific_concerns)
+- ANY track that doesn't match the cultural/linguistic context = OUTLIER
+- Temporal mismatches (modern tracks in era-specific playlists) = OUTLIER
 
 **IMPORTANT**: In "specific_concerns", explicitly identify tracks that should be REMOVED from the playlist.
-Use exact format: "Track Name by Artist Name feels out of place because..."
+Use exact format: "Track Name by Artist Name feels out of place because [reason including region/language/genre/temporal mismatch]"
 
 Respond in JSON format:
 {{

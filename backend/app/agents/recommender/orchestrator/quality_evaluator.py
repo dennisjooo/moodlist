@@ -199,6 +199,11 @@ class QualityEvaluator:
             target_features = state.metadata.get("target_features", {})
             playlist_target = state.metadata.get("playlist_target", {})
             target_count = playlist_target.get("target_count", 20)
+            excluded_themes = state.mood_analysis.get("excluded_themes", []) if state.mood_analysis else []
+
+            # Get regional context from mood_analysis
+            preferred_regions = state.mood_analysis.get("preferred_regions", []) if state.mood_analysis else []
+            excluded_regions = state.mood_analysis.get("excluded_regions", []) if state.mood_analysis else []
 
             prompt = get_quality_evaluation_prompt(
                 mood_prompt=state.mood_prompt,
@@ -210,7 +215,10 @@ class QualityEvaluator:
                 target_count=target_count,
                 evaluation=evaluation,
                 user_mentioned_tracks=user_mentioned_tracks,
-                temporal_context=temporal_context
+                temporal_context=temporal_context,
+                excluded_themes=excluded_themes,
+                preferred_regions=preferred_regions,
+                excluded_regions=excluded_regions
             )
 
             response = await self.llm.ainvoke([{"role": "user", "content": prompt}])

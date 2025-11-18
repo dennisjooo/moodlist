@@ -37,23 +37,25 @@ class TrackFilter:
 
         # Check 1: Artist matching (always accept if artist matches)
         artist_match = self._check_artist_match(context)
+
+        # Always apply theme exclusions even for recommended artists (e.g., holiday tracks)
+        theme_validation = self._validate_theme_compatibility(context)
+        if not theme_validation[0]:
+            return theme_validation
+
+        # If artist matches and themes are clean, we can skip the heavier checks
         if artist_match[0]:
             return artist_match
 
-        # Check 2: Language compatibility
-        language_validation = self._validate_language_compatibility(context)
-        if not language_validation[0]:
-            return language_validation
+        # Check 2: Regional compatibility (language/region must match user intent)
+        regional_validation = self._validate_regional_compatibility(context)
+        if not regional_validation[0]:
+            return regional_validation
 
         # Check 3: Genre compatibility
         genre_validation = self._validate_genre_compatibility(context)
         if not genre_validation[0]:
             return genre_validation
-
-        # Check 4: Theme exclusions (holiday songs, religious, etc.)
-        theme_validation = self._validate_theme_compatibility(context)
-        if not theme_validation[0]:
-            return theme_validation
 
         # If we got here, no obvious red flags
         return (True, "No obvious mismatches detected")
@@ -109,6 +111,129 @@ class TrackFilter:
             if any(rec_artist in artist or artist in rec_artist for rec_artist in context["artist_recs_lower"]):
                 return (True, "Artist matches mood recommendations")
         return (False, "")
+
+    def _validate_regional_compatibility(self, context: Dict[str, Any]) -> tuple[bool, str]:
+        """Validate that track region/language matches mood intent.
+
+        Respects user's regional preferences - if they ask for Indonesian music,
+        allow it. If they don't, block it.
+
+        Args:
+            context: Validation context
+
+        Returns:
+            (is_valid, reason) - True if region/language compatible
+        """
+        mood_analysis = context["mood_analysis"]
+        preferred_regions = mood_analysis.get("preferred_regions", [])
+        excluded_regions = mood_analysis.get("excluded_regions", [])
+
+        # If no regional constraints, skip
+        if not preferred_regions and not excluded_regions:
+            return (True, "No regional constraints")
+
+        # Detect track's region
+        track_region = self._detect_track_region(context["track_and_artists"])
+
+        # If we can't detect region, allow it (better to be lenient)
+        if not track_region:
+            return (True, "Region could not be determined")
+
+        # Check if track region is explicitly excluded
+        if excluded_regions:
+            excluded_lower = [r.lower() for r in excluded_regions]
+            if track_region.lower() in excluded_lower or any(exc in track_region.lower() for exc in excluded_lower):
+                return (False, f"Regional mismatch: track is {track_region}, which is in excluded regions {excluded_regions}")
+
+        # Check if track region matches preferred (if specified)
+        if preferred_regions:
+            preferred_lower = [r.lower() for r in preferred_regions]
+            # Be flexible - "Western" should match English/American/European, etc.
+            if not self._region_matches_preferred(track_region, preferred_lower):
+                return (False, f"Regional mismatch: track is {track_region}, expected one of {preferred_regions}")
+
+        return (True, "Region matches mood intent")
+
+    def _detect_track_region(self, track_and_artists: str) -> Optional[str]:
+        """Detect the likely region/origin of a track based on language indicators.
+
+        Args:
+            track_and_artists: Combined track name and artist string (lowercase)
+
+        Returns:
+            Detected region or None
+        """
+        language_indicators = self._get_language_indicators()
+
+        # Check for each language's indicators
+        for region, indicators in language_indicators.items():
+            for indicator in indicators:
+                if isinstance(indicator, str):
+                    if indicator in track_and_artists:
+                        return self._map_language_to_region(region)
+                else:
+                    # Unicode range check for CJK languages
+                    for char in track_and_artists:
+                        if indicator <= char <= indicators[indicators.index(indicator) + 1]:
+                            return self._map_language_to_region(region)
+
+        return None
+
+    def _map_language_to_region(self, language: str) -> str:
+        """Map detected language to broader region.
+
+        Args:
+            language: Detected language
+
+        Returns:
+            Region name
+        """
+        mapping = {
+            "spanish": "Latin American",
+            "portuguese": "Latin American",
+            "korean": "East Asian",
+            "japanese": "East Asian",
+            "chinese": "East Asian",
+            "indonesian": "Southeast Asian",
+            "malay": "Southeast Asian",
+            "german": "European",
+            "french": "European"
+        }
+        return mapping.get(language, language.capitalize())
+
+    def _region_matches_preferred(self, track_region: str, preferred_lower: list) -> bool:
+        """Check if track region matches any preferred region with flexibility.
+
+        Args:
+            track_region: Detected track region
+            preferred_lower: List of preferred regions (lowercase)
+
+        Returns:
+            True if region matches
+        """
+        track_region_lower = track_region.lower()
+
+        # Direct match
+        if track_region_lower in preferred_lower:
+            return True
+
+        # Flexible matching - "Western" includes English-speaking regions
+        if "western" in preferred_lower:
+            western_regions = ["american", "european", "british", "canadian", "australian"]
+            if any(w in track_region_lower for w in western_regions):
+                return True
+
+        # "European" includes specific European languages
+        if "european" in preferred_lower:
+            european_regions = ["french", "german", "italian", "spanish", "portuguese", "british"]
+            if any(e in track_region_lower for e in european_regions):
+                return True
+
+        # Partial match (e.g., "Latin American" matches "latin")
+        if any(pref in track_region_lower or track_region_lower in pref for pref in preferred_lower):
+            return True
+
+        return False
 
     def _validate_language_compatibility(self, context: Dict[str, Any]) -> tuple[bool, str]:
         """Validate that track language is compatible with mood language.
@@ -177,6 +302,8 @@ class TrackFilter:
             "japanese": ["\u3040", "\u309f", "\u30a0", "\u30ff"],  # Hiragana/Katakana
             "chinese": ["\u4e00", "\u9fff"],  # Common CJK
             "portuguese": ["meu ", "minha ", "você ", "está ", "muito ", "bem "],
+            "indonesian": ["aku ", "kamu ", "yang ", "dengan ", "untuk ", "dari ", "ini ", "itu ", "dan ", "atau "],
+            "malay": ["saya ", "kita ", "kami ", "awak ", "dengan ", "untuk ", "dari "],
             "german": ["der ", "die ", "das ", "ich ", "du ", "und ", "mit "],
             "french": ["le ", "la ", "les ", "de ", "je ", "tu ", "avec ", "pour "]
         }
