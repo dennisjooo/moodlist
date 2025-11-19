@@ -1,6 +1,6 @@
 """Centralized regional, language, and theme filtering utilities."""
 
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 
 class RegionalFilter:
