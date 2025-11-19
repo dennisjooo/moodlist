@@ -37,7 +37,7 @@ const SocialProof = dynamic(() => import('@/components/SocialProof'), {
 });
 
 export default function Home() {
-  // NOTE: In a cross-origin setup (frontend on Vercel, backend on Zeabur),
+  // NOTE: In a cross-origin setup (frontend on Vercel, backend on Railway),
   // we cannot reliably check cookies on the server side because the session_token
   // cookie is set by the backend domain and is not accessible to the frontend server.
   // Auth checking is handled client-side by authStore and components.
@@ -57,7 +57,7 @@ export default function Home() {
           />
         </div>
 
-        {/* Main Content - Zeabur immediately (optimistic) */}
+        {/* Main Content - Railway immediately (optimistic) */}
         <main className="relative z-10 overflow-x-hidden">
           {/* Hero Section */}
           <Suspense fallback={<div className="h-screen" />}>
