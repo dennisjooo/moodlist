@@ -15,7 +15,7 @@ export function AboutChallenges() {
         },
         {
             title: "AWS and That October 20th Outage",
-            content: "I was in the middle of setting up AWS services when the big outage hit on 10/20/2025. Perfect timing, right? Nothing like debugging whether it's your code or the entire cloud infrastructure that's broken. Thanks Jeff, at least I'm still on the free tier. Eventually I ended up moving to Vercel for frontend (I know sorry, it's a touchy subject right now), Railway for backend, Neon for Postgres, and Upstash for Redis. What do you know, moving things there made a huge impact on speed and load times, especially to DB."
+            content: "I was in the middle of setting up AWS services when the big outage hit on 10/20/2025. Perfect timing, right? Nothing like debugging whether it's your code or the entire cloud infrastructure that's broken. Thanks Jeff, at least I'm still on the free tier. Eventually I ended up moving to Vercel for frontend (I know sorry, it's a touchy subject right now), Zeabur for backend, Neon for Postgres, and Upstash for Redis. What do you know, moving things there made a huge impact on speed and load times, especially to DB."
         },
         {
             title: "Cookies and CORS",

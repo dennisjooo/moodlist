@@ -246,7 +246,7 @@ export function AboutTechStack() {
                                     />
                                     <TechCard
                                         icon={<Server className="w-4 h-4 text-purple-600 dark:text-purple-400" />}
-                                        name="Railway"
+                                        name="Zeabur"
                                         description="Cloud platform for backend deployment and hosting"
                                         bgColor="purple"
                                     />
