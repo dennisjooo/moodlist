@@ -11,7 +11,10 @@ router = APIRouter()
 async def root():
     """Root endpoint."""
     return {
-        "message": f"Welcome to {settings.APP_NAME}",
+        "message": (
+            f"Welcome to {settings.APP_NAME}."
+            f"You are not supposed to see this lol, go to {settings.FRONTEND_URL} instead."
+        ),
         "version": settings.APP_VERSION,
         "environment": settings.APP_ENV,
     }
