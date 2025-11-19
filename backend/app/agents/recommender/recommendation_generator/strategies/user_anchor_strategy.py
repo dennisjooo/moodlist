@@ -5,8 +5,9 @@ import structlog
 from typing import Any, Dict, List, Optional, Tuple
 
 from ....states.agent_state import AgentState
-from .base_strategy import RecommendationStrategy
 from ...utils.temporal_filter import check_temporal_match
+from ...utils.config import config
+from .base_strategy import RecommendationStrategy
 
 logger = structlog.get_logger(__name__)
 
