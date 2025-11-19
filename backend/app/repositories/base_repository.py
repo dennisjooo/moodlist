@@ -8,7 +8,14 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, and_, desc, asc, func
 from sqlalchemy.orm import selectinload
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError, OperationalError, DBAPIError
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log
+)
 
 from app.core.exceptions import NotFoundException, ValidationException, InternalServerError
 
@@ -39,6 +46,13 @@ class BaseRepository(ABC, Generic[T]):
         """Return the SQLAlchemy model class for this repository."""
         pass
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
+        retry=retry_if_exception_type((OperationalError, DBAPIError)),
+        before_sleep=before_sleep_log(logger, "WARNING"),
+        reraise=True
+    )
     async def get_by_id(self, id: int, load_relationships: Optional[List[str]] = None) -> Optional[T]:
         """Get entity by ID.
 
@@ -48,6 +62,8 @@ class BaseRepository(ABC, Generic[T]):
 
         Returns:
             Entity instance or None if not found
+
+        Retries up to 3 times on transient database errors.
         """
         try:
             query = select(self.model_class).where(self.model_class.id == id)
@@ -88,6 +104,13 @@ class BaseRepository(ABC, Generic[T]):
             raise NotFoundException(self.model_class.__name__, str(id))
         return entity
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
+        retry=retry_if_exception_type((OperationalError, DBAPIError)),
+        before_sleep=before_sleep_log(logger, "WARNING"),
+        reraise=True
+    )
     async def get_all(
         self,
         skip: int = 0,
@@ -112,6 +135,8 @@ class BaseRepository(ABC, Generic[T]):
 
         Raises:
             ValidationException: If pagination parameters are invalid
+
+        Retries up to 3 times on transient database errors.
         """
         try:
             # Validate and apply pagination limits

@@ -4,6 +4,13 @@ import asyncio
 from typing import Dict, Any, Optional
 import httpx
 import structlog
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log,
+)
 
 from app.core.config import settings
 from app.agents.core.cache import cache_manager
@@ -339,17 +346,26 @@ class SpotifyAPIClient:
         """
         return await self._get(f"/playlists/{playlist_id}", access_token)
     
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type((httpx.RequestError, httpx.TimeoutException)),
+        before_sleep=before_sleep_log(logger, "WARNING"),
+        reraise=True
+    )
     async def refresh_token(self, refresh_token: str) -> Dict[str, Any]:
         """Refresh Spotify access token.
-        
+
         Args:
             refresh_token: Spotify refresh token
-            
+
         Returns:
             New token data
-            
+
         Raises:
             SpotifyAuthError: If refresh fails
+
+        Retries up to 3 times on connection/timeout errors with exponential backoff.
         """
         data = {
             "grant_type": "refresh_token",
@@ -357,7 +373,7 @@ class SpotifyAPIClient:
             "client_id": settings.SPOTIFY_CLIENT_ID,
             "client_secret": settings.SPOTIFY_CLIENT_SECRET
         }
-        
+
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(SpotifyEndpoints.TOKEN_URL, data=data)

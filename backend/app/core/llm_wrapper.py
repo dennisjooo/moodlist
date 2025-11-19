@@ -9,6 +9,16 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage, AIMessage
 from langchain_core.outputs import ChatResult, ChatGeneration
 from langchain_core.callbacks import CallbackManagerForLLMRun
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log,
+    wait_exponential_jitter
+)
+from sqlalchemy.exc import OperationalError, DBAPIError
+from openai import RateLimitError, APIConnectionError, APITimeoutError, InternalServerError
 
 from app.repositories.llm_invocation_repository import LLMInvocationRepository
 
@@ -239,6 +249,13 @@ class LoggingChatModel(BaseChatModel):
         
         return round(cost, 6)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
+        retry=retry_if_exception_type((OperationalError, DBAPIError)),
+        before_sleep=before_sleep_log(logger, "WARNING"),
+        reraise=True
+    )
     async def _log_invocation(
         self,
         messages: List[BaseMessage],
@@ -247,10 +264,12 @@ class LoggingChatModel(BaseChatModel):
         error: Optional[Exception] = None
     ):
         """Log the invocation to the database.
-        
+
         Creates a new database session for each logging operation to avoid
         concurrent access issues when the same LLM instance is shared across
         multiple async workflows.
+
+        Retries up to 3 times on database connection errors with exponential backoff.
         """
         if not self.enable_logging:
             return
@@ -258,7 +277,7 @@ class LoggingChatModel(BaseChatModel):
         # Create a new database session for this logging operation
         # to avoid concurrent access issues with shared LLM instances
         from app.core.database import async_session_factory
-        
+
         async with async_session_factory() as db:
             try:
                 config = self._extract_model_config()
@@ -372,6 +391,13 @@ class LoggingChatModel(BaseChatModel):
                     error=str(error) if error else None
                 )
 
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential_jitter(initial=1, max=60),
+        retry=retry_if_exception_type((RateLimitError, APIConnectionError, APITimeoutError, InternalServerError)),
+        before_sleep=before_sleep_log(logger, "WARNING"),
+        reraise=True
+    )
     async def _agenerate(
         self,
         messages: Union[List[BaseMessage], List[Dict[str, str]]],
@@ -379,7 +405,11 @@ class LoggingChatModel(BaseChatModel):
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> ChatResult:
-        """Generate response (async version)."""
+        """Generate response (async version).
+
+        Retries up to 5 times on transient API errors (rate limits, timeouts, server errors)
+        with exponential backoff + jitter.
+        """
         # Convert messages if needed
         converted_messages = self._convert_to_messages(messages)
 
@@ -423,13 +453,24 @@ class LoggingChatModel(BaseChatModel):
                     error=str(error) if error else None
                 )
 
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential_jitter(initial=1, max=60),
+        retry=retry_if_exception_type((RateLimitError, APIConnectionError, APITimeoutError, InternalServerError)),
+        before_sleep=before_sleep_log(logger, "WARNING"),
+        reraise=True
+    )
     async def ainvoke(
         self,
         input: Union[str, List[BaseMessage], List[Dict[str, str]]],
         config: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> AIMessage:
-        """Invoke the LLM (async version)."""
+        """Invoke the LLM (async version).
+
+        Retries up to 5 times on transient API errors (rate limits, timeouts, server errors)
+        with exponential backoff + jitter.
+        """
         if isinstance(input, str):
             from langchain_core.messages import HumanMessage
             logged_messages: List[BaseMessage] = [HumanMessage(content=input)]
@@ -439,7 +480,7 @@ class LoggingChatModel(BaseChatModel):
         start_time = time.time()
         error = None
         result = None
-        
+
         try:
             result = await self.wrapped_llm.ainvoke(input, config, **kwargs)
             return result

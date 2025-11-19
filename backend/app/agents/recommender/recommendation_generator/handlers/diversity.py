@@ -1,7 +1,7 @@
 """Diversity management for recommendation lists."""
 
 from collections import defaultdict
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 import structlog
 
@@ -403,3 +403,120 @@ class DiversityManager:
         )
 
         return balanced[:target_count]
+
+    def calculate_genre_diversity_score(
+        self,
+        recommendations: List[TrackRecommendation]
+    ) -> float:
+        """Calculate genre diversity score for recommendations.
+
+        Measures variety of genres in the playlist. Higher score means
+        more diverse genres (which is generally better for discovery).
+
+        Args:
+            recommendations: List of track recommendations
+
+        Returns:
+            Diversity score (0-1), where 1 is maximum diversity
+        """
+        if not recommendations:
+            return 0.0
+
+        # Extract all genres from audio features
+        all_genres: Set[str] = set()
+        tracks_with_genres = 0
+
+        for rec in recommendations:
+            if rec.audio_features and isinstance(rec.audio_features, dict):
+                genres = rec.audio_features.get("genres", [])
+                if genres:
+                    if isinstance(genres, list):
+                        all_genres.update(g.lower() for g in genres)
+                        tracks_with_genres += 1
+                    elif isinstance(genres, str):
+                        all_genres.add(genres.lower())
+                        tracks_with_genres += 1
+
+        if tracks_with_genres == 0:
+            # No genre data available
+            return 0.5  # Neutral score
+
+        # Calculate diversity metrics
+        unique_genres = len(all_genres)
+        avg_genres_per_track = unique_genres / max(tracks_with_genres, 1)
+
+        # Good diversity: at least 5-8 unique genres for a 20-track playlist
+        # Normalize: 8+ genres = 1.0 score, 0 genres = 0.0 score
+        genre_variety_score = min(unique_genres / 8.0, 1.0)
+
+        logger.debug(
+            f"Genre diversity: {unique_genres} unique genres across {tracks_with_genres} tracks "
+            f"(score: {genre_variety_score:.2f})"
+        )
+
+        return genre_variety_score
+
+    def calculate_temporal_diversity_score(
+        self,
+        recommendations: List[TrackRecommendation]
+    ) -> float:
+        """Calculate temporal diversity score based on release dates.
+
+        Measures variety of release years/eras. Better playlists have
+        a mix of newer and older tracks (unless mood specifically targets era).
+
+        Args:
+            recommendations: List of track recommendations
+
+        Returns:
+            Diversity score (0-1), where 1 is maximum diversity
+        """
+        if not recommendations:
+            return 0.0
+
+        # Extract release years
+        release_years: List[int] = []
+
+        for rec in recommendations:
+            if rec.audio_features and isinstance(rec.audio_features, dict):
+                release_date = rec.audio_features.get("release_date")
+                if release_date:
+                    try:
+                        # Handle different date formats (YYYY, YYYY-MM-DD, etc.)
+                        if isinstance(release_date, str):
+                            year = int(release_date.split('-')[0])
+                            release_years.append(year)
+                        elif isinstance(release_date, int):
+                            release_years.append(release_date)
+                    except (ValueError, IndexError):
+                        continue
+
+        if not release_years:
+            # No temporal data available
+            return 0.5  # Neutral score
+
+        # Calculate temporal spread
+        min_year = min(release_years)
+        max_year = max(release_years)
+        year_span = max_year - min_year
+
+        # Count unique decades
+        decades = set(year // 10 for year in release_years)
+        unique_decades = len(decades)
+
+        # Good diversity: spans at least 2-3 decades
+        # Excellent diversity: spans 4+ decades
+        decade_score = min(unique_decades / 3.0, 1.0)
+
+        # Year span bonus: 20+ years is excellent
+        span_score = min(year_span / 20.0, 1.0)
+
+        # Combine scores (favor decade diversity slightly more)
+        temporal_score = (decade_score * 0.6 + span_score * 0.4)
+
+        logger.debug(
+            f"Temporal diversity: {year_span} year span, {unique_decades} decades "
+            f"({min_year}-{max_year}, score: {temporal_score:.2f})"
+        )
+
+        return temporal_score

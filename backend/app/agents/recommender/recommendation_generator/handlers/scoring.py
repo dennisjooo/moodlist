@@ -1,5 +1,6 @@
 """Scoring engine for confidence calculation and mood matching."""
 
+import math
 import structlog
 from typing import Any, Dict, Optional
 
@@ -10,6 +11,117 @@ logger = structlog.get_logger(__name__)
 
 class ScoringEngine:
     """Handles confidence scoring and mood matching calculations."""
+
+    def _gaussian_similarity(self, value: float, target: float, sigma: float = 0.15) -> float:
+        """Calculate similarity using Gaussian (bell curve) function.
+
+        This provides smoother degradation than linear distance.
+        Score is 1.0 when value equals target, and decays smoothly.
+
+        Args:
+            value: Actual feature value
+            target: Target feature value
+            sigma: Standard deviation (controls curve width, lower = stricter)
+
+        Returns:
+            Similarity score (0-1)
+        """
+        return math.exp(-((value - target) ** 2) / (2 * sigma ** 2))
+
+    def _enhanced_popularity_score(self, popularity: int) -> float:
+        """Calculate popularity score with bell curve favoring mid-range.
+
+        Sweet spot is 50-70 range (quality but not overly mainstream).
+        Very low popularity (<20) and very high (>85) are penalized.
+
+        Args:
+            popularity: Track popularity (0-100)
+
+        Returns:
+            Popularity score (0-1)
+        """
+        if popularity <= 0:
+            return 0.3  # Penalize unknown tracks
+
+        # Bell curve centered around 60 (sweet spot)
+        # Sigma of 30 gives good spread
+        optimal = 60
+        sigma = 30
+        score = math.exp(-((popularity - optimal) ** 2) / (2 * sigma ** 2))
+
+        # Boost minimum to 0.4 for very popular tracks (they're still valid)
+        # and ensure very obscure tracks (<15) don't get completely zeroed
+        if popularity > 85:
+            score = max(score, 0.5)  # Mainstream but still valid
+        elif popularity < 15:
+            score = max(score, 0.3)  # Too obscure, penalize
+
+        return score
+
+    def _get_feature_weight(self, feature: str, target_features: Dict[str, Any]) -> float:
+        """Get importance weight for a feature based on mood context.
+
+        Different moods prioritize different features.
+        For example, high-energy moods prioritize energy/tempo more.
+
+        Args:
+            feature: Feature name
+            target_features: Target mood features
+
+        Returns:
+            Weight multiplier (0.5-2.0)
+        """
+        # Base weights (all features are important)
+        base_weights = {
+            "energy": 1.0,
+            "valence": 1.0,
+            "danceability": 0.8,
+            "acousticness": 0.8,
+        }
+
+        weight = base_weights.get(feature, 1.0)
+
+        # Adaptive weighting based on target values
+        if feature == "energy" and feature in target_features:
+            target_val = self._extract_numeric_value(target_features[feature])
+            if target_val is not None and target_val > 0.7:
+                weight *= 1.3  # High-energy moods prioritize energy more
+
+        if feature == "valence" and feature in target_features:
+            target_val = self._extract_numeric_value(target_features[feature])
+            if target_val is not None:
+                if target_val > 0.7 or target_val < 0.3:
+                    weight *= 1.2  # Extreme valence (happy/sad) is important
+
+        if feature == "acousticness" and feature in target_features:
+            target_val = self._extract_numeric_value(target_features[feature])
+            if target_val is not None and target_val > 0.6:
+                weight *= 1.2  # Acoustic moods prioritize this more
+
+        return weight
+
+    def _extract_numeric_value(self, value: Any) -> Optional[float]:
+        """Extract numeric value from various formats.
+
+        Args:
+            value: Value that could be number, string, list, or range
+
+        Returns:
+            Numeric value or None
+        """
+        if isinstance(value, (int, float)):
+            return float(value)
+        elif isinstance(value, str):
+            try:
+                if '-' in value:
+                    parts = value.split('-')
+                    return (float(parts[0]) + float(parts[1])) / 2
+                return float(value)
+            except (ValueError, IndexError):
+                return None
+        elif isinstance(value, list) and len(value) == 2:
+            return (value[0] + value[1]) / 2
+        return None
 
     def calculate_confidence_score(
         self,
@@ -75,22 +187,26 @@ class ScoringEngine:
         Returns:
             Base score before penalties
         """
-        base_score = 0.6  # Higher base score
+        base_score = 0.5  # Base score
 
-        # Factor in track popularity if available
+        # Factor in track popularity if available (using enhanced scoring)
         popularity = recommendation_data.get("popularity", 0)
         if popularity > 0:
-            # Scale popularity contribution
-            popularity_factor = min(popularity / 100.0, 1.0)
-            base_score += (0.15 * popularity_factor)
+            # Use enhanced bell curve scoring that favors quality mid-range tracks
+            popularity_factor = self._enhanced_popularity_score(popularity)
+            base_score += (0.2 * popularity_factor)  # Increased weight for better popularity handling
+        else:
+            # No popularity data - slight penalty
+            base_score += 0.05
 
         # Factor in audio features match with mood
         target_features = state.metadata.get("target_features", {})
         audio_features = recommendation_data.get("audio_features")
 
         if target_features and audio_features:
-            mood_match_score = self._calculate_mood_match(audio_features, target_features)
-            base_score += (0.4 * mood_match_score)  # Increased weight for mood matching
+            # Use improved mood matching with Gaussian similarity
+            mood_match_score = self._calculate_mood_match_enhanced(audio_features, target_features)
+            base_score += (0.45 * mood_match_score)  # Increased weight for mood matching
         elif target_features:
             # Boost for having target features even without audio features
             base_score += 0.1
@@ -218,6 +334,63 @@ class ScoringEngine:
                     total_features += 1
 
         return matches / total_features if total_features > 0 else 0.5
+
+    def _calculate_mood_match_enhanced(
+        self,
+        audio_features: Dict[str, Any],
+        target_features: Dict[str, Any]
+    ) -> float:
+        """Calculate mood match using Gaussian similarity and feature weighting.
+
+        This is an enhanced version that provides smoother scoring and
+        adapts feature importance based on mood context.
+
+        Args:
+            audio_features: Track audio features
+            target_features: Target mood features
+
+        Returns:
+            Enhanced match score (0-1)
+        """
+        if not audio_features or not target_features:
+            return 0.5
+
+        # Key features to compare with their sigma values
+        # Lower sigma = stricter matching
+        feature_configs = {
+            "energy": {"sigma": 0.2},
+            "valence": {"sigma": 0.2},
+            "danceability": {"sigma": 0.25},
+            "acousticness": {"sigma": 0.3},
+        }
+
+        weighted_scores = []
+        total_weight = 0.0
+
+        for feature, config in feature_configs.items():
+            if feature in audio_features and feature in target_features:
+                track_value = audio_features[feature]
+                target_value = self._extract_numeric_value(target_features[feature])
+
+                if target_value is not None:
+                    # Calculate Gaussian similarity
+                    similarity = self._gaussian_similarity(
+                        track_value,
+                        target_value,
+                        sigma=config["sigma"]
+                    )
+
+                    # Get adaptive weight based on mood context
+                    weight = self._get_feature_weight(feature, target_features)
+
+                    weighted_scores.append(similarity * weight)
+                    total_weight += weight
+
+        if total_weight > 0:
+            return sum(weighted_scores) / total_weight
+        else:
+            # Fallback to original method if no features matched
+            return self._calculate_mood_match(audio_features, target_features)
 
     def calculate_track_cohesion(
         self,

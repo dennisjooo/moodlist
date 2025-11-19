@@ -9,6 +9,7 @@ from ...states.agent_state import AgentState
 from ..utils.llm_response_parser import LLMResponseParser
 from .cohesion_calculator import CohesionCalculator
 from .prompts import get_quality_evaluation_prompt
+from ..recommendation_generator.handlers.diversity import DiversityManager
 
 logger = structlog.get_logger(__name__)
 
@@ -30,6 +31,7 @@ class QualityEvaluator:
         self.llm = llm
         self.cohesion_threshold = cohesion_threshold
         self.cohesion_calculator = CohesionCalculator()
+        self.diversity_manager = DiversityManager()
 
     async def evaluate_playlist_quality(self, state: AgentState) -> Dict[str, Any]:
         """Evaluate the quality of current recommendations against mood criteria.
@@ -56,6 +58,8 @@ class QualityEvaluator:
             "coverage_score": 0.0,
             "confidence_score": 0.0,
             "diversity_score": 0.0,
+            "genre_diversity_score": 0.0,
+            "temporal_diversity_score": 0.0,
             "meets_threshold": False,
             "issues": [],
             "recommendations_count": len(recommendations),
@@ -102,21 +106,42 @@ class QualityEvaluator:
         if avg_confidence < 0.5:
             evaluation["issues"].append(f"Low average confidence: {avg_confidence:.2f}")
 
-        # Calculate diversity score (artist variety)
+        # Calculate artist diversity score
         unique_artists = set()
         for rec in recommendations:
             unique_artists.update(rec.artists)
 
         # Good diversity: at least 70% unique artists relative to track count
         artist_diversity_ratio = len(unique_artists) / max(len(recommendations), 1)
-        evaluation["diversity_score"] = min(artist_diversity_ratio / 0.7, 1.0)
+        artist_diversity_score = min(artist_diversity_ratio / 0.7, 1.0)
 
-        # Calculate overall score (weighted average)
+        # Calculate genre diversity score
+        genre_diversity_score = self.diversity_manager.calculate_genre_diversity_score(
+            recommendations
+        )
+        evaluation["genre_diversity_score"] = genre_diversity_score
+
+        # Calculate temporal diversity score
+        temporal_diversity_score = self.diversity_manager.calculate_temporal_diversity_score(
+            recommendations
+        )
+        evaluation["temporal_diversity_score"] = temporal_diversity_score
+
+        # Combined diversity score (weighted average)
+        # Artist diversity is most important, then genre, then temporal
+        evaluation["diversity_score"] = (
+            artist_diversity_score * 0.5 +
+            genre_diversity_score * 0.3 +
+            temporal_diversity_score * 0.2
+        )
+
+        # Calculate overall score (weighted average with updated weights)
+        # Slightly reduced cohesion weight to make room for diversity improvements
         evaluation["overall_score"] = (
-            evaluation["cohesion_score"] * 0.4 +
+            evaluation["cohesion_score"] * 0.35 +
             evaluation["coverage_score"] * 0.25 +
             evaluation["confidence_score"] * 0.2 +
-            evaluation["diversity_score"] * 0.15
+            evaluation["diversity_score"] * 0.2
         )
 
         # Use LLM to assess playlist quality if available

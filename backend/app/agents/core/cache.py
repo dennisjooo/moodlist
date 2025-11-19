@@ -7,12 +7,27 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse, urlunparse
 import structlog
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log
+)
 
 try:
     import redis.asyncio as redis
+    from redis.exceptions import RedisError, ConnectionError, TimeoutError
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
+    # Define dummy exceptions for type checking
+    class RedisError(Exception):
+        pass
+    class ConnectionError(Exception):
+        pass
+    class TimeoutError(Exception):
+        pass
 
 
 logger = structlog.get_logger(__name__)
@@ -264,8 +279,19 @@ class RedisCache(Cache):
         """
         return f"{self.prefix}{key}"
 
+    @retry(
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=0.1, min=0.05, max=1),
+        retry=retry_if_exception_type((ConnectionError, TimeoutError, RedisError)),
+        before_sleep=before_sleep_log(logger, "WARNING"),
+        reraise=False  # Don't fail the application on cache errors
+    )
     async def get(self, key: str) -> Optional[Any]:
-        """Get value from Redis cache."""
+        """Get value from Redis cache.
+
+        Retries up to 2 times on connection/timeout errors.
+        Returns None on persistent failures to avoid blocking the application.
+        """
         try:
             client = await self._get_client()
             namespaced_key = self._make_key(key)
@@ -283,8 +309,19 @@ class RedisCache(Cache):
             self.miss_count += 1
             return None
 
+    @retry(
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=0.1, min=0.05, max=1),
+        retry=retry_if_exception_type((ConnectionError, TimeoutError)),
+        before_sleep=before_sleep_log(logger, "WARNING"),
+        reraise=False  # Don't fail the application on cache errors
+    )
     async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
-        """Set value in Redis cache."""
+        """Set value in Redis cache.
+
+        Retries up to 2 times on connection/timeout errors.
+        Fails silently on persistent errors to avoid blocking the application.
+        """
         try:
             client = await self._get_client()
             namespaced_key = self._make_key(key)

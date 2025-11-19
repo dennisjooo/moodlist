@@ -64,19 +64,19 @@ class UserAnchorStrategy(RecommendationStrategy):
         Returns:
             List of recommendation dictionaries with high confidence scores
         """
-        recommendations = []
-
-        # Get user-mentioned tracks from metadata (set by SeedGathererAgent)
-        user_mentioned_track_ids = state.metadata.get("user_mentioned_track_ids", [])
+        # 1. Extract context
         user_mentioned_tracks_full = state.metadata.get("user_mentioned_tracks_full", [])
-        intent_analysis = state.metadata.get("intent_analysis", {})
-        user_mentioned_artists = intent_analysis.get("user_mentioned_artists", [])
-
-        # CRITICAL: Get temporal context for filtering
+        user_mentioned_track_ids = state.metadata.get("user_mentioned_track_ids", [])
+        user_mentioned_artists = state.metadata.get("intent_analysis", {}).get("user_mentioned_artists", [])
         temporal_context = state.mood_analysis.get('temporal_context') if state.mood_analysis else None
+        access_token = state.metadata.get("spotify_access_token")
 
-        if not user_mentioned_track_ids and not user_mentioned_artists:
+        if not (user_mentioned_track_ids or user_mentioned_artists):
             logger.info("No user-mentioned tracks or artists, user anchor strategy skipped")
+            return []
+            
+        if not access_token:
+            logger.warning("No access token for user anchor strategy")
             return []
 
         logger.info(
@@ -84,62 +84,69 @@ class UserAnchorStrategy(RecommendationStrategy):
             f"{len(user_mentioned_artists)} artists"
         )
 
-        # Get access token
-        access_token = state.metadata.get("spotify_access_token")
-        if not access_token:
-            logger.warning("No access token for user anchor strategy")
-            return []
-
-        # Track which track IDs we've already added to prevent duplicates
+        recommendations = []
         added_track_ids = set()
 
         # PART 0: ALWAYS include the actual user-mentioned tracks themselves!
         if user_mentioned_tracks_full:
-            user_track_recs = self._add_user_mentioned_tracks(user_mentioned_tracks_full, temporal_context)
-            recommendations.extend(user_track_recs)
-            # Track the IDs we just added
-            for rec in user_track_recs:
-                if rec.get("track_id"):
-                    added_track_ids.add(rec["track_id"])
+            recs = self._add_user_mentioned_tracks(user_mentioned_tracks_full, temporal_context)
+            self._extend_recommendations(recommendations, recs, added_track_ids)
 
-        # PART 1: Get artists from user-mentioned tracks and fetch their top tracks
+        # PART 1 & 2: Fetch tracks from both sources in parallel
+        tasks = []
+        
         if user_mentioned_track_ids:
-            track_based_recs = await self._get_tracks_from_same_artists(
+            tasks.append(self._get_tracks_from_same_artists(
                 user_mentioned_tracks_full,
                 access_token,
                 target_count // 2 if user_mentioned_artists else target_count,
                 temporal_context,
-                exclude_track_ids=added_track_ids  # Pass exclusion set
-            )
-            recommendations.extend(track_based_recs)
-            # Track newly added IDs
-            for rec in track_based_recs:
-                if rec.get("track_id"):
-                    added_track_ids.add(rec["track_id"])
-            logger.info(f"Got {len(track_based_recs)} tracks from user-mentioned track artists")
-
-        # PART 2: Get top tracks from user-mentioned artists
+                exclude_track_ids=added_track_ids
+            ))
+        
         if user_mentioned_artists:
-            artist_based_recs = await self._get_top_tracks_from_artists(
+            tasks.append(self._get_top_tracks_from_artists(
                 user_mentioned_artists,
                 access_token,
                 target_count // 2 if user_mentioned_track_ids else target_count,
                 temporal_context,
-                exclude_track_ids=added_track_ids  # Pass exclusion set
-            )
-            recommendations.extend(artist_based_recs)
+                exclude_track_ids=added_track_ids
+            ))
+        
+        # Execute both parts in parallel
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
             
-            # CRITICAL: Log prominently if we failed to get tracks for user-mentioned artists
-            if len(artist_based_recs) == 0:
-                logger.error(
-                    f"FAILED to get any tracks from user-mentioned artists: {user_mentioned_artists}. "
-                    f"This is a critical failure - user explicitly requested these artists!"
-                )
-            else:
-                logger.info(
-                    f"✓ Got {len(artist_based_recs)} top tracks from {len(user_mentioned_artists)} "
-                    f"user-mentioned artist(s): {', '.join(user_mentioned_artists)}"
-                )
+            # Process Part 1 results (tracks from same artists)
+            if user_mentioned_track_ids:
+                track_based_recs = results[0] if not isinstance(results[0], Exception) else []
+                if isinstance(results[0], Exception):
+                    logger.error(f"Error in _get_tracks_from_same_artists: {results[0]}")
+                else:
+                    self._extend_recommendations(recommendations, track_based_recs, added_track_ids)
+                    logger.info(f"Got {len(track_based_recs)} tracks from user-mentioned track artists")
+            
+            # Process Part 2 results (top tracks from mentioned artists)
+            if user_mentioned_artists:
+                result_idx = 1 if user_mentioned_track_ids else 0
+                artist_based_recs = results[result_idx] if not isinstance(results[result_idx], Exception) else []
+                
+                if isinstance(results[result_idx], Exception):
+                    logger.error(f"Error in _get_top_tracks_from_artists: {results[result_idx]}")
+                else:
+                    self._extend_recommendations(recommendations, artist_based_recs, added_track_ids)
+                    
+                    # CRITICAL: Log prominently if we failed to get tracks for user-mentioned artists
+                    if not artist_based_recs:
+                        logger.error(
+                            f"FAILED to get any tracks from user-mentioned artists: {user_mentioned_artists}. "
+                            f"This is a critical failure - user explicitly requested these artists!"
+                        )
+                    else:
+                        logger.info(
+                            f"✓ Got {len(artist_based_recs)} top tracks from {len(user_mentioned_artists)} "
+                            f"user-mentioned artist(s): {', '.join(user_mentioned_artists)}"
+                        )
 
         # Mark all recommendations with high confidence
         self._mark_recommendations_with_confidence(recommendations)
@@ -230,6 +237,24 @@ class UserAnchorStrategy(RecommendationStrategy):
                 if "confidence_score" not in rec:
                     rec["confidence_score"] = 0.95  # FIXED: Also set confidence_score for proper sorting
 
+    def _extend_recommendations(
+        self,
+        recommendations: List[Dict[str, Any]],
+        new_recs: List[Dict[str, Any]],
+        added_track_ids: set
+    ) -> None:
+        """Extend recommendations list and update added track IDs set.
+        
+        Args:
+            recommendations: Main list of recommendations to extend
+            new_recs: New recommendations to add
+            added_track_ids: Set of track IDs to update
+        """
+        recommendations.extend(new_recs)
+        for rec in new_recs:
+            if rec.get("track_id"):
+                added_track_ids.add(rec["track_id"])
+
     async def _get_tracks_from_same_artists(
         self,
         user_mentioned_tracks: List[Dict[str, Any]],
@@ -309,7 +334,7 @@ class UserAnchorStrategy(RecommendationStrategy):
         temporal_context: Optional[Dict[str, Any]] = None,
         exclude_track_ids: Optional[set] = None
     ) -> List[Dict[str, Any]]:
-        """Fetch top tracks for a set of artist IDs.
+        """Fetch top tracks for a set of artist IDs in parallel.
 
         Args:
             artist_ids: Set of artist IDs
@@ -323,9 +348,9 @@ class UserAnchorStrategy(RecommendationStrategy):
         """
         recommendations = []
         exclude_track_ids = exclude_track_ids or set()
-        skipped_duplicates = 0
 
-        for artist_id in artist_ids:
+        # Fetch tracks for all artists in parallel
+        async def fetch_for_single_artist(artist_id: str):
             try:
                 # Use hybrid strategy favoring top tracks for user-mentioned artists
                 # Users explicitly requested these artists, so favor their popular/recognizable tracks
@@ -335,59 +360,31 @@ class UserAnchorStrategy(RecommendationStrategy):
                     max_popularity=95,  # Allow popular tracks (users want hits from mentioned artists)
                     min_popularity=30,  # Ensure decent quality
                     target_count=tracks_per_artist,
-                    top_tracks_ratio=0.9  # Popular-focused: 90% top tracks, 10% album tracks
+                    top_tracks_ratio=0.8  # Popular-focused: 80% top tracks, 10% album tracks
                 )
-
-                for track in top_tracks:
-                    if not track.get("id"):
-                        continue
-
-                    # Skip if this track was already added
-                    if track["id"] in exclude_track_ids:
-                        skipped_duplicates += 1
-                        logger.debug(
-                            f"Skipping duplicate track: '{track.get('name')}' (already added as user-mentioned track)"
-                        )
-                        continue
-
-                    # CRITICAL: Apply temporal filtering BEFORE marking as protected
-                    is_temporal_match, temporal_reason = self._check_temporal_match(track, temporal_context)
-                    if not is_temporal_match:
-                        artists = [a.get("name", "") for a in track.get("artists", [])]
-                        logger.info(
-                            f"✗ Filtered user-mentioned artist track '{track.get('name')}' "
-                            f"by {', '.join(artists)}: {temporal_reason}"
-                        )
-                        continue
-
-                    # Build proper artist list
-                    artists = [a.get("name", "") for a in track.get("artists", [])]
-
-                    recommendations.append({
-                        "track_id": track["id"],
-                        "track_name": track.get("name", ""),
-                        "artists": artists,  # Use artists list, not artist_name
-                        "spotify_uri": track.get("uri"),
-                        "popularity": track.get("popularity", 50),
-                        "audio_features": {},
-                        "confidence": 0.85,  # High confidence - same artist as user mentioned
-                        "confidence_score": 0.85,  # FIXED: Also set confidence_score for proper sorting
-                        "source": "anchor_track",  # CRITICAL: Mark as anchor track
-                        "user_mentioned": False,  # This is not a user-mentioned track itself
-                        "user_mentioned_artist": True,  # CRITICAL: This is from a user-mentioned ARTIST
-                        "protected": True,  # CRITICAL: Protect from filtering
-                        "anchor_type": "user"  # Mark as user anchor
-                    })
-
-                    logger.debug(
-                        f"Added track from user-mentioned artist: '{track.get('name')}' by {', '.join(artists)}"
-                    )
+                return top_tracks
             except Exception as e:
                 logger.error(f"Error getting tracks for artist {artist_id}: {e}")
-                continue
+                return []
 
-        if skipped_duplicates > 0:
-            logger.info(f"Skipped {skipped_duplicates} duplicate tracks that were already user-mentioned")
+        # Fetch all artists' tracks in parallel
+        tasks = [fetch_for_single_artist(artist_id) for artist_id in artist_ids]
+        all_tracks_lists = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Process all tracks sequentially (to handle exclude_track_ids properly)
+        for tracks_list in all_tracks_lists:
+            if isinstance(tracks_list, Exception):
+                logger.error(f"Exception in parallel fetch: {tracks_list}")
+                continue
+            
+            if tracks_list:
+                self._process_artist_tracks(
+                    tracks_list,
+                    "Unknown",  # artist_name (unused in processing logic)
+                    temporal_context,
+                    exclude_track_ids,
+                    recommendations
+                )
 
         return recommendations
 
@@ -564,7 +561,7 @@ class UserAnchorStrategy(RecommendationStrategy):
         )
 
         # Process tracks and create recommendations
-        track_count, filtered_count, skipped_duplicates = await self._process_artist_tracks(
+        track_count, filtered_count, skipped_duplicates = self._process_artist_tracks(
             top_tracks, artist_name, temporal_context, exclude_track_ids, recommendations
         )
 
@@ -575,7 +572,7 @@ class UserAnchorStrategy(RecommendationStrategy):
 
         return recommendations
 
-    async def _process_artist_tracks(
+    def _process_artist_tracks(
         self,
         top_tracks: List[Dict[str, Any]],
         artist_name: str,
@@ -640,6 +637,10 @@ class UserAnchorStrategy(RecommendationStrategy):
                 "protected": True,  # CRITICAL: Protect from filtering
                 "anchor_type": "user"  # Mark as user anchor
             })
+            
+            logger.debug(
+                f"Added track from user-mentioned artist: '{track.get('name')}' by {', '.join(artists)}"
+            )
             track_count += 1
         
         return track_count, filtered_count, skipped_duplicates
