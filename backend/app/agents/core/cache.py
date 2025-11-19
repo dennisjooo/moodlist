@@ -12,20 +12,24 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
     retry_if_exception_type,
-    before_sleep_log
+    before_sleep_log,
 )
 
 try:
     import redis.asyncio as redis
     from redis.exceptions import RedisError, ConnectionError, TimeoutError
+
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
+
     # Define dummy exceptions for type checking
     class RedisError(Exception):
         pass
+
     class ConnectionError(Exception):
         pass
+
     class TimeoutError(Exception):
         pass
 
@@ -98,7 +102,7 @@ class Cache:
             "hit_count": self.hit_count,
             "miss_count": self.miss_count,
             "total_requests": total_requests,
-            "hit_rate": hit_rate
+            "hit_rate": hit_rate,
         }
 
 
@@ -149,7 +153,7 @@ class MemoryCache(Cache):
         self.cache[key] = {
             "value": value,
             "expires_at": expires_at,
-            "created_at": datetime.now(timezone.utc)
+            "created_at": datetime.now(timezone.utc),
         }
 
         # Update access order
@@ -201,7 +205,9 @@ class RedisCache(Cache):
     Optimized with a persistent connection pool for better performance.
     """
 
-    def __init__(self, redis_url: str = "redis://localhost:6379", prefix: str = "agentic:"):
+    def __init__(
+        self, redis_url: str = "redis://localhost:6379", prefix: str = "agentic:"
+    ):
         """Initialize Redis cache with connection pooling.
 
         Args:
@@ -219,11 +225,17 @@ class RedisCache(Cache):
         parsed = urlparse(redis_url)
         using_tls = parsed.scheme == "rediss"
 
-        if parsed.scheme == "redis" and parsed.hostname and parsed.hostname.endswith("upstash.io"):
+        if (
+            parsed.scheme == "redis"
+            and parsed.hostname
+            and parsed.hostname.endswith("upstash.io")
+        ):
             parsed = parsed._replace(scheme="rediss")
             redis_url = urlunparse(parsed)
             using_tls = True
-            logger.info("Upgrading Redis URL to TLS for Upstash host", host=parsed.hostname)
+            logger.info(
+                "Upgrading Redis URL to TLS for Upstash host", host=parsed.hostname
+            )
 
         return redis_url, using_tls
 
@@ -249,7 +261,7 @@ class RedisCache(Cache):
             self._pool_initialized = True
             logger.info(
                 "Initialized Redis connection pool with 50 max connections",
-                using_tls=self._using_tls
+                using_tls=self._using_tls,
             )
         return self.redis_client
 
@@ -284,7 +296,7 @@ class RedisCache(Cache):
         wait=wait_exponential(multiplier=0.1, min=0.05, max=1),
         retry=retry_if_exception_type((ConnectionError, TimeoutError, RedisError)),
         before_sleep=before_sleep_log(logger, "WARNING"),
-        reraise=False  # Don't fail the application on cache errors
+        reraise=False,  # Don't fail the application on cache errors
     )
     async def get(self, key: str) -> Optional[Any]:
         """Get value from Redis cache.
@@ -314,7 +326,7 @@ class RedisCache(Cache):
         wait=wait_exponential(multiplier=0.1, min=0.05, max=1),
         retry=retry_if_exception_type((ConnectionError, TimeoutError)),
         before_sleep=before_sleep_log(logger, "WARNING"),
-        reraise=False  # Don't fail the application on cache errors
+        reraise=False,  # Don't fail the application on cache errors
     )
     async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
         """Set value in Redis cache.
@@ -393,8 +405,8 @@ class CacheManager:
         # Cache TTL defaults (in seconds) - optimized for rate limit mitigation
         self.default_ttl = {
             "user_profile": 3600,  # 1 hour
-            "top_tracks": 1800,    # 30 minutes
-            "top_artists": 1800,   # 30 minutes
+            "top_tracks": 1800,  # 30 minutes
+            "top_artists": 1800,  # 30 minutes
             "artist_top_tracks": 7200,  # 2 hours - increased to minimize rate limit hits
             "artist_hybrid_tracks": 300,  # 5 minutes - short-lived cache for album sampling
             "recommendations": 1800,  # 30 minutes - increased from 15 to reduce API load
@@ -448,10 +460,7 @@ class CacheManager:
         await self.cache.set(key, profile, ttl)
 
     async def get_user_top_tracks(
-        self,
-        user_id: str,
-        time_range: str = "medium_term",
-        limit: int = 20
+        self, user_id: str, time_range: str = "medium_term", limit: int = 20
     ) -> Optional[List[Dict[str, Any]]]:
         """Get cached user top tracks.
 
@@ -471,7 +480,7 @@ class CacheManager:
         user_id: str,
         tracks: List[Dict[str, Any]],
         time_range: str = "medium_term",
-        limit: int = 20
+        limit: int = 20,
     ) -> None:
         """Cache user top tracks.
 
@@ -486,10 +495,7 @@ class CacheManager:
         await self.cache.set(key, tracks, ttl)
 
     async def get_user_top_artists(
-        self,
-        user_id: str,
-        time_range: str = "medium_term",
-        limit: int = 20
+        self, user_id: str, time_range: str = "medium_term", limit: int = 20
     ) -> Optional[List[Dict[str, Any]]]:
         """Get cached user top artists.
 
@@ -511,7 +517,7 @@ class CacheManager:
         user_id: str,
         artists: List[Dict[str, Any]],
         time_range: str = "medium_term",
-        limit: int = 20
+        limit: int = 20,
     ) -> None:
         """Cache user top artists.
 
@@ -529,21 +535,19 @@ class CacheManager:
 
     def _normalize_market_for_cache(self, market: Optional[str]) -> str:
         """Normalize market parameter for cache key generation.
-        
+
         Converts None to "global" for consistent cache keys.
-        
+
         Args:
             market: Optional ISO 3166-1 alpha-2 country code (None for global)
-            
+
         Returns:
             Market code or "global" if None
         """
         return market if market is not None else "global"
 
     async def get_artist_top_tracks_cache(
-        self,
-        artist_id: str,
-        market: Optional[str] = None
+        self, artist_id: str, market: Optional[str] = None
     ) -> Optional[List[Dict[str, Any]]]:
         """Get cached Spotify top tracks for an artist."""
         cache_market = self._normalize_market_for_cache(market)
@@ -551,10 +555,7 @@ class CacheManager:
         return await self.cache.get(key)
 
     async def set_artist_top_tracks_cache(
-        self,
-        artist_id: str,
-        tracks: List[Dict[str, Any]],
-        market: Optional[str] = None
+        self, artist_id: str, tracks: List[Dict[str, Any]], market: Optional[str] = None
     ) -> None:
         """Cache Spotify top tracks for an artist."""
         cache_market = self._normalize_market_for_cache(market)
@@ -569,7 +570,7 @@ class CacheManager:
         min_popularity: int,
         max_popularity: int,
         target_count: int,
-        top_tracks_ratio: float
+        top_tracks_ratio: float,
     ) -> Optional[List[Dict[str, Any]]]:
         """Get cached hybrid (top + album) tracks for an artist."""
         cache_market = self._normalize_market_for_cache(market)
@@ -581,7 +582,7 @@ class CacheManager:
             min_popularity,
             max_popularity,
             target_count,
-            ratio_key
+            ratio_key,
         )
         return await self.cache.get(key)
 
@@ -593,7 +594,7 @@ class CacheManager:
         min_popularity: int,
         max_popularity: int,
         target_count: int,
-        top_tracks_ratio: float
+        top_tracks_ratio: float,
     ) -> None:
         """Cache hybrid (top + album) track selections for a short time."""
         cache_market = self._normalize_market_for_cache(market)
@@ -605,15 +606,13 @@ class CacheManager:
             min_popularity,
             max_popularity,
             target_count,
-            ratio_key
+            ratio_key,
         )
         ttl = self.default_ttl["artist_hybrid_tracks"]
         await self.cache.set(key, tracks, ttl)
 
     async def get_anchor_tracks(
-        self,
-        user_id: str,
-        mood_prompt: str
+        self, user_id: str, mood_prompt: str
     ) -> Optional[List[Dict[str, Any]]]:
         """Get cached anchor tracks for a user and mood.
 
@@ -631,10 +630,7 @@ class CacheManager:
         return await self.cache.get(key)
 
     async def set_anchor_tracks(
-        self,
-        user_id: str,
-        mood_prompt: str,
-        anchor_tracks: List[Dict[str, Any]]
+        self, user_id: str, mood_prompt: str, anchor_tracks: List[Dict[str, Any]]
     ) -> None:
         """Cache anchor tracks for a user and mood.
 
@@ -662,7 +658,9 @@ class CacheManager:
         key = self._make_cache_key("mood_analysis", mood_prompt)
         return await self.cache.get(key)
 
-    async def set_mood_analysis(self, mood_prompt: str, analysis: Dict[str, Any]) -> None:
+    async def set_mood_analysis(
+        self, mood_prompt: str, analysis: Dict[str, Any]
+    ) -> None:
         """Cache mood analysis.
 
         Args:
@@ -708,7 +706,9 @@ class CacheManager:
         key = self._make_cache_key("track_details", track_id)
         return await self.cache.get(key)
 
-    async def set_track_details(self, track_id: str, track_data: Dict[str, Any]) -> None:
+    async def set_track_details(
+        self, track_id: str, track_data: Dict[str, Any]
+    ) -> None:
         """Cache track details.
 
         Args:
@@ -734,13 +734,13 @@ class CacheManager:
 
     async def close(self):
         """Close cache connections gracefully.
-        
+
         Proper cleanup for distributed cache connections.
         """
         if isinstance(self.cache, RedisCache):
             await self.cache.close()
             logger.info("Closed Redis/Valkey cache connection")
-    
+
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get comprehensive cache statistics.
 
@@ -750,40 +750,35 @@ class CacheManager:
         return {
             "cache_type": "redis" if isinstance(self.cache, RedisCache) else "memory",
             "cache_stats": self.cache.get_stats(),
-            "default_ttl": self.default_ttl
+            "default_ttl": self.default_ttl,
         }
 
     async def get_workflow_artifacts(
-        self,
-        user_id: str,
-        mood_prompt: str
+        self, user_id: str, mood_prompt: str
     ) -> Optional[Dict[str, Any]]:
         """Get cached workflow artifacts for reuse across iterations.
-        
+
         Persist workflow artifacts so similar prompts can reuse validated
         seeds, artist lists, and audio features.
-        
+
         Args:
             user_id: User ID
             mood_prompt: Mood prompt (used as cache key)
-            
+
         Returns:
             Cached workflow artifacts or None
         """
         key = self._make_cache_key("workflow_artifacts", user_id, mood_prompt)
         return await self.cache.get(key)
-    
+
     async def set_workflow_artifacts(
-        self,
-        user_id: str,
-        mood_prompt: str,
-        artifacts: Dict[str, Any]
+        self, user_id: str, mood_prompt: str, artifacts: Dict[str, Any]
     ) -> None:
         """Cache workflow artifacts for reuse.
-        
+
         Store validated seeds, artist lists, audio features
         to avoid recomputation on similar prompts.
-        
+
         Args:
             user_id: User ID
             mood_prompt: Mood prompt (used as cache key)
@@ -791,45 +786,42 @@ class CacheManager:
         """
         key = self._make_cache_key("workflow_artifacts", user_id, mood_prompt)
         ttl = self.default_ttl["workflow_artifacts"]
-        
+
         # Add timestamp for diffing later
         artifacts["cached_at"] = datetime.now(timezone.utc).isoformat()
-        
+
         await self.cache.set(key, artifacts, ttl)
         logger.info(
             f"Cached workflow artifacts for user {user_id}",
-            artifact_keys=list(artifacts.keys())
+            artifact_keys=list(artifacts.keys()),
         )
-    
+
     async def get_artist_enrichment(
-        self,
-        artist_ids: List[str]
+        self, artist_ids: List[str]
     ) -> Optional[Dict[str, Any]]:
         """Get cached enriched artist data.
-        
+
         Cache artist enrichment (top tracks, audio features)
         to avoid repeated fetches.
-        
+
         Args:
             artist_ids: List of artist IDs (sorted for consistent caching)
-            
+
         Returns:
             Cached artist enrichment data or None
         """
         sorted_ids = sorted(artist_ids)
         key = self._make_cache_key("artist_enrichment", *sorted_ids)
         return await self.cache.get(key)
-    
+
     async def set_artist_enrichment(
-        self,
-        artist_ids: List[str],
-        enrichment_data: Dict[str, Any]
+        self, artist_ids: List[str], enrichment_data: Dict[str, Any]
     ) -> None:
         """Cache enriched artist data.
-        
+
         Store artist top tracks and audio features
         for reuse across workflows.
-        
+
         Args:
             artist_ids: List of artist IDs (sorted for consistent caching)
             enrichment_data: Enriched artist data with tracks and audio features
@@ -841,11 +833,7 @@ class CacheManager:
         logger.info(f"Cached enrichment data for {len(artist_ids)} artists")
 
     async def warm_user_cache(
-        self,
-        user_id: str,
-        spotify_service,
-        reccobeat_service,
-        access_token: str
+        self, user_id: str, spotify_service, reccobeat_service, access_token: str
     ) -> None:
         """Proactively warm cache with user data in background.
 
@@ -857,6 +845,7 @@ class CacheManager:
             reccobeat_service: RecoBeat service for fetching data
             access_token: Spotify access token
         """
+
         async def warm_cache_background():
             """Background task to warm cache."""
             try:
@@ -867,7 +856,7 @@ class CacheManager:
                     access_token=access_token,
                     limit=20,
                     time_range="medium_term",
-                    user_id=user_id
+                    user_id=user_id,
                 )
 
                 # Warm top artists cache
@@ -875,17 +864,21 @@ class CacheManager:
                     access_token=access_token,
                     limit=15,
                     time_range="medium_term",
-                    user_id=user_id
+                    user_id=user_id,
                 )
 
                 # Warm audio features cache for top tracks
                 if top_tracks and reccobeat_service:
-                    track_ids = [track.get('id') for track in top_tracks if track.get('id')]
+                    track_ids = [
+                        track.get("id") for track in top_tracks if track.get("id")
+                    ]
                     if track_ids:
                         await reccobeat_service.get_tracks_audio_features(track_ids)
 
-                logger.info(f"Successfully warmed cache for user {user_id}: "
-                           f"{len(top_tracks)} tracks, {len(top_artists)} artists")
+                logger.info(
+                    f"Successfully warmed cache for user {user_id}: "
+                    f"{len(top_tracks)} tracks, {len(top_artists)} artists"
+                )
 
             except Exception as e:
                 logger.warning(f"Error warming cache for user {user_id}: {e}")
@@ -932,7 +925,7 @@ class CacheDecorator:
         self,
         category: str,
         ttl: Optional[int] = None,
-        key_func: Optional[callable] = None
+        key_func: Optional[callable] = None,
     ):
         """Initialize cache decorator.
 
@@ -947,6 +940,7 @@ class CacheDecorator:
 
     def __call__(self, func):
         """Apply cache decorator to function."""
+
         async def wrapper(*args, **kwargs):
             # Generate cache key
             if self.key_func:

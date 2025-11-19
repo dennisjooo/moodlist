@@ -7,6 +7,7 @@ from pydantic import BaseModel, EmailStr
 
 class UserResponse(BaseModel):
     """Schema for user response."""
+
     id: int
     spotify_id: str
     email: Optional[EmailStr] = None
@@ -18,11 +19,13 @@ class UserResponse(BaseModel):
 
     class Config:
         """Enable ORM attribute loading for SQLAlchemy models."""
+
         from_attributes = True
 
 
 class UserProfileResponse(BaseModel):
     """Schema for detailed user profile response."""
+
     id: int
     spotify_id: str
     email: Optional[EmailStr] = None
@@ -39,11 +42,13 @@ class UserProfileResponse(BaseModel):
 
     class Config:
         """Enable ORM attribute loading for SQLAlchemy models."""
+
         from_attributes = True
 
 
 class UserUpdateRequest(BaseModel):
     """Schema for updating user profile."""
+
     display_name: Optional[str] = None
     email: Optional[EmailStr] = None
     profile_image_url: Optional[str] = None
@@ -52,6 +57,7 @@ class UserUpdateRequest(BaseModel):
 
 class UserStatsResponse(BaseModel):
     """Schema for user statistics response."""
+
     user_id: int
     total_playlists: int
     total_invocations: int
@@ -64,6 +70,7 @@ class UserStatsResponse(BaseModel):
 
 class UserListResponse(BaseModel):
     """Schema for paginated user list response (admin use)."""
+
     users: List[UserResponse]
     total: int
     page: int

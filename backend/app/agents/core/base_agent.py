@@ -23,7 +23,7 @@ class BaseAgent(ABC):
         description: str,
         llm: Optional[BaseLanguageModel] = None,
         tools: Optional[List[BaseTool]] = None,
-        verbose: bool = False
+        verbose: bool = False,
     ):
         """Initialize the base agent.
 
@@ -54,14 +54,14 @@ class BaseAgent(ABC):
 
     async def _notify_progress(self, state: AgentState):
         """Notify workflow manager of progress if callback is set.
-        
+
         This method should be called by agents when they want to notify
         the workflow manager of intermediate progress during execution.
-        
+
         Args:
             state: Current agent state to notify about
         """
-        if hasattr(self, '_progress_callback') and callable(self._progress_callback):
+        if hasattr(self, "_progress_callback") and callable(self._progress_callback):
             try:
                 await self._progress_callback(state)
             except Exception as e:
@@ -97,18 +97,22 @@ class BaseAgent(ABC):
         state.metadata["execution_start"] = datetime.now(timezone.utc).isoformat()
 
         # Set LLM context for logging if LLM is a LoggingChatModel
-        if self.llm and hasattr(self.llm, 'set_context'):
+        if self.llm and hasattr(self.llm, "set_context"):
             try:
                 # Extract playlist_id from metadata if available
                 playlist_id = state.metadata.get("playlist_id")
-                
+
                 self.llm.set_context(
                     user_id=int(state.user_id) if state.user_id else None,
                     session_id=state.session_id,
                     playlist_id=playlist_id,
-                    agent_name=self.name
+                    agent_name=self.name,
                 )
-                logger.debug(f"Set LLM context for agent {self.name}", session_id=state.session_id, agent=self.name)
+                logger.debug(
+                    f"Set LLM context for agent {self.name}",
+                    session_id=state.session_id,
+                    agent=self.name,
+                )
             except Exception as e:
                 logger.warning(f"Failed to set LLM context: {e}")
 
@@ -127,8 +131,10 @@ class BaseAgent(ABC):
         start_time = state.metadata.get("execution_start")
         if start_time:
             try:
-                start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-                execution_time = (datetime.now(timezone.utc) - start_dt.replace(tzinfo=timezone.utc)).total_seconds()
+                start_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                execution_time = (
+                    datetime.now(timezone.utc) - start_dt.replace(tzinfo=timezone.utc)
+                ).total_seconds()
                 self.total_execution_time += execution_time
                 state.metadata["execution_time"] = execution_time
             except (ValueError, TypeError):
@@ -136,18 +142,22 @@ class BaseAgent(ABC):
 
         # Store in memory if significant
         if self._should_store_in_memory(state):
-            self.memory.append({
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "state_summary": self._get_state_summary(state),
-                "metadata": state.metadata.copy()
-            })
+            self.memory.append(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "state_summary": self._get_state_summary(state),
+                    "metadata": state.metadata.copy(),
+                }
+            )
 
             # Keep memory manageable
             if len(self.memory) > 100:
                 self.memory = self.memory[-50:]  # Keep last 50 items
 
         if self.verbose:
-            logger.info(f"Agent {self.name} completed execution in {state.metadata.get('execution_time', 'unknown')}s")
+            logger.info(
+                f"Agent {self.name} completed execution in {state.metadata.get('execution_time', 'unknown')}s"
+            )
 
         return state
 
@@ -162,9 +172,9 @@ class BaseAgent(ABC):
         """
         # Store if there are recommendations or errors
         return (
-            len(state.recommendations) > 0 or
-            state.error_message is not None or
-            state.current_step in ["completed", "failed"]
+            len(state.recommendations) > 0
+            or state.error_message is not None
+            or state.current_step in ["completed", "failed"]
         )
 
     def _get_state_summary(self, state: AgentState) -> Dict[str, Any]:
@@ -178,10 +188,12 @@ class BaseAgent(ABC):
         """
         return {
             "step": state.current_step,
-            "mood_prompt": state.mood_prompt[:50] + "..." if len(state.mood_prompt) > 50 else state.mood_prompt,
+            "mood_prompt": state.mood_prompt[:50] + "..."
+            if len(state.mood_prompt) > 50
+            else state.mood_prompt,
             "recommendation_count": len(state.recommendations),
             "has_error": state.error_message is not None,
-            "playlist_id": state.playlist_id
+            "playlist_id": state.playlist_id,
         }
 
     def get_performance_stats(self) -> Dict[str, Any]:
@@ -192,7 +204,8 @@ class BaseAgent(ABC):
         """
         avg_execution_time = (
             self.total_execution_time / self.execution_count
-            if self.execution_count > 0 else 0
+            if self.execution_count > 0
+            else 0
         )
 
         return {
@@ -203,7 +216,7 @@ class BaseAgent(ABC):
             "error_count": self.error_count,
             "error_rate": self.error_count / max(self.execution_count, 1),
             "memory_size": len(self.memory),
-            "created_at": self.created_at.isoformat()
+            "created_at": self.created_at.isoformat(),
         }
 
     def reset_memory(self):

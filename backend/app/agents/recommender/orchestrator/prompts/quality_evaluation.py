@@ -14,7 +14,7 @@ def get_quality_evaluation_prompt(
     temporal_context: dict = None,
     excluded_themes: list = None,
     preferred_regions: list = None,
-    excluded_regions: list = None
+    excluded_regions: list = None,
 ) -> str:
     """Get the prompt for evaluating playlist quality.
 
@@ -41,7 +41,7 @@ def get_quality_evaluation_prompt(
     if user_mentioned_tracks:
         user_favorites_section = f"""
 **USER FAVORITES (PROTECTED)**: The following tracks were explicitly mentioned by the user and MUST stay in the playlist:
-{chr(10).join(f'- {track}' for track in user_mentioned_tracks)}
+{chr(10).join(f"- {track}" for track in user_mentioned_tracks)}
 
 ⚠️ DO NOT flag these tracks as outliers or suggest removal, even if they violate temporal/era constraints.
 These are EXPLICIT user requests and override all other requirements.
@@ -52,7 +52,7 @@ Note: Tracks from user-mentioned artists (not explicit track mentions) have alre
     excluded_section = ""
     if excluded_themes:
         excluded_section = f"""
-**EXCLUDED THEMES**: {', '.join(excluded_themes)}.
+**EXCLUDED THEMES**: {", ".join(excluded_themes)}.
 Any track title/artist indicative of these themes (e.g., holiday keywords like "Christmas", "Santa", "Jingle") MUST be flagged as outliers."""
 
     # Build regional context section if applicable
@@ -60,9 +60,13 @@ Any track title/artist indicative of these themes (e.g., holiday keywords like "
     if preferred_regions or excluded_regions:
         regional_parts = []
         if preferred_regions:
-            regional_parts.append(f"**PREFERRED REGIONS**: {', '.join(preferred_regions)}")
+            regional_parts.append(
+                f"**PREFERRED REGIONS**: {', '.join(preferred_regions)}"
+            )
         if excluded_regions:
-            regional_parts.append(f"**EXCLUDED REGIONS**: {', '.join(excluded_regions)}")
+            regional_parts.append(
+                f"**EXCLUDED REGIONS**: {', '.join(excluded_regions)}"
+            )
 
         regional_section = f"""
 {chr(10).join(regional_parts)}
@@ -97,20 +101,20 @@ ALL tracks should be from this time period. Modern tracks or tracks from other e
 
 **Mood Analysis**: {mood_interpretation}
 {user_favorites_section}{regional_section}{temporal_section}{excluded_section}
-**Expected Artists**: {', '.join(artist_recommendations[:8])}
-**Expected Genres**: {', '.join(genre_keywords[:5])}
+**Expected Artists**: {", ".join(artist_recommendations[:8])}
+**Expected Genres**: {", ".join(genre_keywords[:5])}
 
-**Target Audio Features**: {', '.join(f'{k}={v:.2f}' if isinstance(v, (int, float)) else f'{k}={v}' for k, v in list(target_features.items())[:5])}
+**Target Audio Features**: {", ".join(f"{k}={v:.2f}" if isinstance(v, (int, float)) else f"{k}={v}" for k, v in list(target_features.items())[:5])}
 
 **Playlist** ({len(tracks_summary.split(chr(10)))} tracks, target: {target_count}):
 {tracks_summary}
 
 **Algorithmic Metrics**:
-- Cohesion Score: {evaluation['cohesion_score']:.2f}/1.0
-- Confidence Score: {evaluation['confidence_score']:.2f}/1.0
-- Diversity Score: {evaluation['diversity_score']:.2f}/1.0
-- Outliers Found: {len(evaluation['outlier_tracks'])}
-- Overall Score: {evaluation['overall_score']:.2f}/1.0
+- Cohesion Score: {evaluation["cohesion_score"]:.2f}/1.0
+- Confidence Score: {evaluation["confidence_score"]:.2f}/1.0
+- Diversity Score: {evaluation["diversity_score"]:.2f}/1.0
+- Outliers Found: {len(evaluation["outlier_tracks"])}
+- Overall Score: {evaluation["overall_score"]:.2f}/1.0
 
 **Task**: BE STRICT - Evaluate if this playlist truly matches the user's mood. Consider:
 1. **Regional/Language Match**: Do track/artist names match the PREFERRED REGIONS and avoid EXCLUDED REGIONS? Check artist origins and language.

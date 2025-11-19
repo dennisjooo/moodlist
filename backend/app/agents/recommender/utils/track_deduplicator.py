@@ -11,7 +11,7 @@ DuplicateCallback = Callable[[TrackRecommendation], None]
 def deduplicate_track_recommendations(
     recommendations: Iterable[TrackRecommendation],
     *,
-    on_duplicate: DuplicateCallback | None = None
+    on_duplicate: DuplicateCallback | None = None,
 ) -> Tuple[List[TrackRecommendation], int]:
     """Remove duplicate track recommendations while preserving order.
 
@@ -31,9 +31,8 @@ def deduplicate_track_recommendations(
 
     for rec in recommendations:
         spotify_uri = rec.spotify_uri
-        is_duplicate = (
-            rec.track_id in seen_track_ids
-            or (spotify_uri and spotify_uri in seen_spotify_uris)
+        is_duplicate = rec.track_id in seen_track_ids or (
+            spotify_uri and spotify_uri in seen_spotify_uris
         )
 
         if is_duplicate:

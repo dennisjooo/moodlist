@@ -15,5 +15,5 @@ __all__ = [
     "ScoringEngine",
     "TokenManager",
     "TrackEnrichmentService",
-    "TrackFilter"
+    "TrackFilter",
 ]

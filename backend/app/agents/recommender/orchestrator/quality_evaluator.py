@@ -18,9 +18,7 @@ class QualityEvaluator:
     """Evaluates the quality of playlists against mood criteria."""
 
     def __init__(
-        self,
-        llm: Optional[BaseLanguageModel] = None,
-        cohesion_threshold: float = 0.65
+        self, llm: Optional[BaseLanguageModel] = None, cohesion_threshold: float = 0.65
     ):
         """Initialize the quality evaluator.
 
@@ -45,7 +43,7 @@ class QualityEvaluator:
         recommendations = state.recommendations
         target_features = state.metadata.get("target_features", {})
         feature_weights = state.metadata.get("feature_weights", {})
-        
+
         # Get target plan
         playlist_target = state.metadata.get("playlist_target", {})
         min_count = playlist_target.get("min_count", 15)
@@ -65,7 +63,7 @@ class QualityEvaluator:
             "recommendations_count": len(recommendations),
             "target_count": target_count,  # Track target
             "outlier_tracks": [],
-            "llm_assessment": None
+            "llm_assessment": None,
         }
 
         # Check against minimum (not target, minimum is the floor)
@@ -100,7 +98,9 @@ class QualityEvaluator:
             )
 
         # Calculate average confidence score
-        avg_confidence = sum(r.confidence_score for r in recommendations) / len(recommendations)
+        avg_confidence = sum(r.confidence_score for r in recommendations) / len(
+            recommendations
+        )
         evaluation["confidence_score"] = avg_confidence
 
         if avg_confidence < 0.5:
@@ -122,33 +122,33 @@ class QualityEvaluator:
         evaluation["genre_diversity_score"] = genre_diversity_score
 
         # Calculate temporal diversity score
-        temporal_diversity_score = self.diversity_manager.calculate_temporal_diversity_score(
-            recommendations
+        temporal_diversity_score = (
+            self.diversity_manager.calculate_temporal_diversity_score(recommendations)
         )
         evaluation["temporal_diversity_score"] = temporal_diversity_score
 
         # Combined diversity score (weighted average)
         # Artist diversity is most important, then genre, then temporal
         evaluation["diversity_score"] = (
-            artist_diversity_score * 0.5 +
-            genre_diversity_score * 0.3 +
-            temporal_diversity_score * 0.2
+            artist_diversity_score * 0.5
+            + genre_diversity_score * 0.3
+            + temporal_diversity_score * 0.2
         )
 
         # Calculate overall score (weighted average with updated weights)
         # Slightly reduced cohesion weight to make room for diversity improvements
         evaluation["overall_score"] = (
-            evaluation["cohesion_score"] * 0.35 +
-            evaluation["coverage_score"] * 0.25 +
-            evaluation["confidence_score"] * 0.2 +
-            evaluation["diversity_score"] * 0.2
+            evaluation["cohesion_score"] * 0.35
+            + evaluation["coverage_score"] * 0.25
+            + evaluation["confidence_score"] * 0.2
+            + evaluation["diversity_score"] * 0.2
         )
 
         # Use LLM to assess playlist quality if available
         if self.llm:
             llm_assessment = await self._llm_evaluate_quality(state, evaluation)
             evaluation["llm_assessment"] = llm_assessment
-            
+
             # Adjust overall score based on LLM assessment
             if llm_assessment:
                 llm_score = llm_assessment.get("quality_score", 0.5)
@@ -157,22 +157,21 @@ class QualityEvaluator:
                 evaluation["overall_score"] = (
                     evaluation["overall_score"] * 0.5 + llm_score * 0.5
                 )
-                
+
                 # Update issues with LLM insights
                 if llm_assessment.get("issues"):
                     evaluation["issues"].extend(llm_assessment["issues"])
-                
+
                 # CRITICAL: Extract LLM-identified outliers from specific_concerns
                 llm_outliers = self.cohesion_calculator.extract_llm_outliers(
-                    llm_assessment.get("specific_concerns", []),
-                    recommendations
+                    llm_assessment.get("specific_concerns", []), recommendations
                 )
                 if llm_outliers:
                     # Merge with algorithmic outliers (union, not duplicates)
                     existing_outliers = set(evaluation["outlier_tracks"])
                     existing_outliers.update(llm_outliers)
                     evaluation["outlier_tracks"] = list(existing_outliers)
-                    
+
                     logger.info(
                         f"LLM identified {len(llm_outliers)} additional outliers: "
                         f"{[r.track_name for r in recommendations if r.track_id in llm_outliers]}"
@@ -181,18 +180,17 @@ class QualityEvaluator:
         # Check if meets threshold using target's quality threshold
         # More relaxed since LLM handles cultural/genre matching and we filter outliers in final processing
         meets_quality = (
-            evaluation["overall_score"] >= quality_threshold and  # LLM-weighted score
-            len(recommendations) >= min_count and
-            len(evaluation["outlier_tracks"]) <= len(recommendations) // 3  # Allow up to 1/3 outliers (will be filtered)
+            evaluation["overall_score"] >= quality_threshold  # LLM-weighted score
+            and len(recommendations) >= min_count
+            and len(evaluation["outlier_tracks"])
+            <= len(recommendations) // 3  # Allow up to 1/3 outliers (will be filtered)
         )
         evaluation["meets_threshold"] = meets_quality
 
         return evaluation
 
     async def _llm_evaluate_quality(
-        self,
-        state: AgentState,
-        evaluation: Dict[str, Any]
+        self, state: AgentState, evaluation: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
         """Use LLM to evaluate playlist quality with contextual understanding.
 
@@ -215,20 +213,36 @@ class QualityEvaluator:
                     f"(confidence: {rec.confidence_score:.2f}, source: {rec.source})"
                 )
                 if rec.user_mentioned:
-                    user_mentioned_tracks.append(f"{rec.track_name} by {', '.join(rec.artists)}")
-            
+                    user_mentioned_tracks.append(
+                        f"{rec.track_name} by {', '.join(rec.artists)}"
+                    )
+
             mood_interpretation = state.mood_analysis.get("mood_interpretation", "N/A")
-            artist_recommendations = state.mood_analysis.get("artist_recommendations", [])
+            artist_recommendations = state.mood_analysis.get(
+                "artist_recommendations", []
+            )
             genre_keywords = state.mood_analysis.get("genre_keywords", [])
             temporal_context = state.mood_analysis.get("temporal_context")
             target_features = state.metadata.get("target_features", {})
             playlist_target = state.metadata.get("playlist_target", {})
             target_count = playlist_target.get("target_count", 20)
-            excluded_themes = state.mood_analysis.get("excluded_themes", []) if state.mood_analysis else []
+            excluded_themes = (
+                state.mood_analysis.get("excluded_themes", [])
+                if state.mood_analysis
+                else []
+            )
 
             # Get regional context from mood_analysis
-            preferred_regions = state.mood_analysis.get("preferred_regions", []) if state.mood_analysis else []
-            excluded_regions = state.mood_analysis.get("excluded_regions", []) if state.mood_analysis else []
+            preferred_regions = (
+                state.mood_analysis.get("preferred_regions", [])
+                if state.mood_analysis
+                else []
+            )
+            excluded_regions = (
+                state.mood_analysis.get("excluded_regions", [])
+                if state.mood_analysis
+                else []
+            )
 
             prompt = get_quality_evaluation_prompt(
                 mood_prompt=state.mood_prompt,
@@ -243,22 +257,24 @@ class QualityEvaluator:
                 temporal_context=temporal_context,
                 excluded_themes=excluded_themes,
                 preferred_regions=preferred_regions,
-                excluded_regions=excluded_regions
+                excluded_regions=excluded_regions,
             )
 
             response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
-            
+
             # Parse JSON response using centralized parser
             assessment = LLMResponseParser.extract_json_from_response(response)
-            
+
             if assessment:
-                logger.info(f"LLM assessment: quality={assessment.get('quality_score')}, "
-                           f"meets_expectations={assessment.get('meets_expectations')}")
+                logger.info(
+                    f"LLM assessment: quality={assessment.get('quality_score')}, "
+                    f"meets_expectations={assessment.get('meets_expectations')}"
+                )
                 return assessment
             else:
                 logger.warning("Could not parse LLM quality assessment response")
                 return None
-                
+
         except Exception as e:
             logger.error(f"LLM quality evaluation failed: {str(e)}", exc_info=True)
             return None

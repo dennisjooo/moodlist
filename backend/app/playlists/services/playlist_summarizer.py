@@ -33,5 +33,5 @@ class PlaylistSummarizer:
             "track_count": len(state.recommendations),
             "mood_prompt": state.mood_prompt,
             "created_at": state.updated_at.isoformat(),
-            "status": state.status.value
+            "status": state.status.value,
         }

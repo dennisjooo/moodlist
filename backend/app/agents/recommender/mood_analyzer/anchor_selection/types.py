@@ -25,19 +25,19 @@ class AnchorCandidate:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
         return {
-            'track': self.track,
-            'score': self.score,
-            'confidence': self.confidence,
-            'features': self.features,
-            'source': self.source,
-            'anchor_type': self.anchor_type,
-            'user_mentioned': self.user_mentioned,
-            'protected': self.protected,
-            'genre': self.genre,
-            'artist': self.artist,
-            'llm_score': self.llm_score,
-            'llm_confidence': self.llm_confidence,
-            'llm_reasoning': self.llm_reasoning,
+            "track": self.track,
+            "score": self.score,
+            "confidence": self.confidence,
+            "features": self.features,
+            "source": self.source,
+            "anchor_type": self.anchor_type,
+            "user_mentioned": self.user_mentioned,
+            "protected": self.protected,
+            "genre": self.genre,
+            "artist": self.artist,
+            "llm_score": self.llm_score,
+            "llm_confidence": self.llm_confidence,
+            "llm_reasoning": self.llm_reasoning,
         }
 
 
@@ -53,10 +53,10 @@ class AnchorSelectionStrategy:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
         return {
-            'anchor_count': self.anchor_count,
-            'selection_criteria': self.selection_criteria,
-            'track_priorities': self.track_priorities,
-            'strategy_notes': self.strategy_notes,
+            "anchor_count": self.anchor_count,
+            "selection_criteria": self.selection_criteria,
+            "track_priorities": self.track_priorities,
+            "strategy_notes": self.strategy_notes,
         }
 
 

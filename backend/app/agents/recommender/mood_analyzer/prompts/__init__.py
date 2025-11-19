@@ -25,5 +25,5 @@ __all__ = [
     "get_anchor_finalization_prompt",
     "get_artist_validation_prompt",
     "get_batch_track_filter_prompt",
-    "get_batch_artist_validation_prompt"
+    "get_batch_artist_validation_prompt",
 ]

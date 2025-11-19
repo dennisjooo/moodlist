@@ -12,7 +12,9 @@ logger = structlog.get_logger(__name__)
 class ScoringEngine:
     """Handles confidence scoring and mood matching calculations."""
 
-    def _gaussian_similarity(self, value: float, target: float, sigma: float = 0.15) -> float:
+    def _gaussian_similarity(
+        self, value: float, target: float, sigma: float = 0.15
+    ) -> float:
         """Calculate similarity using Gaussian (bell curve) function.
 
         This provides smoother degradation than linear distance.
@@ -26,7 +28,7 @@ class ScoringEngine:
         Returns:
             Similarity score (0-1)
         """
-        return math.exp(-((value - target) ** 2) / (2 * sigma ** 2))
+        return math.exp(-((value - target) ** 2) / (2 * sigma**2))
 
     def _enhanced_popularity_score(self, popularity: int) -> float:
         """Calculate popularity score with bell curve favoring mid-range.
@@ -47,7 +49,7 @@ class ScoringEngine:
         # Sigma of 30 gives good spread
         optimal = 60
         sigma = 30
-        score = math.exp(-((popularity - optimal) ** 2) / (2 * sigma ** 2))
+        score = math.exp(-((popularity - optimal) ** 2) / (2 * sigma**2))
 
         # Boost minimum to 0.4 for very popular tracks (they're still valid)
         # and ensure very obscure tracks (<15) don't get completely zeroed
@@ -58,7 +60,9 @@ class ScoringEngine:
 
         return score
 
-    def _get_feature_weight(self, feature: str, target_features: Dict[str, Any]) -> float:
+    def _get_feature_weight(
+        self, feature: str, target_features: Dict[str, Any]
+    ) -> float:
         """Get importance weight for a feature based on mood context.
 
         Different moods prioritize different features.
@@ -113,8 +117,8 @@ class ScoringEngine:
             return float(value)
         elif isinstance(value, str):
             try:
-                if '-' in value:
-                    parts = value.split('-')
+                if "-" in value:
+                    parts = value.split("-")
                     return (float(parts[0]) + float(parts[1])) / 2
                 return float(value)
             except (ValueError, IndexError):
@@ -124,9 +128,7 @@ class ScoringEngine:
         return None
 
     def calculate_confidence_score(
-        self,
-        recommendation_data: Dict[str, Any],
-        state: AgentState
+        self, recommendation_data: Dict[str, Any], state: AgentState
     ) -> float:
         """Calculate confidence score for a recommendation.
 
@@ -150,7 +152,9 @@ class ScoringEngine:
         final_score = (base_score - penalty) * source_multiplier
         return min(max(final_score, 0.0), 1.0)
 
-    def _get_existing_score(self, recommendation_data: Dict[str, Any]) -> Optional[float]:
+    def _get_existing_score(
+        self, recommendation_data: Dict[str, Any]
+    ) -> Optional[float]:
         """Extract existing score from recommendation data if available.
 
         Args:
@@ -174,9 +178,7 @@ class ScoringEngine:
         return None
 
     def _calculate_base_score(
-        self,
-        recommendation_data: Dict[str, Any],
-        state: AgentState
+        self, recommendation_data: Dict[str, Any], state: AgentState
     ) -> float:
         """Calculate base confidence score from popularity and mood matching.
 
@@ -194,7 +196,9 @@ class ScoringEngine:
         if popularity > 0:
             # Use enhanced bell curve scoring that favors quality mid-range tracks
             popularity_factor = self._enhanced_popularity_score(popularity)
-            base_score += (0.2 * popularity_factor)  # Increased weight for better popularity handling
+            base_score += (
+                0.2 * popularity_factor
+            )  # Increased weight for better popularity handling
         else:
             # No popularity data - slight penalty
             base_score += 0.05
@@ -205,8 +209,10 @@ class ScoringEngine:
 
         if target_features and audio_features:
             # Use improved mood matching with Gaussian similarity
-            mood_match_score = self._calculate_mood_match_enhanced(audio_features, target_features)
-            base_score += (0.45 * mood_match_score)  # Increased weight for mood matching
+            mood_match_score = self._calculate_mood_match_enhanced(
+                audio_features, target_features
+            )
+            base_score += 0.45 * mood_match_score  # Increased weight for mood matching
         elif target_features:
             # Boost for having target features even without audio features
             base_score += 0.1
@@ -214,9 +220,7 @@ class ScoringEngine:
         return base_score
 
     def _calculate_penalties(
-        self,
-        recommendation_data: Dict[str, Any],
-        state: AgentState
+        self, recommendation_data: Dict[str, Any], state: AgentState
     ) -> float:
         """Calculate penalties for feature violations.
 
@@ -268,9 +272,7 @@ class ScoringEngine:
         return 1.0
 
     def _calculate_mood_match(
-        self,
-        audio_features: Dict[str, Any],
-        target_features: Dict[str, Any]
+        self, audio_features: Dict[str, Any], target_features: Dict[str, Any]
     ) -> float:
         """Calculate how well audio features match target mood features.
 
@@ -297,8 +299,8 @@ class ScoringEngine:
                 # Handle range values as string (e.g., "0.8-1.0")
                 if isinstance(target_value, str):
                     try:
-                        if '-' in target_value:
-                            parts = target_value.split('-')
+                        if "-" in target_value:
+                            parts = target_value.split("-")
                             if len(parts) == 2:
                                 min_val = float(parts[0])
                                 max_val = float(parts[1])
@@ -318,7 +320,9 @@ class ScoringEngine:
                             matches += similarity
                         total_features += 1
                     except (ValueError, IndexError) as e:
-                        logger.warning(f"Could not parse target value '{target_value}' for {key}: {e}")
+                        logger.warning(
+                            f"Could not parse target value '{target_value}' for {key}: {e}"
+                        )
                         continue
                 # Handle range values as list (e.g., [0.8, 1.0])
                 elif isinstance(target_value, list) and len(target_value) == 2:
@@ -336,9 +340,7 @@ class ScoringEngine:
         return matches / total_features if total_features > 0 else 0.5
 
     def _calculate_mood_match_enhanced(
-        self,
-        audio_features: Dict[str, Any],
-        target_features: Dict[str, Any]
+        self, audio_features: Dict[str, Any], target_features: Dict[str, Any]
     ) -> float:
         """Calculate mood match using Gaussian similarity and feature weighting.
 
@@ -375,9 +377,7 @@ class ScoringEngine:
                 if target_value is not None:
                     # Calculate Gaussian similarity
                     similarity = self._gaussian_similarity(
-                        track_value,
-                        target_value,
-                        sigma=config["sigma"]
+                        track_value, target_value, sigma=config["sigma"]
                     )
 
                     # Get adaptive weight based on mood context
@@ -393,9 +393,7 @@ class ScoringEngine:
             return self._calculate_mood_match(audio_features, target_features)
 
     def calculate_track_cohesion(
-        self,
-        audio_features: Dict[str, Any],
-        target_features: Dict[str, Any]
+        self, audio_features: Dict[str, Any], target_features: Dict[str, Any]
     ) -> float:
         """Calculate how well a track's audio features match target mood features.
 
@@ -422,7 +420,7 @@ class ScoringEngine:
             "tempo": 40.0,
             "loudness": 6.0,
             "liveness": 0.4,
-            "popularity": 30
+            "popularity": 30,
         }
 
         for feature_name, target_value in target_features.items():

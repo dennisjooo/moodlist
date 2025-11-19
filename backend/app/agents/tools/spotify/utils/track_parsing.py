@@ -9,10 +9,10 @@ from typing import Dict, Any, List
 
 def parse_track_data(track_data: Dict[str, Any]) -> Dict[str, Any]:
     """Parse a single track from Spotify API response.
-    
+
     Args:
         track_data: Raw track data from Spotify API
-        
+
     Returns:
         Formatted track dictionary with standardized fields
     """
@@ -46,10 +46,10 @@ def parse_track_data(track_data: Dict[str, Any]) -> Dict[str, Any]:
 
 def parse_tracks_from_response(response_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Parse multiple tracks from Spotify API response.
-    
+
     Args:
         response_data: Response data containing tracks array
-        
+
     Returns:
         List of parsed track dictionaries
     """
@@ -66,10 +66,10 @@ def parse_tracks_from_response(response_data: Dict[str, Any]) -> List[Dict[str, 
 
 def parse_tracks_batch(response_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Parse tracks from batch API response (e.g., /tracks endpoint with multiple IDs).
-    
+
     Args:
         response_data: Response data containing tracks array (may include null entries)
-        
+
     Returns:
         List of parsed track dictionaries (null entries filtered out)
     """
@@ -84,4 +84,3 @@ def parse_tracks_batch(response_data: Dict[str, Any]) -> List[Dict[str, Any]]:
             # Skip tracks that fail to parse
             continue
     return tracks
-

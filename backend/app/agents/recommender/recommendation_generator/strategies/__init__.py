@@ -11,5 +11,5 @@ __all__ = [
     "ArtistDiscoveryStrategy",
     "SeedBasedStrategy",
     "FallbackStrategy",
-    "UserAnchorStrategy"
+    "UserAnchorStrategy",
 ]

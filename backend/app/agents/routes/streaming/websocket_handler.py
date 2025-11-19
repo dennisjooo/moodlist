@@ -21,7 +21,7 @@ async def handle_websocket_connection(
 ):
     """
     Handle WebSocket connection for workflow status updates.
-    
+
     Args:
         websocket: WebSocket connection
         session_id: Workflow session ID
@@ -33,9 +33,11 @@ async def handle_websocket_connection(
 
     try:
         # Authenticate and get initial playlist data
-        current_user, initial_playlist_data, initial_playlist_status = await authenticate_websocket(
-            websocket, session_id
-        )
+        (
+            current_user,
+            initial_playlist_data,
+            initial_playlist_status,
+        ) = await authenticate_websocket(websocket, session_id)
 
         # Send initial connected message
         await websocket.send_json({"type": "connected", "session_id": session_id})
@@ -53,7 +55,11 @@ async def handle_websocket_connection(
                 current_step=state.current_step if state else None,
             )
             await queue.put(state)
-            logger.info("WebSocket state added to queue", session_id=sid, queue_size=queue.qsize())
+            logger.info(
+                "WebSocket state added to queue",
+                session_id=sid,
+                queue_size=queue.qsize(),
+            )
 
         workflow_manager.subscribe_to_state_changes(session_id, state_change_callback)
         logger.info("WebSocket subscribed to state changes", session_id=session_id)
@@ -77,11 +83,19 @@ async def handle_websocket_connection(
             elif initial_playlist_data:
                 last_sent_status = initial_playlist_status
                 last_sent_step = initial_playlist_data.get("current_step")
-                await websocket.send_json({"type": "status", "data": initial_playlist_data})
+                await websocket.send_json(
+                    {"type": "status", "data": initial_playlist_data}
+                )
 
-                terminal_statuses = [PlaylistStatus.COMPLETED, PlaylistStatus.FAILED, PlaylistStatus.CANCELLED]
+                terminal_statuses = [
+                    PlaylistStatus.COMPLETED,
+                    PlaylistStatus.FAILED,
+                    PlaylistStatus.CANCELLED,
+                ]
                 if initial_playlist_status in terminal_statuses:
-                    await websocket.send_json({"type": "complete", "data": initial_playlist_data})
+                    await websocket.send_json(
+                        {"type": "complete", "data": initial_playlist_data}
+                    )
                     await websocket.close(code=1000)
                     return
 
@@ -91,7 +105,7 @@ async def handle_websocket_connection(
                     # Wait for state change or client message
                     pending_tasks = [
                         asyncio.create_task(queue.get()),
-                        asyncio.create_task(websocket.receive_text())
+                        asyncio.create_task(websocket.receive_text()),
                     ]
                     done, pending = await asyncio.wait(
                         pending_tasks, timeout=30, return_when=asyncio.FIRST_COMPLETED
@@ -131,12 +145,16 @@ async def handle_websocket_connection(
                                 continue
 
                             # State update
-                            logger.info("WebSocket processing state update", session_id=session_id)
+                            logger.info(
+                                "WebSocket processing state update",
+                                session_id=session_id,
+                            )
                             current_state = get_current_state() or result
 
-                            if (current_state.status.value != last_sent_status or
-                                current_state.current_step != last_sent_step):
-
+                            if (
+                                current_state.status.value != last_sent_status
+                                or current_state.current_step != last_sent_step
+                            ):
                                 logger.info(
                                     "WebSocket detected state change",
                                     session_id=session_id,
@@ -146,8 +164,12 @@ async def handle_websocket_connection(
                                     new_step=current_state.current_step,
                                 )
 
-                                if is_forward_progress(last_sent_status, current_state.status.value):
-                                    status_data = serialize_workflow_state(session_id, current_state)
+                                if is_forward_progress(
+                                    last_sent_status, current_state.status.value
+                                ):
+                                    status_data = serialize_workflow_state(
+                                        session_id, current_state
+                                    )
                                     last_sent_status = current_state.status.value
                                     last_sent_step = current_state.current_step
 
@@ -157,33 +179,52 @@ async def handle_websocket_connection(
                                         status=current_state.status.value,
                                         step=current_state.current_step,
                                     )
-                                    await websocket.send_json({"type": "status", "data": status_data})
+                                    await websocket.send_json(
+                                        {"type": "status", "data": status_data}
+                                    )
 
-                                    if current_state.status.value in ["completed", "failed", "cancelled"]:
-                                        await websocket.send_json({"type": "complete", "data": status_data})
+                                    if current_state.status.value in [
+                                        "completed",
+                                        "failed",
+                                        "cancelled",
+                                    ]:
+                                        await websocket.send_json(
+                                            {"type": "complete", "data": status_data}
+                                        )
                                         await websocket.close(code=1000)
                                         return
                         except WebSocketDisconnect:
                             # Client disconnected while processing - exit loop
-                            logger.info("Client disconnected during message processing", session_id=session_id)
+                            logger.info(
+                                "Client disconnected during message processing",
+                                session_id=session_id,
+                            )
                             return
                         except Exception as e:
-                            logger.error("Error processing WebSocket task", error=str(e))
+                            logger.error(
+                                "Error processing WebSocket task", error=str(e)
+                            )
 
                 except asyncio.TimeoutError:
                     # Send keep-alive
                     try:
                         await websocket.send_json({"type": "ping"})
                     except WebSocketDisconnect:
-                        logger.info("Client disconnected during ping", session_id=session_id)
+                        logger.info(
+                            "Client disconnected during ping", session_id=session_id
+                        )
                         return
                 except WebSocketDisconnect:
                     # Client disconnected - exit cleanly
-                    logger.info("Client disconnected in main loop", session_id=session_id)
+                    logger.info(
+                        "Client disconnected in main loop", session_id=session_id
+                    )
                     return
 
         finally:
-            workflow_manager.unsubscribe_from_state_changes(session_id, state_change_callback)
+            workflow_manager.unsubscribe_from_state_changes(
+                session_id, state_change_callback
+            )
             logger.debug("Unsubscribed from state changes", session_id=session_id)
 
     except WebSocketDisconnect:
@@ -192,10 +233,11 @@ async def handle_websocket_connection(
         # Authentication errors are already handled in authenticate_websocket
         pass
     except Exception as exc:
-        logger.error("WebSocket error", session_id=session_id, error=str(exc), exc_info=True)
+        logger.error(
+            "WebSocket error", session_id=session_id, error=str(exc), exc_info=True
+        )
         try:
             await websocket.send_json({"type": "error", "message": str(exc)})
             await websocket.close(code=1011)
         except Exception:
             pass
-

@@ -35,8 +35,7 @@ class AudioFeaturesHandler:
         self.reccobeat_service = reccobeat_service
 
     async def get_batch_complete_audio_features(
-        self,
-        track_data: List[Tuple[str, Optional[Dict[str, Any]]]]
+        self, track_data: List[Tuple[str, Optional[Dict[str, Any]]]]
     ) -> Dict[str, Dict[str, Any]]:
         """Get complete audio features for multiple tracks using RecoBeat API.
 
@@ -47,9 +46,18 @@ class AudioFeaturesHandler:
             Dictionary mapping track IDs to complete audio features
         """
         required_features = {
-            "acousticness", "danceability", "energy", "instrumentalness",
-            "key", "liveness", "loudness", "mode", "speechiness",
-            "tempo", "valence", "popularity"
+            "acousticness",
+            "danceability",
+            "energy",
+            "instrumentalness",
+            "key",
+            "liveness",
+            "loudness",
+            "mode",
+            "speechiness",
+            "tempo",
+            "valence",
+            "popularity",
         }
 
         results = {}
@@ -71,7 +79,11 @@ class AudioFeaturesHandler:
         # Batch fetch for tracks that need API calls
         if tracks_needing_api:
             try:
-                audio_features_result = await self.reccobeat_service.get_tracks_audio_features(tracks_needing_api)
+                audio_features_result = (
+                    await self.reccobeat_service.get_tracks_audio_features(
+                        tracks_needing_api
+                    )
+                )
 
                 successful_fetches = 0
                 for track_id in tracks_needing_api:
@@ -91,20 +103,25 @@ class AudioFeaturesHandler:
                             "speechiness": api_features.get("speechiness"),
                             "tempo": api_features.get("tempo"),
                             "valence": api_features.get("valence"),
-                            "popularity": api_features.get("popularity")
+                            "popularity": api_features.get("popularity"),
                         }
 
                         # Update with API features (only add non-None values)
                         for feature_name, feature_value in feature_mapping.items():
                             if feature_value is not None:
                                 results[track_id][feature_name] = feature_value
-                        
+
                         successful_fetches += 1
                     else:
                         # Track not found in RecoBeat - use defaults if needed
-                        logger.debug(f"Track {track_id} not found in RecoBeat, using defaults if needed")
+                        logger.debug(
+                            f"Track {track_id} not found in RecoBeat, using defaults if needed"
+                        )
                         # Only add missing features, don't override existing
-                        for feature_name, default_value in DEFAULT_AUDIO_FEATURES.items():
+                        for (
+                            feature_name,
+                            default_value,
+                        ) in DEFAULT_AUDIO_FEATURES.items():
                             if feature_name not in results[track_id]:
                                 results[track_id][feature_name] = default_value
 
@@ -114,11 +131,16 @@ class AudioFeaturesHandler:
                 )
 
             except Exception as e:
-                logger.warning(f"Failed to get batch audio features: {e}, using defaults for missing tracks")
+                logger.warning(
+                    f"Failed to get batch audio features: {e}, using defaults for missing tracks"
+                )
                 # Apply defaults to all tracks that need features
                 for track_id in tracks_needing_api:
                     if track_id in results:
-                        for feature_name, default_value in DEFAULT_AUDIO_FEATURES.items():
+                        for (
+                            feature_name,
+                            default_value,
+                        ) in DEFAULT_AUDIO_FEATURES.items():
                             if feature_name not in results[track_id]:
                                 results[track_id][feature_name] = default_value
 
@@ -131,9 +153,7 @@ class AudioFeaturesHandler:
         return results
 
     async def get_complete_audio_features(
-        self,
-        track_id: str,
-        existing_features: Optional[Dict[str, Any]] = None
+        self, track_id: str, existing_features: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Get complete audio features for a track using RecoBeat API.
 
@@ -152,9 +172,18 @@ class AudioFeaturesHandler:
 
         # If we already have all features, return them
         required_features = {
-            "acousticness", "danceability", "energy", "instrumentalness",
-            "key", "liveness", "loudness", "mode", "speechiness",
-            "tempo", "valence", "popularity"
+            "acousticness",
+            "danceability",
+            "energy",
+            "instrumentalness",
+            "key",
+            "liveness",
+            "loudness",
+            "mode",
+            "speechiness",
+            "tempo",
+            "valence",
+            "popularity",
         }
 
         if required_features.issubset(complete_features.keys()):
@@ -162,7 +191,9 @@ class AudioFeaturesHandler:
 
         try:
             # Fetch complete audio features from RecoBeat API
-            audio_features_result = await self.reccobeat_service.get_tracks_audio_features([track_id])
+            audio_features_result = (
+                await self.reccobeat_service.get_tracks_audio_features([track_id])
+            )
 
             if track_id in audio_features_result:
                 api_features = audio_features_result[track_id]
@@ -180,7 +211,7 @@ class AudioFeaturesHandler:
                     "speechiness": api_features.get("speechiness"),
                     "tempo": api_features.get("tempo"),
                     "valence": api_features.get("valence"),
-                    "popularity": api_features.get("popularity")
+                    "popularity": api_features.get("popularity"),
                 }
 
                 # Update with API features (only add non-None values)
@@ -188,7 +219,9 @@ class AudioFeaturesHandler:
                     if feature_value is not None:
                         complete_features[feature_name] = feature_value
 
-                logger.info(f"Enhanced audio features for track {track_id}: got {len(complete_features)} features")
+                logger.info(
+                    f"Enhanced audio features for track {track_id}: got {len(complete_features)} features"
+                )
             else:
                 # Track not found in RecoBeat - use defaults
                 logger.debug(f"Track {track_id} not found in RecoBeat, using defaults")
@@ -197,7 +230,9 @@ class AudioFeaturesHandler:
                         complete_features[feature_name] = default_value
 
         except Exception as e:
-            logger.warning(f"Failed to get complete audio features for track {track_id}: {e}, using defaults")
+            logger.warning(
+                f"Failed to get complete audio features for track {track_id}: {e}, using defaults"
+            )
             # Apply defaults for missing features
             for feature_name, default_value in DEFAULT_AUDIO_FEATURES.items():
                 if feature_name not in complete_features:
@@ -205,7 +240,10 @@ class AudioFeaturesHandler:
 
         # Ensure full feature set with defaults
         for feature_name, default_value in DEFAULT_AUDIO_FEATURES.items():
-            if feature_name not in complete_features or complete_features[feature_name] is None:
+            if (
+                feature_name not in complete_features
+                or complete_features[feature_name] is None
+            ):
                 complete_features[feature_name] = default_value
 
         return complete_features

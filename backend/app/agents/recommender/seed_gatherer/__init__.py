@@ -11,5 +11,5 @@ __all__ = [
     "SeedSelector",
     "FeatureMatcher",
     "LLMSeedSelector",
-    "AudioEnricher"
+    "AudioEnricher",
 ]

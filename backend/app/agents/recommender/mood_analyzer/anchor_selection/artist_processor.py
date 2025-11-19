@@ -32,7 +32,7 @@ class ArtistProcessor:
         access_token: str,
         mood_analysis: Optional[Dict[str, Any]] = None,
         user_mentioned_artists: Optional[List[str]] = None,
-        skip_audio_features: bool = False
+        skip_audio_features: bool = False,
     ) -> List[Dict[str, Any]]:
         """Get anchor candidates from top recommended artists, prioritizing those mentioned in prompt.
 
@@ -51,7 +51,9 @@ class ArtistProcessor:
             return []
 
         # Extract temporal context for filtering
-        temporal_context = mood_analysis.get('temporal_context') if mood_analysis else None
+        temporal_context = (
+            mood_analysis.get("temporal_context") if mood_analysis else None
+        )
 
         # Step 1: Categorize artists (mentioned vs others)
         mentioned_artists, artists_to_process = self._categorize_and_prioritize_artists(
@@ -62,11 +64,15 @@ class ArtistProcessor:
         artist_infos = await self._search_artists(
             artists_to_process, mentioned_artists, access_token
         )
-        
+
         # Step 3: Fetch tracks for each validated artist
         candidates = await self._fetch_artist_tracks(
-            artist_infos, mentioned_artists, target_features, access_token, temporal_context,
-            skip_audio_features=skip_audio_features
+            artist_infos,
+            mentioned_artists,
+            target_features,
+            access_token,
+            temporal_context,
+            skip_audio_features=skip_audio_features,
         )
 
         return candidates
@@ -75,7 +81,7 @@ class ArtistProcessor:
         self,
         artist_recommendations: List[str],
         mood_prompt: str,
-        user_mentioned_artists: Optional[List[str]]
+        user_mentioned_artists: Optional[List[str]],
     ) -> tuple[List[str], List[str]]:
         """Categorize artists into mentioned vs others and create prioritized list.
 
@@ -87,7 +93,10 @@ class ArtistProcessor:
         Returns:
             Tuple of (mentioned_artists, artists_to_process)
         """
-        user_mentioned_set = {artist.lower() if artist else '' for artist in (user_mentioned_artists or [])}
+        user_mentioned_set = {
+            artist.lower() if artist else ""
+            for artist in (user_mentioned_artists or [])
+        }
 
         mentioned_artists = []
         other_artists = []
@@ -104,13 +113,18 @@ class ArtistProcessor:
 
             if is_user_mentioned:
                 mentioned_artists.append(artist)
-                logger.info(f"✓ Detected user-mentioned artist for anchor search: {artist}")
+                logger.info(
+                    f"✓ Detected user-mentioned artist for anchor search: {artist}"
+                )
             else:
                 other_artists.append(artist)
         # PERFORMANCE: Process ALL user-mentioned artists first (no limit), then other artists
         max_artists = config.artist_anchor_processing_limit
-        artists_to_process = mentioned_artists + other_artists[:max(0, max_artists - len(mentioned_artists))]
-        
+        artists_to_process = (
+            mentioned_artists
+            + other_artists[: max(0, max_artists - len(mentioned_artists))]
+        )
+
         logger.info(
             f"Processing {len(artists_to_process)} artists for anchors (limit: {max_artists}): "
             f"{len(mentioned_artists)} user-mentioned + {len(artists_to_process) - len(mentioned_artists)} others"
@@ -122,7 +136,7 @@ class ArtistProcessor:
         self,
         artists_to_process: List[str],
         mentioned_artists: List[str],
-        access_token: str
+        access_token: str,
     ) -> List[Dict[str, Any]]:
         """Search for artists on Spotify in parallel and return validated artist info.
 
@@ -136,6 +150,7 @@ class ArtistProcessor:
         Returns:
             List of dicts with 'info', 'name', and 'is_mentioned' keys
         """
+
         async def search_single_artist(artist_name: str) -> Optional[Dict[str, Any]]:
             """Search for a single artist and return info if found."""
             try:
@@ -144,7 +159,7 @@ class ArtistProcessor:
                 artists = await self.spotify_service.search_spotify_artists(
                     access_token=access_token,
                     query=artist_name,
-                    limit=config.artist_search_limit
+                    limit=config.artist_search_limit,
                 )
 
                 if not artists:
@@ -153,22 +168,24 @@ class ArtistProcessor:
                 # Find the artist with exact name match (case-insensitive)
                 artist_info = None
                 for artist_result in artists:
-                    if artist_result.get('name', '').lower() == artist_name.lower():
+                    if artist_result.get("name", "").lower() == artist_name.lower():
                         artist_info = artist_result
                         break
 
                 # If no exact match, fall back to first result
                 if not artist_info:
-                    logger.warning(f"No exact match for '{artist_name}', using closest match: {artists[0].get('name')}")
+                    logger.warning(
+                        f"No exact match for '{artist_name}', using closest match: {artists[0].get('name')}"
+                    )
                     artist_info = artists[0]
 
-                artist_id = artist_info.get('id')
+                artist_id = artist_info.get("id")
                 if artist_id:
                     is_mentioned_check = artist_name in mentioned_artists
                     return {
-                        'info': artist_info,
-                        'name': artist_name,
-                        'is_mentioned': is_mentioned_check
+                        "info": artist_info,
+                        "name": artist_name,
+                        "is_mentioned": is_mentioned_check,
                     }
 
                 return None
@@ -183,7 +200,7 @@ class ArtistProcessor:
 
         search_results = await asyncio.gather(
             *[search_single_artist(artist_name) for artist_name in artists_to_search],
-            return_exceptions=True
+            return_exceptions=True,
         )
 
         # Filter out None results and exceptions
@@ -192,7 +209,9 @@ class ArtistProcessor:
             if result and not isinstance(result, Exception):
                 artist_infos.append(result)
 
-        logger.info(f"Found {len(artist_infos)} artists out of {len(artists_to_search)} searches")
+        logger.info(
+            f"Found {len(artist_infos)} artists out of {len(artists_to_search)} searches"
+        )
         return artist_infos
 
     async def _fetch_artist_tracks(
@@ -202,7 +221,7 @@ class ArtistProcessor:
         target_features: Dict[str, Any],
         access_token: str,
         temporal_context: Optional[Dict[str, Any]] = None,
-        skip_audio_features: bool = False
+        skip_audio_features: bool = False,
     ) -> List[Dict[str, Any]]:
         """Fetch top tracks for each artist using batch method and create anchor candidates.
 
@@ -225,8 +244,8 @@ class ArtistProcessor:
         artist_id_to_data = {}
         artist_ids = []
         for artist_data in artist_infos:
-            artist_info = artist_data['info']
-            artist_id = artist_info.get('id')
+            artist_info = artist_data["info"]
+            artist_id = artist_info.get("id")
             if artist_id:
                 artist_id_to_data[artist_id] = artist_data
                 artist_ids.append(artist_id)
@@ -249,7 +268,7 @@ class ArtistProcessor:
             if not artist_data or not tracks:
                 continue
 
-            artist_name = artist_data['name']
+            artist_name = artist_data["name"]
             # Take configurable number of tracks based on whether artist was user mentioned
             limit_per_artist = (
                 config.mentioned_artist_track_limit
@@ -261,31 +280,49 @@ class ArtistProcessor:
             # Create candidates for each track
             for track in selected_tracks:
                 candidate = await self._create_artist_candidate(
-                    track, artist_name, artist_data['is_mentioned'], target_features, temporal_context
+                    track,
+                    artist_name,
+                    artist_data["is_mentioned"],
+                    target_features,
+                    temporal_context,
                 )
                 if candidate:
                     candidates.append(candidate)
 
         # Batch fetch all audio features at once (unless skipped for coordinated batching)
         if not skip_audio_features and candidates and self.reccobeat_service:
-            track_ids = [c['track']['id'] for c in candidates if c.get('track', {}).get('id')]
+            track_ids = [
+                c["track"]["id"] for c in candidates if c.get("track", {}).get("id")
+            ]
             if track_ids:
                 try:
-                    logger.info(f"Batch fetching audio features for {len(track_ids)} tracks")
-                    features_map = await self.reccobeat_service.get_tracks_audio_features(track_ids)
+                    logger.info(
+                        f"Batch fetching audio features for {len(track_ids)} tracks"
+                    )
+                    features_map = (
+                        await self.reccobeat_service.get_tracks_audio_features(
+                            track_ids
+                        )
+                    )
 
                     # Update candidates with batched features
                     for candidate in candidates:
-                        track_id = candidate.get('track', {}).get('id')
+                        track_id = candidate.get("track", {}).get("id")
                         if track_id and track_id in features_map:
-                            candidate['track']['audio_features'] = features_map[track_id]
-                            candidate['features'] = features_map[track_id]
+                            candidate["track"]["audio_features"] = features_map[
+                                track_id
+                            ]
+                            candidate["features"] = features_map[track_id]
 
-                    logger.info(f"Successfully enriched {len([c for c in candidates if c.get('features')])} candidates with audio features")
+                    logger.info(
+                        f"Successfully enriched {len([c for c in candidates if c.get('features')])} candidates with audio features"
+                    )
                 except Exception as e:
                     logger.warning(f"Failed to batch fetch audio features: {e}")
 
-        logger.info(f"Created {len(candidates)} anchor candidates from {len(artist_infos)} artists")
+        logger.info(
+            f"Created {len(candidates)} anchor candidates from {len(artist_infos)} artists"
+        )
         return candidates
 
     async def _create_artist_candidate(
@@ -294,7 +331,7 @@ class ArtistProcessor:
         artist_name: str,
         is_mentioned: bool,
         target_features: Dict[str, Any],
-        temporal_context: Optional[Dict[str, Any]] = None
+        temporal_context: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Create an anchor candidate from an artist track.
 
@@ -311,7 +348,7 @@ class ArtistProcessor:
         Returns:
             Anchor candidate dictionary or None if invalid
         """
-        if not track.get('id'):
+        if not track.get("id"):
             return None
 
         # CRITICAL: Apply temporal filtering BEFORE marking as protected
@@ -332,18 +369,20 @@ class ArtistProcessor:
         features = {}
 
         # Mark as artist-based anchor
-        track['user_mentioned'] = is_mentioned  # Mentioned artists get high priority
-        track['anchor_type'] = 'artist_mentioned' if is_mentioned else 'artist_recommended'
-        track['protected'] = is_mentioned  # Protect mentioned artist tracks
+        track["user_mentioned"] = is_mentioned  # Mentioned artists get high priority
+        track["anchor_type"] = (
+            "artist_mentioned" if is_mentioned else "artist_recommended"
+        )
+        track["protected"] = is_mentioned  # Protect mentioned artist tracks
 
         return {
-            'track': track,
-            'score': 0.9 if is_mentioned else 0.8,  # High base score for artist tracks
-            'confidence': 0.95 if is_mentioned else 0.9,
-            'features': features,
-            'artist': artist_name,
-            'source': 'artist_top_tracks',
-            'anchor_type': track['anchor_type'],
-            'user_mentioned': is_mentioned,
-            'protected': is_mentioned
+            "track": track,
+            "score": 0.9 if is_mentioned else 0.8,  # High base score for artist tracks
+            "confidence": 0.95 if is_mentioned else 0.9,
+            "features": features,
+            "artist": artist_name,
+            "source": "artist_top_tracks",
+            "anchor_type": track["anchor_type"],
+            "user_mentioned": is_mentioned,
+            "protected": is_mentioned,
         }

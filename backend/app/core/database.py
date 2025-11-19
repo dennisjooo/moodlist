@@ -7,6 +7,7 @@ from app.core.config import settings
 
 class Base(DeclarativeBase):
     """Base class for all database models."""
+
     pass
 
 
@@ -15,23 +16,20 @@ engine = create_async_engine(
     settings.get_database_url().replace("postgresql://", "postgresql+asyncpg://"),
     # echo=settings.DEBUG,  # Only log SQL in debug mode
     future=True,
-    
     # Optimized connection pool settings for production
-    pool_size=20,              # Base pool size (increased from 10)
-    max_overflow=10,           # Extra connections under load (decreased from 20 for better control)
-    pool_pre_ping=True,        # Test connections before using them
-    pool_recycle=3600,         # Recycle connections after 1 hour
-    
+    pool_size=20,  # Base pool size (increased from 10)
+    max_overflow=10,  # Extra connections under load (decreased from 20 for better control)
+    pool_pre_ping=True,  # Test connections before using them
+    pool_recycle=3600,  # Recycle connections after 1 hour
     # Performance settings
-    echo_pool=False,           # Don't log pool checkouts
-    
+    echo_pool=False,  # Don't log pool checkouts
     # Connection arguments for PostgreSQL/asyncpg
     connect_args={
         "prepared_statement_cache_size": 100,
         "statement_cache_size": 100,
         "server_settings": {
             "application_name": "moodlist_api",
-            "jit": "off",      # Disable JIT for faster simple queries
+            "jit": "off",  # Disable JIT for faster simple queries
         },
     },
 )

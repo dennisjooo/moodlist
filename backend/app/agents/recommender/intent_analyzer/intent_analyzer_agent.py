@@ -21,11 +21,7 @@ logger = structlog.get_logger(__name__)
 class IntentAnalyzerAgent(BaseAgent):
     """Agent for analyzing user intent before generating recommendations."""
 
-    def __init__(
-        self,
-        llm: Optional[BaseLanguageModel] = None,
-        verbose: bool = False
-    ):
+    def __init__(self, llm: Optional[BaseLanguageModel] = None, verbose: bool = False):
         """Initialize the intent analyzer agent.
 
         Args:
@@ -36,7 +32,7 @@ class IntentAnalyzerAgent(BaseAgent):
             name="intent_analyzer",
             description="Analyzes user intent to understand what kind of playlist they want",
             llm=llm,
-            verbose=verbose
+            verbose=verbose,
         )
 
         self.response_parser = LLMResponseParser()
@@ -64,7 +60,9 @@ class IntentAnalyzerAgent(BaseAgent):
             if self.llm:
                 intent_data = await self._analyze_intent_with_llm(state.mood_prompt)
             else:
-                intent_data = self.fallback_analyzer.analyze_intent_fallback(state.mood_prompt)
+                intent_data = self.fallback_analyzer.analyze_intent_fallback(
+                    state.mood_prompt
+                )
 
             # Store intent analysis in state metadata
             state.metadata["intent_analysis"] = intent_data
@@ -75,8 +73,12 @@ class IntentAnalyzerAgent(BaseAgent):
                 intent_type=intent_data.get("intent_type"),
                 primary_genre=intent_data.get("primary_genre"),
                 genre_strictness=intent_data.get("genre_strictness"),
-                mentioned_tracks_count=len(intent_data.get("user_mentioned_tracks", [])),
-                mentioned_artists_count=len(intent_data.get("user_mentioned_artists", []))
+                mentioned_tracks_count=len(
+                    intent_data.get("user_mentioned_tracks", [])
+                ),
+                mentioned_artists_count=len(
+                    intent_data.get("user_mentioned_artists", [])
+                ),
             )
 
             # Log user mentions for debugging
@@ -88,7 +90,9 @@ class IntentAnalyzerAgent(BaseAgent):
                     )
 
             if intent_data.get("user_mentioned_artists"):
-                logger.info(f"User mentioned artists: {', '.join(intent_data['user_mentioned_artists'])}")
+                logger.info(
+                    f"User mentioned artists: {', '.join(intent_data['user_mentioned_artists'])}"
+                )
 
         except Exception as e:
             logger.error(f"Error in intent analysis: {str(e)}", exc_info=True)
@@ -124,14 +128,16 @@ class IntentAnalyzerAgent(BaseAgent):
                     "exclude_regions": [],
                     "allow_obscure_artists": False,
                     "quality_threshold": 0.6,
-                    "reasoning": "Failed to parse LLM response"
-                }
+                    "reasoning": "Failed to parse LLM response",
+                },
             )
 
             # Validate and sanitize the parsed data
             intent_data = self.validator.validate_intent_data(intent_data)
 
-            logger.info(f"LLM intent analysis: {intent_data.get('reasoning', 'No reasoning provided')}")
+            logger.info(
+                f"LLM intent analysis: {intent_data.get('reasoning', 'No reasoning provided')}"
+            )
 
             return intent_data
 
@@ -139,4 +145,3 @@ class IntentAnalyzerAgent(BaseAgent):
             logger.error(f"Error in LLM intent analysis: {e}", exc_info=True)
             # Fallback to rule-based
             return self.fallback_analyzer.analyze_intent_fallback(mood_prompt)
-

@@ -29,7 +29,7 @@ class OrchestratorAgent(BaseAgent):
         llm: Optional[BaseLanguageModel] = None,
         max_iterations: int = 2,
         cohesion_threshold: float = 0.65,
-        verbose: bool = False
+        verbose: bool = False,
     ):
         """Initialize the orchestrator agent.
 
@@ -46,7 +46,7 @@ class OrchestratorAgent(BaseAgent):
             name="orchestrator",
             description="Orchestrates quality evaluation and iterative improvement of playlist recommendations",
             llm=llm,
-            verbose=verbose
+            verbose=verbose,
         )
 
         self.mood_analyzer = mood_analyzer
@@ -57,16 +57,15 @@ class OrchestratorAgent(BaseAgent):
 
         # Initialize component modules
         self.quality_evaluator = QualityEvaluator(
-            llm=llm,
-            cohesion_threshold=cohesion_threshold
+            llm=llm, cohesion_threshold=cohesion_threshold
         )
         self.improvement_strategy = ImprovementStrategy(
             recommendation_generator=recommendation_generator,
             llm=llm,
-            cohesion_threshold=cohesion_threshold
+            cohesion_threshold=cohesion_threshold,
         )
         self.recommendation_processor = RecommendationProcessor()
-        
+
         # Initialize track enrichment service
         spotify_service = SpotifyService()
         self.track_enrichment_service = TrackEnrichmentService(spotify_service)
@@ -82,7 +81,7 @@ class OrchestratorAgent(BaseAgent):
         """
         # Initialize timing tracking
         orchestration_timings = {}
-        
+
         try:
             logger.info(f"Starting orchestration for session {state.session_id}")
 
@@ -92,27 +91,33 @@ class OrchestratorAgent(BaseAgent):
             # Initial seed gathering and recommendation generation
             step_start = datetime.now(timezone.utc)
             state = await self.perform_initial_generation(state)
-            orchestration_timings["initial_generation"] = (datetime.now(timezone.utc) - step_start).total_seconds()
+            orchestration_timings["initial_generation"] = (
+                datetime.now(timezone.utc) - step_start
+            ).total_seconds()
 
             # Iterative improvement loop
             step_start = datetime.now(timezone.utc)
             quality_evaluation = await self.perform_iterative_improvement(state)
-            orchestration_timings["iterative_improvement"] = (datetime.now(timezone.utc) - step_start).total_seconds()
+            orchestration_timings["iterative_improvement"] = (
+                datetime.now(timezone.utc) - step_start
+            ).total_seconds()
 
             # Final processing and cleanup
             step_start = datetime.now(timezone.utc)
             state = await self.perform_final_processing(state, quality_evaluation)
-            orchestration_timings["final_processing"] = (datetime.now(timezone.utc) - step_start).total_seconds()
+            orchestration_timings["final_processing"] = (
+                datetime.now(timezone.utc) - step_start
+            ).total_seconds()
 
             # Store orchestration timings in state metadata
             state.metadata["orchestration_timings"] = orchestration_timings
-            
+
             # Enhance iterative_improvement timing with breakdown if available
             if "iterative_improvement_timings" in state.metadata:
                 iterative_breakdown = state.metadata["iterative_improvement_timings"]
                 orchestration_timings["iterative_improvement"] = {
                     "total": orchestration_timings["iterative_improvement"],
-                    "breakdown": iterative_breakdown
+                    "breakdown": iterative_breakdown,
                 }
                 # Update the stored timings with the enhanced structure
                 state.metadata["orchestration_timings"] = orchestration_timings
@@ -150,9 +155,9 @@ class OrchestratorAgent(BaseAgent):
         state.current_step = "gathering_seeds"
         state.status = RecommendationStatus.GATHERING_SEEDS
         await self._notify_progress(state)
-        
+
         # Pass progress callback to seed gatherer
-        if hasattr(self, '_progress_callback'):
+        if hasattr(self, "_progress_callback"):
             self.seed_gatherer._progress_callback = self._progress_callback
         state = await self.seed_gatherer.run_with_error_handling(state)
 
@@ -160,9 +165,9 @@ class OrchestratorAgent(BaseAgent):
         state.current_step = "generating_recommendations"
         state.status = RecommendationStatus.GENERATING_RECOMMENDATIONS
         await self._notify_progress(state)
-        
+
         # Pass progress callback to recommendation generator
-        if hasattr(self, '_progress_callback'):
+        if hasattr(self, "_progress_callback"):
             self.recommendation_generator._progress_callback = self._progress_callback
         state = await self.recommendation_generator.run_with_error_handling(state)
 
@@ -177,20 +182,19 @@ class OrchestratorAgent(BaseAgent):
         max_stalled = 1  # Stop after 1 iteration with no meaningful improvement (reduced from 2 for faster convergence)
 
         # Initialize timing tracking for iterative improvement breakdown
-        iterative_timings = {
-            "quality_evaluation": 0.0,
-            "improvement_strategies": 0.0
-        }
+        iterative_timings = {"quality_evaluation": 0.0, "improvement_strategies": 0.0}
 
         # PERFORMANCE OPTIMIZATION: Skip iteration if quality is already excellent
         step_start = datetime.now(timezone.utc)
         quick_eval = await self.quality_evaluator.evaluate_playlist_quality(state)
-        iterative_timings["quality_evaluation"] += (datetime.now(timezone.utc) - step_start).total_seconds()
+        iterative_timings["quality_evaluation"] += (
+            datetime.now(timezone.utc) - step_start
+        ).total_seconds()
 
         # Track best quality evaluation
         self._update_best_quality_evaluation(state, quick_eval)
 
-        if quick_eval['overall_score'] >= 0.75 and quick_eval['cohesion_score'] >= 0.60:
+        if quick_eval["overall_score"] >= 0.75 and quick_eval["cohesion_score"] >= 0.60:
             logger.info(
                 f"✓ Skipping iterative improvement - quality already excellent "
                 f"(overall: {quick_eval['overall_score']:.2f}, cohesion: {quick_eval['cohesion_score']:.2f})"
@@ -206,41 +210,57 @@ class OrchestratorAgent(BaseAgent):
             if state.status == RecommendationStatus.CANCELLED:
                 logger.info(f"Orchestration cancelled during iteration {iteration + 1}")
                 break
-            
+
             state.metadata["orchestration_iterations"] = iteration + 1
-            
+
             # Evaluate quality and check for convergence
             step_start = datetime.now(timezone.utc)
             quality_evaluation = await self.evaluate_quality_with_convergence(
-                state, iteration, previous_score, convergence_threshold,
-                stalled_iterations, max_stalled
+                state,
+                iteration,
+                previous_score,
+                convergence_threshold,
+                stalled_iterations,
+                max_stalled,
             )
-            iterative_timings["quality_evaluation"] += (datetime.now(timezone.utc) - step_start).total_seconds()
-            
+            iterative_timings["quality_evaluation"] += (
+                datetime.now(timezone.utc) - step_start
+            ).total_seconds()
+
             # Check for cancellation after evaluation
             if state.status == RecommendationStatus.CANCELLED:
-                logger.info(f"Orchestration cancelled after quality evaluation in iteration {iteration + 1}")
+                logger.info(
+                    f"Orchestration cancelled after quality evaluation in iteration {iteration + 1}"
+                )
                 break
-            
+
             if quality_evaluation is None:
                 # Converged or threshold met
                 break
-                
+
             # Check if quality meets threshold
             if quality_evaluation["meets_threshold"]:
-                logger.info(f"✓ Quality threshold met after {iteration + 1} iteration(s)")
+                logger.info(
+                    f"✓ Quality threshold met after {iteration + 1} iteration(s)"
+                )
                 state.current_step = "recommendations_ready"
                 break
 
             # Apply improvement strategies
-            previous_score = quality_evaluation['overall_score']
+            previous_score = quality_evaluation["overall_score"]
             step_start = datetime.now(timezone.utc)
-            state = await self.apply_improvement_strategies(state, iteration, quality_evaluation)
-            iterative_timings["improvement_strategies"] += (datetime.now(timezone.utc) - step_start).total_seconds()
-            
+            state = await self.apply_improvement_strategies(
+                state, iteration, quality_evaluation
+            )
+            iterative_timings["improvement_strategies"] += (
+                datetime.now(timezone.utc) - step_start
+            ).total_seconds()
+
             # Check for cancellation after applying improvements
             if state.status == RecommendationStatus.CANCELLED:
-                logger.info(f"Orchestration cancelled after applying improvements in iteration {iteration + 1}")
+                logger.info(
+                    f"Orchestration cancelled after applying improvements in iteration {iteration + 1}"
+                )
                 break
 
             # Small delay between iterations
@@ -258,7 +278,7 @@ class OrchestratorAgent(BaseAgent):
         previous_score: float,
         convergence_threshold: float,
         stalled_iterations: int,
-        max_stalled: int
+        max_stalled: int,
     ) -> Optional[Dict[str, Any]]:
         """Evaluate playlist quality and check for convergence."""
         state.current_step = f"evaluating_quality_iteration_{iteration + 1}"
@@ -266,14 +286,16 @@ class OrchestratorAgent(BaseAgent):
         await self._notify_progress(state)
 
         # Evaluate current playlist quality
-        quality_evaluation = await self.quality_evaluator.evaluate_playlist_quality(state)
+        quality_evaluation = await self.quality_evaluator.evaluate_playlist_quality(
+            state
+        )
         state.metadata["quality_scores"].append(quality_evaluation)
 
         # Track best quality evaluation
         self._update_best_quality_evaluation(state, quality_evaluation)
 
-        current_score = quality_evaluation['overall_score']
-        
+        current_score = quality_evaluation["overall_score"]
+
         logger.info(
             f"Iteration {iteration + 1}: Overall score={current_score:.2f}, "
             f"Cohesion={quality_evaluation['cohesion_score']:.2f}, "
@@ -306,28 +328,34 @@ class OrchestratorAgent(BaseAgent):
 
         return quality_evaluation
 
-    def _update_best_quality_evaluation(self, state: AgentState, quality_evaluation: Dict[str, Any]) -> None:
+    def _update_best_quality_evaluation(
+        self, state: AgentState, quality_evaluation: Dict[str, Any]
+    ) -> None:
         """Update the best quality evaluation if this one is better.
-        
+
         Also snapshots the recommendations at this point so we can restore them
         if quality degrades in later iterations.
         """
         import copy
-        
+
         current_best = state.metadata.get("best_quality_evaluation")
 
         if current_best is None:
             # First evaluation - set as best
             state.metadata["best_quality_evaluation"] = quality_evaluation
-            state.metadata["best_recommendations_snapshot"] = copy.deepcopy(state.recommendations)
+            state.metadata["best_recommendations_snapshot"] = copy.deepcopy(
+                state.recommendations
+            )
             logger.info(
                 f"Set initial best quality evaluation: {quality_evaluation['overall_score']:.3f} "
                 f"with {len(state.recommendations)} recommendations"
             )
-        elif quality_evaluation['overall_score'] > current_best['overall_score']:
+        elif quality_evaluation["overall_score"] > current_best["overall_score"]:
             # Found better quality - update best and snapshot recommendations
             state.metadata["best_quality_evaluation"] = quality_evaluation
-            state.metadata["best_recommendations_snapshot"] = copy.deepcopy(state.recommendations)
+            state.metadata["best_recommendations_snapshot"] = copy.deepcopy(
+                state.recommendations
+            )
             logger.info(
                 f"Updated best quality evaluation: {quality_evaluation['overall_score']:.3f} "
                 f"(previous: {current_best['overall_score']:.3f}) "
@@ -335,47 +363,50 @@ class OrchestratorAgent(BaseAgent):
             )
 
     async def apply_improvement_strategies(
-        self,
-        state: AgentState,
-        iteration: int,
-        quality_evaluation: Dict[str, Any]
+        self, state: AgentState, iteration: int, quality_evaluation: Dict[str, Any]
     ) -> AgentState:
         """Apply improvement strategies to enhance playlist quality."""
         state.current_step = f"optimizing_recommendations_iteration_{iteration + 1}"
         state.status = RecommendationStatus.OPTIMIZING_RECOMMENDATIONS
         await self._notify_progress(state)
 
-        improvement_strategies = await self.improvement_strategy.decide_improvement_strategy(
-            quality_evaluation, state
+        improvement_strategies = (
+            await self.improvement_strategy.decide_improvement_strategy(
+                quality_evaluation, state
+            )
         )
         logger.info(f"Applying improvement strategies: {improvement_strategies}")
 
         state = await self.improvement_strategy.apply_improvements(
             improvement_strategies, quality_evaluation, state
         )
-        
+
         return state
 
-    async def perform_final_processing(self, state: AgentState, quality_evaluation: Dict[str, Any]) -> AgentState:
+    async def perform_final_processing(
+        self, state: AgentState, quality_evaluation: Dict[str, Any]
+    ) -> AgentState:
         """Perform final processing and cleanup with outlier filtering."""
         logger.info("Starting final processing and cleanup...")
-        
+
         # Check if we should restore the best recommendations snapshot
-        state = await self.restore_best_recommendations_if_needed(state, quality_evaluation)
-        
+        state = await self.restore_best_recommendations_if_needed(
+            state, quality_evaluation
+        )
+
         # Remove duplicates and enrich tracks
         state = await self.handle_duplicates_and_enrichment(state)
-        
+
         # Filter outliers with protection logic
         state = await self.filter_outliers_with_protection(state)
-        
+
         # Enforce playlist targets and source ratios
         state = await self.enforce_playlist_targets(state)
         state = await self.enforce_source_ratio(state)
-        
+
         # Final state update
         state.current_step = "recommendations_ready"
-        
+
         logger.info(
             f"Final processing complete: {len(state.recommendations)} tracks delivered"
         )
@@ -383,38 +414,38 @@ class OrchestratorAgent(BaseAgent):
         return state
 
     async def restore_best_recommendations_if_needed(
-        self, 
-        state: AgentState, 
-        quality_evaluation: Optional[Dict[str, Any]]
+        self, state: AgentState, quality_evaluation: Optional[Dict[str, Any]]
     ) -> AgentState:
         """Restore the best recommendations snapshot if quality has degraded.
-        
+
         This prevents situations where iterative improvements accidentally make
         the playlist worse. We always use the highest quality version achieved
         during the workflow.
-        
+
         Args:
             state: Current agent state
             quality_evaluation: Most recent quality evaluation (may be None)
-            
+
         Returns:
             Updated state with best recommendations restored if needed
         """
         import copy
-        
+
         best_evaluation = state.metadata.get("best_quality_evaluation")
         best_snapshot = state.metadata.get("best_recommendations_snapshot")
-        
+
         # Skip if we don't have a best snapshot yet
         if best_evaluation is None or best_snapshot is None:
-            logger.debug("No best recommendations snapshot available, continuing with current")
+            logger.debug(
+                "No best recommendations snapshot available, continuing with current"
+            )
             return state
-        
+
         # If we have a recent quality evaluation, compare it
         if quality_evaluation is not None:
-            current_score = quality_evaluation.get('overall_score', 0.0)
-            best_score = best_evaluation.get('overall_score', 0.0)
-            
+            current_score = quality_evaluation.get("overall_score", 0.0)
+            best_score = best_evaluation.get("overall_score", 0.0)
+
             if current_score < best_score:
                 # Quality has degraded - restore best snapshot
                 logger.warning(
@@ -432,10 +463,12 @@ class OrchestratorAgent(BaseAgent):
                 )
         else:
             # No current evaluation but we have iterations - evaluate current state
-            current_evaluation = await self.quality_evaluator.evaluate_playlist_quality(state)
-            current_score = current_evaluation.get('overall_score', 0.0)
-            best_score = best_evaluation.get('overall_score', 0.0)
-            
+            current_evaluation = await self.quality_evaluator.evaluate_playlist_quality(
+                state
+            )
+            current_score = current_evaluation.get("overall_score", 0.0)
+            best_score = best_evaluation.get("overall_score", 0.0)
+
             if current_score < best_score:
                 logger.warning(
                     f"Quality degraded from {best_score:.3f} to {current_score:.3f}. "
@@ -450,17 +483,19 @@ class OrchestratorAgent(BaseAgent):
                     f"Current quality ({current_score:.3f}) is equal or better than best ({best_score:.3f}). "
                     f"Keeping current recommendations."
                 )
-        
+
         return state
 
     async def handle_duplicates_and_enrichment(self, state: AgentState) -> AgentState:
         """Remove duplicates and enrich tracks with Spotify data."""
         # Remove duplicates
-        state.recommendations = self.recommendation_processor.remove_duplicates(state.recommendations)
-        
+        state.recommendations = self.recommendation_processor.remove_duplicates(
+            state.recommendations
+        )
+
         # Enrich tracks with missing Spotify URIs
         state = await self.enrich_tracks_with_spotify_data(state)
-        
+
         return state
 
     async def filter_outliers_with_protection(self, state: AgentState) -> AgentState:
@@ -475,28 +510,37 @@ class OrchestratorAgent(BaseAgent):
         current_ids = {rec.track_id for rec in state.recommendations}
         needs_fresh_eval = (
             best_evaluation is None
-            or not current_ids.issubset(set(best_evaluation.get("track_scores", {}).keys()))
-            or best_evaluation.get("recommendations_count") != len(state.recommendations)
+            or not current_ids.issubset(
+                set(best_evaluation.get("track_scores", {}).keys())
+            )
+            or best_evaluation.get("recommendations_count")
+            != len(state.recommendations)
         )
 
         if needs_fresh_eval:
-            logger.info("Running fresh quality evaluation for final playlist to sync outlier filtering")
-            final_evaluation = await self.quality_evaluator.evaluate_playlist_quality(state)
+            logger.info(
+                "Running fresh quality evaluation for final playlist to sync outlier filtering"
+            )
+            final_evaluation = await self.quality_evaluator.evaluate_playlist_quality(
+                state
+            )
             # Track the extra evaluation for transparency and future analysis
             state.metadata.setdefault("quality_scores", []).append(final_evaluation)
             self._update_best_quality_evaluation(state, final_evaluation)
         else:
-            logger.info(f"Using best quality evaluation for final processing: {best_evaluation['overall_score']:.3f}")
+            logger.info(
+                f"Using best quality evaluation for final processing: {best_evaluation['overall_score']:.3f}"
+            )
 
         state.metadata["final_quality_evaluation"] = final_evaluation
-        
+
         # Filter out outliers from final recommendations (but keep protected tracks)
         outlier_ids = set(final_evaluation.get("outlier_tracks", []))
         if outlier_ids:
             original_count = len(state.recommendations)
             filtered_recommendations = []
             protected_kept = 0
-            
+
             for rec in state.recommendations:
                 if rec.track_id in outlier_ids:
                     # CRITICAL: Never filter protected tracks (user-mentioned)
@@ -513,14 +557,14 @@ class OrchestratorAgent(BaseAgent):
                         )
                 else:
                     filtered_recommendations.append(rec)
-            
+
             state.recommendations = filtered_recommendations
-            
+
             logger.info(
                 f"Final outlier filtering: removed {original_count - len(filtered_recommendations)} tracks "
                 f"({protected_kept} protected tracks kept despite being outliers)"
             )
-        
+
         return state
 
     async def enforce_playlist_targets(self, state: AgentState) -> AgentState:
@@ -546,14 +590,18 @@ class OrchestratorAgent(BaseAgent):
             state = await self.recommendation_generator.run_with_error_handling(state)
             added_count = len(state.recommendations) - before_count
 
-            logger.info(f"Added {added_count} tracks, now have {len(state.recommendations)} total")
+            logger.info(
+                f"Added {added_count} tracks, now have {len(state.recommendations)} total"
+            )
         elif len(state.recommendations) < min_count:
             # Emergency regeneration if somehow below minimum
-            logger.error(f"Critical: Below minimum after filtering ({len(state.recommendations)} < {min_count})")
+            logger.error(
+                f"Critical: Below minimum after filtering ({len(state.recommendations)} < {min_count})"
+            )
             if state.recommendations:
                 state.seed_tracks = [rec.track_id for rec in state.recommendations[:5]]
             state = await self.recommendation_generator.run_with_error_handling(state)
-        
+
         return state
 
     async def enforce_source_ratio(self, state: AgentState) -> AgentState:
@@ -580,16 +628,16 @@ class OrchestratorAgent(BaseAgent):
         state.recommendations = self.recommendation_processor.enforce_source_ratio(
             recommendations=state.recommendations,
             max_count=final_limit,
-            artist_ratio=1.0
+            artist_ratio=1.0,
         )
-        
+
         final_evaluation = state.metadata.get("final_quality_evaluation", {})
         logger.info(
             f"Final processing complete: {len(state.recommendations)} tracks delivered "
             f"(cohesion: {final_evaluation.get('cohesion_score', 0):.2f}, "
             f"overall: {final_evaluation.get('overall_score', 0):.2f})"
         )
-        
+
         return state
 
     async def enrich_tracks_with_spotify_data(self, state: AgentState) -> AgentState:
@@ -604,12 +652,14 @@ class OrchestratorAgent(BaseAgent):
             validation_result = self.validate_enrichment_requirements(state)
             if not validation_result["can_proceed"]:
                 return state
-                
+
             access_token = validation_result["access_token"]
             tracks_needing_enrichment = validation_result["tracks_needing_enrichment"]
 
             # Process track enrichment
-            state = await self.process_track_enrichment(state, access_token, tracks_needing_enrichment)
+            state = await self.process_track_enrichment(
+                state, access_token, tracks_needing_enrichment
+            )
 
         except Exception as e:
             logger.error(f"Error enriching tracks: {e}", exc_info=True)
@@ -624,45 +674,52 @@ class OrchestratorAgent(BaseAgent):
         access_token = state.metadata.get("spotify_access_token")
         if not access_token:
             logger.warning("No Spotify access token available for enrichment")
-            return {"can_proceed": False, "access_token": None, "tracks_needing_enrichment": 0}
+            return {
+                "can_proceed": False,
+                "access_token": None,
+                "tracks_needing_enrichment": 0,
+            }
 
         # Count tracks that need enrichment
         tracks_needing_enrichment = sum(
-            1 for rec in state.recommendations
-            if not rec.spotify_uri or
-               rec.spotify_uri == "null" or
-               "Unknown Artist" in rec.artists
+            1
+            for rec in state.recommendations
+            if not rec.spotify_uri
+            or rec.spotify_uri == "null"
+            or "Unknown Artist" in rec.artists
         )
 
         if tracks_needing_enrichment == 0:
             logger.info("No tracks need enrichment - all have valid Spotify URIs")
-            return {"can_proceed": False, "access_token": access_token, "tracks_needing_enrichment": 0}
+            return {
+                "can_proceed": False,
+                "access_token": access_token,
+                "tracks_needing_enrichment": 0,
+            }
 
         logger.info(
             f"Found {tracks_needing_enrichment}/{len(state.recommendations)} tracks "
             f"that need enrichment"
         )
-        
+
         return {
             "can_proceed": True,
             "access_token": access_token,
-            "tracks_needing_enrichment": tracks_needing_enrichment
+            "tracks_needing_enrichment": tracks_needing_enrichment,
         }
 
     async def process_track_enrichment(
-        self,
-        state: AgentState,
-        access_token: str,
-        tracks_needing_enrichment: int
+        self, state: AgentState, access_token: str, tracks_needing_enrichment: int
     ) -> AgentState:
         """Process the actual track enrichment."""
         # Enrich recommendations
         state.current_step = "enriching_tracks"
         await self._notify_progress(state)
 
-        enriched_recommendations = await self.track_enrichment_service.enrich_recommendations(
-            recommendations=state.recommendations,
-            access_token=access_token
+        enriched_recommendations = (
+            await self.track_enrichment_service.enrich_recommendations(
+                recommendations=state.recommendations, access_token=access_token
+            )
         )
 
         # Update state with enriched recommendations
@@ -680,7 +737,7 @@ class OrchestratorAgent(BaseAgent):
             "original_count": original_count,
             "enriched_count": len(enriched_recommendations),
             "removed_count": original_count - len(enriched_recommendations),
-            "tracks_needing_enrichment": tracks_needing_enrichment
+            "tracks_needing_enrichment": tracks_needing_enrichment,
         }
-        
+
         return state

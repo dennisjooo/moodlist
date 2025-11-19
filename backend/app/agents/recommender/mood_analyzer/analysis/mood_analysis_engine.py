@@ -54,7 +54,7 @@ class MoodAnalysisEngine:
             # Create prompt
             messages = [
                 {"role": "system", "content": get_mood_analysis_system_prompt()},
-                {"role": "user", "content": f"Analyze this mood: '{mood_prompt}'"}
+                {"role": "user", "content": f"Analyze this mood: '{mood_prompt}'"},
             ]
 
             # Get LLM response
@@ -62,7 +62,7 @@ class MoodAnalysisEngine:
 
             # Parse JSON response using centralized parser
             analysis = LLMResponseParser.extract_json_from_response(response)
-            
+
             if not analysis:
                 # Fallback if parsing fails
                 logger.warning("Failed to parse JSON from LLM response, using fallback")
@@ -95,21 +95,27 @@ class MoodAnalysisEngine:
             "search_keywords": [],
             "artist_recommendations": [],
             "genre_keywords": [],
-            "reasoning": f"Rule-based analysis using keyword matching for: {mood_prompt}"
+            "reasoning": f"Rule-based analysis using keyword matching for: {mood_prompt}",
         }
 
         # Match and apply mood profiles
         matched_profiles = self._profile_matcher.match_mood_profiles(mood_prompt)
-        self._profile_matcher.apply_mood_profiles(matched_profiles, mood_prompt, analysis)
+        self._profile_matcher.apply_mood_profiles(
+            matched_profiles, mood_prompt, analysis
+        )
 
         # Additional keyword-based feature analysis
         self._enhance_features_with_keywords(analysis, prompt_lower)
 
         # Generate search keywords
-        analysis["search_keywords"] = self._text_processor.extract_search_keywords(mood_prompt)
+        analysis["search_keywords"] = self._text_processor.extract_search_keywords(
+            mood_prompt
+        )
 
         # Extract genre keywords and artist recommendations
-        genre_keywords, artist_recommendations = self._text_processor.extract_genres_and_artists(mood_prompt)
+        genre_keywords, artist_recommendations = (
+            self._text_processor.extract_genres_and_artists(mood_prompt)
+        )
         analysis["genre_keywords"] = genre_keywords
         analysis["artist_recommendations"] = artist_recommendations
 
@@ -137,29 +143,46 @@ class MoodAnalysisEngine:
         excluded = []
 
         # French/European indicators
-        if any(term in prompt_lower for term in ['french', 'france', 'parisian']):
-            preferred.extend(['French', 'European', 'Western'])
-            excluded.extend(['Southeast Asian', 'Indonesian', 'Eastern European'])
-        
+        if any(term in prompt_lower for term in ["french", "france", "parisian"]):
+            preferred.extend(["French", "European", "Western"])
+            excluded.extend(["Southeast Asian", "Indonesian", "Eastern European"])
+
         # General European
-        elif any(term in prompt_lower for term in ['european', 'euro', 'nu-disco', 'house', 'disco']):
-            preferred.extend(['European', 'Western'])
-            excluded.extend(['Southeast Asian', 'Indonesian'])
-        
+        elif any(
+            term in prompt_lower
+            for term in ["european", "euro", "nu-disco", "house", "disco"]
+        ):
+            preferred.extend(["European", "Western"])
+            excluded.extend(["Southeast Asian", "Indonesian"])
+
         # K-pop / Asian
-        elif any(term in prompt_lower for term in ['k-pop', 'kpop', 'korean', 'j-pop', 'jpop', 'japanese', 'anime']):
-            preferred.append('Asian')
-            excluded.extend(['Southeast Asian', 'Western'])
-        
+        elif any(
+            term in prompt_lower
+            for term in [
+                "k-pop",
+                "kpop",
+                "korean",
+                "j-pop",
+                "jpop",
+                "japanese",
+                "anime",
+            ]
+        ):
+            preferred.append("Asian")
+            excluded.extend(["Southeast Asian", "Western"])
+
         # Latin
-        elif any(term in prompt_lower for term in ['latin', 'reggaeton', 'spanish', 'salsa', 'bachata']):
-            preferred.append('Latin American')
-            excluded.extend(['Southeast Asian', 'Asian'])
-        
+        elif any(
+            term in prompt_lower
+            for term in ["latin", "reggaeton", "spanish", "salsa", "bachata"]
+        ):
+            preferred.append("Latin American")
+            excluded.extend(["Southeast Asian", "Asian"])
+
         # Default to Western if no specific region detected
         elif not preferred:
-            preferred.append('Western')
-            excluded.extend(['Southeast Asian', 'Indonesian'])
+            preferred.append("Western")
+            excluded.extend(["Southeast Asian", "Indonesian"])
 
         return preferred, excluded
 
@@ -175,47 +198,76 @@ class MoodAnalysisEngine:
         excluded = []
 
         # Check if specific themes are explicitly requested (then don't exclude them)
-        if any(term in prompt_lower for term in ['christmas', 'holiday', 'xmas', 'festive']):
+        if any(
+            term in prompt_lower for term in ["christmas", "holiday", "xmas", "festive"]
+        ):
             # User wants holiday music, don't exclude it
             return []
 
-        if any(term in prompt_lower for term in ['gospel', 'worship', 'praise', 'church']):
+        if any(
+            term in prompt_lower for term in ["gospel", "worship", "praise", "church"]
+        ):
             # User wants religious music, don't exclude it
             return []
 
-        if any(term in prompt_lower for term in ['kids', 'children', 'nursery']):
+        if any(term in prompt_lower for term in ["kids", "children", "nursery"]):
             # User wants kids music, don't exclude it
             return []
 
         # Default exclusions for most playlists (unless explicitly requested above)
         # Most people don't want holiday songs in their regular playlists
-        excluded.extend(['holiday', 'christmas'])
+        excluded.extend(["holiday", "christmas"])
 
         # For specific genres/moods, add more exclusions
-        if any(term in prompt_lower for term in ['romantic', 'date', 'dinner', 'intimate', 'sensual']):
+        if any(
+            term in prompt_lower
+            for term in ["romantic", "date", "dinner", "intimate", "sensual"]
+        ):
             # Romantic moods should exclude religious themes
-            excluded.extend(['religious', 'kids'])
+            excluded.extend(["religious", "kids"])
 
-        if any(term in prompt_lower for term in ['workout', 'gym', 'exercise', 'running']):
+        if any(
+            term in prompt_lower for term in ["workout", "gym", "exercise", "running"]
+        ):
             # Workout playlists should exclude slow/ballad themes
-            excluded.extend(['religious', 'kids'])
+            excluded.extend(["religious", "kids"])
 
-        if any(term in prompt_lower for term in ['party', 'dance', 'club', 'hype']):
+        if any(term in prompt_lower for term in ["party", "dance", "club", "hype"]):
             # Party moods should exclude solemn themes
-            excluded.extend(['religious', 'kids'])
+            excluded.extend(["religious", "kids"])
 
-        if any(term in prompt_lower for term in ['chill', 'relax', 'study', 'focus', 'ambient']):
+        if any(
+            term in prompt_lower
+            for term in ["chill", "relax", "study", "focus", "ambient"]
+        ):
             # Chill/focus moods should exclude comedy and kids
-            excluded.extend(['comedy', 'kids'])
+            excluded.extend(["comedy", "kids"])
 
         # Remove duplicates
         return list(set(excluded))
 
-    def _enhance_features_with_keywords(self, analysis: Dict[str, Any], prompt_lower: str):
+    def _enhance_features_with_keywords(
+        self, analysis: Dict[str, Any], prompt_lower: str
+    ):
         """Enhance feature analysis with specific keywords."""
         # Energy analysis
-        high_energy_keywords = ["energetic", "upbeat", "exciting", "workout", "intense", "powerful", "hype"]
-        low_energy_keywords = ["calm", "peaceful", "sleepy", "soft", "gentle", "laid-back"]
+        high_energy_keywords = [
+            "energetic",
+            "upbeat",
+            "exciting",
+            "workout",
+            "intense",
+            "powerful",
+            "hype",
+        ]
+        low_energy_keywords = [
+            "calm",
+            "peaceful",
+            "sleepy",
+            "soft",
+            "gentle",
+            "laid-back",
+        ]
 
         if any(keyword in prompt_lower for keyword in high_energy_keywords):
             analysis["energy_level"] = "high"
@@ -228,7 +280,14 @@ class MoodAnalysisEngine:
                 analysis["target_features"]["energy"] = [0.0, 0.4]
 
         # Valence analysis
-        positive_keywords = ["happy", "joyful", "cheerful", "uplifting", "fun", "bright"]
+        positive_keywords = [
+            "happy",
+            "joyful",
+            "cheerful",
+            "uplifting",
+            "fun",
+            "bright",
+        ]
         negative_keywords = ["sad", "depressed", "dark", "moody", "bittersweet"]
 
         if any(keyword in prompt_lower for keyword in positive_keywords):
@@ -247,7 +306,13 @@ class MoodAnalysisEngine:
                 analysis["target_features"]["danceability"] = [0.6, 1.0]
 
         # Acousticness analysis
-        acoustic_keywords = ["acoustic", "unplugged", "organic", "folk", "singer-songwriter"]
+        acoustic_keywords = [
+            "acoustic",
+            "unplugged",
+            "organic",
+            "folk",
+            "singer-songwriter",
+        ]
         if any(keyword in prompt_lower for keyword in acoustic_keywords):
             if "acousticness" not in analysis["target_features"]:
                 analysis["target_features"]["acousticness"] = [0.7, 1.0]
@@ -270,7 +335,9 @@ class MoodAnalysisEngine:
             if "speechiness" not in analysis["target_features"]:
                 analysis["target_features"]["speechiness"] = [0.5, 1.0]
 
-    def _parse_llm_response_fallback(self, response_content: Union[str, AIMessage]) -> Dict[str, Any]:
+    def _parse_llm_response_fallback(
+        self, response_content: Union[str, AIMessage]
+    ) -> Dict[str, Any]:
         """Parse LLM response when JSON parsing fails.
 
         Args:
@@ -279,8 +346,12 @@ class MoodAnalysisEngine:
         Returns:
             Parsed mood analysis
         """
-        content = response_content if isinstance(response_content, str) else response_content.content
-        content_lower = content.lower() 
+        content = (
+            response_content
+            if isinstance(response_content, str)
+            else response_content.content
+        )
+        content_lower = content.lower()
 
         analysis = {
             "mood_interpretation": content[:200] + "...",
@@ -288,7 +359,7 @@ class MoodAnalysisEngine:
             "energy_level": "medium",
             "target_features": {},
             "search_keywords": [],
-            "reasoning": content
+            "reasoning": content,
         }
 
         # Extract basic features from text

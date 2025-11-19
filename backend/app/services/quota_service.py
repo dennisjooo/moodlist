@@ -59,14 +59,18 @@ class QuotaService:
             cached_usage: Optional[int] = await self._cache.get(cache_key)
             if cached_usage is None:
                 logger.debug("Quota usage cache warm-up on increment", user_id=user_id)
-                usage = await self.playlist_repo.count_user_playlists_created_today(user_id)
+                usage = await self.playlist_repo.count_user_playlists_created_today(
+                    user_id
+                )
             else:
                 usage = cached_usage + delta
 
             await self._cache.set(cache_key, usage, ttl=self._ttl_until_midnight())
             return usage
 
-    async def invalidate_daily_usage(self, user_id: int, cache_date: Optional[date] = None) -> None:
+    async def invalidate_daily_usage(
+        self, user_id: int, cache_date: Optional[date] = None
+    ) -> None:
         """Invalidate the cached usage entry."""
         cache_date = cache_date or self._current_date()
         cache_key = self._cache_key(user_id, cache_date)
@@ -85,7 +89,9 @@ class QuotaService:
     def _ttl_until_midnight() -> int:
         """Seconds until the next UTC midnight, minimum one minute."""
         now = datetime.now(timezone.utc)
-        tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        tomorrow = (now + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         ttl = int((tomorrow - now).total_seconds())
         return max(ttl, 60)
 

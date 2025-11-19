@@ -40,7 +40,9 @@ class WorkflowExecutor:
 
         intent_agent = self.agents.get("intent_analyzer")
         if not intent_agent:
-            logger.warning("Intent analyzer agent not available, skipping intent analysis")
+            logger.warning(
+                "Intent analyzer agent not available, skipping intent analysis"
+            )
             # Set empty intent analysis so downstream agents don't break
             state.metadata["intent_analysis"] = {
                 "intent_type": "mood_variety",
@@ -52,7 +54,7 @@ class WorkflowExecutor:
                 "exclude_regions": [],
                 "allow_obscure_artists": False,
                 "quality_threshold": 0.6,
-                "reasoning": "Intent analyzer not available"
+                "reasoning": "Intent analyzer not available",
             }
             return state
 
@@ -76,7 +78,9 @@ class WorkflowExecutor:
 
         return await mood_agent.run_with_error_handling(state)
 
-    async def execute_orchestration(self, state: AgentState, progress_callback=None) -> AgentState:
+    async def execute_orchestration(
+        self, state: AgentState, progress_callback=None
+    ) -> AgentState:
         """Execute orchestration for quality evaluation and improvement.
 
         Args:
@@ -94,7 +98,9 @@ class WorkflowExecutor:
 
         orchestrator = self.agents.get("orchestrator")
         if not orchestrator:
-            logger.warning("Orchestrator agent not available, skipping quality optimization")
+            logger.warning(
+                "Orchestrator agent not available, skipping quality optimization"
+            )
             return state
 
         # Set progress callback for real-time SSE updates
@@ -177,8 +183,9 @@ class WorkflowExecutor:
 
                 # Update expiration time
                 expires_in = token_data.get("expires_in", 3600)
-                user.token_expires_at = datetime.now(timezone.utc).replace(microsecond=0) + \
-                                       timedelta(seconds=expires_in)
+                user.token_expires_at = datetime.now(timezone.utc).replace(
+                    microsecond=0
+                ) + timedelta(seconds=expires_in)
 
                 await db.commit()
 

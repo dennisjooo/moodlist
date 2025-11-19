@@ -26,7 +26,9 @@ class WorkflowStateManager:
         # State change notifications for SSE
         self.state_change_callbacks: Dict[str, List[StateChangeCallback]] = {}
 
-    def subscribe_to_state_changes(self, session_id: str, callback: StateChangeCallback):
+    def subscribe_to_state_changes(
+        self, session_id: str, callback: StateChangeCallback
+    ):
         """Subscribe to state changes for a specific workflow session.
 
         Args:
@@ -38,7 +40,9 @@ class WorkflowStateManager:
         self.state_change_callbacks[session_id].append(callback)
         logger.debug(f"Added state change callback for session {session_id}")
 
-    def unsubscribe_from_state_changes(self, session_id: str, callback: StateChangeCallback):
+    def unsubscribe_from_state_changes(
+        self, session_id: str, callback: StateChangeCallback
+    ):
         """Unsubscribe from state changes for a specific workflow session.
 
         Args:
@@ -67,7 +71,9 @@ class WorkflowStateManager:
                 try:
                     await callback(session_id, state)
                 except Exception as e:
-                    logger.error(f"Error in state change callback: {str(e)}", exc_info=True)
+                    logger.error(
+                        f"Error in state change callback: {str(e)}", exc_info=True
+                    )
 
     async def update_state(self, session_id: str, state: AgentState):
         """Update workflow state and notify subscribers.
@@ -79,14 +85,18 @@ class WorkflowStateManager:
         # Don't update if workflow is in completed_workflows (e.g., was cancelled)
         # This prevents race conditions where cancelled workflows get moved back to active
         if session_id in self.completed_workflows:
-            logger.debug(f"Skipping state update - workflow {session_id} already in completed workflows")
+            logger.debug(
+                f"Skipping state update - workflow {session_id} already in completed workflows"
+            )
             return
-        
+
         # Don't update if state is marked as cancelled
         if state.status.value == "cancelled":
-            logger.debug(f"Skipping state update - state marked as cancelled for {session_id}")
+            logger.debug(
+                f"Skipping state update - state marked as cancelled for {session_id}"
+            )
             return
-        
+
         self.active_workflows[session_id] = state
         await self.update_playlist_db(session_id, state)
         await self.notify_state_change(session_id, state)
@@ -134,7 +144,7 @@ class WorkflowStateManager:
                                 "spotify_uri": rec.spotify_uri,
                                 "confidence_score": rec.confidence_score,
                                 "reasoning": rec.reasoning,
-                                "source": rec.source
+                                "source": rec.source,
                             }
                             for rec in state.recommendations
                         ]
@@ -146,7 +156,7 @@ class WorkflowStateManager:
                         playlist.playlist_data = {
                             "name": state.playlist_name,
                             "spotify_url": state.metadata.get("playlist_url"),
-                            "spotify_uri": state.metadata.get("playlist_uri")
+                            "spotify_uri": state.metadata.get("playlist_uri"),
                         }
 
                     # Update error if present
@@ -159,7 +169,10 @@ class WorkflowStateManager:
                     logger.warning(f"Playlist not found for session {session_id}")
 
         except Exception as e:
-            logger.error(f"Failed to update playlist DB for session {session_id}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Failed to update playlist DB for session {session_id}: {str(e)}",
+                exc_info=True,
+            )
 
     def move_to_completed(self, session_id: str, state: AgentState):
         """Move workflow from active to completed.
@@ -191,4 +204,3 @@ class WorkflowStateManager:
 
         if to_remove:
             logger.info(f"Cleaned up {len(to_remove)} old workflows")
-

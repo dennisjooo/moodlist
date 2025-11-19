@@ -19,9 +19,7 @@ class RecommendationStrategy(ABC):
 
     @abstractmethod
     async def generate_recommendations(
-        self,
-        state: AgentState,
-        target_count: int
+        self, state: AgentState, target_count: int
     ) -> List[Dict[str, Any]]:
         """Generate recommendations using this strategy.
 
@@ -42,5 +40,5 @@ class RecommendationStrategy(ABC):
         """
         return {
             "name": self.name,
-            "description": self.__class__.__doc__ or f"{self.name} strategy"
+            "description": self.__class__.__doc__ or f"{self.name} strategy",
         }

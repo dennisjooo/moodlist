@@ -65,11 +65,17 @@ class PlaylistNamer:
 
             response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
 
-            name = response.content.strip() if hasattr(response, 'content') else str(response).strip()
+            name = (
+                response.content.strip()
+                if hasattr(response, "content")
+                else str(response).strip()
+            )
 
             # Clean up the name
-            name = re.sub(r'^["\']|["\']$', '', name)  # Remove quotes
-            name = re.sub(r'^Playlist:\s*', '', name, flags=re.IGNORECASE)  # Remove "Playlist:" prefix
+            name = re.sub(r'^["\']|["\']$', "", name)  # Remove quotes
+            name = re.sub(
+                r"^Playlist:\s*", "", name, flags=re.IGNORECASE
+            )  # Remove "Playlist:" prefix
 
             return name or self._generate_name_fallback(mood_prompt)
 
@@ -97,7 +103,7 @@ class PlaylistNamer:
             "romantic": ["Love Songs", "Romantic Evening", "Date Night"],
             "focus": ["Concentration", "Study Mode", "Focus Flow"],
             "party": ["Party Time", "Celebration", "Dance Party"],
-            "workout": ["Workout Mix", "Fitness Fuel", "Gym Session"]
+            "workout": ["Workout Mix", "Fitness Fuel", "Gym Session"],
         }
 
         # Find matching template
@@ -111,7 +117,7 @@ class PlaylistNamer:
             "Curated Sounds",
             "Vibe Session",
             "Music Journey",
-            "Sonic Escape"
+            "Sonic Escape",
         ]
 
         return random.choice(default_names)

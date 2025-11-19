@@ -1,7 +1,9 @@
 """Prompt templates for mood-based artist filtering workflows."""
 
 
-def get_artist_filtering_prompt(mood_prompt: str, mood_interpretation: str, artists_summary: str) -> str:
+def get_artist_filtering_prompt(
+    mood_prompt: str, mood_interpretation: str, artists_summary: str
+) -> str:
     """Build the LLM prompt used to select artists that match a requested mood.
 
     Args:

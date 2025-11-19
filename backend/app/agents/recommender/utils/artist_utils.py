@@ -8,7 +8,7 @@ class ArtistDeduplicator:
 
     @staticmethod
     def merge_and_deduplicate(
-        *artist_sources: List[Dict[str, Any]]
+        *artist_sources: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
         """Merge multiple artist lists and deduplicate by ID.
 

@@ -22,7 +22,9 @@ class UserRepository(BaseRepository[User]):
         """Return the User model class."""
         return User
 
-    async def get_by_spotify_id(self, spotify_id: str, load_relationships: Optional[List[str]] = None) -> Optional[User]:
+    async def get_by_spotify_id(
+        self, spotify_id: str, load_relationships: Optional[List[str]] = None
+    ) -> Optional[User]:
         """Get user by Spotify ID.
 
         Args:
@@ -45,7 +47,9 @@ class UserRepository(BaseRepository[User]):
             if user:
                 self.logger.debug("User retrieved by Spotify ID", spotify_id=spotify_id)
             else:
-                self.logger.debug("User not found for Spotify ID", spotify_id=spotify_id)
+                self.logger.debug(
+                    "User not found for Spotify ID", spotify_id=spotify_id
+                )
 
             return user
 
@@ -53,11 +57,13 @@ class UserRepository(BaseRepository[User]):
             self.logger.error(
                 "Database error retrieving user by Spotify ID",
                 spotify_id=spotify_id,
-                error=str(e)
+                error=str(e),
             )
             raise
 
-    async def get_by_email(self, email: str, load_relationships: Optional[List[str]] = None) -> Optional[User]:
+    async def get_by_email(
+        self, email: str, load_relationships: Optional[List[str]] = None
+    ) -> Optional[User]:
         """Get user by email address.
 
         Args:
@@ -86,9 +92,7 @@ class UserRepository(BaseRepository[User]):
 
         except Exception as e:
             self.logger.error(
-                "Database error retrieving user by email",
-                email=email,
-                error=str(e)
+                "Database error retrieving user by email", email=email, error=str(e)
             )
             raise
 
@@ -96,7 +100,7 @@ class UserRepository(BaseRepository[User]):
         self,
         skip: int = 0,
         limit: Optional[int] = None,
-        load_relationships: Optional[List[str]] = None
+        load_relationships: Optional[List[str]] = None,
     ) -> List[User]:
         """Get all active users.
 
@@ -114,7 +118,7 @@ class UserRepository(BaseRepository[User]):
             filters={"is_active": True},
             order_by="created_at",
             order_desc=True,
-            load_relationships=load_relationships
+            load_relationships=load_relationships,
         )
 
     async def update_tokens(
@@ -122,7 +126,7 @@ class UserRepository(BaseRepository[User]):
         user_id: int,
         access_token: str,
         refresh_token: str,
-        token_expires_at: datetime
+        token_expires_at: datetime,
     ) -> User:
         """Update user's Spotify tokens.
 
@@ -139,7 +143,7 @@ class UserRepository(BaseRepository[User]):
             user_id,
             access_token=access_token,
             refresh_token=refresh_token,
-            token_expires_at=token_expires_at
+            token_expires_at=token_expires_at,
         )
 
     async def update_profile(
@@ -147,7 +151,7 @@ class UserRepository(BaseRepository[User]):
         user_id: int,
         display_name: Optional[str] = None,
         email: Optional[str] = None,
-        profile_image_url: Optional[str] = None
+        profile_image_url: Optional[str] = None,
     ) -> User:
         """Update user's profile information.
 
@@ -201,7 +205,7 @@ class UserRepository(BaseRepository[User]):
         created_after: datetime,
         skip: int = 0,
         limit: Optional[int] = None,
-        load_relationships: Optional[List[str]] = None
+        load_relationships: Optional[List[str]] = None,
     ) -> List[User]:
         """Get users created after a specific timestamp.
 
@@ -239,7 +243,7 @@ class UserRepository(BaseRepository[User]):
                 created_after=created_after.isoformat(),
                 count=len(users),
                 skip=skip,
-                limit=limit
+                limit=limit,
             )
 
             return list(users)
@@ -248,7 +252,7 @@ class UserRepository(BaseRepository[User]):
             self.logger.error(
                 "Database error retrieving users by creation date",
                 created_after=created_after.isoformat(),
-                error=str(e)
+                error=str(e),
             )
             raise
 
@@ -257,7 +261,7 @@ class UserRepository(BaseRepository[User]):
         search_term: str,
         skip: int = 0,
         limit: Optional[int] = None,
-        load_relationships: Optional[List[str]] = None
+        load_relationships: Optional[List[str]] = None,
     ) -> List[User]:
         """Search users by display name or email.
 
@@ -277,8 +281,8 @@ class UserRepository(BaseRepository[User]):
                     User.is_active.is_(True),
                     or_(
                         User.display_name.ilike(search_pattern),
-                        User.email.ilike(search_pattern)
-                    )
+                        User.email.ilike(search_pattern),
+                    ),
                 )
             )
 
@@ -304,20 +308,20 @@ class UserRepository(BaseRepository[User]):
                 search_term=search_term,
                 count=len(users),
                 skip=skip,
-                limit=limit
+                limit=limit,
             )
 
             return list(users)
 
         except Exception as e:
             self.logger.error(
-                "Database error searching users",
-                search_term=search_term,
-                error=str(e)
+                "Database error searching users", search_term=search_term, error=str(e)
             )
             raise
 
-    async def get_active_user_by_spotify_id(self, spotify_id: str, load_relationships: Optional[List[str]] = None) -> Optional[User]:
+    async def get_active_user_by_spotify_id(
+        self, spotify_id: str, load_relationships: Optional[List[str]] = None
+    ) -> Optional[User]:
         """Get active user by Spotify ID.
 
         Args:
@@ -329,10 +333,7 @@ class UserRepository(BaseRepository[User]):
         """
         try:
             query = select(User).where(
-                and_(
-                    User.spotify_id == spotify_id,
-                    User.is_active.is_(True)
-                )
+                and_(User.spotify_id == spotify_id, User.is_active.is_(True))
             )
 
             if load_relationships:
@@ -343,9 +344,13 @@ class UserRepository(BaseRepository[User]):
             user = result.scalar_one_or_none()
 
             if user:
-                self.logger.debug("Active user retrieved by Spotify ID", spotify_id=spotify_id)
+                self.logger.debug(
+                    "Active user retrieved by Spotify ID", spotify_id=spotify_id
+                )
             else:
-                self.logger.debug("Active user not found for Spotify ID", spotify_id=spotify_id)
+                self.logger.debug(
+                    "Active user not found for Spotify ID", spotify_id=spotify_id
+                )
 
             return user
 
@@ -353,11 +358,13 @@ class UserRepository(BaseRepository[User]):
             self.logger.error(
                 "Database error retrieving active user by Spotify ID",
                 spotify_id=spotify_id,
-                error=str(e)
+                error=str(e),
             )
             raise
 
-    async def get_active_user_by_id(self, user_id: int, load_relationships: Optional[List[str]] = None) -> Optional[User]:
+    async def get_active_user_by_id(
+        self, user_id: int, load_relationships: Optional[List[str]] = None
+    ) -> Optional[User]:
         """Get active user by ID.
 
         Args:
@@ -369,10 +376,7 @@ class UserRepository(BaseRepository[User]):
         """
         try:
             query = select(User).where(
-                and_(
-                    User.id == user_id,
-                    User.is_active.is_(True)
-                )
+                and_(User.id == user_id, User.is_active.is_(True))
             )
 
             if load_relationships:
@@ -393,7 +397,7 @@ class UserRepository(BaseRepository[User]):
             self.logger.error(
                 "Database error retrieving active user by ID",
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise
 
@@ -406,7 +410,7 @@ class UserRepository(BaseRepository[User]):
         display_name: str,
         email: Optional[str] = None,
         profile_image_url: Optional[str] = None,
-        commit: bool = True
+        commit: bool = True,
     ) -> User:
         """Create a new user or update existing user's tokens and profile.
 
@@ -443,7 +447,11 @@ class UserRepository(BaseRepository[User]):
                 else:
                     await self.session.flush()
 
-                self.logger.info("Updated existing user", user_id=existing_user.id, spotify_id=spotify_id)
+                self.logger.info(
+                    "Updated existing user",
+                    user_id=existing_user.id,
+                    spotify_id=spotify_id,
+                )
                 return existing_user
             else:
                 user = User(
@@ -454,7 +462,7 @@ class UserRepository(BaseRepository[User]):
                     display_name=display_name,
                     email=email,
                     profile_image_url=profile_image_url,
-                    is_active=True
+                    is_active=True,
                 )
 
                 self.session.add(user)
@@ -465,14 +473,18 @@ class UserRepository(BaseRepository[User]):
                 else:
                     await self.session.flush()
 
-                self.logger.info("Created new user", user_id=getattr(user, "id", None), spotify_id=spotify_id)
+                self.logger.info(
+                    "Created new user",
+                    user_id=getattr(user, "id", None),
+                    spotify_id=spotify_id,
+                )
                 return user
 
         except Exception as e:
             self.logger.error(
                 "Database error creating or updating user",
                 spotify_id=spotify_id,
-                error=str(e)
+                error=str(e),
             )
             await self.session.rollback()
             raise
@@ -489,14 +501,14 @@ class UserRepository(BaseRepository[User]):
         is_spotify_whitelisted: bool = True,
     ) -> User:
         """Create or update user in a single database operation using UPSERT.
-        
+
         This is significantly faster than the get_by_spotify_id + update/create pattern.
         Uses PostgreSQL's INSERT ... ON CONFLICT for optimal performance.
-        
+
         Args:
             spotify_id: Spotify user ID
             access_token: Spotify access token
-            refresh_token: Spotify refresh token  
+            refresh_token: Spotify refresh token
             token_expires_at: Token expiration timestamp
             display_name: User display name
             email: User email (optional)
@@ -507,48 +519,49 @@ class UserRepository(BaseRepository[User]):
             Created or updated user instance
         """
         try:
-            stmt = insert(User).values(
-                spotify_id=spotify_id,
-                access_token=access_token,
-                refresh_token=refresh_token,
-                token_expires_at=token_expires_at,
-                display_name=display_name,
-                email=email,
-                profile_image_url=profile_image_url,
-                is_active=True,
-                is_spotify_whitelisted=is_spotify_whitelisted
-            ).on_conflict_do_update(
-                index_elements=['spotify_id'],
-                set_={
-                    'access_token': access_token,
-                    'refresh_token': refresh_token,
-                    'token_expires_at': token_expires_at,
-                    'display_name': display_name,
-                    'email': email,
-                    'profile_image_url': profile_image_url,
-                    'is_active': True,
-                    'is_spotify_whitelisted': is_spotify_whitelisted,
-                    'updated_at': func.now()
-                }
-            ).returning(User)
-            
+            stmt = (
+                insert(User)
+                .values(
+                    spotify_id=spotify_id,
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    token_expires_at=token_expires_at,
+                    display_name=display_name,
+                    email=email,
+                    profile_image_url=profile_image_url,
+                    is_active=True,
+                    is_spotify_whitelisted=is_spotify_whitelisted,
+                )
+                .on_conflict_do_update(
+                    index_elements=["spotify_id"],
+                    set_={
+                        "access_token": access_token,
+                        "refresh_token": refresh_token,
+                        "token_expires_at": token_expires_at,
+                        "display_name": display_name,
+                        "email": email,
+                        "profile_image_url": profile_image_url,
+                        "is_active": True,
+                        "is_spotify_whitelisted": is_spotify_whitelisted,
+                        "updated_at": func.now(),
+                    },
+                )
+                .returning(User)
+            )
+
             result = await self.session.execute(stmt)
             user = result.scalar_one()
             await self.session.flush()
-            
+
             self.logger.info(
-                "User upserted successfully",
-                spotify_id=spotify_id,
-                user_id=user.id
+                "User upserted successfully", spotify_id=spotify_id, user_id=user.id
             )
-            
+
             return user
-            
+
         except Exception as e:
             self.logger.error(
-                "Database error upserting user",
-                spotify_id=spotify_id,
-                error=str(e)
+                "Database error upserting user", spotify_id=spotify_id, error=str(e)
             )
             await self.session.rollback()
             raise
@@ -558,7 +571,7 @@ class UserRepository(BaseRepository[User]):
         user_id: int,
         access_token: str,
         refresh_token: str,
-        token_expires_at: datetime
+        token_expires_at: datetime,
     ) -> User:
         """Update user tokens and commit the transaction.
 
@@ -586,9 +599,7 @@ class UserRepository(BaseRepository[User]):
 
         except Exception as e:
             self.logger.error(
-                "Database error updating user tokens",
-                user_id=user_id,
-                error=str(e)
+                "Database error updating user tokens", user_id=user_id, error=str(e)
             )
             await self.session.rollback()
             raise

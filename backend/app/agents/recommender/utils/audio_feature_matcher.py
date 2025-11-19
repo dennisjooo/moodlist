@@ -9,21 +9,21 @@ class AudioFeatureMatcher:
     # Centralized tolerance thresholds for audio features
     # These define how much a feature can deviate from target before being flagged
     BASE_TOLERANCE_THRESHOLDS = {
-        "energy": 0.25,          # ±0.25 (stricter - energy is important)
-        "valence": 0.30,         # ±0.30 (moderate - mood flexibility)
-        "danceability": 0.30,    # ±0.30 (moderate)
-        "acousticness": 0.40,    # ±0.40 (flexible - can vary)
+        "energy": 0.25,  # ±0.25 (stricter - energy is important)
+        "valence": 0.30,  # ±0.30 (moderate - mood flexibility)
+        "danceability": 0.30,  # ±0.30 (moderate)
+        "acousticness": 0.40,  # ±0.40 (flexible - can vary)
         "instrumentalness": 0.25,  # ±0.25 (stricter - vocal presence matters)
-        "speechiness": 0.25,     # ±0.25 (stricter - avoid podcasts)
-        "tempo": 35.0,           # ±35 BPM (moderate)
-        "loudness": 6.0,         # ±6 dB (moderate)
-        "liveness": 0.40,        # ±0.40 (flexible - usually not critical)
-        "popularity": 30         # ±30 points (flexible)
+        "speechiness": 0.25,  # ±0.25 (stricter - avoid podcasts)
+        "tempo": 35.0,  # ±35 BPM (moderate)
+        "loudness": 6.0,  # ±6 dB (moderate)
+        "liveness": 0.40,  # ±0.40 (flexible - usually not critical)
+        "popularity": 30,  # ±30 points (flexible)
     }
 
     # Extended tolerances for more lenient matching (used in track filtering)
     EXTENDED_TOLERANCE_THRESHOLDS = {
-        "energy": 0.20,          # Extension amount
+        "energy": 0.20,  # Extension amount
         "valence": 0.25,
         "danceability": 0.20,
         "acousticness": 0.25,
@@ -32,7 +32,7 @@ class AudioFeatureMatcher:
         "tempo": 30.0,
         "loudness": 5.0,
         "liveness": 0.30,
-        "popularity": 20
+        "popularity": 20,
     }
 
     # Relaxed tolerances for artist discovery (more lenient to get enough tracks)
@@ -46,7 +46,7 @@ class AudioFeatureMatcher:
         "tempo": 45.0,
         "loudness": 7.0,
         "liveness": 0.45,
-        "popularity": 35
+        "popularity": 35,
     }
 
     @classmethod
@@ -56,7 +56,7 @@ class AudioFeatureMatcher:
         target_features: Dict[str, Any],
         feature_weights: Optional[Dict[str, float]] = None,
         source: Optional[str] = None,
-        tolerance_mode: str = "base"
+        tolerance_mode: str = "base",
     ) -> float:
         """Calculate cohesion score between audio features and target mood features.
 
@@ -120,7 +120,9 @@ class AudioFeatureMatcher:
                 cohesion = weighted_sum / total_weight if total_weight > 0 else 0.0
             else:
                 # Unweighted mode (simple average)
-                cohesion = sum(score for score, _ in weighted_matches) / len(weighted_matches)
+                cohesion = sum(score for score, _ in weighted_matches) / len(
+                    weighted_matches
+                )
         else:
             cohesion = 0.70  # Neutral score if no features to compare
 
@@ -132,7 +134,7 @@ class AudioFeatureMatcher:
         audio_features: Dict[str, Any],
         target_features: Dict[str, Any],
         tolerance_extensions: Optional[Dict[str, float]] = None,
-        critical_features: Optional[List[str]] = None
+        critical_features: Optional[List[str]] = None,
     ) -> Tuple[List[str], int]:
         """Check for feature violations (values outside acceptable ranges).
 
@@ -148,7 +150,12 @@ class AudioFeatureMatcher:
         violations = []
         critical_violations = 0
 
-        critical_features = critical_features or ["energy", "acousticness", "instrumentalness", "danceability"]
+        critical_features = critical_features or [
+            "energy",
+            "acousticness",
+            "instrumentalness",
+            "danceability",
+        ]
         tolerance_extensions = tolerance_extensions or {}
 
         for feature_name, target_value in target_features.items():
@@ -160,16 +167,20 @@ class AudioFeatureMatcher:
             # Handle range-based targets
             if isinstance(target_value, list) and len(target_value) == 2:
                 violation_info = cls._check_range_violation(
-                    feature_name, target_value, actual_value,
+                    feature_name,
+                    target_value,
+                    actual_value,
                     tolerance_extensions.get(feature_name),
-                    critical_features
+                    critical_features,
                 )
             # Handle single-value targets
             elif isinstance(target_value, (int, float)):
                 violation_info = cls._check_single_value_violation(
-                    feature_name, target_value, actual_value,
+                    feature_name,
+                    target_value,
+                    actual_value,
                     tolerance_extensions.get(feature_name),
-                    critical_features
+                    critical_features,
                 )
             else:
                 continue
@@ -188,7 +199,7 @@ class AudioFeatureMatcher:
         target_range: List[float],
         actual_value: float,
         tolerance_extension: Optional[float],
-        critical_features: List[str]
+        critical_features: List[str],
     ) -> Optional[Dict[str, Any]]:
         """Check if a value violates a range-based target."""
         min_val, max_val = target_range
@@ -196,21 +207,27 @@ class AudioFeatureMatcher:
         # Extend the range by tolerance on both sides
         if tolerance_extension is not None:
             extended_min = max(0, min_val - tolerance_extension)
-            extended_max = min(1 if feature_name != "tempo" else 250, max_val + tolerance_extension)
+            extended_max = min(
+                1 if feature_name != "tempo" else 250, max_val + tolerance_extension
+            )
         else:
             extended_min, extended_max = min_val, max_val
 
         # Check if value falls within extended range
         if actual_value < extended_min or actual_value > extended_max:
-            distance_below = extended_min - actual_value if actual_value < extended_min else 0
-            distance_above = actual_value - extended_max if actual_value > extended_max else 0
+            distance_below = (
+                extended_min - actual_value if actual_value < extended_min else 0
+            )
+            distance_above = (
+                actual_value - extended_max if actual_value > extended_max else 0
+            )
             distance = max(distance_below, distance_above)
 
             # Only flag as critical if it's a critical feature and significantly out of range
             is_critical = (
-                feature_name in critical_features and
-                tolerance_extension is not None and
-                distance > tolerance_extension * 2
+                feature_name in critical_features
+                and tolerance_extension is not None
+                and distance > tolerance_extension * 2
             )
 
             return {
@@ -219,7 +236,7 @@ class AudioFeatureMatcher:
                     f"extended=[{extended_min:.2f}, {extended_max:.2f}], "
                     f"actual={actual_value:.2f}, out_by={distance:.2f}"
                 ),
-                "is_critical": is_critical
+                "is_critical": is_critical,
             }
 
         return None
@@ -231,7 +248,7 @@ class AudioFeatureMatcher:
         target_value: float,
         actual_value: float,
         tolerance_extension: Optional[float],
-        critical_features: List[str]
+        critical_features: List[str],
     ) -> Optional[Dict[str, Any]]:
         """Check if a value violates a single-value target."""
         if tolerance_extension is None:
@@ -245,8 +262,8 @@ class AudioFeatureMatcher:
         if difference > tolerance_extension:
             # Only flag as critical if it's a critical feature and very far off
             is_critical = (
-                feature_name in critical_features and
-                difference > tolerance_extension * 2
+                feature_name in critical_features
+                and difference > tolerance_extension * 2
             )
 
             return {
@@ -254,7 +271,7 @@ class AudioFeatureMatcher:
                     f"{feature_name}: target={target_value:.2f}, "
                     f"actual={actual_value:.2f}, diff={difference:.2f}"
                 ),
-                "is_critical": is_critical
+                "is_critical": is_critical,
             }
 
         return None

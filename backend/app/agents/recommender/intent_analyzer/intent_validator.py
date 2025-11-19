@@ -20,7 +20,12 @@ class IntentValidator:
             Validated intent data
         """
         # Ensure intent_type is valid
-        valid_intent_types = ["artist_focus", "genre_exploration", "mood_variety", "specific_track_similar"]
+        valid_intent_types = [
+            "artist_focus",
+            "genre_exploration",
+            "mood_variety",
+            "specific_track_similar",
+        ]
         if intent_data.get("intent_type") not in valid_intent_types:
             logger.warning(
                 f"Invalid intent_type '{intent_data.get('intent_type')}', defaulting to 'mood_variety'"
@@ -41,12 +46,16 @@ class IntentValidator:
         if not isinstance(intent_data.get("genre_strictness"), (int, float)):
             intent_data["genre_strictness"] = 0.6
         else:
-            intent_data["genre_strictness"] = max(0.0, min(1.0, float(intent_data["genre_strictness"])))
+            intent_data["genre_strictness"] = max(
+                0.0, min(1.0, float(intent_data["genre_strictness"]))
+            )
 
         if not isinstance(intent_data.get("quality_threshold"), (int, float)):
             intent_data["quality_threshold"] = 0.6
         else:
-            intent_data["quality_threshold"] = max(0.0, min(1.0, float(intent_data["quality_threshold"])))
+            intent_data["quality_threshold"] = max(
+                0.0, min(1.0, float(intent_data["quality_threshold"]))
+            )
 
         # Ensure boolean
         if not isinstance(intent_data.get("allow_obscure_artists"), bool):
@@ -55,13 +64,20 @@ class IntentValidator:
         # Validate track mentions structure
         validated_tracks = []
         for track in intent_data.get("user_mentioned_tracks", []):
-            if isinstance(track, dict) and track.get("track_name") and track.get("artist_name"):
-                validated_tracks.append({
-                    "track_name": str(track["track_name"]),
-                    "artist_name": str(track["artist_name"]),
-                    "priority": track.get("priority", "medium") if track.get("priority") in ["high", "medium"] else "medium"
-                })
+            if (
+                isinstance(track, dict)
+                and track.get("track_name")
+                and track.get("artist_name")
+            ):
+                validated_tracks.append(
+                    {
+                        "track_name": str(track["track_name"]),
+                        "artist_name": str(track["artist_name"]),
+                        "priority": track.get("priority", "medium")
+                        if track.get("priority") in ["high", "medium"]
+                        else "medium",
+                    }
+                )
         intent_data["user_mentioned_tracks"] = validated_tracks
 
         return intent_data
-

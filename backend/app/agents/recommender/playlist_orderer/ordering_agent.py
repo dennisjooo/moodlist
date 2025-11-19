@@ -28,12 +28,8 @@ logger = structlog.get_logger(__name__)
 
 class PlaylistOrderingAgent(BaseAgent):
     """Agent for ordering playlist tracks based on energy flow and listening experience."""
-    
-    def __init__(
-        self,
-        llm: BaseLanguageModel,
-        verbose: bool = False
-    ):
+
+    def __init__(self, llm: BaseLanguageModel, verbose: bool = False):
         """Initialize the playlist ordering agent.
 
         Args:
@@ -44,9 +40,9 @@ class PlaylistOrderingAgent(BaseAgent):
             name="PlaylistOrderingAgent",
             description="Orders playlist tracks to create optimal energy flow and listening experience",
             llm=llm,
-            verbose=verbose
+            verbose=verbose,
         )
-        
+
         # Initialize components
         self.phase_assigner = PhaseAssigner()
         self.phase_sorter = PhaseSorter()
@@ -72,7 +68,9 @@ class PlaylistOrderingAgent(BaseAgent):
                 return state
 
             if len(state.recommendations) < 3:
-                logger.info(f"Only {len(state.recommendations)} tracks - skipping ordering")
+                logger.info(
+                    f"Only {len(state.recommendations)} tracks - skipping ordering"
+                )
                 return state
 
             # CRITICAL: Remove any duplicates that somehow made it through
@@ -87,16 +85,16 @@ class PlaylistOrderingAgent(BaseAgent):
 
             # Step 1: Analyze track energy characteristics and attach to recommendations
             track_analyses = await self._analyze_track_energies(state)
-            self._attach_energy_analyses_to_tracks(state.recommendations, track_analyses)
+            self._attach_energy_analyses_to_tracks(
+                state.recommendations, track_analyses
+            )
 
             # Step 2: Determine optimal ordering strategy
             strategy = await self._determine_ordering_strategy(state, track_analyses)
 
             # Step 3: Order tracks according to strategy
             ordered_recommendations = self._order_tracks(
-                state.recommendations,
-                track_analyses,
-                strategy
+                state.recommendations, track_analyses, strategy
             )
 
             # Update state with ordered recommendations
@@ -109,7 +107,7 @@ class PlaylistOrderingAgent(BaseAgent):
             logger.info(
                 "Playlist ordering complete",
                 strategy=strategy.get("strategy"),
-                track_count=len(ordered_recommendations)
+                track_count=len(ordered_recommendations),
             )
 
             return state
@@ -131,11 +129,13 @@ class PlaylistOrderingAgent(BaseAgent):
             List of track energy analyses
         """
         batch_size = config.track_energy_analysis_batch_size
-        logger.info(f"Analyzing energy characteristics for {len(state.recommendations)} tracks in batches of {batch_size}")
+        logger.info(
+            f"Analyzing energy characteristics for {len(state.recommendations)} tracks in batches of {batch_size}"
+        )
 
         # Split tracks into batches
         batches = [
-            state.recommendations[i:i + batch_size]
+            state.recommendations[i : i + batch_size]
             for i in range(0, len(state.recommendations), batch_size)
         ]
 
@@ -147,34 +147,38 @@ class PlaylistOrderingAgent(BaseAgent):
                     batch_index=i,
                     total_batches=total_batches,
                     tracks=batch,
-                    mood_prompt=state.mood_prompt
+                    mood_prompt=state.mood_prompt,
                 )
                 for i, batch in enumerate(batches)
             ]
-            
+
             batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
-            
+
             # Combine results from all batches
             all_analyses = []
             for i, result in enumerate(batch_results):
                 if isinstance(result, Exception):
-                    logger.error(f"Error analyzing batch {i+1}: {result}")
+                    logger.error(f"Error analyzing batch {i + 1}: {result}")
                     # Use fallback for failed batch
-                    all_analyses.extend(self.energy_analyzer.analyze_from_audio_features(batches[i]))
+                    all_analyses.extend(
+                        self.energy_analyzer.analyze_from_audio_features(batches[i])
+                    )
                 else:
                     all_analyses.extend(result)
 
-            logger.info(f"Successfully analyzed {len(all_analyses)} tracks across {len(batches)} batches")
+            logger.info(
+                f"Successfully analyzed {len(all_analyses)} tracks across {len(batches)} batches"
+            )
             return all_analyses
 
         except Exception as e:
             logger.error(f"Error in batch analysis: {e}", exc_info=True)
-            return self.energy_analyzer.analyze_from_audio_features(state.recommendations)
+            return self.energy_analyzer.analyze_from_audio_features(
+                state.recommendations
+            )
 
     async def _analyze_track_batch(
-        self,
-        tracks: List[TrackRecommendation],
-        mood_prompt: str
+        self, tracks: List[TrackRecommendation], mood_prompt: str
     ) -> List[Dict[str, Any]]:
         """Analyze a single batch of tracks.
 
@@ -190,7 +194,7 @@ class PlaylistOrderingAgent(BaseAgent):
             {
                 "track_id": rec.track_id,
                 "track_name": f"{rec.track_name} - {rec.artists[0] if rec.artists else 'Unknown'}",
-                "audio_features": rec.audio_features or {}
+                "audio_features": rec.audio_features or {},
             }
             for rec in tracks
         ]
@@ -201,15 +205,14 @@ class PlaylistOrderingAgent(BaseAgent):
 
         messages = [
             SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt)
+            HumanMessage(content=user_prompt),
         ]
 
         response = await self.llm.ainvoke(messages)
 
         # Parse JSON response using utility
         analysis_result = LLMResponseParser.extract_json_from_response(
-            response,
-            fallback={"track_analyses": []}
+            response, fallback={"track_analyses": []}
         )
         return analysis_result.get("track_analyses", [])
 
@@ -218,27 +221,24 @@ class PlaylistOrderingAgent(BaseAgent):
         batch_index: int,
         total_batches: int,
         tracks: List[TrackRecommendation],
-        mood_prompt: str
+        mood_prompt: str,
     ) -> List[Dict[str, Any]]:
         """Run batch analysis with timeout and automatic fallbacks."""
         timeout = config.track_energy_analysis_timeout_seconds
         batch_label = f"{batch_index + 1}/{total_batches}"
         logger.debug(
-            "Starting energy analysis batch",
-            batch=batch_label,
-            track_count=len(tracks)
+            "Starting energy analysis batch", batch=batch_label, track_count=len(tracks)
         )
 
         try:
             result = await asyncio.wait_for(
-                self._analyze_track_batch(tracks, mood_prompt),
-                timeout=timeout
+                self._analyze_track_batch(tracks, mood_prompt), timeout=timeout
             )
             result = self._ensure_complete_batch_analysis(tracks, result, batch_label)
             logger.info(
                 "Completed energy analysis batch",
                 batch=batch_label,
-                analyzed_tracks=len(result)
+                analyzed_tracks=len(result),
             )
             return result
 
@@ -247,7 +247,7 @@ class PlaylistOrderingAgent(BaseAgent):
                 "Energy analysis batch timed out, falling back to audio features",
                 batch=batch_label,
                 timeout_seconds=timeout,
-                track_count=len(tracks)
+                track_count=len(tracks),
             )
             return self.energy_analyzer.analyze_from_audio_features(tracks)
 
@@ -256,7 +256,7 @@ class PlaylistOrderingAgent(BaseAgent):
                 "Energy analysis batch failed, falling back to audio features",
                 batch=batch_label,
                 error=str(exc),
-                track_count=len(tracks)
+                track_count=len(tracks),
             )
             return self.energy_analyzer.analyze_from_audio_features(tracks)
 
@@ -264,7 +264,7 @@ class PlaylistOrderingAgent(BaseAgent):
         self,
         tracks: List[TrackRecommendation],
         analyses: List[Dict[str, Any]],
-        batch_label: str
+        batch_label: str,
     ) -> List[Dict[str, Any]]:
         """Ensure each track in the batch has an analysis entry."""
         provided_ids = {
@@ -272,26 +272,25 @@ class PlaylistOrderingAgent(BaseAgent):
             for analysis in analyses
             if analysis.get("track_id")
         }
-        missing_tracks = [
-            rec for rec in tracks
-            if rec.track_id not in provided_ids
-        ]
+        missing_tracks = [rec for rec in tracks if rec.track_id not in provided_ids]
 
         if missing_tracks:
             logger.warning(
                 "Energy analysis batch missing tracks, supplementing from audio features",
                 batch=batch_label,
                 missing_count=len(missing_tracks),
-                analyzed_count=len(analyses)
+                analyzed_count=len(analyses),
             )
-            analyses.extend(self.energy_analyzer.analyze_from_audio_features(missing_tracks))
+            analyses.extend(
+                self.energy_analyzer.analyze_from_audio_features(missing_tracks)
+            )
 
         return analyses
 
     def _attach_energy_analyses_to_tracks(
         self,
         recommendations: List[TrackRecommendation],
-        track_analyses: List[Dict[str, Any]]
+        track_analyses: List[Dict[str, Any]],
     ) -> None:
         """Attach energy analyses directly to track recommendations.
 
@@ -308,12 +307,12 @@ class PlaylistOrderingAgent(BaseAgent):
                 rec.energy_analysis = analysis_map[rec.track_id]
                 logger.debug(f"Attached energy analysis to track {rec.track_id}")
 
-        logger.info(f"Attached energy analyses to {len([r for r in recommendations if r.energy_analysis])} tracks")
+        logger.info(
+            f"Attached energy analyses to {len([r for r in recommendations if r.energy_analysis])} tracks"
+        )
 
     async def _determine_ordering_strategy(
-        self,
-        state: AgentState,
-        track_analyses: List[Dict[str, Any]]
+        self, state: AgentState, track_analyses: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Determine the optimal ordering strategy for the playlist.
 
@@ -327,11 +326,19 @@ class PlaylistOrderingAgent(BaseAgent):
         logger.info("Determining optimal ordering strategy")
 
         # Calculate aggregate statistics
-        avg_energy = sum(t.get("energy_level", 50) for t in track_analyses) / len(track_analyses)
+        avg_energy = sum(t.get("energy_level", 50) for t in track_analyses) / len(
+            track_analyses
+        )
         max_energy = max(t.get("energy_level", 50) for t in track_analyses)
         min_energy = min(t.get("energy_level", 50) for t in track_analyses)
         energy_range = max_energy - min_energy
-        user_mentioned_count = len([t for t in state.metadata.get('anchor_tracks', []) if t.get('user_mentioned', False)])
+        user_mentioned_count = len(
+            [
+                t
+                for t in state.metadata.get("anchor_tracks", [])
+                if t.get("user_mentioned", False)
+            ]
+        )
 
         # Create strategy prompts
         system_prompt = get_ordering_strategy_system_prompt()
@@ -343,13 +350,13 @@ class PlaylistOrderingAgent(BaseAgent):
             min_energy=min_energy,
             energy_range=energy_range,
             track_analyses=track_analyses,
-            user_mentioned_count=user_mentioned_count
+            user_mentioned_count=user_mentioned_count,
         )
 
         try:
             messages = [
                 SystemMessage(content=system_prompt),
-                HumanMessage(content=user_prompt)
+                HumanMessage(content=user_prompt),
             ]
 
             response = await self.llm.ainvoke(messages)
@@ -362,13 +369,15 @@ class PlaylistOrderingAgent(BaseAgent):
         except Exception as e:
             logger.error(f"Error determining strategy: {e}", exc_info=True)
             # Return default strategy
-            return self.strategy_builder.build_default_strategy(avg_energy, energy_range, len(track_analyses))
+            return self.strategy_builder.build_default_strategy(
+                avg_energy, energy_range, len(track_analyses)
+            )
 
     def _order_tracks(
         self,
         recommendations: List[TrackRecommendation],
         track_analyses: List[Dict[str, Any]],
-        strategy: Dict[str, Any]
+        strategy: Dict[str, Any],
     ) -> List[TrackRecommendation]:
         """Order tracks according to the determined strategy.
 
@@ -387,9 +396,7 @@ class PlaylistOrderingAgent(BaseAgent):
 
         # Assign tracks to phases based on their characteristics
         phase_buckets = self.phase_assigner.assign_tracks_to_phases(
-            recommendations,
-            analysis_map,
-            strategy
+            recommendations, analysis_map, strategy
         )
 
         # Order tracks within each phase
@@ -409,8 +416,7 @@ class PlaylistOrderingAgent(BaseAgent):
         return ordered_recommendations
 
     def _remove_duplicates(
-        self,
-        recommendations: List[TrackRecommendation]
+        self, recommendations: List[TrackRecommendation]
     ) -> List[TrackRecommendation]:
         """Remove duplicate tracks from recommendations.
 

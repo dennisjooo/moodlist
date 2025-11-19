@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 class PlaylistTrack(BaseModel):
     """Schema for individual track in playlist."""
+
     id: str
     name: str
     artist: str
@@ -19,6 +20,7 @@ class PlaylistTrack(BaseModel):
 
 class PlaylistUser(BaseModel):
     """Nested user info for playlist responses."""
+
     id: int
     display_name: str
     profile_image_url: Optional[str] = None
@@ -26,6 +28,7 @@ class PlaylistUser(BaseModel):
 
 class PlaylistResponse(BaseModel):
     """Schema for playlist response."""
+
     id: int
     user_id: int
     session_id: Optional[str] = None
@@ -38,12 +41,12 @@ class PlaylistResponse(BaseModel):
     duration_ms: int
     status: str
     error_message: Optional[str] = None
-    
+
     # LLM-generated triadic color scheme
     color_primary: Optional[str] = None
     color_secondary: Optional[str] = None
     color_tertiary: Optional[str] = None
-    
+
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime] = None
@@ -53,16 +56,21 @@ class PlaylistResponse(BaseModel):
 
     class Config:
         """Allow constructing responses from ORM objects."""
+
         from_attributes = True
 
 
 class PlaylistCreateRequest(BaseModel):
     """Schema for creating a new playlist."""
-    mood_prompt: str = Field(..., description="User's mood description for playlist generation")
+
+    mood_prompt: str = Field(
+        ..., description="User's mood description for playlist generation"
+    )
 
 
 class PlaylistUpdateRequest(BaseModel):
     """Schema for updating playlist metadata."""
+
     mood_prompt: Optional[str] = None
     playlist_data: Optional[Dict[str, Any]] = None
     recommendations_data: Optional[Dict[str, Any]] = None
@@ -75,6 +83,7 @@ class PlaylistUpdateRequest(BaseModel):
 
 class PlaylistListResponse(BaseModel):
     """Schema for paginated playlist list response."""
+
     playlists: List[PlaylistResponse]
     total: int
     page: int
@@ -84,6 +93,7 @@ class PlaylistListResponse(BaseModel):
 
 class PlaylistGenerationStatus(BaseModel):
     """Schema for playlist generation status."""
+
     playlist_id: int
     status: str
     progress_percentage: Optional[int] = None

@@ -28,7 +28,7 @@ class WorkflowConfig:
         timeout_per_agent: int = 60,
         max_recommendations: int = 30,
         enable_human_loop: bool = True,
-        require_approval: bool = False
+        require_approval: bool = False,
     ):
         """Initialize workflow configuration.
 
@@ -48,15 +48,12 @@ class WorkflowConfig:
 
 class WorkflowManager:
     """Manages the complete recommendation workflow.
-    
+
     Refactored to use specialized managers for better separation of concerns.
     """
 
     def __init__(
-        self,
-        config: WorkflowConfig,
-        agents: Dict[str, BaseAgent],
-        tools: AgentTools
+        self, config: WorkflowConfig, agents: Dict[str, BaseAgent], tools: AgentTools
     ):
         """Initialize the workflow manager.
 
@@ -83,18 +80,22 @@ class WorkflowManager:
 
         logger.info("Initialized WorkflowManager with {} agents".format(len(agents)))
 
-    def subscribe_to_state_changes(self, session_id: str, callback: StateChangeCallback):
+    def subscribe_to_state_changes(
+        self, session_id: str, callback: StateChangeCallback
+    ):
         """Subscribe to state changes for a specific workflow session.
-        
+
         Args:
             session_id: Workflow session ID to subscribe to
             callback: Async callback function to call when state changes
         """
         self.state_manager.subscribe_to_state_changes(session_id, callback)
 
-    def unsubscribe_from_state_changes(self, session_id: str, callback: StateChangeCallback):
+    def unsubscribe_from_state_changes(
+        self, session_id: str, callback: StateChangeCallback
+    ):
         """Unsubscribe from state changes for a specific workflow session.
-        
+
         Args:
             session_id: Workflow session ID to unsubscribe from
             callback: Callback function to remove
@@ -103,7 +104,7 @@ class WorkflowManager:
 
     async def _update_state(self, session_id: str, state: AgentState):
         """Update workflow state and notify subscribers.
-        
+
         Args:
             session_id: Workflow session ID
             state: Updated workflow state
@@ -113,20 +114,18 @@ class WorkflowManager:
         if self.is_cancelled(session_id):
             logger.debug(f"Skipping state update for cancelled workflow {session_id}")
             return
-        
+
         # Also check the state object directly
         if state.status == RecommendationStatus.CANCELLED:
-            logger.debug(f"Skipping state update - state already marked as cancelled for {session_id}")
+            logger.debug(
+                f"Skipping state update - state already marked as cancelled for {session_id}"
+            )
             return
-        
+
         await self.state_manager.update_state(session_id, state)
 
-
     async def start_workflow(
-        self,
-        mood_prompt: str,
-        user_id: str,
-        spotify_user_id: Optional[str] = None
+        self, mood_prompt: str, user_id: str, spotify_user_id: Optional[str] = None
     ) -> str:
         """Start a new recommendation workflow.
 
@@ -147,7 +146,7 @@ class WorkflowManager:
             mood_prompt=mood_prompt,
             spotify_user_id=spotify_user_id,
             current_step="initializing",
-            status=RecommendationStatus.PENDING
+            status=RecommendationStatus.PENDING,
         )
 
         # Store workflow
@@ -173,18 +172,18 @@ class WorkflowManager:
         """
         if session_id in self.state_manager.active_workflows:
             state = self.state_manager.active_workflows[session_id]
-            
+
             # Check if already cancelled or completed
             if state.status == RecommendationStatus.CANCELLED:
                 logger.info(f"Workflow {session_id} already cancelled")
                 return True
-            
+
             # Update state atomically
             state.status = RecommendationStatus.CANCELLED
             state.error_message = "Workflow cancelled by user"
             state.current_step = "cancelled"
             state.update_timestamp()
-            
+
             # Cancel the asyncio task if it exists
             if session_id in self.active_tasks:
                 task = self.active_tasks[session_id]
@@ -192,16 +191,16 @@ class WorkflowManager:
                     task.cancel()
                     logger.info(f"Cancelled asyncio task for workflow {session_id}")
                 del self.active_tasks[session_id]
-            
+
             # Move to completed workflows
             # Note: The route handler will update the database, so we don't need to do it here
             self.state_manager.move_to_completed(session_id, state)
-            
+
             self.failure_count += 1
-            
+
             logger.info(f"Workflow {session_id} cancelled by user")
             return True
-        
+
         # Check if it's in completed workflows but not cancelled
         if session_id in self.state_manager.completed_workflows:
             state = self.state_manager.completed_workflows[session_id]
@@ -211,9 +210,11 @@ class WorkflowManager:
                 state.error_message = "Workflow cancelled by user"
                 state.current_step = "cancelled"
                 state.update_timestamp()
-                logger.info(f"Updated completed workflow {session_id} to cancelled status")
+                logger.info(
+                    f"Updated completed workflow {session_id} to cancelled status"
+                )
                 return True
-        
+
         logger.warning(f"Attempted to cancel non-existent workflow {session_id}")
         return False
 
@@ -235,7 +236,7 @@ class WorkflowManager:
 
         def check_cancellation() -> bool:
             """Check if workflow has been cancelled.
-            
+
             Returns:
                 True if cancelled, False otherwise
             """
@@ -251,7 +252,9 @@ class WorkflowManager:
 
             # Check cancellation before starting
             if check_cancellation():
-                logger.info(f"Workflow {session_id} was cancelled before execution started")
+                logger.info(
+                    f"Workflow {session_id} was cancelled before execution started"
+                )
                 return
 
             # Execute workflow steps in the updated order
@@ -260,7 +263,9 @@ class WorkflowManager:
                 return
             step_start = datetime.now(timezone.utc)
             state = await self.executor.execute_intent_analysis(state)
-            step_timings["intent_analysis"] = (datetime.now(timezone.utc) - step_start).total_seconds()
+            step_timings["intent_analysis"] = (
+                datetime.now(timezone.utc) - step_start
+            ).total_seconds()
             # Only update state if not cancelled
             if not check_cancellation():
                 await self._update_state(session_id, state)
@@ -272,7 +277,9 @@ class WorkflowManager:
                 return
             step_start = datetime.now(timezone.utc)
             state = await self.executor.execute_mood_analysis(state)
-            step_timings["mood_analysis"] = (datetime.now(timezone.utc) - step_start).total_seconds()
+            step_timings["mood_analysis"] = (
+                datetime.now(timezone.utc) - step_start
+            ).total_seconds()
             # Only update state if not cancelled
             if not check_cancellation():
                 await self._update_state(session_id, state)
@@ -285,13 +292,13 @@ class WorkflowManager:
                 # Don't notify if workflow is cancelled
                 if check_cancellation():
                     return
-                
+
                 # Get current state to ensure we don't send backwards updates
                 current_state = self.get_workflow_state(state.session_id)
                 if current_state:
                     # Only send if this is forward progress (newer status or step)
                     from ..states.agent_state import RecommendationStatus
-                    
+
                     # Define status progression order
                     status_order = {
                         RecommendationStatus.PENDING: 0,
@@ -304,27 +311,35 @@ class WorkflowManager:
                         RecommendationStatus.FAILED: 6,
                         RecommendationStatus.CANCELLED: 6,
                     }
-                    
+
                     current_status_order = status_order.get(current_state.status, -1)
                     updated_status_order = status_order.get(updated_state.status, -1)
-                    
+
                     # Allow same status (sub-steps within a stage) or forward progress
                     if updated_status_order >= current_status_order:
-                        await self.state_manager.notify_state_change(state.session_id, updated_state)
+                        await self.state_manager.notify_state_change(
+                            state.session_id, updated_state
+                        )
                     else:
                         logger.debug(
                             f"Skipping backwards progress notification: {current_state.status.value} -> {updated_state.status.value}",
-                            session_id=state.session_id
+                            session_id=state.session_id,
                         )
                 else:
                     # No current state, safe to send
-                    await self.state_manager.notify_state_change(state.session_id, updated_state)
+                    await self.state_manager.notify_state_change(
+                        state.session_id, updated_state
+                    )
 
             if check_cancellation():
                 return
             step_start = datetime.now(timezone.utc)
-            state = await self.executor.execute_orchestration(state, progress_callback=notify_progress)
-            step_timings["orchestration"] = (datetime.now(timezone.utc) - step_start).total_seconds()
+            state = await self.executor.execute_orchestration(
+                state, progress_callback=notify_progress
+            )
+            step_timings["orchestration"] = (
+                datetime.now(timezone.utc) - step_start
+            ).total_seconds()
             # Only update state if not cancelled
             if not check_cancellation():
                 await self._update_state(session_id, state)
@@ -336,13 +351,15 @@ class WorkflowManager:
                 return
             step_start = datetime.now(timezone.utc)
             state = await self.executor.execute_playlist_ordering(state)
-            step_timings["playlist_ordering"] = (datetime.now(timezone.utc) - step_start).total_seconds()
+            step_timings["playlist_ordering"] = (
+                datetime.now(timezone.utc) - step_start
+            ).total_seconds()
             # Only update state if not cancelled
             if not check_cancellation():
                 await self._update_state(session_id, state)
             if check_cancellation():
                 return
-            
+
             # Mark as completed after recommendations are ready
             if not check_cancellation():
                 state.status = RecommendationStatus.COMPLETED
@@ -350,7 +367,7 @@ class WorkflowManager:
                 state.metadata["playlist_saved_to_spotify"] = False
                 await self._update_state(session_id, state)
                 self.success_count += 1
-                
+
                 # Dump the state to a file if DEBUG is enabled
                 if settings.DEBUG:
                     self._save_workflow_state_to_file(session_id, state)
@@ -378,34 +395,42 @@ class WorkflowManager:
             # Clean up task reference
             if session_id in self.active_tasks:
                 del self.active_tasks[session_id]
-            
+
             # Move to completed workflows if still in active
             # But preserve cancelled status if it was set
             if session_id in self.state_manager.active_workflows:
                 # Check if workflow was cancelled - if so, ensure status is preserved
-                is_cancelled = self.is_cancelled(session_id) or state.status == RecommendationStatus.CANCELLED
-                
+                is_cancelled = (
+                    self.is_cancelled(session_id)
+                    or state.status == RecommendationStatus.CANCELLED
+                )
+
                 if is_cancelled and state.status != RecommendationStatus.CANCELLED:
                     # Restore cancelled status if it was lost
                     state.status = RecommendationStatus.CANCELLED
                     state.error_message = "Workflow cancelled by user"
                     state.current_step = "cancelled"
                     state.update_timestamp()
-                
+
                 completion_time = datetime.now(timezone.utc)
                 state.metadata["completion_time"] = completion_time.isoformat()
-                state.metadata["total_duration"] = (completion_time - start_time).total_seconds()
-                
+                state.metadata["total_duration"] = (
+                    completion_time - start_time
+                ).total_seconds()
+
                 # Enhance step_timings with orchestration breakdown if available
                 enhanced_step_timings = step_timings.copy()
-                if "orchestration" in enhanced_step_timings and "orchestration_timings" in state.metadata:
+                if (
+                    "orchestration" in enhanced_step_timings
+                    and "orchestration_timings" in state.metadata
+                ):
                     orchestration_breakdown = state.metadata["orchestration_timings"]
                     # Replace single orchestration timing with breakdown structure
                     enhanced_step_timings["orchestration"] = {
                         "total": enhanced_step_timings["orchestration"],
-                        "breakdown": orchestration_breakdown
+                        "breakdown": orchestration_breakdown,
                     }
-                
+
                 state.metadata["step_timings"] = enhanced_step_timings
 
                 # Send final notification before moving to completed
@@ -417,7 +442,7 @@ class WorkflowManager:
                 status_msg = "cancelled" if is_cancelled else "completed"
                 logger.info(
                     f"Workflow {session_id} {status_msg} in {state.metadata['total_duration']:.2f}s",
-                    step_timings=enhanced_step_timings
+                    step_timings=enhanced_step_timings,
                 )
 
     def _save_workflow_state_to_file(self, session_id: str, state: AgentState):
@@ -428,6 +453,7 @@ class WorkflowManager:
             state: Workflow state to save
         """
         try:
+
             def serialize_datetime(obj):
                 """Recursively serialize datetime objects to ISO format strings."""
                 if isinstance(obj, datetime):
@@ -438,11 +464,11 @@ class WorkflowManager:
                     return [serialize_datetime(item) for item in obj]
                 elif isinstance(obj, tuple):
                     return tuple(serialize_datetime(item) for item in obj)
-                elif hasattr(obj, '__dict__'):
+                elif hasattr(obj, "__dict__"):
                     return serialize_datetime(obj.__dict__)
                 else:
                     return obj
-            
+
             # Check if logs directory exists
             if not os.path.exists("logs"):
                 os.makedirs("logs")
@@ -456,7 +482,6 @@ class WorkflowManager:
                 f.write(json.dumps(serialized_state, indent=4, default=str))
         except Exception as e:
             logger.error(f"Failed to save workflow state to file: {e}")
-
 
     def is_cancelled(self, session_id: str) -> bool:
         """Check if a workflow has been cancelled.
@@ -479,10 +504,9 @@ class WorkflowManager:
         Returns:
             Current state or None if not found
         """
-        return (
-            self.state_manager.active_workflows.get(session_id) or
-            self.state_manager.completed_workflows.get(session_id)
-        )
+        return self.state_manager.active_workflows.get(
+            session_id
+        ) or self.state_manager.completed_workflows.get(session_id)
 
     def get_workflow_summary(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get a summary of a workflow.
@@ -505,7 +529,7 @@ class WorkflowManager:
             "recommendation_count": len(state.recommendations),
             "has_playlist": state.playlist_id is not None,
             "created_at": state.created_at.isoformat(),
-            "is_active": session_id in self.state_manager.active_workflows
+            "is_active": session_id in self.state_manager.active_workflows,
         }
 
     def get_performance_stats(self) -> Dict[str, Any]:
@@ -524,7 +548,7 @@ class WorkflowManager:
             "success_count": self.success_count,
             "failure_count": self.failure_count,
             "success_rate": success_rate,
-            "average_completion_time": self._calculate_average_completion_time()
+            "average_completion_time": self._calculate_average_completion_time(),
         }
 
     def _calculate_average_completion_time(self) -> float:
@@ -574,10 +598,7 @@ class WorkflowManager:
         recent_workflows = list(self.state_manager.completed_workflows.values())
         recent_workflows.sort(key=lambda x: x.created_at, reverse=True)
 
-        return [
-            workflow.get_summary()
-            for workflow in recent_workflows[:limit]
-        ]
+        return [workflow.get_summary() for workflow in recent_workflows[:limit]]
 
     async def graceful_shutdown(self, timeout: int = 300):
         """Wait for active workflows to complete before shutdown.
@@ -593,26 +614,30 @@ class WorkflowManager:
         logger.info(
             f"Graceful shutdown initiated: waiting for {active_count} active workflow(s) to complete",
             active_workflows=list(self.active_tasks.keys()),
-            timeout=timeout
+            timeout=timeout,
         )
 
         try:
             # Wait for all active tasks with timeout
             await asyncio.wait_for(
                 asyncio.gather(*self.active_tasks.values(), return_exceptions=True),
-                timeout=timeout
+                timeout=timeout,
             )
-            logger.info(f"All {active_count} workflows completed successfully during shutdown")
+            logger.info(
+                f"All {active_count} workflows completed successfully during shutdown"
+            )
         except asyncio.TimeoutError:
             remaining = len([t for t in self.active_tasks.values() if not t.done()])
             logger.warning(
                 f"Graceful shutdown timeout after {timeout}s: {remaining} workflow(s) still running",
-                remaining_workflows=list(self.active_tasks.keys())
+                remaining_workflows=list(self.active_tasks.keys()),
             )
             # Cancel remaining tasks
             for session_id, task in list(self.active_tasks.items()):
                 if not task.done():
-                    logger.info(f"Force-cancelling workflow {session_id} due to shutdown timeout")
+                    logger.info(
+                        f"Force-cancelling workflow {session_id} due to shutdown timeout"
+                    )
                     task.cancel()
         except Exception as e:
             logger.error(f"Error during graceful shutdown: {e}", exc_info=True)

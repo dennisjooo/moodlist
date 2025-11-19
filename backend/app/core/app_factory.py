@@ -1,4 +1,5 @@
 """FastAPI application factory."""
+
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,18 +31,24 @@ def create_application() -> FastAPI:
     # Add global exception handler for CORS on errors
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
-        logger.error("Unhandled exception", error=str(exc), error_type=type(exc).__name__, path=request.url.path)
+        logger.error(
+            "Unhandled exception",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            path=request.url.path,
+        )
         return JSONResponse(
             status_code=500,
             content={"detail": "Internal server error"},
             headers={
                 "Access-Control-Allow-Origin": request.headers.get("Origin", "*"),
                 "Access-Control-Allow-Credentials": "true",
-            }
+            },
         )
 
     if settings.ENABLE_RATE_LIMITING:
         from slowapi.middleware import SlowAPIMiddleware
+
         app.state.limiter = limiter
         app.add_middleware(SlowAPIMiddleware)
 
@@ -61,7 +68,9 @@ def create_application() -> FastAPI:
     # Add TrustedHostMiddleware if ALLOWED_HOSTS is configured
     # Automatically includes Render hostname via RENDER_EXTERNAL_URL
     if settings.ALLOWED_HOSTS:
-        logger.info("Enabling TrustedHostMiddleware", allowed_hosts=settings.ALLOWED_HOSTS)
+        logger.info(
+            "Enabling TrustedHostMiddleware", allowed_hosts=settings.ALLOWED_HOSTS
+        )
         app.add_middleware(
             TrustedHostMiddleware,
             allowed_hosts=settings.ALLOWED_HOSTS,
@@ -70,28 +79,11 @@ def create_application() -> FastAPI:
     # Add custom middleware
     app.add_middleware(LoggingMiddleware)
     app.add_middleware(InvocationStatusMiddleware)
-    
-    # Include routers
-    app.include_router(
-        auth_router,
-        prefix="/api/auth",
-        tags=["authentication"]
-    )
-    app.include_router(
-        spotify_router,
-        prefix="/api/spotify",
-        tags=["spotify"]
-    )
-    app.include_router(
-        agent_router,
-        prefix="/api/agents",
-        tags=["agents"]
-    )
-    app.include_router(
-        playlist_router,
-        prefix="/api",
-        tags=["playlists"]
-    )
-    
-    return app
 
+    # Include routers
+    app.include_router(auth_router, prefix="/api/auth", tags=["authentication"])
+    app.include_router(spotify_router, prefix="/api/spotify", tags=["spotify"])
+    app.include_router(agent_router, prefix="/api/agents", tags=["agents"])
+    app.include_router(playlist_router, prefix="/api", tags=["playlists"])
+
+    return app

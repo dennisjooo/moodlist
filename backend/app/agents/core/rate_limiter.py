@@ -15,11 +15,7 @@ logger = structlog.get_logger(__name__)
 class RateLimiter:
     """Token bucket rate limiter for API endpoints."""
 
-    def __init__(
-        self,
-        requests_per_minute: int = 60,
-        burst_size: int = 10
-    ):
+    def __init__(self, requests_per_minute: int = 60, burst_size: int = 10):
         """Initialize rate limiter.
 
         Args:
@@ -34,7 +30,9 @@ class RateLimiter:
 
         # In-memory storage for rate limiting
         # In production, this would use Redis
-        self.buckets: Dict[str, Tuple[float, float]] = {}  # key -> (tokens, last_update)
+        self.buckets: Dict[
+            str, Tuple[float, float]
+        ] = {}  # key -> (tokens, last_update)
         self.request_counts: Dict[str, deque] = defaultdict(deque)
 
         # Cleanup interval
@@ -95,7 +93,8 @@ class RateLimiter:
         # Clean up old buckets (older than 1 hour)
         cutoff = now - 3600
         keys_to_remove = [
-            key for key, (_, last_update) in self.buckets.items()
+            key
+            for key, (_, last_update) in self.buckets.items()
             if last_update < cutoff
         ]
 
@@ -113,7 +112,7 @@ class RateLimiter:
         self,
         request: Request,
         user_id: Optional[str] = None,
-        endpoint: Optional[str] = None
+        endpoint: Optional[str] = None,
     ) -> bool:
         """Check if request is allowed under rate limits.
 
@@ -149,7 +148,10 @@ class RateLimiter:
         for key in keys:
             self.request_counts[key].append(current_minute)
             # Keep only last 2 minutes of data
-            while self.request_counts[key] and self.request_counts[key][0] < current_minute - 1:
+            while (
+                self.request_counts[key]
+                and self.request_counts[key][0] < current_minute - 1
+            ):
                 self.request_counts[key].popleft()
 
         return True
@@ -182,7 +184,7 @@ class RateLimiter:
         self,
         request: Request,
         user_id: Optional[str] = None,
-        endpoint: Optional[str] = None
+        endpoint: Optional[str] = None,
     ) -> Dict[str, int]:
         """Get current rate limit information.
 
@@ -211,15 +213,18 @@ class RateLimiter:
             tokens, _ = self._get_bucket(key)
 
             # Get request count for current minute
-            request_count = len([
-                minute for minute in self.request_counts[key]
-                if minute == current_minute
-            ])
+            request_count = len(
+                [
+                    minute
+                    for minute in self.request_counts[key]
+                    if minute == current_minute
+                ]
+            )
 
             info[key] = {
                 "current_tokens": int(tokens),
                 "requests_this_minute": request_count,
-                "max_burst": self.burst_size
+                "max_burst": self.burst_size,
             }
 
         return info
@@ -268,7 +273,7 @@ class SlidingWindowRateLimiter:
 # Global rate limiter instances
 api_rate_limiter = RateLimiter(
     requests_per_minute=120,  # 120 requests per minute for general API
-    burst_size=20
+    burst_size=20,
 )
 
 workflow_rate_limiter = SlidingWindowRateLimiter(
@@ -277,7 +282,7 @@ workflow_rate_limiter = SlidingWindowRateLimiter(
 
 recommendation_rate_limiter = RateLimiter(
     requests_per_minute=60,  # 60 recommendation requests per minute
-    burst_size=10
+    burst_size=10,
 )
 
 
@@ -293,9 +298,7 @@ async def check_api_rate_limit(request: Request, user_id: Optional[str] = None) 
     """
     allowed = await api_rate_limiter.is_allowed(request, user_id)
     if not allowed:
-        raise RateLimitException(
-            detail="Too many requests. Please try again later."
-        )
+        raise RateLimitException(detail="Too many requests. Please try again later.")
 
 
 async def check_workflow_rate_limit(user_id: str) -> None:
@@ -314,7 +317,9 @@ async def check_workflow_rate_limit(user_id: str) -> None:
         )
 
 
-async def check_recommendation_rate_limit(request: Request, user_id: Optional[str] = None) -> None:
+async def check_recommendation_rate_limit(
+    request: Request, user_id: Optional[str] = None
+) -> None:
     """Check recommendation rate limit and raise exception if exceeded.
 
     Args:

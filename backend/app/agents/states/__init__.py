@@ -2,7 +2,4 @@
 
 from .agent_state import AgentState, RecommendationState
 
-__all__ = [
-    "AgentState",
-    "RecommendationState"
-]
+__all__ = ["AgentState", "RecommendationState"]

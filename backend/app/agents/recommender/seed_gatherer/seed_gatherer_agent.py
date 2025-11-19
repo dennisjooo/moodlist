@@ -38,7 +38,7 @@ class SeedGathererAgent(BaseAgent):
         spotify_service: SpotifyService,
         reccobeat_service=None,
         llm=None,
-        verbose: bool = False
+        verbose: bool = False,
     ):
         """Initialize the seed gatherer agent.
 
@@ -52,7 +52,7 @@ class SeedGathererAgent(BaseAgent):
             name="seed_gatherer",
             description="Gathers seeds, searches user-mentioned tracks, selects anchors, discovers artists",
             llm=llm,
-            verbose=verbose
+            verbose=verbose,
         )
 
         self.spotify_service = spotify_service
@@ -68,11 +68,10 @@ class SeedGathererAgent(BaseAgent):
         self.anchor_track_selector = AnchorTrackSelector(
             spotify_service=spotify_service,
             reccobeat_service=reccobeat_service,
-            llm=llm
+            llm=llm,
         )
         self.artist_discovery = ArtistDiscovery(
-            spotify_service=spotify_service,
-            llm=llm
+            spotify_service=spotify_service, llm=llm
         )
 
     async def execute(self, state: AgentState) -> AgentState:
@@ -92,18 +91,22 @@ class SeedGathererAgent(BaseAgent):
             logger.info(f"Gathering seeds for user {state.user_id}")
 
             # Check if we have Spotify access token
-            if not hasattr(state, 'access_token') or not state.access_token:
+            if not hasattr(state, "access_token") or not state.access_token:
                 # Try to get from metadata or user record
                 access_token = state.metadata.get("spotify_access_token")
                 if not access_token:
-                    raise ValueError("No Spotify access token available for seed gathering")
+                    raise ValueError(
+                        "No Spotify access token available for seed gathering"
+                    )
 
             # Get intent analysis from state (set by IntentAnalyzerAgent)
             intent_analysis = state.metadata.get("intent_analysis", {})
 
             # STEP 1: Search for user-mentioned tracks
             step_start = time.time()
-            await self._search_user_mentioned_tracks(state, intent_analysis, access_token)
+            await self._search_user_mentioned_tracks(
+                state, intent_analysis, access_token
+            )
             timing_metrics["search_user_tracks"] = time.time() - step_start
 
             # STEP 2: Select anchor tracks
@@ -113,7 +116,9 @@ class SeedGathererAgent(BaseAgent):
 
             # STEP 3: Discover and validate artists
             step_start = time.time()
-            await self._discover_and_validate_artists(state, intent_analysis, access_token)
+            await self._discover_and_validate_artists(
+                state, intent_analysis, access_token
+            )
             timing_metrics["discover_artists"] = time.time() - step_start
 
             # STEP 4: Get user's top tracks for additional seeds
@@ -126,7 +131,7 @@ class SeedGathererAgent(BaseAgent):
                 access_token=access_token,
                 limit=20,
                 time_range="medium_term",
-                user_id=state.user_id
+                user_id=state.user_id,
             )
             timing_metrics["fetch_top_tracks"] = time.time() - step_start
 
@@ -144,7 +149,7 @@ class SeedGathererAgent(BaseAgent):
                 access_token=access_token,
                 limit=15,
                 time_range="medium_term",
-                user_id=state.user_id
+                user_id=state.user_id,
             )
             timing_metrics["fetch_top_artists"] = time.time() - step_start
 
@@ -173,7 +178,7 @@ class SeedGathererAgent(BaseAgent):
                 discover_artists_seconds=f"{timing_metrics.get('discover_artists', 0):.2f}",
                 fetch_top_tracks_seconds=f"{timing_metrics.get('fetch_top_tracks', 0):.2f}",
                 fetch_top_artists_seconds=f"{timing_metrics.get('fetch_top_artists', 0):.2f}",
-                build_seed_pool_seconds=f"{timing_metrics.get('build_seed_pool', 0):.2f}"
+                build_seed_pool_seconds=f"{timing_metrics.get('build_seed_pool', 0):.2f}",
             )
 
             # Store timing metrics in state for analysis
@@ -186,10 +191,7 @@ class SeedGathererAgent(BaseAgent):
         return state
 
     async def _search_user_mentioned_tracks(
-        self,
-        state: AgentState,
-        intent_analysis: dict,
-        access_token: str
+        self, state: AgentState, intent_analysis: dict, access_token: str
     ) -> None:
         """Search for tracks explicitly mentioned by the user.
 
@@ -208,7 +210,10 @@ class SeedGathererAgent(BaseAgent):
         state.current_step = "gathering_seeds_searching_user_tracks"
         await self._notify_progress(state)
 
-        found_track_ids, found_tracks = await self.user_track_searcher.search_user_mentioned_tracks(
+        (
+            found_track_ids,
+            found_tracks,
+        ) = await self.user_track_searcher.search_user_mentioned_tracks(
             user_mentioned_tracks, access_token
         )
 
@@ -217,10 +222,7 @@ class SeedGathererAgent(BaseAgent):
         state.metadata["user_mentioned_tracks_full"] = found_tracks
 
     async def _select_anchor_tracks(
-        self,
-        state: AgentState,
-        intent_analysis: dict,
-        access_token: str
+        self, state: AgentState, intent_analysis: dict, access_token: str
     ) -> None:
         """Select anchor tracks using mood analysis and genre keywords.
 
@@ -236,45 +238,51 @@ class SeedGathererAgent(BaseAgent):
         try:
             # Optimization: Check cache for anchor tracks
             cached_anchors = await cache_manager.get_anchor_tracks(
-                user_id=state.user_id,
-                mood_prompt=state.mood_prompt
+                user_id=state.user_id, mood_prompt=state.mood_prompt
             )
 
             if cached_anchors is not None:
-                logger.info(f"Cache hit for anchor tracks - using {len(cached_anchors)} cached anchors")
-                normalized_anchors = self._normalize_anchor_tracks(
-                    cached_anchors,
-                    state,
-                    intent_analysis
+                logger.info(
+                    f"Cache hit for anchor tracks - using {len(cached_anchors)} cached anchors"
                 )
-                anchor_ids = [track.get("id") for track in normalized_anchors if track.get("id")]
+                normalized_anchors = self._normalize_anchor_tracks(
+                    cached_anchors, state, intent_analysis
+                )
+                anchor_ids = [
+                    track.get("id") for track in normalized_anchors if track.get("id")
+                ]
                 state.metadata["anchor_tracks"] = normalized_anchors
                 state.metadata["anchor_track_ids"] = anchor_ids
                 return
 
             # Cache miss - compute anchor tracks
             # Prepare anchor selection parameters
-            anchor_params = self._prepare_anchor_selection_params(state, intent_analysis)
+            anchor_params = self._prepare_anchor_selection_params(
+                state, intent_analysis
+            )
 
             # Call anchor selection
-            anchor_tracks, anchor_ids = await self.anchor_track_selector.select_anchor_tracks(**anchor_params)
+            (
+                anchor_tracks,
+                anchor_ids,
+            ) = await self.anchor_track_selector.select_anchor_tracks(**anchor_params)
 
             normalized_anchors = self._normalize_anchor_tracks(
-                anchor_tracks,
-                state,
-                intent_analysis
+                anchor_tracks, state, intent_analysis
             )
 
             # Store results
             state.metadata["anchor_tracks"] = normalized_anchors
-            state.metadata["anchor_track_ids"] = [track.get("id") for track in normalized_anchors if track.get("id")]
+            state.metadata["anchor_track_ids"] = [
+                track.get("id") for track in normalized_anchors if track.get("id")
+            ]
 
             # Optimization: Cache the anchor tracks
             if normalized_anchors:
                 await cache_manager.set_anchor_tracks(
                     user_id=state.user_id,
                     mood_prompt=state.mood_prompt,
-                    anchor_tracks=normalized_anchors
+                    anchor_tracks=normalized_anchors,
                 )
                 logger.info(f"Cached {len(normalized_anchors)} anchor tracks")
 
@@ -286,16 +294,14 @@ class SeedGathererAgent(BaseAgent):
             state.metadata["anchor_track_ids"] = []
 
     def _prepare_anchor_selection_params(
-        self,
-        state: AgentState,
-        intent_analysis: dict
+        self, state: AgentState, intent_analysis: dict
     ) -> dict:
         """Prepare parameters for anchor track selection.
-        
+
         Args:
             state: Current agent state
             intent_analysis: Intent analysis data
-            
+
         Returns:
             Dictionary of parameters for anchor selection
         """
@@ -303,17 +309,17 @@ class SeedGathererAgent(BaseAgent):
         target_features = state.metadata.get("target_features", {})
         genre_keywords = mood_analysis.get("genre_keywords", [])
         artist_recommendations = mood_analysis.get("artist_recommendations", [])
-        
+
         # Use intent analysis for stricter genre matching if available
         if intent_analysis.get("primary_genre"):
             genre_keywords = [intent_analysis["primary_genre"]] + genre_keywords
 
         # Extract user-mentioned artists from intent analysis (HIGHEST PRIORITY)
         user_mentioned_artists = intent_analysis.get("user_mentioned_artists", [])
-        
+
         # Calculate appropriate anchor limit
         anchor_limit = self._calculate_anchor_limit(user_mentioned_artists)
-        
+
         return {
             "genre_keywords": genre_keywords,
             "target_features": target_features,
@@ -322,14 +328,11 @@ class SeedGathererAgent(BaseAgent):
             "artist_recommendations": artist_recommendations,
             "mood_analysis": mood_analysis,
             "limit": anchor_limit,
-            "user_mentioned_artists": user_mentioned_artists
+            "user_mentioned_artists": user_mentioned_artists,
         }
 
     def _normalize_anchor_tracks(
-        self,
-        anchor_tracks: List[dict],
-        state: AgentState,
-        intent_analysis: dict
+        self, anchor_tracks: List[dict], state: AgentState, intent_analysis: dict
     ) -> List[dict]:
         """Ensure anchor metadata correctly reflects actual user mentions."""
         if not anchor_tracks:
@@ -375,37 +378,34 @@ class SeedGathererAgent(BaseAgent):
 
     def _calculate_anchor_limit(self, user_mentioned_artists: list) -> int:
         """Calculate appropriate anchor limit based on user-mentioned artists.
-        
+
         Args:
             user_mentioned_artists: List of artists mentioned by user
-            
+
         Returns:
             Appropriate anchor limit
         """
         base_limit = 5
-        
+
         if not user_mentioned_artists:
             return base_limit
-        
+
         # Guarantee at least 2 tracks per user-mentioned artist, plus some genre anchors
         min_needed = len(user_mentioned_artists) * 2  # 2 tracks per artist
         anchor_limit = max(base_limit, min_needed + 2)  # +2 for genre diversity
-        
+
         logger.info(
             f"✓ Passing {len(user_mentioned_artists)} user-mentioned artists to anchor selection: "
             f"{user_mentioned_artists} (limit increased from {base_limit} to {anchor_limit})"
         )
-        
+
         return anchor_limit
 
     async def _discover_and_validate_artists(
-        self,
-        state: AgentState,
-        intent_analysis: dict,
-        access_token: str
+        self, state: AgentState, intent_analysis: dict, access_token: str
     ) -> None:
         """Discover and validate artists for the mood.
-        
+
         Args:
             state: Current agent state
             intent_analysis: Intent analysis
@@ -417,7 +417,7 @@ class SeedGathererAgent(BaseAgent):
 
         try:
             mood_analysis = state.mood_analysis or {}
-            
+
             # Discover artists using mood analysis
             await self.artist_discovery.discover_mood_artists(state, mood_analysis)
 
@@ -428,7 +428,7 @@ class SeedGathererAgent(BaseAgent):
                     "id": track.get("artist_id"),
                     "name": track.get("artist"),
                     "popularity": track.get("popularity", 50),
-                    "source": "user_mentioned"
+                    "source": "user_mentioned",
                 }
                 for track in user_mentioned_tracks
                 if track.get("artist_id")
@@ -440,7 +440,7 @@ class SeedGathererAgent(BaseAgent):
                     "id": track.get("artist_id"),
                     "name": track.get("artist"),
                     "popularity": track.get("popularity", 50),
-                    "source": "anchor_track"
+                    "source": "anchor_track",
                 }
                 for track in anchor_tracks
                 if track.get("artist_id")
@@ -449,31 +449,27 @@ class SeedGathererAgent(BaseAgent):
             # Merge and deduplicate all artist sources using shared utility
             discovered_artists = state.metadata.get("discovered_artists", [])
             discovered_artists = ArtistDeduplicator.merge_and_deduplicate(
-                discovered_artists,
-                user_mentioned_artists,
-                anchor_artists
+                discovered_artists, user_mentioned_artists, anchor_artists
             )
             state.metadata["discovered_artists"] = discovered_artists
 
             if user_mentioned_artists:
-                logger.info(f"Added artists from {len(user_mentioned_tracks)} user-mentioned tracks")
+                logger.info(
+                    f"Added artists from {len(user_mentioned_tracks)} user-mentioned tracks"
+                )
             if anchor_artists:
                 logger.info(f"Added artists from {len(anchor_tracks)} anchor tracks")
             logger.info(f"✓ Discovered {len(discovered_artists)} artists")
-            
+
         except Exception as e:
             logger.error(f"Error in artist discovery: {e}", exc_info=True)
             state.metadata["discovered_artists"] = []
 
     async def _build_seed_pool(
-        self,
-        state: AgentState,
-        top_tracks: list,
-        top_artists: list,
-        access_token: str
+        self, state: AgentState, top_tracks: list, top_artists: list, access_token: str
     ) -> None:
         """Build optimized seed pool from all sources.
-        
+
         Args:
             state: Current agent state
             top_tracks: User's top tracks
@@ -506,7 +502,9 @@ class SeedGathererAgent(BaseAgent):
         state.current_step = "gathering_seeds_selecting_seeds"
         await self._notify_progress(state)
 
-        scored_tracks = self.seed_selector.select_seed_tracks(top_tracks, target_features)
+        scored_tracks = self.seed_selector.select_seed_tracks(
+            top_tracks, target_features
+        )
 
         # Progress update after scoring
         state.current_step = "gathering_seeds_tracks_scored"
@@ -522,10 +520,10 @@ class SeedGathererAgent(BaseAgent):
         # Use LLM to select final seeds if available
         if self.llm and len(scored_tracks) > ideal_seed_count:
             final_seeds = await self.llm_seed_selector.select_seeds(
-                scored_tracks[:ideal_seed_count * 2],  # Give LLM 2x candidates
+                scored_tracks[: ideal_seed_count * 2],  # Give LLM 2x candidates
                 state.mood_prompt,
                 target_features,
-                ideal_count=ideal_seed_count
+                ideal_count=ideal_seed_count,
             )
         else:
             # Just use top scored tracks

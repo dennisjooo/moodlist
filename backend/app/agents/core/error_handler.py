@@ -30,7 +30,7 @@ class AgentError(Exception):
         error_code: str,
         severity: ErrorSeverity = ErrorSeverity.MEDIUM,
         details: Optional[Dict[str, Any]] = None,
-        cause: Optional[Exception] = None
+        cause: Optional[Exception] = None,
     ):
         super().__init__(message)
         self.message = message
@@ -48,7 +48,7 @@ class AgentError(Exception):
             "severity": self.severity.value,
             "details": self.details,
             "timestamp": self.timestamp.isoformat(),
-            "cause": str(self.cause) if self.cause else None
+            "cause": str(self.cause) if self.cause else None,
         }
 
 
@@ -74,26 +74,21 @@ class APIError(AgentError):
     """Error in external API calls."""
 
     def __init__(
-        self,
-        message: str,
-        api_name: str,
-        status_code: Optional[int] = None,
-        **kwargs
+        self, message: str, api_name: str, status_code: Optional[int] = None, **kwargs
     ):
         super().__init__(message, "API_ERROR", **kwargs)
         self.api_name = api_name
         self.status_code = status_code
-        self.details.update({
-            "api_name": api_name,
-            "status_code": status_code
-        })
+        self.details.update({"api_name": api_name, "status_code": status_code})
 
 
 class ConfigurationError(AgentError):
     """Error in system configuration."""
 
     def __init__(self, message: str, config_key: str, **kwargs):
-        super().__init__(message, "CONFIGURATION_ERROR", severity=ErrorSeverity.HIGH, **kwargs)
+        super().__init__(
+            message, "CONFIGURATION_ERROR", severity=ErrorSeverity.HIGH, **kwargs
+        )
         self.config_key = config_key
         self.details["config_key"] = config_key
 
@@ -107,9 +102,7 @@ class ErrorHandler:
         self.last_error_cleanup = datetime.now(timezone.utc)
 
     def handle_error(
-        self,
-        error: Exception,
-        context: Optional[Dict[str, Any]] = None
+        self, error: Exception, context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Handle and log an error with context.
 
@@ -128,7 +121,7 @@ class ErrorHandler:
             "message": str(error),
             "context": context,
             "traceback": traceback.format_exc(),
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         # Determine severity
@@ -199,13 +192,11 @@ class ErrorHandler:
         return {
             "total_errors_tracked": sum(self.error_counts.values()),
             "error_types": dict(self.error_counts),
-            "last_cleanup": self.last_error_cleanup.isoformat()
+            "last_cleanup": self.last_error_cleanup.isoformat(),
         }
 
     def create_http_exception(
-        self,
-        error: AgentError,
-        status_code: int = 500
+        self, error: AgentError, status_code: int = 500
     ) -> HTTPException:
         """Create an HTTP exception from an agent error.
 
@@ -222,7 +213,7 @@ class ErrorHandler:
             "AGENT_EXECUTION_ERROR": 500,
             "API_ERROR": 502,
             "CONFIGURATION_ERROR": 500,
-            "VALIDATION_ERROR": 400
+            "VALIDATION_ERROR": 400,
         }
 
         http_status = status_code_map.get(error.error_code, status_code)
@@ -234,8 +225,8 @@ class ErrorHandler:
                 "message": error.message,
                 "severity": error.severity.value,
                 "details": error.details,
-                "timestamp": error.timestamp.isoformat()
-            }
+                "timestamp": error.timestamp.isoformat(),
+            },
         )
 
 
@@ -243,7 +234,9 @@ class ErrorHandler:
 error_handler = ErrorHandler()
 
 
-def handle_agent_error(error: Exception, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def handle_agent_error(
+    error: Exception, context: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """Convenience function for handling agent errors.
 
     Args:
@@ -260,7 +253,7 @@ def create_agent_error(
     message: str,
     error_code: str,
     severity: ErrorSeverity = ErrorSeverity.MEDIUM,
-    **kwargs
+    **kwargs,
 ) -> AgentError:
     """Convenience function for creating agent errors.
 

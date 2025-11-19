@@ -8,15 +8,37 @@ class RegionalFilter:
 
     # Language indicators for track name detection
     LANGUAGE_INDICATORS = {
-        "spanish": ["el ", "la ", "los ", "las ", "mi ", "tu ", "de ", "con ", "por ", "para "],
+        "spanish": [
+            "el ",
+            "la ",
+            "los ",
+            "las ",
+            "mi ",
+            "tu ",
+            "de ",
+            "con ",
+            "por ",
+            "para ",
+        ],
         "korean": ["\u3131", "\u314f", "\uac00", "\ud7a3"],  # Hangul character ranges
         "japanese": ["\u3040", "\u309f", "\u30a0", "\u30ff"],  # Hiragana/Katakana
         "chinese": ["\u4e00", "\u9fff"],  # Common CJK
         "portuguese": ["meu ", "minha ", "você ", "está ", "muito ", "bem "],
-        "indonesian": ["aku ", "kamu ", "yang ", "dengan ", "untuk ", "dari ", "ini ", "itu ", "dan ", "atau "],
+        "indonesian": [
+            "aku ",
+            "kamu ",
+            "yang ",
+            "dengan ",
+            "untuk ",
+            "dari ",
+            "ini ",
+            "itu ",
+            "dan ",
+            "atau ",
+        ],
         "malay": ["saya ", "kita ", "kami ", "awak ", "dengan ", "untuk ", "dari "],
         "german": ["der ", "die ", "das ", "ich ", "du ", "und ", "mit "],
-        "french": ["le ", "la ", "les ", "de ", "je ", "tu ", "avec ", "pour "]
+        "french": ["le ", "la ", "les ", "de ", "je ", "tu ", "avec ", "pour "],
     }
 
     # Language to region mapping
@@ -29,23 +51,49 @@ class RegionalFilter:
         "indonesian": "Southeast Asian",
         "malay": "Southeast Asian",
         "german": "European",
-        "french": "European"
+        "french": "European",
     }
 
     # Genre-based region indicators for artist detection
     GENRE_REGION_INDICATORS = {
-        "Southeast Asian": ['indonesian', 'malay', 'malaysian', 'singapore', 'thai', 'vietnamese', 'filipino'],
-        "East Asian": ['k-pop', 'korean', 'j-pop', 'japanese', 'c-pop', 'chinese', 'mandopop', 'cantopop'],
-        "Latin American": ['latin', 'reggaeton', 'bachata', 'salsa', 'cumbia', 'banda', 'corridos', 'urbano latino'],
-        "Eastern European": ['russian', 'polish', 'ukrainian', 'balkan', 'romanian'],
-        "Middle Eastern": ['arabic', 'turkish', 'persian', 'khaleeji'],
-        "African": ['afrobeats', 'afropop', 'nigerian', 'south african', 'amapiano']
+        "Southeast Asian": [
+            "indonesian",
+            "malay",
+            "malaysian",
+            "singapore",
+            "thai",
+            "vietnamese",
+            "filipino",
+        ],
+        "East Asian": [
+            "k-pop",
+            "korean",
+            "j-pop",
+            "japanese",
+            "c-pop",
+            "chinese",
+            "mandopop",
+            "cantopop",
+        ],
+        "Latin American": [
+            "latin",
+            "reggaeton",
+            "bachata",
+            "salsa",
+            "cumbia",
+            "banda",
+            "corridos",
+            "urbano latino",
+        ],
+        "Eastern European": ["russian", "polish", "ukrainian", "balkan", "romanian"],
+        "Middle Eastern": ["arabic", "turkish", "persian", "khaleeji"],
+        "African": ["afrobeats", "afropop", "nigerian", "south african", "amapiano"],
     }
 
     # Flexible region matching (e.g., "Western" includes multiple sub-regions)
     REGION_ALIASES = {
         "western": ["american", "european", "british", "canadian", "australian"],
-        "european": ["french", "german", "italian", "spanish", "portuguese", "british"]
+        "european": ["french", "german", "italian", "spanish", "portuguese", "british"],
     }
 
     @classmethod
@@ -66,12 +114,20 @@ class RegionalFilter:
             for indicator in indicators:
                 if isinstance(indicator, str):
                     if indicator in track_and_artists:
-                        return cls.LANGUAGE_TO_REGION.get(language, language.capitalize())
+                        return cls.LANGUAGE_TO_REGION.get(
+                            language, language.capitalize()
+                        )
                 else:
                     # Unicode range check for CJK languages
                     for char in track_and_artists:
-                        if indicator <= char <= indicators[indicators.index(indicator) + 1]:
-                            return cls.LANGUAGE_TO_REGION.get(language, language.capitalize())
+                        if (
+                            indicator
+                            <= char
+                            <= indicators[indicators.index(indicator) + 1]
+                        ):
+                            return cls.LANGUAGE_TO_REGION.get(
+                                language, language.capitalize()
+                            )
 
         return None
 
@@ -86,7 +142,7 @@ class RegionalFilter:
         Returns:
             Detected region or None
         """
-        genres_lower = ' '.join(genres).lower()
+        genres_lower = " ".join(genres).lower()
 
         # Check each region's genre indicators
         for region, genre_indicators in cls.GENRE_REGION_INDICATORS.items():
@@ -96,7 +152,9 @@ class RegionalFilter:
         return None
 
     @classmethod
-    def is_region_excluded(cls, detected_region: str, excluded_regions: List[str]) -> bool:
+    def is_region_excluded(
+        cls, detected_region: str, excluded_regions: List[str]
+    ) -> bool:
         """Check if detected region matches any excluded region.
 
         Args:
@@ -124,7 +182,9 @@ class RegionalFilter:
         return False
 
     @classmethod
-    def region_matches_preferred(cls, detected_region: str, preferred_regions: List[str]) -> bool:
+    def region_matches_preferred(
+        cls, detected_region: str, preferred_regions: List[str]
+    ) -> bool:
         """Check if detected region matches any preferred region with flexible matching.
 
         Args:
@@ -152,7 +212,9 @@ class RegionalFilter:
                     return True
 
         # Partial match (e.g., "Latin American" matches "latin")
-        if any(pref in detected_lower or detected_lower in pref for pref in preferred_lower):
+        if any(
+            pref in detected_lower or detected_lower in pref for pref in preferred_lower
+        ):
             return True
 
         return False
@@ -162,7 +224,7 @@ class RegionalFilter:
         cls,
         detected_region: Optional[str],
         preferred_regions: List[str],
-        excluded_regions: List[str]
+        excluded_regions: List[str],
     ) -> tuple[bool, str]:
         """Validate if a detected region is compatible with mood preferences.
 
@@ -183,28 +245,89 @@ class RegionalFilter:
             return (True, "Region could not be determined")
 
         # Check if region is explicitly excluded
-        if excluded_regions and cls.is_region_excluded(detected_region, excluded_regions):
-            return (False, f"Regional mismatch: detected region '{detected_region}' is in excluded regions {excluded_regions}")
+        if excluded_regions and cls.is_region_excluded(
+            detected_region, excluded_regions
+        ):
+            return (
+                False,
+                f"Regional mismatch: detected region '{detected_region}' is in excluded regions {excluded_regions}",
+            )
 
         # Check if region matches preferred (if specified)
-        if preferred_regions and not cls.region_matches_preferred(detected_region, preferred_regions):
-            return (False, f"Regional mismatch: detected region '{detected_region}', expected one of {preferred_regions}")
+        if preferred_regions and not cls.region_matches_preferred(
+            detected_region, preferred_regions
+        ):
+            return (
+                False,
+                f"Regional mismatch: detected region '{detected_region}', expected one of {preferred_regions}",
+            )
 
         return (True, "Region matches mood intent")
 
     # Theme filtering - Keyword patterns for different themes
     THEME_INDICATORS = {
-        "holiday": ["christmas", "xmas", "santa", "jingle", "sleigh", "noel", "holiday",
-                   "winter wonderland", "silent night", "holy night", "feliz navidad",
-                   "deck the halls", "carol", "festive"],
-        "christmas": ["christmas", "xmas", "santa", "jingle", "sleigh", "noel",
-                     "silent night", "holy night", "feliz navidad", "deck the halls"],
-        "religious": ["holy", "prayer", "worship", "gospel", "praise", "blessed", "amen",
-                     "hallelujah", "church", "hymn", "psalm", "sacred"],
-        "kids": ["baby shark", "wheels on the bus", "itsy bitsy", "twinkle twinkle",
-                "abc song", "nursery rhyme", "children's", "kids bop"],
-        "children": ["baby shark", "wheels on the bus", "itsy bitsy", "twinkle twinkle",
-                    "abc song", "nursery rhyme", "children's", "kids bop"],
+        "holiday": [
+            "christmas",
+            "xmas",
+            "santa",
+            "jingle",
+            "sleigh",
+            "noel",
+            "holiday",
+            "winter wonderland",
+            "silent night",
+            "holy night",
+            "feliz navidad",
+            "deck the halls",
+            "carol",
+            "festive",
+        ],
+        "christmas": [
+            "christmas",
+            "xmas",
+            "santa",
+            "jingle",
+            "sleigh",
+            "noel",
+            "silent night",
+            "holy night",
+            "feliz navidad",
+            "deck the halls",
+        ],
+        "religious": [
+            "holy",
+            "prayer",
+            "worship",
+            "gospel",
+            "praise",
+            "blessed",
+            "amen",
+            "hallelujah",
+            "church",
+            "hymn",
+            "psalm",
+            "sacred",
+        ],
+        "kids": [
+            "baby shark",
+            "wheels on the bus",
+            "itsy bitsy",
+            "twinkle twinkle",
+            "abc song",
+            "nursery rhyme",
+            "children's",
+            "kids bop",
+        ],
+        "children": [
+            "baby shark",
+            "wheels on the bus",
+            "itsy bitsy",
+            "twinkle twinkle",
+            "abc song",
+            "nursery rhyme",
+            "children's",
+            "kids bop",
+        ],
         "comedy": ["parody", "comedy", "funny", "joke", "weird al", "lonely island"],
         "parody": ["parody", "weird al", "lonely island", "comedy"],
         "national anthems": ["national anthem", "star spangled banner", "god save"],
@@ -213,14 +336,12 @@ class RegionalFilter:
         "stadium": ["stadium anthem", "we will rock you", "we are the champions"],
         "video game": ["8-bit", "chiptune", "minecraft", "fortnite", "game soundtrack"],
         "soundtrack": ["movie soundtrack", "film score", "ost"],
-        "aggressive": ["rage", "angry", "screamo", "death metal", "brutal"]
+        "aggressive": ["rage", "angry", "screamo", "death metal", "brutal"],
     }
 
     @classmethod
     def validate_theme_compatibility(
-        cls,
-        track_name: str,
-        excluded_themes: List[str]
+        cls, track_name: str, excluded_themes: List[str]
     ) -> tuple[bool, str]:
         """Validate that track doesn't contain excluded themes.
 
@@ -242,6 +363,9 @@ class RegionalFilter:
 
             for indicator in indicators:
                 if indicator in track_lower:
-                    return (False, f"Theme exclusion: track contains '{indicator}' which matches excluded theme '{excluded_theme}'")
+                    return (
+                        False,
+                        f"Theme exclusion: track contains '{indicator}' which matches excluded theme '{excluded_theme}'",
+                    )
 
         return (True, "No excluded themes detected")

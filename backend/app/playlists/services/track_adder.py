@@ -42,15 +42,21 @@ class TrackAdder:
                     normalized_uri = self._normalize_spotify_uri(rec.spotify_uri)
                     if normalized_uri:
                         track_uris.append(normalized_uri)
-                        logger.debug(f"Normalized URI: {rec.spotify_uri} -> {normalized_uri}")
+                        logger.debug(
+                            f"Normalized URI: {rec.spotify_uri} -> {normalized_uri}"
+                        )
                     else:
-                        logger.warning(f"Could not normalize URI for track {rec.track_id}: {rec.spotify_uri}")
+                        logger.warning(
+                            f"Could not normalize URI for track {rec.track_id}: {rec.spotify_uri}"
+                        )
                 elif rec.track_id:
                     # Try to use track_id as fallback
                     normalized_uri = self._normalize_spotify_uri(rec.track_id)
                     if normalized_uri:
                         track_uris.append(normalized_uri)
-                        logger.debug(f"Using track_id as URI: {rec.track_id} -> {normalized_uri}")
+                        logger.debug(
+                            f"Using track_id as URI: {rec.track_id} -> {normalized_uri}"
+                        )
                 else:
                     logger.warning("No Spotify URI or track ID for recommendation")
 
@@ -64,18 +70,18 @@ class TrackAdder:
             # Split into chunks to respect API limits (100 tracks per request)
             chunk_size = 100
             for i in range(0, len(track_uris), chunk_size):
-                chunk = track_uris[i:i + chunk_size]
+                chunk = track_uris[i : i + chunk_size]
 
                 # Add tracks to playlist
                 access_token = state.metadata.get("spotify_access_token")
                 success = await self.spotify_service.add_tracks_to_playlist(
-                    access_token=access_token,
-                    playlist_id=playlist_id,
-                    track_uris=chunk
+                    access_token=access_token, playlist_id=playlist_id, track_uris=chunk
                 )
 
                 if not success:
-                    logger.error(f"Failed to add track chunk {i//chunk_size} to playlist")
+                    logger.error(
+                        f"Failed to add track chunk {i // chunk_size} to playlist"
+                    )
                     continue
 
                 # Add delay between chunks to respect rate limits
@@ -101,16 +107,16 @@ class TrackAdder:
             return None
 
         # If already a proper URI, return as-is
-        if uri_or_id.startswith('spotify:track:'):
+        if uri_or_id.startswith("spotify:track:"):
             return uri_or_id
 
         # If it's a URI with different format, extract ID
-        if 'spotify:' in uri_or_id:
-            parts = uri_or_id.split(':')
+        if "spotify:" in uri_or_id:
+            parts = uri_or_id.split(":")
             if len(parts) >= 3:
                 return f"spotify:track:{parts[-1]}"
 
         # If it's just an ID, format it
         # Remove any URL prefixes if present
-        track_id = uri_or_id.split('/')[-1].split('?')[0]
+        track_id = uri_or_id.split("/")[-1].split("?")[0]
         return f"spotify:track:{track_id}"

@@ -12,8 +12,7 @@ class EnergyAnalyzer:
     """Provides fallback energy analysis based on audio features."""
 
     def analyze_from_audio_features(
-        self,
-        recommendations: List[TrackRecommendation]
+        self, recommendations: List[TrackRecommendation]
     ) -> List[Dict[str, Any]]:
         """Provide fallback energy analysis based on audio features.
 
@@ -32,10 +31,7 @@ class EnergyAnalyzer:
 
         return analyses
 
-    def _analyze_single_track(
-        self,
-        rec: TrackRecommendation
-    ) -> Dict[str, Any]:
+    def _analyze_single_track(self, rec: TrackRecommendation) -> Dict[str, Any]:
         """Analyze a single track's energy characteristics.
 
         Args:
@@ -75,14 +71,16 @@ class EnergyAnalyzer:
             "closing_potential": closing_potential,
             "peak_potential": peak_potential,
             "phase_assignment": phase,
-            "reasoning": "Fallback analysis based on audio features"
+            "reasoning": "Fallback analysis based on audio features",
         }
 
     def _calculate_opening_potential(self, energy_level: float) -> float:
         """Calculate opening potential score."""
         return 60 if 40 < energy_level < 70 else 40
 
-    def _calculate_closing_potential(self, energy_level: float, valence: float) -> float:
+    def _calculate_closing_potential(
+        self, energy_level: float, valence: float
+    ) -> float:
         """Calculate closing potential score."""
         return 70 if energy_level < 50 or valence > 60 else 40
 
@@ -91,9 +89,7 @@ class EnergyAnalyzer:
         return energy_level if energy_level > 70 else 40
 
     def _assign_phase_from_energy(
-        self,
-        energy_level: float,
-        opening_potential: float
+        self, energy_level: float, opening_potential: float
     ) -> str:
         """Assign phase based on energy level."""
         if energy_level < 40:
@@ -104,4 +100,3 @@ class EnergyAnalyzer:
             return "mid"
         else:
             return "high"
-

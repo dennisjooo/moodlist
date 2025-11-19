@@ -1,4 +1,5 @@
 """Central logging configuration for the application."""
+
 import logging
 import sys
 import os
@@ -43,15 +44,15 @@ def configure_logging(log_level: str = "INFO", app_env: str = None) -> None:
 
     # Use console renderer for development, JSON for production
     # Also use console if LOG_LEVEL is DEBUG
-    is_development = (app_env or os.getenv("APP_ENV", "development")).lower() == "development"
+    is_development = (
+        app_env or os.getenv("APP_ENV", "development")
+    ).lower() == "development"
     use_json = not is_development and log_level.upper() != "DEBUG"
-    
+
     if use_json:
         # Production: JSON output
         structlog.configure(
-            processors=shared_processors + [
-                structlog.processors.JSONRenderer()
-            ],
+            processors=shared_processors + [structlog.processors.JSONRenderer()],
             wrapper_class=structlog.stdlib.BoundLogger,
             context_class=dict,
             logger_factory=structlog.stdlib.LoggerFactory(),
@@ -60,9 +61,7 @@ def configure_logging(log_level: str = "INFO", app_env: str = None) -> None:
     else:
         # Development: Pretty console output
         structlog.configure(
-            processors=shared_processors + [
-                structlog.dev.ConsoleRenderer()
-            ],
+            processors=shared_processors + [structlog.dev.ConsoleRenderer()],
             wrapper_class=structlog.stdlib.BoundLogger,
             context_class=dict,
             logger_factory=structlog.stdlib.LoggerFactory(),
@@ -73,7 +72,8 @@ def configure_logging(log_level: str = "INFO", app_env: str = None) -> None:
     structlog.configure(
         processors=[
             structlog.stdlib.filter_by_level,
-        ] + structlog.get_config()["processors"],
+        ]
+        + structlog.get_config()["processors"],
         wrapper_class=structlog.stdlib.BoundLogger,
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),

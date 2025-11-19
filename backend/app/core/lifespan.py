@@ -1,4 +1,5 @@
 """Application lifespan management."""
+
 import structlog
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -12,14 +13,16 @@ logger = structlog.get_logger(__name__)
 
 def _initialize_cache_manager():
     """Initialize cache manager singleton based on configuration.
-    
+
     Returns:
         CacheManager: Initialized cache manager instance
     """
     from app.agents.core.cache import CacheManager
-    
+
     if settings.REDIS_URL:
-        logger.info("Initializing cache manager with Valkey", redis_url=settings.REDIS_URL)
+        logger.info(
+            "Initializing cache manager with Valkey", redis_url=settings.REDIS_URL
+        )
         return CacheManager(settings.REDIS_URL)
     else:
         logger.info("No Valkey URL provided, using in-memory cache")
@@ -31,10 +34,13 @@ async def lifespan(app: FastAPI):
     """Application lifespan context manager."""
     # Configure logging first
     from app.core.logging_config import configure_logging
+
     configure_logging(log_level=settings.LOG_LEVEL, app_env=settings.APP_ENV)
 
     # Startup
-    logger.info("Starting application", app_name=settings.APP_NAME, environment=settings.APP_ENV)
+    logger.info(
+        "Starting application", app_name=settings.APP_NAME, environment=settings.APP_ENV
+    )
 
     # Validate required secrets before proceeding
     validate_required_secrets()
@@ -57,16 +63,19 @@ async def lifespan(app: FastAPI):
     # Gracefully shutdown active workflows first
     try:
         from app.agents.routes.dependencies import get_workflow_manager
+
         workflow_manager = get_workflow_manager()
         logger.info("Initiating graceful shutdown for active workflows")
         await workflow_manager.graceful_shutdown(timeout=300)  # 5 minutes max
     except Exception as e:
-        logger.error("Error during workflow graceful shutdown", error=str(e), exc_info=True)
+        logger.error(
+            "Error during workflow graceful shutdown", error=str(e), exc_info=True
+        )
 
     # Close cache manager connection
     from app.agents.core.cache import get_cache_manager
 
     cache_manager = get_cache_manager()
-    if hasattr(cache_manager, 'close'):
+    if hasattr(cache_manager, "close"):
         logger.info("Closing cache manager connection")
         await cache_manager.close()

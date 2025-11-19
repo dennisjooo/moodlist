@@ -11,5 +11,5 @@ __all__ = [
     "QualityEvaluator",
     "CohesionCalculator",
     "ImprovementStrategy",
-    "RecommendationProcessor"
+    "RecommendationProcessor",
 ]

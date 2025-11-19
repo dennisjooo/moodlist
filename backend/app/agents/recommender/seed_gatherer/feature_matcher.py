@@ -10,9 +10,7 @@ class FeatureMatcher:
     """Handles feature matching and similarity calculations for seed selection."""
 
     def calculate_mood_match_score(
-        self,
-        track: Dict[str, Any],
-        target_features: Dict[str, Any]
+        self, track: Dict[str, Any], target_features: Dict[str, Any]
     ) -> float:
         """Calculate how well a track matches target mood features using all available audio features and weights.
 
@@ -28,7 +26,9 @@ class FeatureMatcher:
             return track.get("popularity", 50) / 100.0
 
         # Extract feature weights if provided, otherwise use defaults
-        feature_weights = target_features.get("_weights", self._get_default_feature_weights())
+        feature_weights = target_features.get(
+            "_weights", self._get_default_feature_weights()
+        )
 
         total_score = 0.0
         total_weight = 0.0
@@ -38,7 +38,9 @@ class FeatureMatcher:
             if feature == "_weights" or feature not in feature_weights:
                 continue
 
-            weight = feature_weights.get(feature, 0.1)  # Default weight if not specified
+            weight = feature_weights.get(
+                feature, 0.1
+            )  # Default weight if not specified
             track_value = self._get_track_feature_value(track, feature)
 
             if track_value is not None:
@@ -75,10 +77,12 @@ class FeatureMatcher:
             "speechiness": 0.05,
             "liveness": 0.05,
             "key": 0.03,
-            "popularity": 0.01
+            "popularity": 0.01,
         }
 
-    def _get_track_feature_value(self, track: Dict[str, Any], feature: str) -> Optional[float]:
+    def _get_track_feature_value(
+        self, track: Dict[str, Any], feature: str
+    ) -> Optional[float]:
         """Extract feature value from Spotify track data.
 
         Args:
@@ -101,16 +105,13 @@ class FeatureMatcher:
             "speechiness": track.get("speechiness"),
             "liveness": track.get("liveness"),
             "key": track.get("key"),
-            "popularity": track.get("popularity")
+            "popularity": track.get("popularity"),
         }
 
         return feature_mapping.get(feature)
 
     def _calculate_feature_similarity(
-        self,
-        track_value: float,
-        target_value: float,
-        feature: str
+        self, track_value: float, target_value: float, feature: str
     ) -> float:
         """Calculate similarity between track feature and target feature.
 

@@ -19,9 +19,7 @@ class UserTrackSearcher:
         self.spotify_service = spotify_service
 
     async def search_user_mentioned_tracks(
-        self,
-        user_mentioned_tracks: List[Dict[str, Any]],
-        access_token: str
+        self, user_mentioned_tracks: List[Dict[str, Any]], access_token: str
     ) -> tuple[List[str], List[Dict[str, Any]]]:
         """Search for tracks explicitly mentioned by the user.
 
@@ -55,14 +53,16 @@ class UserTrackSearcher:
                     found_track_ids.append(track_id)
                     found_tracks.append(track_entry)
 
-        logger.info(f"Found {len(found_tracks)}/{len(user_mentioned_tracks)} user-mentioned tracks")
+        logger.info(
+            f"Found {len(found_tracks)}/{len(user_mentioned_tracks)} user-mentioned tracks"
+        )
         return found_track_ids, found_tracks
 
     async def _search_single_track(
         self,
         track_info: Dict[str, Any],
         access_token: str,
-        semaphore: asyncio.Semaphore
+        semaphore: asyncio.Semaphore,
     ) -> Optional[Tuple[str, Dict[str, Any]]]:
         """Search a single user-mentioned track with bounded concurrency.
 
@@ -82,9 +82,7 @@ class UserTrackSearcher:
             try:
                 search_query = f"track:{track_name} artist:{artist_name}"
                 search_results = await self.spotify_service.search_spotify_tracks(
-                    access_token=access_token,
-                    query=search_query,
-                    limit=3
+                    access_token=access_token, query=search_query, limit=3
                 )
 
                 if search_results:
@@ -102,7 +100,7 @@ class UserTrackSearcher:
                             "user_mentioned": True,
                             "priority": priority,
                             "anchor_type": "user",
-                            "protected": True
+                            "protected": True,
                         }
                         logger.info(
                             f"✓ Found user-mentioned track: '{track.get('name')}' "

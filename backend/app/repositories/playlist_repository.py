@@ -22,12 +22,12 @@ logger = structlog.get_logger(__name__)
 
 def safe_json_get(json_field: Optional[dict], key: str, default: Any = None) -> Any:
     """Safely get value from JSON field that might be None.
-    
+
     Args:
         json_field: JSON field which might be None
         key: Key to retrieve
         default: Default value if field is None or key doesn't exist
-        
+
     Returns:
         Value from JSON field or default
     """
@@ -83,10 +83,18 @@ class PlaylistRepository(BaseRepository[Playlist]):
 
         if search_query:
             search_term = f"%{search_query.lower()}%"
-            playlist_name = func.coalesce(Playlist.playlist_data["name"].as_string(), "")
-            primary_emotion = func.coalesce(Playlist.mood_analysis_data["primary_emotion"].as_string(), "")
-            energy_level = func.coalesce(Playlist.mood_analysis_data["energy_level"].as_string(), "")
-            recommendations_data = func.coalesce(func.cast(Playlist.recommendations_data, String), "")
+            playlist_name = func.coalesce(
+                Playlist.playlist_data["name"].as_string(), ""
+            )
+            primary_emotion = func.coalesce(
+                Playlist.mood_analysis_data["primary_emotion"].as_string(), ""
+            )
+            energy_level = func.coalesce(
+                Playlist.mood_analysis_data["energy_level"].as_string(), ""
+            )
+            recommendations_data = func.coalesce(
+                func.cast(Playlist.recommendations_data, String), ""
+            )
             query = query.where(
                 or_(
                     func.lower(Playlist.mood_prompt).like(search_term),
@@ -107,7 +115,9 @@ class PlaylistRepository(BaseRepository[Playlist]):
         sort_column = Playlist.created_at
         if sort_by == "name":
             sort_column = func.lower(
-                func.coalesce(Playlist.playlist_data["name"].as_string(), Playlist.mood_prompt)
+                func.coalesce(
+                    Playlist.playlist_data["name"].as_string(), Playlist.mood_prompt
+                )
             )
         elif sort_by == "track_count":
             sort_column = Playlist.track_count
@@ -190,7 +200,11 @@ class PlaylistRepository(BaseRepository[Playlist]):
                     raise ValidationException(
                         f"Status must be a string, got {type(status_item).__name__}"
                     )
-            query = query.where(func.lower(Playlist.status).not_in([status.lower() for status in exclude_statuses]))
+            query = query.where(
+                func.lower(Playlist.status).not_in(
+                    [status.lower() for status in exclude_statuses]
+                )
+            )
 
         return await self._execute_playlist_query(
             query,
@@ -221,7 +235,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
         sort_order: str = "desc",
     ) -> Tuple[List[Playlist], int]:
         """Get playlists for a specific user with count in a single optimized query.
-        
+
         This method is more efficient than calling get_by_user_id_with_filters and
         count_user_playlists_with_filters separately as it performs both operations
         in a single database round-trip.
@@ -243,10 +257,10 @@ class PlaylistRepository(BaseRepository[Playlist]):
         try:
             # Build the base WHERE clause
             where_clauses = [Playlist.user_id == user_id]
-            
+
             if not include_deleted:
                 where_clauses.append(Playlist.deleted_at.is_(None))
-            
+
             if status:
                 where_clauses.append(Playlist.status == status)
             elif exclude_statuses:
@@ -254,21 +268,32 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 for status_item in exclude_statuses:
                     if not isinstance(status_item, str):
                         from app.core.exceptions import ValidationException
+
                         raise ValidationException(
                             f"Status must be a string, got {type(status_item).__name__}"
                         )
                 where_clauses.append(
-                    func.lower(Playlist.status).not_in([s.lower() for s in exclude_statuses])
+                    func.lower(Playlist.status).not_in(
+                        [s.lower() for s in exclude_statuses]
+                    )
                 )
-            
+
             # Add search conditions if provided
             if search_query:
                 search_term = f"%{search_query.lower()}%"
-                playlist_name = func.coalesce(Playlist.playlist_data["name"].as_string(), "")
-                primary_emotion = func.coalesce(Playlist.mood_analysis_data["primary_emotion"].as_string(), "")
-                energy_level = func.coalesce(Playlist.mood_analysis_data["energy_level"].as_string(), "")
-                recommendations_data = func.coalesce(func.cast(Playlist.recommendations_data, String), "")
-                
+                playlist_name = func.coalesce(
+                    Playlist.playlist_data["name"].as_string(), ""
+                )
+                primary_emotion = func.coalesce(
+                    Playlist.mood_analysis_data["primary_emotion"].as_string(), ""
+                )
+                energy_level = func.coalesce(
+                    Playlist.mood_analysis_data["energy_level"].as_string(), ""
+                )
+                recommendations_data = func.coalesce(
+                    func.cast(Playlist.recommendations_data, String), ""
+                )
+
                 where_clauses.append(
                     or_(
                         func.lower(Playlist.mood_prompt).like(search_term),
@@ -279,46 +304,48 @@ class PlaylistRepository(BaseRepository[Playlist]):
                         func.lower(recommendations_data).like(search_term),
                     )
                 )
-            
+
             # First, get the total count with a simple count query
             count_query = select(func.count(Playlist.id)).where(and_(*where_clauses))
             count_result = await self.session.execute(count_query)
             total_count = count_result.scalar() or 0
-            
+
             # If total_count is 0, return early
             if total_count == 0:
                 self.logger.debug(
                     "No playlists found for user with filters",
                     user_id=user_id,
-                    search_query=search_query
+                    search_query=search_query,
                 )
                 return ([], 0)
-            
+
             # Build the main query for playlists
             query = select(Playlist).where(and_(*where_clauses))
-            
+
             # Apply sorting
             sort_column = Playlist.created_at
             if sort_by == "name":
                 sort_column = func.lower(
-                    func.coalesce(Playlist.playlist_data["name"].as_string(), Playlist.mood_prompt)
+                    func.coalesce(
+                        Playlist.playlist_data["name"].as_string(), Playlist.mood_prompt
+                    )
                 )
             elif sort_by == "track_count":
                 sort_column = Playlist.track_count
-            
+
             order_func = desc if sort_order.lower() == "desc" else asc
             query = query.order_by(order_func(sort_column), desc(Playlist.created_at))
-            
+
             # Apply pagination
             if skip:
                 query = query.offset(skip)
             if limit:
                 query = query.limit(limit)
-            
+
             # Execute query
             result = await self.session.execute(query)
             playlists = list(result.scalars().all())
-            
+
             self.logger.debug(
                 "User playlists retrieved with count (optimized)",
                 user_id=user_id,
@@ -330,9 +357,9 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 sort_by=sort_by,
                 sort_order=sort_order,
             )
-            
+
             return (playlists, total_count)
-            
+
         except Exception as exc:
             self.logger.error(
                 "Database error retrieving user playlists with count",
@@ -348,7 +375,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
         skip: int = 0,
         limit: Optional[int] = None,
         include_deleted: bool = False,
-        load_relationships: Optional[List[str]] = None
+        load_relationships: Optional[List[str]] = None,
     ) -> List[Playlist]:
         """Get playlists for a specific user.
 
@@ -396,9 +423,13 @@ class PlaylistRepository(BaseRepository[Playlist]):
             playlist = result.scalar_one_or_none()
 
             if playlist:
-                self.logger.debug("Playlist retrieved by session ID for update", session_id=session_id)
+                self.logger.debug(
+                    "Playlist retrieved by session ID for update", session_id=session_id
+                )
             else:
-                self.logger.debug("Playlist not found by session ID for update", session_id=session_id)
+                self.logger.debug(
+                    "Playlist not found by session ID for update", session_id=session_id
+                )
 
             return playlist
 
@@ -406,11 +437,13 @@ class PlaylistRepository(BaseRepository[Playlist]):
             self.logger.error(
                 "Database error retrieving playlist by session ID for update",
                 session_id=session_id,
-                error=str(e)
+                error=str(e),
             )
             raise
 
-    async def get_by_session_id(self, session_id: str, load_relationships: Optional[List[str]] = None) -> Optional[Playlist]:
+    async def get_by_session_id(
+        self, session_id: str, load_relationships: Optional[List[str]] = None
+    ) -> Optional[Playlist]:
         """Get playlist by workflow session ID.
 
         Args:
@@ -431,9 +464,13 @@ class PlaylistRepository(BaseRepository[Playlist]):
             playlist = result.scalar_one_or_none()
 
             if playlist:
-                self.logger.debug("Playlist retrieved by session ID", session_id=session_id)
+                self.logger.debug(
+                    "Playlist retrieved by session ID", session_id=session_id
+                )
             else:
-                self.logger.debug("Playlist not found for session ID", session_id=session_id)
+                self.logger.debug(
+                    "Playlist not found for session ID", session_id=session_id
+                )
 
             return playlist
 
@@ -441,11 +478,13 @@ class PlaylistRepository(BaseRepository[Playlist]):
             self.logger.error(
                 "Database error retrieving playlist by session ID",
                 session_id=session_id,
-                error=str(e)
+                error=str(e),
             )
             raise
 
-    async def get_by_spotify_id(self, spotify_playlist_id: str, load_relationships: Optional[List[str]] = None) -> Optional[Playlist]:
+    async def get_by_spotify_id(
+        self, spotify_playlist_id: str, load_relationships: Optional[List[str]] = None
+    ) -> Optional[Playlist]:
         """Get playlist by Spotify playlist ID.
 
         Args:
@@ -456,7 +495,9 @@ class PlaylistRepository(BaseRepository[Playlist]):
             Playlist instance or None if not found
         """
         try:
-            query = select(Playlist).where(Playlist.spotify_playlist_id == spotify_playlist_id)
+            query = select(Playlist).where(
+                Playlist.spotify_playlist_id == spotify_playlist_id
+            )
 
             if load_relationships:
                 for relationship in load_relationships:
@@ -466,9 +507,15 @@ class PlaylistRepository(BaseRepository[Playlist]):
             playlist = result.scalar_one_or_none()
 
             if playlist:
-                self.logger.debug("Playlist retrieved by Spotify ID", spotify_playlist_id=spotify_playlist_id)
+                self.logger.debug(
+                    "Playlist retrieved by Spotify ID",
+                    spotify_playlist_id=spotify_playlist_id,
+                )
             else:
-                self.logger.debug("Playlist not found for Spotify ID", spotify_playlist_id=spotify_playlist_id)
+                self.logger.debug(
+                    "Playlist not found for Spotify ID",
+                    spotify_playlist_id=spotify_playlist_id,
+                )
 
             return playlist
 
@@ -476,7 +523,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
             self.logger.error(
                 "Database error retrieving playlist by Spotify ID",
                 spotify_playlist_id=spotify_playlist_id,
-                error=str(e)
+                error=str(e),
             )
             raise
 
@@ -484,7 +531,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
         self,
         user_id: int,
         limit: int = 10,
-        load_relationships: Optional[List[str]] = None
+        load_relationships: Optional[List[str]] = None,
     ) -> List[Playlist]:
         """Get recent playlists for a user.
 
@@ -497,9 +544,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
             List of recent playlists
         """
         return await self.get_by_user_id(
-            user_id=user_id,
-            limit=limit,
-            load_relationships=load_relationships
+            user_id=user_id, limit=limit, load_relationships=load_relationships
         )
 
     async def get_by_status(
@@ -507,7 +552,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
         status: str,
         skip: int = 0,
         limit: Optional[int] = None,
-        load_relationships: Optional[List[str]] = None
+        load_relationships: Optional[List[str]] = None,
     ) -> List[Playlist]:
         """Get playlists by status.
 
@@ -522,10 +567,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
         """
         try:
             query = select(Playlist).where(
-                and_(
-                    Playlist.status == status,
-                    Playlist.deleted_at.is_(None)
-                )
+                and_(Playlist.status == status, Playlist.deleted_at.is_(None))
             )
 
             # Apply pagination
@@ -550,7 +592,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 status=status,
                 count=len(playlists),
                 skip=skip,
-                limit=limit
+                limit=limit,
             )
 
             return list(playlists)
@@ -559,7 +601,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
             self.logger.error(
                 "Database error retrieving playlists by status",
                 status=status,
-                error=str(e)
+                error=str(e),
             )
             raise
 
@@ -586,9 +628,13 @@ class PlaylistRepository(BaseRepository[Playlist]):
             deleted = result.rowcount > 0
 
             if deleted:
-                self.logger.info("Playlist soft deleted successfully", playlist_id=playlist_id)
+                self.logger.info(
+                    "Playlist soft deleted successfully", playlist_id=playlist_id
+                )
             else:
-                self.logger.debug("Playlist not found for soft deletion", playlist_id=playlist_id)
+                self.logger.debug(
+                    "Playlist not found for soft deletion", playlist_id=playlist_id
+                )
 
             return deleted
 
@@ -596,12 +642,14 @@ class PlaylistRepository(BaseRepository[Playlist]):
             self.logger.error(
                 "Database error soft deleting playlist",
                 playlist_id=playlist_id,
-                error=str(e)
+                error=str(e),
             )
             await self.session.rollback()
             raise
 
-    async def get_by_session_id_for_user(self, session_id: str, user_id: int, include_deleted: bool = False) -> Optional[Playlist]:
+    async def get_by_session_id_for_user(
+        self, session_id: str, user_id: int, include_deleted: bool = False
+    ) -> Optional[Playlist]:
         """Get playlist by session ID with user ownership check.
 
         Args:
@@ -614,8 +662,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
         """
         try:
             query = select(Playlist).where(
-                Playlist.session_id == session_id,
-                Playlist.user_id == user_id
+                Playlist.session_id == session_id, Playlist.user_id == user_id
             )
 
             if not include_deleted:
@@ -625,9 +672,17 @@ class PlaylistRepository(BaseRepository[Playlist]):
             playlist = result.scalar_one_or_none()
 
             if playlist:
-                self.logger.debug("Playlist retrieved by session ID for user", session_id=session_id, user_id=user_id)
+                self.logger.debug(
+                    "Playlist retrieved by session ID for user",
+                    session_id=session_id,
+                    user_id=user_id,
+                )
             else:
-                self.logger.debug("Playlist not found by session ID for user", session_id=session_id, user_id=user_id)
+                self.logger.debug(
+                    "Playlist not found by session ID for user",
+                    session_id=session_id,
+                    user_id=user_id,
+                )
 
             return playlist
 
@@ -636,11 +691,13 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "Database error retrieving playlist by session ID for user",
                 session_id=session_id,
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise InternalServerError("Failed to retrieve playlist")
 
-    async def get_by_id_for_user(self, playlist_id: int, user_id: int, include_deleted: bool = False) -> Optional[Playlist]:
+    async def get_by_id_for_user(
+        self, playlist_id: int, user_id: int, include_deleted: bool = False
+    ) -> Optional[Playlist]:
         """Get playlist by ID with user ownership check.
 
         Args:
@@ -653,8 +710,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
         """
         try:
             query = select(Playlist).where(
-                Playlist.id == playlist_id,
-                Playlist.user_id == user_id
+                Playlist.id == playlist_id, Playlist.user_id == user_id
             )
 
             if not include_deleted:
@@ -664,9 +720,17 @@ class PlaylistRepository(BaseRepository[Playlist]):
             playlist = result.scalar_one_or_none()
 
             if playlist:
-                self.logger.debug("Playlist retrieved for user", playlist_id=playlist_id, user_id=user_id)
+                self.logger.debug(
+                    "Playlist retrieved for user",
+                    playlist_id=playlist_id,
+                    user_id=user_id,
+                )
             else:
-                self.logger.debug("Playlist not found for user", playlist_id=playlist_id, user_id=user_id)
+                self.logger.debug(
+                    "Playlist not found for user",
+                    playlist_id=playlist_id,
+                    user_id=user_id,
+                )
 
             return playlist
 
@@ -675,7 +739,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "Database error retrieving playlist for user",
                 playlist_id=playlist_id,
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise InternalServerError("Failed to retrieve playlist")
 
@@ -698,16 +762,13 @@ class PlaylistRepository(BaseRepository[Playlist]):
             return cached_stats
 
         try:
-            stmt = (
-                select(
-                    func.count(Playlist.id).label("total_playlists"),
-                    func.count(Playlist.spotify_playlist_id).label("saved_playlists"),
-                    func.coalesce(func.sum(Playlist.track_count), 0).label("total_tracks"),
-                )
-                .where(
-                    Playlist.user_id == user_id,
-                    Playlist.deleted_at.is_(None),
-                )
+            stmt = select(
+                func.count(Playlist.id).label("total_playlists"),
+                func.count(Playlist.spotify_playlist_id).label("saved_playlists"),
+                func.coalesce(func.sum(Playlist.track_count), 0).label("total_tracks"),
+            ).where(
+                Playlist.user_id == user_id,
+                Playlist.deleted_at.is_(None),
             )
 
             result = await self.session.execute(stmt)
@@ -722,18 +783,22 @@ class PlaylistRepository(BaseRepository[Playlist]):
             # Cache the stats for 5 minutes
             await cache_manager.cache.set(cache_key, stats, ttl=300)
 
-            self.logger.debug("User playlist stats retrieved and cached", user_id=user_id, **stats)
+            self.logger.debug(
+                "User playlist stats retrieved and cached", user_id=user_id, **stats
+            )
             return stats
 
         except Exception as e:
             self.logger.error(
                 "Database error retrieving user playlist stats",
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise
 
-    async def get_session_status_snapshot(self, session_id: str) -> Optional[PlaylistSessionSnapshot]:
+    async def get_session_status_snapshot(
+        self, session_id: str
+    ) -> Optional[PlaylistSessionSnapshot]:
         """Return lightweight playlist data needed for status polling.
 
         Args:
@@ -744,21 +809,18 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 func.jsonb_array_length(cast(Playlist.recommendations_data, JSONB)), 0
             ).label("recommendation_count")
 
-            stmt = (
-                select(
-                    Playlist.status,
-                    Playlist.mood_prompt,
-                    Playlist.mood_analysis_data,
-                    Playlist.spotify_playlist_id,
-                    Playlist.error_message,
-                    Playlist.created_at,
-                    Playlist.updated_at,
-                    recommendation_count_expr,
-                )
-                .where(
-                    Playlist.session_id == session_id,
-                    Playlist.deleted_at.is_(None),
-                )
+            stmt = select(
+                Playlist.status,
+                Playlist.mood_prompt,
+                Playlist.mood_analysis_data,
+                Playlist.spotify_playlist_id,
+                Playlist.error_message,
+                Playlist.created_at,
+                Playlist.updated_at,
+                recommendation_count_expr,
+            ).where(
+                Playlist.session_id == session_id,
+                Playlist.deleted_at.is_(None),
             )
 
             result = await self.session.execute(stmt)
@@ -787,25 +849,24 @@ class PlaylistRepository(BaseRepository[Playlist]):
             )
             raise
 
-    async def get_session_results_snapshot(self, session_id: str) -> Optional[PlaylistSessionSnapshot]:
+    async def get_session_results_snapshot(
+        self, session_id: str
+    ) -> Optional[PlaylistSessionSnapshot]:
         """Return playlist data required to build final workflow results."""
         try:
-            stmt = (
-                select(
-                    Playlist.status,
-                    Playlist.mood_prompt,
-                    Playlist.mood_analysis_data,
-                    Playlist.spotify_playlist_id,
-                    Playlist.playlist_data,
-                    Playlist.recommendations_data,
-                    Playlist.error_message,
-                    Playlist.created_at,
-                    Playlist.updated_at,
-                )
-                .where(
-                    Playlist.session_id == session_id,
-                    Playlist.deleted_at.is_(None),
-                )
+            stmt = select(
+                Playlist.status,
+                Playlist.mood_prompt,
+                Playlist.mood_analysis_data,
+                Playlist.spotify_playlist_id,
+                Playlist.playlist_data,
+                Playlist.recommendations_data,
+                Playlist.error_message,
+                Playlist.created_at,
+                Playlist.updated_at,
+            ).where(
+                Playlist.session_id == session_id,
+                Playlist.deleted_at.is_(None),
             )
 
             result = await self.session.execute(stmt)
@@ -865,14 +926,16 @@ class PlaylistRepository(BaseRepository[Playlist]):
             total_playlists = playlists_result.scalar() or 0
 
             # Completed playlists
-            completed_query = select(func.count(Playlist.id)).where(Playlist.status == "completed")
+            completed_query = select(func.count(Playlist.id)).where(
+                Playlist.status == "completed"
+            )
             completed_result = await self.session.execute(completed_query)
             completed_playlists = completed_result.scalar() or 0
 
             stats = {
                 "total_users": total_users,
                 "total_playlists": total_playlists,
-                "completed_playlists": completed_playlists
+                "completed_playlists": completed_playlists,
             }
 
             # Cache for 5 minutes
@@ -883,8 +946,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
 
         except Exception as e:
             self.logger.error(
-                "Database error retrieving public playlist stats",
-                error=str(e)
+                "Database error retrieving public playlist stats", error=str(e)
             )
             raise
 
@@ -894,7 +956,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
         spotify_playlist_id: str,
         playlist_name: str,
         spotify_url: str,
-        spotify_uri: Optional[str] = None
+        spotify_uri: Optional[str] = None,
     ) -> bool:
         """Update playlist with Spotify information after saving to Spotify.
 
@@ -913,10 +975,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
             from app.core.constants import PlaylistStatus
 
             # Build playlist data
-            playlist_data = {
-                "name": playlist_name,
-                "spotify_url": spotify_url
-            }
+            playlist_data = {"name": playlist_name, "spotify_url": spotify_url}
             if spotify_uri:
                 playlist_data["spotify_uri"] = spotify_uri
 
@@ -925,11 +984,12 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "spotify_playlist_id": spotify_playlist_id,
                 "status": PlaylistStatus.COMPLETED,
                 "playlist_data": playlist_data,
-                "updated_at": datetime.now(timezone.utc)
+                "updated_at": datetime.now(timezone.utc),
             }
 
             # Use a raw update query since we need to update by session_id
             from sqlalchemy import update
+
             query = (
                 update(Playlist)
                 .where(Playlist.session_id == session_id)
@@ -945,12 +1005,11 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 self.logger.info(
                     "Playlist updated with Spotify info",
                     session_id=session_id,
-                    spotify_playlist_id=spotify_playlist_id
+                    spotify_playlist_id=spotify_playlist_id,
                 )
             else:
                 self.logger.warning(
-                    "Playlist not found for Spotify info update",
-                    session_id=session_id
+                    "Playlist not found for Spotify info update", session_id=session_id
                 )
 
             return updated
@@ -959,7 +1018,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
             self.logger.error(
                 "Database error updating playlist Spotify info",
                 session_id=session_id,
-                error=str(e)
+                error=str(e),
             )
             await self.session.rollback()
             raise
@@ -995,17 +1054,29 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 query = query.where(Playlist.status == status)
             elif exclude_statuses:
                 # Exclude specified statuses (case insensitive)
-                query = query.where(func.lower(Playlist.status).not_in([status.lower() for status in exclude_statuses]))
+                query = query.where(
+                    func.lower(Playlist.status).not_in(
+                        [status.lower() for status in exclude_statuses]
+                    )
+                )
             else:
                 # Exclude cancelled playlists by default unless specifically filtering for them
                 query = query.where(Playlist.status != "cancelled")
 
             if search_query:
                 search_term = f"%{search_query.lower()}%"
-                playlist_name = func.coalesce(Playlist.playlist_data["name"].as_string(), "")
-                primary_emotion = func.coalesce(Playlist.mood_analysis_data["primary_emotion"].as_string(), "")
-                energy_level = func.coalesce(Playlist.mood_analysis_data["energy_level"].as_string(), "")
-                recommendations_data = func.coalesce(func.cast(Playlist.recommendations_data, String), "")
+                playlist_name = func.coalesce(
+                    Playlist.playlist_data["name"].as_string(), ""
+                )
+                primary_emotion = func.coalesce(
+                    Playlist.mood_analysis_data["primary_emotion"].as_string(), ""
+                )
+                energy_level = func.coalesce(
+                    Playlist.mood_analysis_data["energy_level"].as_string(), ""
+                )
+                recommendations_data = func.coalesce(
+                    func.cast(Playlist.recommendations_data, String), ""
+                )
                 query = query.where(
                     or_(
                         func.lower(Playlist.mood_prompt).like(search_term),
@@ -1036,11 +1107,13 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "Database error counting user playlists with filters",
                 user_id=user_id,
                 status=status,
-                error=str(e)
+                error=str(e),
             )
             raise
 
-    async def get_user_playlist_count(self, user_id: int, include_deleted: bool = False) -> int:
+    async def get_user_playlist_count(
+        self, user_id: int, include_deleted: bool = False
+    ) -> int:
         """Get total playlist count for a user.
 
         Args:
@@ -1063,25 +1136,23 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "User playlist count retrieved",
                 user_id=user_id,
                 count=count,
-                include_deleted=include_deleted
+                include_deleted=include_deleted,
             )
 
             return count or 0
 
         except Exception as e:
             self.logger.error(
-                "Database error counting user playlists",
-                user_id=user_id,
-                error=str(e)
+                "Database error counting user playlists", user_id=user_id, error=str(e)
             )
             raise
 
     async def count_user_playlists_created_today(self, user_id: int) -> int:
         """Count playlists created by user today (UTC).
-        
+
         Args:
             user_id: User ID
-            
+
         Returns:
             Number of playlists created today
         """
@@ -1089,33 +1160,33 @@ class PlaylistRepository(BaseRepository[Playlist]):
             # Get start of today in UTC
             now_utc = datetime.now(timezone.utc)
             start_of_today = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
-            
+
             query = select(func.count(Playlist.id)).where(
                 and_(
                     Playlist.user_id == user_id,
                     Playlist.created_at >= start_of_today,
                     Playlist.deleted_at.is_(None),
-                    Playlist.status != "cancelled"
+                    Playlist.status != "cancelled",
                 )
             )
-            
+
             result = await self.session.execute(query)
             count = result.scalar() or 0
-            
+
             self.logger.debug(
                 "User playlists created today counted",
                 user_id=user_id,
                 count=count,
-                start_of_today=start_of_today.isoformat()
+                start_of_today=start_of_today.isoformat(),
             )
-            
+
             return count
-            
+
         except Exception as e:
             self.logger.error(
                 "Database error counting user playlists created today",
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise
 
@@ -1123,7 +1194,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
         self,
         session_id: str,
         user_id: int,
-        load_relationships: Optional[List[str]] = None
+        load_relationships: Optional[List[str]] = None,
     ) -> Optional[Playlist]:
         """Get playlist by session ID and user ID.
 
@@ -1137,10 +1208,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
         """
         try:
             query = select(Playlist).where(
-                and_(
-                    Playlist.session_id == session_id,
-                    Playlist.user_id == user_id
-                )
+                and_(Playlist.session_id == session_id, Playlist.user_id == user_id)
             )
 
             if load_relationships:
@@ -1154,13 +1222,13 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 self.logger.debug(
                     "Playlist retrieved by session and user ID",
                     session_id=session_id,
-                    user_id=user_id
+                    user_id=user_id,
                 )
             else:
                 self.logger.debug(
                     "Playlist not found for session and user ID",
                     session_id=session_id,
-                    user_id=user_id
+                    user_id=user_id,
                 )
 
             return playlist
@@ -1170,7 +1238,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "Database error retrieving playlist by session and user ID",
                 session_id=session_id,
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise InternalServerError("Failed to retrieve playlist")
 
@@ -1180,7 +1248,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
         session_id: str,
         mood_prompt: str,
         status: str,
-        commit: bool = True
+        commit: bool = True,
     ) -> Playlist:
         """Create a new playlist for a workflow session.
 
@@ -1199,7 +1267,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 user_id=user_id,
                 session_id=session_id,
                 mood_prompt=mood_prompt,
-                status=status
+                status=status,
             )
 
             self.session.add(playlist)
@@ -1214,7 +1282,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "Playlist created for session",
                 playlist_id=getattr(playlist, "id", None),
                 session_id=session_id,
-                user_id=user_id
+                user_id=user_id,
             )
 
             return playlist
@@ -1224,7 +1292,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "Database error creating playlist for session",
                 session_id=session_id,
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             await self.session.rollback()
             raise InternalServerError("Failed to create playlist")
@@ -1234,7 +1302,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
         playlist_id: int,
         status: str,
         error_message: Optional[str] = None,
-        commit: bool = True
+        commit: bool = True,
     ) -> Playlist:
         """Update playlist status.
 
@@ -1261,9 +1329,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 await self.session.flush()
 
             self.logger.info(
-                "Playlist status updated",
-                playlist_id=playlist_id,
-                status=status
+                "Playlist status updated", playlist_id=playlist_id, status=status
             )
 
             return playlist
@@ -1273,7 +1339,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "Database error updating playlist status",
                 playlist_id=playlist_id,
                 status=status,
-                error=str(e)
+                error=str(e),
             )
             await self.session.rollback()
             raise
@@ -1283,7 +1349,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
         session_id: str,
         status: str,
         error_message: Optional[str] = None,
-        commit: bool = True
+        commit: bool = True,
     ) -> Optional[Playlist]:
         """Update playlist status by session ID.
 
@@ -1300,7 +1366,9 @@ class PlaylistRepository(BaseRepository[Playlist]):
             playlist = await self.get_by_session_id(session_id)
 
             if not playlist:
-                self.logger.warning("Playlist not found for status update", session_id=session_id)
+                self.logger.warning(
+                    "Playlist not found for status update", session_id=session_id
+                )
                 return None
 
             playlist.status = status
@@ -1316,7 +1384,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
             self.logger.info(
                 "Playlist status updated by session",
                 session_id=session_id,
-                status=status
+                status=status,
             )
 
             return playlist
@@ -1326,16 +1394,13 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 "Database error updating playlist status by session",
                 session_id=session_id,
                 status=status,
-                error=str(e)
+                error=str(e),
             )
             await self.session.rollback()
             raise InternalServerError("Failed to update playlist status")
 
     async def update_recommendations_data(
-        self,
-        playlist_id: int,
-        recommendations_data: List[Dict],
-        commit: bool = True
+        self, playlist_id: int, recommendations_data: List[Dict], commit: bool = True
     ) -> Playlist:
         """Update playlist recommendations data.
 
@@ -1361,7 +1426,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
             self.logger.info(
                 "Playlist recommendations updated",
                 playlist_id=playlist_id,
-                recommendation_count=len(recommendations_data)
+                recommendation_count=len(recommendations_data),
             )
 
             return playlist
@@ -1370,15 +1435,13 @@ class PlaylistRepository(BaseRepository[Playlist]):
             self.logger.error(
                 "Database error updating playlist recommendations",
                 playlist_id=playlist_id,
-                error=str(e)
+                error=str(e),
             )
             await self.session.rollback()
             raise
 
     async def get_user_recent_playlists(
-        self,
-        user_id: int,
-        limit: int = 10
+        self, user_id: int, limit: int = 10
     ) -> List[Dict]:
         """Get recent playlists for a user with mood and metadata.
 
@@ -1400,12 +1463,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
                     Playlist.playlist_data,
                     Playlist.mood_analysis_data,
                 )
-                .where(
-                    and_(
-                        Playlist.user_id == user_id,
-                        Playlist.deleted_at.is_(None)
-                    )
-                )
+                .where(and_(Playlist.user_id == user_id, Playlist.deleted_at.is_(None)))
                 .order_by(desc(Playlist.created_at))
                 .limit(limit)
             )
@@ -1430,23 +1488,29 @@ class PlaylistRepository(BaseRepository[Playlist]):
                     "track_count": track_count,
                     "created_at": created_at.isoformat() if created_at else None,
                     "name": safe_json_get(playlist_data, "name"),
-                    "spotify_url": safe_json_get(playlist_data, "spotify_url")
+                    "spotify_url": safe_json_get(playlist_data, "spotify_url"),
                 }
-                
+
                 # Extract primary emotion if available
-                playlist_info["primary_emotion"] = safe_json_get(mood_analysis_data, "primary_emotion")
-                playlist_info["energy_level"] = safe_json_get(mood_analysis_data, "energy_level")
-                
+                playlist_info["primary_emotion"] = safe_json_get(
+                    mood_analysis_data, "primary_emotion"
+                )
+                playlist_info["energy_level"] = safe_json_get(
+                    mood_analysis_data, "energy_level"
+                )
+
                 recent_data.append(playlist_info)
 
-            self.logger.debug("Recent playlists retrieved", user_id=user_id, count=len(recent_data))
+            self.logger.debug(
+                "Recent playlists retrieved", user_id=user_id, count=len(recent_data)
+            )
             return recent_data
 
         except Exception as e:
             self.logger.error(
                 "Database error retrieving recent playlists",
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise
 
@@ -1495,13 +1559,10 @@ class PlaylistRepository(BaseRepository[Playlist]):
             ][:5]
 
             # Energy distribution and audio feature averages
-            energy_stmt = (
-                select(
-                    cast(Playlist.mood_analysis_data["energy_level"], String),
-                    cast(Playlist.mood_analysis_data["target_features"], JSONB),
-                )
-                .where(*filters)
-            )
+            energy_stmt = select(
+                cast(Playlist.mood_analysis_data["energy_level"], String),
+                cast(Playlist.mood_analysis_data["target_features"], JSONB),
+            ).where(*filters)
             energy_rows = await self.session.execute(energy_stmt)
 
             energy_counts = {"high": 0, "medium": 0, "low": 0}
@@ -1514,7 +1575,11 @@ class PlaylistRepository(BaseRepository[Playlist]):
                     normalized = energy_level.lower()
                     if "high" in normalized or "intense" in normalized:
                         energy_counts["high"] += 1
-                    elif "low" in normalized or "calm" in normalized or "mellow" in normalized:
+                    elif (
+                        "low" in normalized
+                        or "calm" in normalized
+                        or "mellow" in normalized
+                    ):
                         energy_counts["low"] += 1
                     else:
                         energy_counts["medium"] += 1
@@ -1534,8 +1599,12 @@ class PlaylistRepository(BaseRepository[Playlist]):
 
             audio_insights = {
                 "avg_energy": sum(avg_energy) / len(avg_energy) if avg_energy else 0,
-                "avg_valence": sum(avg_valence) / len(avg_valence) if avg_valence else 0,
-                "avg_danceability": sum(avg_danceability) / len(avg_danceability) if avg_danceability else 0,
+                "avg_valence": sum(avg_valence) / len(avg_valence)
+                if avg_valence
+                else 0,
+                "avg_danceability": sum(avg_danceability) / len(avg_danceability)
+                if avg_danceability
+                else 0,
                 "energy_distribution": energy_counts,
             }
 
@@ -1552,6 +1621,6 @@ class PlaylistRepository(BaseRepository[Playlist]):
             self.logger.error(
                 "Database error retrieving dashboard analytics",
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise

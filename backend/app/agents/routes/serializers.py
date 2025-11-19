@@ -34,24 +34,26 @@ def serialize_workflow_state(
 
     # Extract anchor tracks from metadata for frontend display
     anchor_tracks = state.metadata.get("anchor_tracks", [])
-    
+
     # Serialize recommendations for real-time display
     recommendations = []
     for rec in state.recommendations:
-        recommendations.append({
-            "track_id": rec.track_id,
-            "track_name": rec.track_name,
-            "artists": rec.artists,
-            "spotify_uri": rec.spotify_uri,
-            "confidence_score": rec.confidence_score,
-            "reasoning": rec.reasoning,
-            "source": rec.source,
-            "user_mentioned": getattr(rec, "user_mentioned", False),
-            "user_mentioned_artist": getattr(rec, "user_mentioned_artist", False),
-            "anchor_type": getattr(rec, "anchor_type", None),
-            "protected": getattr(rec, "protected", False),
-        })
-    
+        recommendations.append(
+            {
+                "track_id": rec.track_id,
+                "track_name": rec.track_name,
+                "artists": rec.artists,
+                "spotify_uri": rec.spotify_uri,
+                "confidence_score": rec.confidence_score,
+                "reasoning": rec.reasoning,
+                "source": rec.source,
+                "user_mentioned": getattr(rec, "user_mentioned", False),
+                "user_mentioned_artist": getattr(rec, "user_mentioned_artist", False),
+                "anchor_type": getattr(rec, "anchor_type", None),
+                "protected": getattr(rec, "protected", False),
+            }
+        )
+
     payload = {
         "session_id": session_id,
         "status": state.status.value,
@@ -93,8 +95,10 @@ def serialize_playlist_status(
         "session_id": session_id,
         "status": playlist.status,
         "current_step": (
-            "completed" if playlist.status == PlaylistStatus.COMPLETED 
-            else "cancelled" if playlist.status == PlaylistStatus.CANCELLED
+            "completed"
+            if playlist.status == PlaylistStatus.COMPLETED
+            else "cancelled"
+            if playlist.status == PlaylistStatus.CANCELLED
             else playlist.status
         ),
         "mood_prompt": playlist.mood_prompt,

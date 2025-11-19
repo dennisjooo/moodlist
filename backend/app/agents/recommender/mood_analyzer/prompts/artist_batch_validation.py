@@ -4,9 +4,7 @@ from typing import Dict, Any, List
 
 
 def get_batch_artist_validation_prompt(
-    artists: List[Dict[str, Any]],
-    mood_prompt: str,
-    mood_analysis: Dict[str, Any]
+    artists: List[Dict[str, Any]], mood_prompt: str, mood_analysis: Dict[str, Any]
 ) -> str:
     """Get prompt for validating a batch of artists for cultural/genre relevance.
 
@@ -18,24 +16,26 @@ def get_batch_artist_validation_prompt(
     Returns:
         Prompt string for batch artist validation
     """
-    mood_interpretation = mood_analysis.get('mood_interpretation', '')
-    genre_keywords = ', '.join(mood_analysis.get('genre_keywords', []))
-    preferred_regions = ', '.join(mood_analysis.get('preferred_regions', []))
-    excluded_regions = ', '.join(mood_analysis.get('excluded_regions', []))
-    recommended_artists = ', '.join(mood_analysis.get('artist_recommendations', [])[:10])
-    
+    mood_interpretation = mood_analysis.get("mood_interpretation", "")
+    genre_keywords = ", ".join(mood_analysis.get("genre_keywords", []))
+    preferred_regions = ", ".join(mood_analysis.get("preferred_regions", []))
+    excluded_regions = ", ".join(mood_analysis.get("excluded_regions", []))
+    recommended_artists = ", ".join(
+        mood_analysis.get("artist_recommendations", [])[:10]
+    )
+
     # Format artists
     artists_info = []
     for i, artist in enumerate(artists[:30]):  # Limit to 30 for prompt size
-        genres = artist.get('genres', [])
-        genres_str = ', '.join(genres[:5]) if genres else 'No genres listed'
-        popularity = artist.get('popularity', 0)
+        genres = artist.get("genres", [])
+        genres_str = ", ".join(genres[:5]) if genres else "No genres listed"
+        popularity = artist.get("popularity", 0)
         artists_info.append(
             f"{i}. {artist.get('name', 'Unknown')} | Genres: {genres_str} | Popularity: {popularity}"
         )
-    
-    artists_context = '\n'.join(artists_info)
-    
+
+    artists_context = "\n".join(artists_info)
+
     return f"""Evaluate which artists are culturally and genre-appropriate for the user's music request.
 
 User's mood request: "{mood_prompt}"
@@ -92,4 +92,3 @@ Respond in JSON format:
 }}
 
 Return indices (0-based) of artists to KEEP in the `keep_artists` array."""
-

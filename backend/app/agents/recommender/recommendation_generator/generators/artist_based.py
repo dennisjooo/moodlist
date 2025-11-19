@@ -15,7 +15,9 @@ logger = structlog.get_logger(__name__)
 class ArtistBasedGenerator:
     """Generates recommendations from discovered artists."""
 
-    def __init__(self, spotify_service: SpotifyService, reccobeat_service: RecoBeatService):
+    def __init__(
+        self, spotify_service: SpotifyService, reccobeat_service: RecoBeatService
+    ):
         """Initialize the artist-based generator.
 
         Args:
@@ -30,7 +32,7 @@ class ArtistBasedGenerator:
         self.pipeline = ArtistRecommendationPipeline(
             spotify_service=spotify_service,
             reccobeat_service=reccobeat_service,
-            use_failed_artist_caching=False
+            use_failed_artist_caching=False,
         )
 
     async def generate_recommendations(self, state: AgentState) -> List[Dict[str, Any]]:
@@ -43,14 +45,14 @@ class ArtistBasedGenerator:
             List of recommendations from discovered artists
         """
         # Pass through progress callback if available (from parent agent)
-        if hasattr(self, '_progress_callback'):
+        if hasattr(self, "_progress_callback"):
             self.pipeline._progress_callback = self._progress_callback
 
         # Use shared pipeline with our recommendation creation logic
         return await self.pipeline.process_artists(
             state=state,
             create_recommendation_fn=self._create_recommendation_wrapper,
-            calculate_score_fn=self._calculate_track_score
+            calculate_score_fn=self._calculate_track_score,
         )
 
     async def _create_recommendation_wrapper(
@@ -58,7 +60,7 @@ class ArtistBasedGenerator:
         track: Dict[str, Any],
         target_features: Dict[str, Any],
         audio_features_map: Dict[str, Dict[str, Any]],
-        calculate_score_fn: callable
+        calculate_score_fn: callable,
     ) -> Optional[TrackRecommendation]:
         """Wrapper to adapt _create_recommendation to pipeline signature.
 
@@ -71,13 +73,15 @@ class ArtistBasedGenerator:
         Returns:
             TrackRecommendation object or None if filtered out
         """
-        return await self._create_recommendation(track, target_features, audio_features_map)
+        return await self._create_recommendation(
+            track, target_features, audio_features_map
+        )
 
     async def _create_recommendation(
         self,
         track: Dict[str, Any],
         target_features: Dict[str, Any],
-        audio_features_map: Dict[str, Dict[str, Any]]
+        audio_features_map: Dict[str, Dict[str, Any]],
     ) -> Optional[TrackRecommendation]:
         """Create a recommendation from an artist track.
 
@@ -109,7 +113,9 @@ class ArtistBasedGenerator:
             return None
 
         # Extract artist names from Spotify format
-        artist_names = [artist.get("name", "Unknown") for artist in track.get("artists", [])]
+        artist_names = [
+            artist.get("name", "Unknown") for artist in track.get("artists", [])
+        ]
         spotify_uri = track.get("spotify_uri") or track.get("uri")
 
         return TrackRecommendation(
@@ -120,13 +126,11 @@ class ArtistBasedGenerator:
             confidence_score=cohesion_score,
             audio_features=audio_features,
             reasoning=f"From mood-matched artist (cohesion: {cohesion_score:.2f})",
-            source="artist_discovery"
+            source="artist_discovery",
         )
 
     def _calculate_track_score(
-        self,
-        audio_features: Optional[Dict[str, Any]],
-        target_features: Dict[str, Any]
+        self, audio_features: Optional[Dict[str, Any]], target_features: Dict[str, Any]
     ) -> float:
         """Calculate confidence score for an artist track.
 
@@ -138,7 +142,8 @@ class ArtistBasedGenerator:
             Confidence score
         """
         if target_features and audio_features:
-            return self.scoring_engine.calculate_track_cohesion(audio_features, target_features)
+            return self.scoring_engine.calculate_track_cohesion(
+                audio_features, target_features
+            )
         else:
             return 0.75  # Higher default for artist tracks without features
-

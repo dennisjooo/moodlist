@@ -47,7 +47,7 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
         agent_name: Optional[str] = None,
         operation: Optional[str] = None,
         context_metadata: Optional[Dict[str, Any]] = None,
-        commit: bool = True
+        commit: bool = True,
     ) -> LLMInvocation:
         """Create an LLM invocation log entry.
 
@@ -105,7 +105,7 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
                 error_type=error_type,
                 agent_name=agent_name,
                 operation=operation,
-                context_metadata=context_metadata
+                context_metadata=context_metadata,
             )
 
             self.session.add(llm_invocation)
@@ -121,7 +121,7 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
                 invocation_id=getattr(llm_invocation, "id", None),
                 model=model_name,
                 agent=agent_name,
-                success=success
+                success=success,
             )
 
             return llm_invocation
@@ -131,14 +131,14 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
                 "Database error creating LLM invocation log",
                 model=model_name,
                 agent=agent_name,
-                error=str(e)
+                error=str(e),
             )
             try:
                 await self.session.rollback()
             except Exception as rollback_error:
                 self.logger.warning(
                     "Failed to rollback session after LLM invocation log error",
-                    error=str(rollback_error)
+                    error=str(rollback_error),
                 )
             raise InternalServerError("Failed to create LLM invocation log")
 
@@ -147,7 +147,7 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
         user_id: int,
         skip: int = 0,
         limit: Optional[int] = None,
-        load_relationships: Optional[List[str]] = None
+        load_relationships: Optional[List[str]] = None,
     ) -> List[LLMInvocation]:
         """Get LLM invocations by user ID.
 
@@ -161,13 +161,17 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
             List of LLMInvocation instances
         """
         try:
-            query = select(LLMInvocation).where(
-                LLMInvocation.user_id == user_id
-            ).order_by(desc(LLMInvocation.created_at))
+            query = (
+                select(LLMInvocation)
+                .where(LLMInvocation.user_id == user_id)
+                .order_by(desc(LLMInvocation.created_at))
+            )
 
             if load_relationships:
                 for relationship in load_relationships:
-                    query = query.options(selectinload(getattr(LLMInvocation, relationship)))
+                    query = query.options(
+                        selectinload(getattr(LLMInvocation, relationship))
+                    )
 
             if skip:
                 query = query.offset(skip)
@@ -177,17 +181,23 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
             result = await self.session.execute(query)
             invocations = result.scalars().all()
 
-            self.logger.debug("Retrieved LLM invocations by user", user_id=user_id, count=len(invocations))
+            self.logger.debug(
+                "Retrieved LLM invocations by user",
+                user_id=user_id,
+                count=len(invocations),
+            )
             return list(invocations)
 
         except Exception as e:
-            self.logger.error("Error retrieving LLM invocations by user", user_id=user_id, error=str(e))
+            self.logger.error(
+                "Error retrieving LLM invocations by user",
+                user_id=user_id,
+                error=str(e),
+            )
             raise
 
     async def get_by_session_id(
-        self,
-        session_id: str,
-        load_relationships: Optional[List[str]] = None
+        self, session_id: str, load_relationships: Optional[List[str]] = None
     ) -> List[LLMInvocation]:
         """Get LLM invocations by session ID.
 
@@ -199,22 +209,34 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
             List of LLMInvocation instances
         """
         try:
-            query = select(LLMInvocation).where(
-                LLMInvocation.session_id == session_id
-            ).order_by(LLMInvocation.created_at)
+            query = (
+                select(LLMInvocation)
+                .where(LLMInvocation.session_id == session_id)
+                .order_by(LLMInvocation.created_at)
+            )
 
             if load_relationships:
                 for relationship in load_relationships:
-                    query = query.options(selectinload(getattr(LLMInvocation, relationship)))
+                    query = query.options(
+                        selectinload(getattr(LLMInvocation, relationship))
+                    )
 
             result = await self.session.execute(query)
             invocations = result.scalars().all()
 
-            self.logger.debug("Retrieved LLM invocations by session", session_id=session_id, count=len(invocations))
+            self.logger.debug(
+                "Retrieved LLM invocations by session",
+                session_id=session_id,
+                count=len(invocations),
+            )
             return list(invocations)
 
         except Exception as e:
-            self.logger.error("Error retrieving LLM invocations by session", session_id=session_id, error=str(e))
+            self.logger.error(
+                "Error retrieving LLM invocations by session",
+                session_id=session_id,
+                error=str(e),
+            )
             raise
 
     async def get_session_cost_summary(self, session_id: str) -> Dict[str, Any]:
@@ -224,7 +246,9 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
             query = select(
                 sql_func.count(LLMInvocation.id).label("invocation_count"),
                 sql_func.sum(LLMInvocation.prompt_tokens).label("total_prompt_tokens"),
-                sql_func.sum(LLMInvocation.completion_tokens).label("total_completion_tokens"),
+                sql_func.sum(LLMInvocation.completion_tokens).label(
+                    "total_completion_tokens"
+                ),
                 sql_func.sum(LLMInvocation.total_tokens).label("total_tokens"),
                 sql_func.sum(LLMInvocation.cost_usd).label("total_cost_usd"),
             ).where(LLMInvocation.session_id == session_id)
@@ -266,10 +290,7 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
             raise
 
     async def get_by_agent_name(
-        self,
-        agent_name: str,
-        skip: int = 0,
-        limit: Optional[int] = None
+        self, agent_name: str, skip: int = 0, limit: Optional[int] = None
     ) -> List[LLMInvocation]:
         """Get LLM invocations by agent name.
 
@@ -282,9 +303,11 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
             List of LLMInvocation instances
         """
         try:
-            query = select(LLMInvocation).where(
-                LLMInvocation.agent_name == agent_name
-            ).order_by(desc(LLMInvocation.created_at))
+            query = (
+                select(LLMInvocation)
+                .where(LLMInvocation.agent_name == agent_name)
+                .order_by(desc(LLMInvocation.created_at))
+            )
 
             if skip:
                 query = query.offset(skip)
@@ -294,18 +317,26 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
             result = await self.session.execute(query)
             invocations = result.scalars().all()
 
-            self.logger.debug("Retrieved LLM invocations by agent", agent_name=agent_name, count=len(invocations))
+            self.logger.debug(
+                "Retrieved LLM invocations by agent",
+                agent_name=agent_name,
+                count=len(invocations),
+            )
             return list(invocations)
 
         except Exception as e:
-            self.logger.error("Error retrieving LLM invocations by agent", agent_name=agent_name, error=str(e))
+            self.logger.error(
+                "Error retrieving LLM invocations by agent",
+                agent_name=agent_name,
+                error=str(e),
+            )
             raise
 
     async def get_usage_stats(
         self,
         user_id: Optional[int] = None,
         start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+        end_date: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """Get usage statistics for LLM invocations.
 
@@ -319,11 +350,11 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
         """
         try:
             query = select(
-                sql_func.count(LLMInvocation.id).label('total_invocations'),
-                sql_func.sum(LLMInvocation.total_tokens).label('total_tokens'),
-                sql_func.sum(LLMInvocation.cost_usd).label('total_cost'),
-                sql_func.avg(LLMInvocation.latency_ms).label('avg_latency'),
-                sql_func.sum(LLMInvocation.success).label('successful_calls'),
+                sql_func.count(LLMInvocation.id).label("total_invocations"),
+                sql_func.sum(LLMInvocation.total_tokens).label("total_tokens"),
+                sql_func.sum(LLMInvocation.cost_usd).label("total_cost"),
+                sql_func.avg(LLMInvocation.latency_ms).label("avg_latency"),
+                sql_func.sum(LLMInvocation.success).label("successful_calls"),
             )
 
             conditions = []
@@ -341,25 +372,26 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
             row = result.one()
 
             stats = {
-                'total_invocations': row.total_invocations or 0,
-                'total_tokens': row.total_tokens or 0,
-                'total_cost_usd': float(row.total_cost or 0),
-                'avg_latency_ms': float(row.avg_latency or 0),
-                'successful_calls': row.successful_calls or 0,
-                'failed_calls': (row.total_invocations or 0) - (row.successful_calls or 0)
+                "total_invocations": row.total_invocations or 0,
+                "total_tokens": row.total_tokens or 0,
+                "total_cost_usd": float(row.total_cost or 0),
+                "avg_latency_ms": float(row.avg_latency or 0),
+                "successful_calls": row.successful_calls or 0,
+                "failed_calls": (row.total_invocations or 0)
+                - (row.successful_calls or 0),
             }
 
             self.logger.debug("Retrieved LLM usage stats", user_id=user_id, stats=stats)
             return stats
 
         except Exception as e:
-            self.logger.error("Error retrieving LLM usage stats", user_id=user_id, error=str(e))
+            self.logger.error(
+                "Error retrieving LLM usage stats", user_id=user_id, error=str(e)
+            )
             raise
 
     async def get_model_usage_breakdown(
-        self,
-        user_id: Optional[int] = None,
-        days: int = 30
+        self, user_id: Optional[int] = None, days: int = 30
     ) -> List[Dict[str, Any]]:
         """Get breakdown of usage by model.
 
@@ -372,19 +404,18 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
         """
         try:
             start_date = datetime.now() - timedelta(days=days)
-            
-            query = select(
-                LLMInvocation.model_name,
-                sql_func.count(LLMInvocation.id).label('count'),
-                sql_func.sum(LLMInvocation.total_tokens).label('tokens'),
-                sql_func.sum(LLMInvocation.cost_usd).label('cost'),
-                sql_func.avg(LLMInvocation.latency_ms).label('avg_latency')
-            ).where(
-                LLMInvocation.created_at >= start_date
-            ).group_by(
-                LLMInvocation.model_name
-            ).order_by(
-                desc('count')
+
+            query = (
+                select(
+                    LLMInvocation.model_name,
+                    sql_func.count(LLMInvocation.id).label("count"),
+                    sql_func.sum(LLMInvocation.total_tokens).label("tokens"),
+                    sql_func.sum(LLMInvocation.cost_usd).label("cost"),
+                    sql_func.avg(LLMInvocation.latency_ms).label("avg_latency"),
+                )
+                .where(LLMInvocation.created_at >= start_date)
+                .group_by(LLMInvocation.model_name)
+                .order_by(desc("count"))
             )
 
             if user_id:
@@ -395,19 +426,25 @@ class LLMInvocationRepository(BaseRepository[LLMInvocation]):
 
             breakdown = [
                 {
-                    'model_name': row.model_name,
-                    'invocation_count': row.count,
-                    'total_tokens': row.tokens or 0,
-                    'total_cost_usd': float(row.cost or 0),
-                    'avg_latency_ms': float(row.avg_latency or 0)
+                    "model_name": row.model_name,
+                    "invocation_count": row.count,
+                    "total_tokens": row.tokens or 0,
+                    "total_cost_usd": float(row.cost or 0),
+                    "avg_latency_ms": float(row.avg_latency or 0),
                 }
                 for row in rows
             ]
 
-            self.logger.debug("Retrieved model usage breakdown", user_id=user_id, days=days, models=len(breakdown))
+            self.logger.debug(
+                "Retrieved model usage breakdown",
+                user_id=user_id,
+                days=days,
+                models=len(breakdown),
+            )
             return breakdown
 
         except Exception as e:
-            self.logger.error("Error retrieving model usage breakdown", user_id=user_id, error=str(e))
+            self.logger.error(
+                "Error retrieving model usage breakdown", user_id=user_id, error=str(e)
+            )
             raise
-

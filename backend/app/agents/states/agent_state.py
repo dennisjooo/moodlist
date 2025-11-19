@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 class RecommendationStatus(str, Enum):
     """Status of the recommendation process."""
+
     PENDING = "pending"
     ANALYZING_MOOD = "analyzing_mood"
     GATHERING_SEEDS = "gathering_seeds"
@@ -24,6 +25,7 @@ class RecommendationStatus(str, Enum):
 
 class TrackRecommendation(BaseModel):
     """Individual track recommendation with metadata."""
+
     track_id: str = Field(..., description="Track ID from RecoBeat/Spotify")
     track_name: str = Field(..., description="Track name")
     artists: List[str] = Field(..., description="Artist names")
@@ -32,25 +34,35 @@ class TrackRecommendation(BaseModel):
     audio_features: Optional[Dict[str, Any]] = Field(None, description="Audio features")
     reasoning: str = Field(..., description="Why this track was recommended")
     source: str = Field(..., description="Source of recommendation (reccobeat/spotify)")
-    
+
     # Anchor track protection metadata
-    user_mentioned: bool = Field(default=False, description="Whether track was explicitly mentioned by user")
-    user_mentioned_artist: bool = Field(default=False, description="Whether track is from a user-mentioned artist")
-    anchor_type: Optional[str] = Field(None, description="Type of anchor: 'user' or 'genre'")
-    protected: bool = Field(default=False, description="Whether track is protected from quality filtering")
-    
+    user_mentioned: bool = Field(
+        default=False, description="Whether track was explicitly mentioned by user"
+    )
+    user_mentioned_artist: bool = Field(
+        default=False, description="Whether track is from a user-mentioned artist"
+    )
+    anchor_type: Optional[str] = Field(
+        None, description="Type of anchor: 'user' or 'genre'"
+    )
+    protected: bool = Field(
+        default=False, description="Whether track is protected from quality filtering"
+    )
+
     # Energy flow analysis (for playlist ordering)
-    energy_analysis: Optional[Dict[str, Any]] = Field(None, description="Energy flow characteristics for ordering")
+    energy_analysis: Optional[Dict[str, Any]] = Field(
+        None, description="Energy flow characteristics for ordering"
+    )
 
     class Config:
         """Pydantic configuration."""
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+
+        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 class PlaylistEdit(BaseModel):
     """User edit to the playlist."""
+
     edit_type: str = Field(..., description="Type of edit (reorder/remove/add)")
     track_id: Optional[str] = Field(None, description="Track being edited")
     new_position: Optional[int] = Field(None, description="New position for reorder")
@@ -71,17 +83,29 @@ class AgentState(BaseModel):
 
     # Input data
     mood_prompt: str = Field(..., description="Original mood description")
-    mood_analysis: Optional[Dict[str, Any]] = Field(None, description="LLM mood analysis")
+    mood_analysis: Optional[Dict[str, Any]] = Field(
+        None, description="LLM mood analysis"
+    )
 
     # Spotify user data
     spotify_user_id: Optional[str] = Field(None, description="Spotify user ID")
-    user_top_tracks: List[str] = Field(default_factory=list, description="User's top track IDs")
-    user_top_artists: List[str] = Field(default_factory=list, description="User's top artist IDs")
+    user_top_tracks: List[str] = Field(
+        default_factory=list, description="User's top track IDs"
+    )
+    user_top_artists: List[str] = Field(
+        default_factory=list, description="User's top artist IDs"
+    )
 
     # Recommendations
-    recommendations: List[TrackRecommendation] = Field(default_factory=list, description="Generated recommendations")
-    seed_tracks: List[str] = Field(default_factory=list, description="Seed tracks used for recommendations")
-    negative_seeds: List[str] = Field(default_factory=list, description="Tracks to avoid")
+    recommendations: List[TrackRecommendation] = Field(
+        default_factory=list, description="Generated recommendations"
+    )
+    seed_tracks: List[str] = Field(
+        default_factory=list, description="Seed tracks used for recommendations"
+    )
+    negative_seeds: List[str] = Field(
+        default_factory=list, description="Tracks to avoid"
+    )
 
     # Playlist management
     playlist_id: Optional[str] = Field(None, description="Created playlist ID")
@@ -89,15 +113,21 @@ class AgentState(BaseModel):
     spotify_playlist_id: Optional[str] = Field(None, description="Spotify playlist ID")
 
     # Human-in-the-loop
-    user_edits: List[PlaylistEdit] = Field(default_factory=list, description="User edits to playlist")
-    awaiting_user_input: bool = Field(default=False, description="Whether waiting for user input")
+    user_edits: List[PlaylistEdit] = Field(
+        default_factory=list, description="User edits to playlist"
+    )
+    awaiting_user_input: bool = Field(
+        default=False, description="Whether waiting for user input"
+    )
 
     # Error handling
     error_message: Optional[str] = Field(None, description="Error message if failed")
     retry_count: int = Field(default=0, description="Number of retries attempted")
 
     # Metadata
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional metadata"
+    )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -148,7 +178,10 @@ class AgentState(BaseModel):
         Returns:
             Whether the process is complete
         """
-        return self.status in [RecommendationStatus.COMPLETED, RecommendationStatus.FAILED]
+        return self.status in [
+            RecommendationStatus.COMPLETED,
+            RecommendationStatus.FAILED,
+        ]
 
     def get_summary(self) -> Dict[str, Any]:
         """Get a summary of the current state.
@@ -160,13 +193,15 @@ class AgentState(BaseModel):
             "session_id": self.session_id,
             "status": self.status.value,
             "current_step": self.current_step,
-            "mood_prompt": self.mood_prompt[:50] + "..." if len(self.mood_prompt) > 50 else self.mood_prompt,
+            "mood_prompt": self.mood_prompt[:50] + "..."
+            if len(self.mood_prompt) > 50
+            else self.mood_prompt,
             "recommendation_count": len(self.recommendations),
             "has_playlist": self.playlist_id is not None,
             "awaiting_input": self.awaiting_user_input,
             "error": self.error_message is not None,
             "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat()
+            "updated_at": self.updated_at.isoformat(),
         }
 
 
@@ -199,8 +234,6 @@ class RecommendationState(BaseModel):
             Top recommendations sorted by confidence
         """
         sorted_recs = sorted(
-            self.recommendations,
-            key=lambda x: x.confidence_score,
-            reverse=True
+            self.recommendations, key=lambda x: x.confidence_score, reverse=True
         )
         return sorted_recs[:limit]

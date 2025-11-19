@@ -21,7 +21,9 @@ class RecommendationProcessor:
         """Initialize the recommendation processor."""
         self.diversity_handler = DiversityManager()
 
-    def remove_duplicates(self, recommendations: List[TrackRecommendation]) -> List[TrackRecommendation]:
+    def remove_duplicates(
+        self, recommendations: List[TrackRecommendation]
+    ) -> List[TrackRecommendation]:
         """Remove duplicate tracks from recommendations.
 
         Args:
@@ -54,7 +56,7 @@ class RecommendationProcessor:
         self,
         recommendations: List[TrackRecommendation],
         max_count: int = 30,
-        artist_ratio: float = 1.0
+        artist_ratio: float = 1.0,
     ) -> List[TrackRecommendation]:
         """Enforce source ratio between artist discovery and RecoBeat recommendations.
 
@@ -68,7 +70,7 @@ class RecommendationProcessor:
         """
         if not recommendations or max_count <= 0:
             return []
-        
+
         # Separate recommendations by source
         source_groups = self.separate_by_source(recommendations)
 
@@ -76,7 +78,9 @@ class RecommendationProcessor:
         source_limits = self.calculate_source_limits(max_count, artist_ratio)
 
         # Cap and sort each source
-        capped_sources, overflow_sources = self.cap_and_sort_by_source(source_groups, source_limits)
+        capped_sources, overflow_sources = self.cap_and_sort_by_source(
+            source_groups, source_limits
+        )
 
         # Combine and sort final list
         final_recommendations = self.combine_and_sort_final(
@@ -87,14 +91,14 @@ class RecommendationProcessor:
 
         # If we're still short of the desired count, top up from overflow pools
         final_recommendations = self.fill_with_overflow(
-            final_recommendations,
-            overflow_sources,
-            max_count
+            final_recommendations, overflow_sources, max_count
         )
 
         return final_recommendations
 
-    def separate_by_source(self, recommendations: List[TrackRecommendation]) -> Dict[str, List[TrackRecommendation]]:
+    def separate_by_source(
+        self, recommendations: List[TrackRecommendation]
+    ) -> Dict[str, List[TrackRecommendation]]:
         """Separate recommendations by source."""
         source_groups: Dict[str, List[TrackRecommendation]] = defaultdict(list)
         for recommendation in recommendations:
@@ -107,7 +111,9 @@ class RecommendationProcessor:
 
         return dict(source_groups)
 
-    def calculate_source_limits(self, max_count: int, artist_ratio: float) -> Dict[str, int]:
+    def calculate_source_limits(
+        self, max_count: int, artist_ratio: float
+    ) -> Dict[str, int]:
         """Calculate maximum counts for each source.
         `
         Note: This returns a generic limit for anchor tracks, but the actual capping
@@ -121,7 +127,9 @@ class RecommendationProcessor:
                 "reccobeat": 0,
             }
 
-        max_anchor = min(5, max_count)  # Base limit for non-user-mentioned anchor tracks
+        max_anchor = min(
+            5, max_count
+        )  # Base limit for non-user-mentioned anchor tracks
         remaining = max(0, max_count - max_anchor)
 
         artist_ratio = max(0.0, min(1.0, artist_ratio))
@@ -138,14 +146,16 @@ class RecommendationProcessor:
         return {
             "anchor_track": max_anchor,
             "artist_discovery": max_artist,
-            "reccobeat": max_reccobeat
+            "reccobeat": max_reccobeat,
         }
 
     def cap_and_sort_by_source(
         self,
         source_groups: Dict[str, List[TrackRecommendation]],
-        source_limits: Dict[str, int]
-    ) -> tuple[Dict[str, List[TrackRecommendation]], Dict[str, List[TrackRecommendation]]]:
+        source_limits: Dict[str, int],
+    ) -> tuple[
+        Dict[str, List[TrackRecommendation]], Dict[str, List[TrackRecommendation]]
+    ]:
         """Cap each source to its limit and sort by confidence.
 
         CRITICAL: User-mentioned anchor tracks don't count toward the anchor limit.
@@ -167,8 +177,12 @@ class RecommendationProcessor:
                 other_anchors: List[TrackRecommendation] = []
                 for rec in recommendations:
                     # Include both user-mentioned tracks AND tracks from user-mentioned artists
-                    is_protected = rec.user_mentioned or rec.user_mentioned_artist or rec.protected
-                    logger.debug(f"Protected track: {rec.track_name} by {rec.artists} (user_mentioned={rec.user_mentioned}, user_mentioned_artist={rec.user_mentioned_artist}, protected={rec.protected})")
+                    is_protected = (
+                        rec.user_mentioned or rec.user_mentioned_artist or rec.protected
+                    )
+                    logger.debug(
+                        f"Protected track: {rec.track_name} by {rec.artists} (user_mentioned={rec.user_mentioned}, user_mentioned_artist={rec.user_mentioned_artist}, protected={rec.protected})"
+                    )
                     (user_mentioned if is_protected else other_anchors).append(rec)
 
                 # Sort each group independently
@@ -185,7 +199,7 @@ class RecommendationProcessor:
                     allowed=len(other_anchors[:limit]),
                     overflow=len(overflow_sources[source]),
                     limit=limit,
-                    note="user_mentioned includes tracks from user-mentioned artists"
+                    note="user_mentioned includes tracks from user-mentioned artists",
                 )
             else:
                 # Normal capping for other sources
@@ -215,7 +229,7 @@ class RecommendationProcessor:
         max_count: int,
     ) -> List[TrackRecommendation]:
         """Combine sources and sort final list.
-        
+
         CRITICAL: Anchor tracks (especially user-mentioned) must stay at the top.
         We maintain priority by combining in order without re-sorting.
         """
@@ -229,7 +243,7 @@ class RecommendationProcessor:
         if artist_recs and len(artist_recs) > 5:  # Only apply if we have enough tracks
             artist_recs = self.diversity_handler.enforce_popularity_tiers(
                 artist_recs,
-                target_count=len(artist_recs)  # Balance within available artist tracks
+                target_count=len(artist_recs),  # Balance within available artist tracks
             )
 
         # Combine with anchors first (NEVER re-sort after this!)
@@ -248,8 +262,10 @@ class RecommendationProcessor:
             final_recs = combined_recs
 
         counts = Counter(
-            recommendation.source for recommendation in final_recs
-            if recommendation.source in {"anchor_track", "artist_discovery", "reccobeat"}
+            recommendation.source
+            for recommendation in final_recs
+            if recommendation.source
+            in {"anchor_track", "artist_discovery", "reccobeat"}
         )
 
         anchor_count = counts.get("anchor_track", 0)
@@ -274,7 +290,7 @@ class RecommendationProcessor:
         self,
         recommendations: List[TrackRecommendation],
         overflow_sources: Dict[str, List[TrackRecommendation]],
-        max_count: int
+        max_count: int,
     ) -> List[TrackRecommendation]:
         """Top up recommendations if capping left us short of the target size.
 
@@ -295,7 +311,9 @@ class RecommendationProcessor:
 
         # Maintain sets for fast duplicate checks
         seen_track_ids = {rec.track_id for rec in final_recommendations}
-        seen_spotify_uris = {rec.spotify_uri for rec in final_recommendations if rec.spotify_uri}
+        seen_spotify_uris = {
+            rec.spotify_uri for rec in final_recommendations if rec.spotify_uri
+        }
 
         # Prioritise overflow order: anchors -> artist discovery -> RecoBeat
         overflow_priority: Iterable[TrackRecommendation] = chain(

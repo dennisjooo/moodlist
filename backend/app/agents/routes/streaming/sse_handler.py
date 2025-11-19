@@ -23,7 +23,7 @@ async def create_sse_stream(
 ):
     """
     Generate SSE events for workflow status updates.
-    
+
     Args:
         session_id: Workflow session ID
         request: FastAPI request object (for disconnect detection)
@@ -78,7 +78,11 @@ async def create_sse_stream(
 
             # Only send complete if status is terminal (completed, failed, cancelled)
             # Otherwise, continue the loop to wait for workflow state updates
-            terminal_statuses = [PlaylistStatus.COMPLETED, PlaylistStatus.FAILED, PlaylistStatus.CANCELLED]
+            terminal_statuses = [
+                PlaylistStatus.COMPLETED,
+                PlaylistStatus.FAILED,
+                PlaylistStatus.CANCELLED,
+            ]
             if session_playlist.status in terminal_statuses:
                 yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
                 return
@@ -96,7 +100,7 @@ async def create_sse_stream(
             try:
                 # Wait for state change notification with timeout
                 updated_state = await asyncio.wait_for(queue.get(), timeout=5.0)
-                
+
                 # Always get the latest state from workflow manager to ensure accuracy
                 current_state = get_current_state()
                 if current_state:
@@ -105,20 +109,29 @@ async def create_sse_stream(
                 else:
                     # Fallback to queued state if manager doesn't have it
                     state_to_send = updated_state
-                
+
                 # Only send if status or step actually changed AND it's forward progress
-                if (state_to_send.status.value != last_sent_status or 
-                    state_to_send.current_step != last_sent_step):
-                    
+                if (
+                    state_to_send.status.value != last_sent_status
+                    or state_to_send.current_step != last_sent_step
+                ):
                     # Check if this is forward progress (prevent backwards updates)
-                    if is_forward_progress(last_sent_status, state_to_send.status.value):
-                        status_data = serialize_workflow_state(session_id, state_to_send)
+                    if is_forward_progress(
+                        last_sent_status, state_to_send.status.value
+                    ):
+                        status_data = serialize_workflow_state(
+                            session_id, state_to_send
+                        )
                         last_sent_status = state_to_send.status.value
                         last_sent_step = state_to_send.current_step
-                        
+
                         yield f"event: status\ndata: {json.dumps(status_data)}\n\n"
 
-                        if state_to_send.status.value in ["completed", "failed", "cancelled"]:
+                        if state_to_send.status.value in [
+                            "completed",
+                            "failed",
+                            "cancelled",
+                        ]:
                             yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
                             break
                     else:
@@ -126,7 +139,7 @@ async def create_sse_stream(
                             "Skipping backwards status update in stream",
                             session_id=session_id,
                             from_status=last_sent_status,
-                            to_status=state_to_send.status.value
+                            to_status=state_to_send.status.value,
                         )
 
             except asyncio.TimeoutError:
@@ -134,18 +147,27 @@ async def create_sse_stream(
                 current_state = get_current_state()
                 if current_state:
                     # Check if state changed while we were waiting AND it's forward progress
-                    if (current_state.status.value != last_sent_status or 
-                        current_state.current_step != last_sent_step):
-                        
+                    if (
+                        current_state.status.value != last_sent_status
+                        or current_state.current_step != last_sent_step
+                    ):
                         # Check if this is forward progress
-                        if is_forward_progress(last_sent_status, current_state.status.value):
-                            status_data = serialize_workflow_state(session_id, current_state)
+                        if is_forward_progress(
+                            last_sent_status, current_state.status.value
+                        ):
+                            status_data = serialize_workflow_state(
+                                session_id, current_state
+                            )
                             last_sent_status = current_state.status.value
                             last_sent_step = current_state.current_step
-                            
+
                             yield f"event: status\ndata: {json.dumps(status_data)}\n\n"
 
-                            if current_state.status.value in ["completed", "failed", "cancelled"]:
+                            if current_state.status.value in [
+                                "completed",
+                                "failed",
+                                "cancelled",
+                            ]:
                                 yield f"event: complete\ndata: {json.dumps(status_data)}\n\n"
                                 break
                         else:
@@ -153,9 +175,9 @@ async def create_sse_stream(
                                 "Skipping backwards status update in stream (timeout check)",
                                 session_id=session_id,
                                 from_status=last_sent_status,
-                                to_status=current_state.status.value
+                                to_status=current_state.status.value,
                             )
-                
+
                 # Send keep-alive
                 yield ": keep-alive\n\n"
 
@@ -169,6 +191,7 @@ async def create_sse_stream(
         error_data = {"message": str(exc)}
         yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
     finally:
-        workflow_manager.unsubscribe_from_state_changes(session_id, state_change_callback)
+        workflow_manager.unsubscribe_from_state_changes(
+            session_id, state_change_callback
+        )
         logger.debug("Unsubscribed from state changes", session_id=session_id)
-

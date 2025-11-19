@@ -10,7 +10,7 @@ def setup_agent_logging(
     log_level: str = "INFO",
     log_format: str = "detailed",
     enable_file_logging: bool = True,
-    log_directory: str = "logs"
+    log_directory: str = "logs",
 ) -> None:
     """Set up comprehensive logging for the agentic system.
 
@@ -34,48 +34,46 @@ def setup_agent_logging(
             "json": {
                 "format": "%(asctime)s",
                 "class": "pythonjsonlogger.jsonlogger.JsonFormatter",
-                "()": lambda: json_formatter()
-            }
+                "()": lambda: json_formatter(),
+            },
         },
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
                 "formatter": log_format,
                 "level": log_level,
-                "stream": "ext://sys.stdout"
+                "stream": "ext://sys.stdout",
             }
         },
         "loggers": {
             "app.agents": {
                 "level": log_level,
                 "handlers": ["console"],
-                "propagate": False
+                "propagate": False,
             },
             "app.agents.core": {
                 "level": log_level,
                 "handlers": ["console"],
-                "propagate": False
+                "propagate": False,
             },
             "app.agents.tools": {
                 "level": log_level,
                 "handlers": ["console"],
-                "propagate": False
+                "propagate": False,
             },
             "app.agents.agents": {
                 "level": log_level,
                 "handlers": ["console"],
-                "propagate": False
-            }
+                "propagate": False,
+            },
         },
-        "root": {
-            "level": log_level,
-            "handlers": ["console"]
-        }
+        "root": {"level": log_level, "handlers": ["console"]},
     }
 
     # Add file logging if enabled
     if enable_file_logging:
         import os
+
         os.makedirs(log_directory, exist_ok=True)
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -84,7 +82,7 @@ def setup_agent_logging(
             "formatter": log_format,
             "level": log_level,
             "filename": f"{log_directory}/agentic_system_{timestamp}.log",
-            "encoding": "utf-8"
+            "encoding": "utf-8",
         }
         config["handlers"]["file"] = file_handler
 
@@ -110,9 +108,10 @@ def json_formatter():
     """Create a JSON formatter for structured logging."""
     try:
         from pythonjsonlogger import jsonlogger
+
         return jsonlogger.JsonFormatter(
             "%(asctime)s %(name)s %(levelname)s %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
+            datefmt="%Y-%m-%d %H:%M:%S",
         )
     except ImportError:
         # Fallback to simple formatter if pythonjsonlogger not available
@@ -178,11 +177,7 @@ class PerformanceLogger:
         self.metrics = {}
 
     def log_agent_execution(
-        self,
-        agent_name: str,
-        execution_time: float,
-        success: bool,
-        **metadata
+        self, agent_name: str, execution_time: float, success: bool, **metadata
     ):
         """Log agent execution metrics.
 
@@ -199,16 +194,12 @@ class PerformanceLogger:
                 "execution_time": execution_time,
                 "success": success,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                **metadata
-            }
+                **metadata,
+            },
         )
 
     def log_workflow_step(
-        self,
-        session_id: str,
-        step: str,
-        duration: float,
-        **metadata
+        self, session_id: str, step: str, duration: float, **metadata
     ):
         """Log workflow step metrics.
 
@@ -225,17 +216,12 @@ class PerformanceLogger:
                 "workflow_step": step,
                 "step_duration": duration,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                **metadata
-            }
+                **metadata,
+            },
         )
 
     def log_api_call(
-        self,
-        api_name: str,
-        endpoint: str,
-        duration: float,
-        success: bool,
-        **metadata
+        self, api_name: str, endpoint: str, duration: float, success: bool, **metadata
     ):
         """Log API call metrics.
 
@@ -254,8 +240,8 @@ class PerformanceLogger:
                 "call_duration": duration,
                 "success": success,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                **metadata
-            }
+                **metadata,
+            },
         )
 
 

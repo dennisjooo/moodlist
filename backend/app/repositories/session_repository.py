@@ -22,7 +22,9 @@ class SessionRepository(BaseRepository[Session]):
         """Return the Session model class."""
         return Session
 
-    async def get_by_token(self, session_token: str, load_relationships: Optional[List[str]] = None) -> Optional[Session]:
+    async def get_by_token(
+        self, session_token: str, load_relationships: Optional[List[str]] = None
+    ) -> Optional[Session]:
         """Get session by session token.
 
         Args:
@@ -43,9 +45,15 @@ class SessionRepository(BaseRepository[Session]):
             session = result.scalar_one_or_none()
 
             if session:
-                self.logger.debug("Session retrieved by token", session_token=session_token[:8] + "...")
+                self.logger.debug(
+                    "Session retrieved by token",
+                    session_token=session_token[:8] + "...",
+                )
             else:
-                self.logger.debug("Session not found for token", session_token=session_token[:8] + "...")
+                self.logger.debug(
+                    "Session not found for token",
+                    session_token=session_token[:8] + "...",
+                )
 
             return session
 
@@ -53,7 +61,7 @@ class SessionRepository(BaseRepository[Session]):
             self.logger.error(
                 "Database error retrieving session by token",
                 session_token=session_token[:8] + "...",
-                error=str(e)
+                error=str(e),
             )
             raise
 
@@ -62,7 +70,7 @@ class SessionRepository(BaseRepository[Session]):
         user_id: int,
         skip: int = 0,
         limit: Optional[int] = None,
-        load_relationships: Optional[List[str]] = None
+        load_relationships: Optional[List[str]] = None,
     ) -> List[Session]:
         """Get all sessions for a user.
 
@@ -100,16 +108,14 @@ class SessionRepository(BaseRepository[Session]):
                 user_id=user_id,
                 count=len(sessions),
                 skip=skip,
-                limit=limit
+                limit=limit,
             )
 
             return list(sessions)
 
         except Exception as e:
             self.logger.error(
-                "Database error retrieving user sessions",
-                user_id=user_id,
-                error=str(e)
+                "Database error retrieving user sessions", user_id=user_id, error=str(e)
             )
             raise
 
@@ -118,7 +124,7 @@ class SessionRepository(BaseRepository[Session]):
         user_id: Optional[int] = None,
         skip: int = 0,
         limit: Optional[int] = None,
-        load_relationships: Optional[List[str]] = None
+        load_relationships: Optional[List[str]] = None,
     ) -> List[Session]:
         """Get active (non-expired) sessions.
 
@@ -160,7 +166,7 @@ class SessionRepository(BaseRepository[Session]):
                 user_id=user_id,
                 count=len(sessions),
                 skip=skip,
-                limit=limit
+                limit=limit,
             )
 
             return list(sessions)
@@ -169,7 +175,7 @@ class SessionRepository(BaseRepository[Session]):
             self.logger.error(
                 "Database error retrieving active sessions",
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise
 
@@ -177,7 +183,7 @@ class SessionRepository(BaseRepository[Session]):
         self,
         before_timestamp: Optional[datetime] = None,
         skip: int = 0,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
     ) -> List[Session]:
         """Get expired sessions.
 
@@ -210,10 +216,12 @@ class SessionRepository(BaseRepository[Session]):
 
             self.logger.debug(
                 "Expired sessions retrieved successfully",
-                before_timestamp=before_timestamp.isoformat() if before_timestamp else None,
+                before_timestamp=before_timestamp.isoformat()
+                if before_timestamp
+                else None,
                 count=len(sessions),
                 skip=skip,
-                limit=limit
+                limit=limit,
             )
 
             return list(sessions)
@@ -221,8 +229,10 @@ class SessionRepository(BaseRepository[Session]):
         except Exception as e:
             self.logger.error(
                 "Database error retrieving expired sessions",
-                before_timestamp=before_timestamp.isoformat() if before_timestamp else None,
-                error=str(e)
+                before_timestamp=before_timestamp.isoformat()
+                if before_timestamp
+                else None,
+                error=str(e),
             )
             raise
 
@@ -238,7 +248,9 @@ class SessionRepository(BaseRepository[Session]):
         now = datetime.now(timezone.utc)
         return await self.update(session_id, last_activity=now)
 
-    async def extend_session(self, session_id: int, new_expires_at: datetime) -> Session:
+    async def extend_session(
+        self, session_id: int, new_expires_at: datetime
+    ) -> Session:
         """Extend session expiration time.
 
         Args:
@@ -250,7 +262,9 @@ class SessionRepository(BaseRepository[Session]):
         """
         return await self.update(session_id, expires_at=new_expires_at)
 
-    async def delete_expired_sessions(self, before_timestamp: Optional[datetime] = None) -> int:
+    async def delete_expired_sessions(
+        self, before_timestamp: Optional[datetime] = None
+    ) -> int:
         """Delete expired sessions.
 
         Args:
@@ -272,7 +286,9 @@ class SessionRepository(BaseRepository[Session]):
             self.logger.info(
                 "Expired sessions deleted successfully",
                 deleted_count=deleted_count,
-                before_timestamp=before_timestamp.isoformat() if before_timestamp else None
+                before_timestamp=before_timestamp.isoformat()
+                if before_timestamp
+                else None,
             )
 
             return deleted_count
@@ -280,13 +296,17 @@ class SessionRepository(BaseRepository[Session]):
         except Exception as e:
             self.logger.error(
                 "Database error deleting expired sessions",
-                before_timestamp=before_timestamp.isoformat() if before_timestamp else None,
-                error=str(e)
+                before_timestamp=before_timestamp.isoformat()
+                if before_timestamp
+                else None,
+                error=str(e),
             )
             await self.session.rollback()
             raise
 
-    async def delete_user_sessions(self, user_id: int, except_session_id: Optional[int] = None) -> int:
+    async def delete_user_sessions(
+        self, user_id: int, except_session_id: Optional[int] = None
+    ) -> int:
         """Delete all sessions for a user.
 
         Args:
@@ -309,7 +329,7 @@ class SessionRepository(BaseRepository[Session]):
                 "User sessions deleted successfully",
                 user_id=user_id,
                 deleted_count=deleted_count,
-                except_session_id=except_session_id
+                except_session_id=except_session_id,
             )
 
             return deleted_count
@@ -319,12 +339,14 @@ class SessionRepository(BaseRepository[Session]):
                 "Database error deleting user sessions",
                 user_id=user_id,
                 except_session_id=except_session_id,
-                error=str(e)
+                error=str(e),
             )
             await self.session.rollback()
             raise
 
-    async def get_session_count(self, user_id: Optional[int] = None, active_only: bool = False) -> int:
+    async def get_session_count(
+        self, user_id: Optional[int] = None, active_only: bool = False
+    ) -> int:
         """Get session count with optional filters.
 
         Args:
@@ -352,7 +374,7 @@ class SessionRepository(BaseRepository[Session]):
                 "Session count retrieved",
                 user_id=user_id,
                 active_only=active_only,
-                count=count
+                count=count,
             )
 
             return count
@@ -362,14 +384,12 @@ class SessionRepository(BaseRepository[Session]):
                 "Database error counting sessions",
                 user_id=user_id,
                 active_only=active_only,
-                error=str(e)
+                error=str(e),
             )
             raise
 
     async def get_valid_session_by_token(
-        self,
-        session_token: str,
-        load_relationships: Optional[List[str]] = None
+        self, session_token: str, load_relationships: Optional[List[str]] = None
     ) -> Optional[Session]:
         """Get valid (non-expired) session by token.
 
@@ -383,10 +403,7 @@ class SessionRepository(BaseRepository[Session]):
         try:
             now = datetime.now(timezone.utc)
             query = select(Session).where(
-                and_(
-                    Session.session_token == session_token,
-                    Session.expires_at > now
-                )
+                and_(Session.session_token == session_token, Session.expires_at > now)
             )
 
             if load_relationships:
@@ -397,9 +414,15 @@ class SessionRepository(BaseRepository[Session]):
             session = result.scalar_one_or_none()
 
             if session:
-                self.logger.debug("Valid session retrieved by token", session_token=session_token[:8] + "...")
+                self.logger.debug(
+                    "Valid session retrieved by token",
+                    session_token=session_token[:8] + "...",
+                )
             else:
-                self.logger.debug("Valid session not found for token", session_token=session_token[:8] + "...")
+                self.logger.debug(
+                    "Valid session not found for token",
+                    session_token=session_token[:8] + "...",
+                )
 
             return session
 
@@ -407,13 +430,12 @@ class SessionRepository(BaseRepository[Session]):
             self.logger.error(
                 "Database error retrieving valid session by token",
                 session_token=session_token[:8] + "...",
-                error=str(e)
+                error=str(e),
             )
             raise
 
     async def get_valid_session_with_user(
-        self,
-        session_token: str
+        self, session_token: str
     ) -> Optional[Session]:
         """Get valid session with user loaded in single query (optimized for auth verification).
 
@@ -423,34 +445,43 @@ class SessionRepository(BaseRepository[Session]):
         Returns:
             Session instance with user relationship loaded, or None if not found or expired
         """
-        try:            
+        try:
             now = datetime.now(timezone.utc)
-            query = select(Session).where(
-                and_(
-                    Session.session_token == session_token,
-                    Session.expires_at > now
+            query = (
+                select(Session)
+                .where(
+                    and_(
+                        Session.session_token == session_token, Session.expires_at > now
+                    )
                 )
-            ).join(Session.user).where(
-                User.is_active.is_(True)
-            ).options(selectinload(Session.user))  # Load user in same query
+                .join(Session.user)
+                .where(User.is_active.is_(True))
+                .options(selectinload(Session.user))
+            )  # Load user in same query
 
             result = await self.session.execute(query)
             session = result.scalar_one_or_none()
 
             if session:
-                self.logger.debug("Valid session with user retrieved",
-                                session_token=session_token[:8] + "...",
-                                user_id=session.user_id)
+                self.logger.debug(
+                    "Valid session with user retrieved",
+                    session_token=session_token[:8] + "...",
+                    user_id=session.user_id,
+                )
             else:
-                self.logger.debug("Valid session with active user not found",
-                                session_token=session_token[:8] + "...")
+                self.logger.debug(
+                    "Valid session with active user not found",
+                    session_token=session_token[:8] + "...",
+                )
 
             return session
 
         except Exception as e:
-            self.logger.error("Error retrieving session with user",
-                            error=str(e),
-                            session_token=session_token[:8] + "...")
+            self.logger.error(
+                "Error retrieving session with user",
+                error=str(e),
+                session_token=session_token[:8] + "...",
+            )
             raise
 
     async def create_session_for_user(
@@ -460,7 +491,7 @@ class SessionRepository(BaseRepository[Session]):
         ip_address: str,
         user_agent: Optional[str],
         expires_at: datetime,
-        commit: bool = True
+        commit: bool = True,
     ) -> Session:
         """Create a new session for a user.
 
@@ -481,7 +512,7 @@ class SessionRepository(BaseRepository[Session]):
                 session_token=session_token,
                 ip_address=ip_address,
                 user_agent=user_agent,
-                expires_at=expires_at
+                expires_at=expires_at,
             )
 
             self.session.add(session)
@@ -495,7 +526,7 @@ class SessionRepository(BaseRepository[Session]):
             self.logger.info(
                 "Session created for user",
                 session_id=getattr(session, "id", None),
-                user_id=user_id
+                user_id=user_id,
             )
 
             return session
@@ -504,7 +535,7 @@ class SessionRepository(BaseRepository[Session]):
             self.logger.error(
                 "Database error creating session for user",
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             await self.session.rollback()
             raise
@@ -518,17 +549,17 @@ class SessionRepository(BaseRepository[Session]):
         expires_at: datetime,
     ) -> Session:
         """Replace all user sessions with a new one in a single transaction.
-        
+
         This is more efficient than separate delete + create operations.
         Both operations happen atomically within the same transaction.
-        
+
         Args:
             user_id: User ID
             session_token: New session token
             ip_address: Client IP address
             user_agent: User agent string
             expires_at: Session expiration timestamp
-        
+
         Returns:
             Created session instance
         """
@@ -537,33 +568,31 @@ class SessionRepository(BaseRepository[Session]):
             delete_stmt = delete(Session).where(Session.user_id == user_id)
             delete_result = await self.session.execute(delete_stmt)
             deleted_count = delete_result.rowcount
-            
+
             # Create new session
             session = Session(
                 user_id=user_id,
                 session_token=session_token,
                 ip_address=ip_address,
                 user_agent=user_agent,
-                expires_at=expires_at
+                expires_at=expires_at,
             )
-            
+
             self.session.add(session)
             await self.session.flush()
-            
+
             self.logger.info(
                 "Session replaced atomically",
                 user_id=user_id,
                 deleted_count=deleted_count,
-                new_session_id=session.id
+                new_session_id=session.id,
             )
-            
+
             return session
-            
+
         except Exception as e:
             self.logger.error(
-                "Database error replacing user session",
-                user_id=user_id,
-                error=str(e)
+                "Database error replacing user session", user_id=user_id, error=str(e)
             )
             await self.session.rollback()
             raise
@@ -584,9 +613,14 @@ class SessionRepository(BaseRepository[Session]):
             deleted = result.rowcount > 0
 
             if deleted:
-                self.logger.info("Session deleted by token", session_token=session_token[:8] + "...")
+                self.logger.info(
+                    "Session deleted by token", session_token=session_token[:8] + "..."
+                )
             else:
-                self.logger.debug("Session not found for deletion", session_token=session_token[:8] + "...")
+                self.logger.debug(
+                    "Session not found for deletion",
+                    session_token=session_token[:8] + "...",
+                )
 
             return deleted
 
@@ -594,7 +628,7 @@ class SessionRepository(BaseRepository[Session]):
             self.logger.error(
                 "Database error deleting session by token",
                 session_token=session_token[:8] + "...",
-                error=str(e)
+                error=str(e),
             )
             await self.session.rollback()
             raise

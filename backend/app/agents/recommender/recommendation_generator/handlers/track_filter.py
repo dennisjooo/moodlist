@@ -17,7 +17,7 @@ class TrackFilter:
         self,
         track_name: str,
         artists: List[str],
-        mood_analysis: Optional[Dict[str, Any]]
+        mood_analysis: Optional[Dict[str, Any]],
     ) -> tuple[bool, str]:
         """Validate if a track is relevant to the mood before accepting.
 
@@ -63,10 +63,7 @@ class TrackFilter:
         return (True, "No obvious mismatches detected")
 
     def _prepare_validation_context(
-        self,
-        track_name: str,
-        artists: List[str],
-        mood_analysis: Dict[str, Any]
+        self, track_name: str, artists: List[str], mood_analysis: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Prepare context data for validation checks.
 
@@ -97,7 +94,7 @@ class TrackFilter:
             "artist_recs_lower": artist_recs_lower,
             "all_keywords": all_keywords,
             "track_and_artists": track_and_artists,
-            "mood_analysis": mood_analysis
+            "mood_analysis": mood_analysis,
         }
 
     def _check_artist_match(self, context: Dict[str, Any]) -> tuple[bool, str]:
@@ -110,11 +107,16 @@ class TrackFilter:
             (is_valid, reason) - True if artist matches
         """
         for artist in context["artists_lower"]:
-            if any(rec_artist in artist or artist in rec_artist for rec_artist in context["artist_recs_lower"]):
+            if any(
+                rec_artist in artist or artist in rec_artist
+                for rec_artist in context["artist_recs_lower"]
+            ):
                 return (True, "Artist matches mood recommendations")
         return (False, "")
 
-    def _validate_regional_compatibility(self, context: Dict[str, Any]) -> tuple[bool, str]:
+    def _validate_regional_compatibility(
+        self, context: Dict[str, Any]
+    ) -> tuple[bool, str]:
         """Validate that track region/language matches mood intent.
 
         Respects user's regional preferences - if they ask for Indonesian music,
@@ -132,18 +134,19 @@ class TrackFilter:
 
         # Detect track's region using centralized utility
         track_region = RegionalFilter.detect_track_region(
-            track_name=context["track_name"],
-            artists=context["artists_lower"]
+            track_name=context["track_name"], artists=context["artists_lower"]
         )
 
         # Validate using centralized utility
         return RegionalFilter.validate_regional_compatibility(
             detected_region=track_region,
             preferred_regions=preferred_regions,
-            excluded_regions=excluded_regions
+            excluded_regions=excluded_regions,
         )
 
-    def _validate_language_compatibility(self, context: Dict[str, Any]) -> tuple[bool, str]:
+    def _validate_language_compatibility(
+        self, context: Dict[str, Any]
+    ) -> tuple[bool, str]:
         """Validate that track language is compatible with mood language.
 
         Args:
@@ -166,12 +169,22 @@ class TrackFilter:
             for indicator in indicators:
                 if isinstance(indicator, str):
                     if indicator in context["track_and_artists"]:
-                        return (False, f"Language mismatch: track appears to be {lang}, mood is {mood_language}")
+                        return (
+                            False,
+                            f"Language mismatch: track appears to be {lang}, mood is {mood_language}",
+                        )
                 else:
                     # Unicode range check for CJK languages
                     for char in context["track_name"]:
-                        if indicator <= char <= indicators[indicators.index(indicator) + 1]:
-                            return (False, f"Language mismatch: track appears to be {lang}, mood is {mood_language}")
+                        if (
+                            indicator
+                            <= char
+                            <= indicators[indicators.index(indicator) + 1]
+                        ):
+                            return (
+                                False,
+                                f"Language mismatch: track appears to be {lang}, mood is {mood_language}",
+                            )
 
         return (True, "Language compatible")
 
@@ -188,17 +201,30 @@ class TrackFilter:
             keyword_lower = keyword.lower()
             if any(lang_word in keyword_lower for lang_word in ["french", "français"]):
                 return "french"
-            elif any(lang_word in keyword_lower for lang_word in ["spanish", "latin", "latino"]):
+            elif any(
+                lang_word in keyword_lower
+                for lang_word in ["spanish", "latin", "latino"]
+            ):
                 return "spanish"
-            elif any(lang_word in keyword_lower for lang_word in ["korean", "k-pop", "kpop"]):
+            elif any(
+                lang_word in keyword_lower for lang_word in ["korean", "k-pop", "kpop"]
+            ):
                 return "korean"
-            elif any(lang_word in keyword_lower for lang_word in ["japanese", "j-pop", "jpop", "city pop"]):
+            elif any(
+                lang_word in keyword_lower
+                for lang_word in ["japanese", "j-pop", "jpop", "city pop"]
+            ):
                 return "japanese"
-            elif any(lang_word in keyword_lower for lang_word in ["portuguese", "brazilian", "bossa"]):
+            elif any(
+                lang_word in keyword_lower
+                for lang_word in ["portuguese", "brazilian", "bossa"]
+            ):
                 return "portuguese"
         return None
 
-    def _validate_genre_compatibility(self, context: Dict[str, Any]) -> tuple[bool, str]:
+    def _validate_genre_compatibility(
+        self, context: Dict[str, Any]
+    ) -> tuple[bool, str]:
         """Validate that track genres are compatible with mood genres.
 
         Args:
@@ -207,9 +233,29 @@ class TrackFilter:
         Returns:
             (is_valid, reason) - True if genres compatible
         """
-        genre_terms = ["funk", "disco", "house", "techno", "jazz", "rock", "pop", "indie",
-                       "electronic", "hip hop", "rap", "soul", "blues", "metal", "punk",
-                       "reggae", "country", "folk", "classical", "ambient", "trap"]
+        genre_terms = [
+            "funk",
+            "disco",
+            "house",
+            "techno",
+            "jazz",
+            "rock",
+            "pop",
+            "indie",
+            "electronic",
+            "hip hop",
+            "rap",
+            "soul",
+            "blues",
+            "metal",
+            "punk",
+            "reggae",
+            "country",
+            "folk",
+            "classical",
+            "ambient",
+            "trap",
+        ]
 
         track_genres = []
         mood_genres = []
@@ -232,24 +278,32 @@ class TrackFilter:
             conflicting_pairs = [
                 (["classical", "jazz", "blues"], ["metal", "punk", "trap"]),
                 (["folk", "country", "indie"], ["electronic", "techno", "house"]),
-                (["hip hop", "rap", "trap"], ["rock", "indie", "folk"])
+                (["hip hop", "rap", "trap"], ["rock", "indie", "folk"]),
             ]
 
             for group1, group2 in conflicting_pairs:
                 has_group1 = any(g in track_genres for g in group1)
                 has_group2 = any(g in mood_genres for g in group2)
                 if has_group1 and has_group2:
-                    return (False, f"Genre conflict: track appears to be {track_genres}, mood is {mood_genres}")
+                    return (
+                        False,
+                        f"Genre conflict: track appears to be {track_genres}, mood is {mood_genres}",
+                    )
 
                 # Check reverse
                 has_group1_mood = any(g in mood_genres for g in group1)
                 has_group2_track = any(g in track_genres for g in group2)
                 if has_group1_mood and has_group2_track:
-                    return (False, f"Genre conflict: track appears to be {track_genres}, mood is {mood_genres}")
+                    return (
+                        False,
+                        f"Genre conflict: track appears to be {track_genres}, mood is {mood_genres}",
+                    )
 
         return (True, "Genres compatible")
 
-    def _validate_theme_compatibility(self, context: Dict[str, Any]) -> tuple[bool, str]:
+    def _validate_theme_compatibility(
+        self, context: Dict[str, Any]
+    ) -> tuple[bool, str]:
         """Validate that track doesn't contain excluded themes.
 
         Args:
@@ -263,15 +317,14 @@ class TrackFilter:
 
         # Use centralized theme filtering
         return RegionalFilter.validate_theme_compatibility(
-            track_name=context["track_name"],
-            excluded_themes=excluded_themes
+            track_name=context["track_name"], excluded_themes=excluded_themes
         )
 
     def _filter_and_rank_recommendations(
         self,
         recommendations: List[Dict[str, Any]],
         mood_analysis: Optional[Dict[str, Any]] = None,
-        negative_seeds: Optional[List[str]] = None
+        negative_seeds: Optional[List[str]] = None,
     ) -> List[TrackRecommendation]:
         """Filter and rank recommendations based on mood analysis.
 
@@ -291,12 +344,16 @@ class TrackFilter:
             negative_seeds_set = set(negative_seeds)
             original_count = len(recommendations)
             recommendations = [
-                rec for rec in recommendations 
-                if rec.get("track_id") not in negative_seeds_set and rec.get("id") not in negative_seeds_set
+                rec
+                for rec in recommendations
+                if rec.get("track_id") not in negative_seeds_set
+                and rec.get("id") not in negative_seeds_set
             ]
             filtered_count = original_count - len(recommendations)
             if filtered_count > 0:
-                logger.info(f"✓ Excluded {filtered_count} tracks matching negative seeds")
+                logger.info(
+                    f"✓ Excluded {filtered_count} tracks matching negative seeds"
+                )
 
         # Convert to TrackRecommendation objects
         rec_objects = []
@@ -320,7 +377,7 @@ class TrackFilter:
                     user_mentioned=rec_data.get("user_mentioned", False),
                     user_mentioned_artist=rec_data.get("user_mentioned_artist", False),
                     anchor_type=rec_data.get("anchor_type"),
-                    protected=rec_data.get("protected", False)
+                    protected=rec_data.get("protected", False),
                 )
                 rec_objects.append(rec_obj)
 
@@ -338,9 +395,7 @@ class TrackFilter:
         return rec_objects
 
     def _apply_mood_filtering(
-        self,
-        recommendations: List[TrackRecommendation],
-        mood_analysis: Dict[str, Any]
+        self, recommendations: List[TrackRecommendation], mood_analysis: Dict[str, Any]
     ) -> List[TrackRecommendation]:
         """Apply mood-based filtering to recommendations using range-based logic.
 
@@ -358,7 +413,12 @@ class TrackFilter:
         filtered_recommendations = []
 
         tolerance_extensions = self._get_tolerance_extensions()
-        critical_features = ["energy", "acousticness", "instrumentalness", "danceability"]
+        critical_features = [
+            "energy",
+            "acousticness",
+            "instrumentalness",
+            "danceability",
+        ]
 
         for rec in recommendations:
             if not rec.audio_features:
@@ -375,7 +435,9 @@ class TrackFilter:
 
             filtered_recommendations.append(rec)
 
-        logger.info(f"Mood filtering: {len(recommendations)} -> {len(filtered_recommendations)} tracks")
+        logger.info(
+            f"Mood filtering: {len(recommendations)} -> {len(filtered_recommendations)} tracks"
+        )
         return filtered_recommendations
 
     def _get_tolerance_extensions(self) -> Dict[str, Optional[float]]:
@@ -399,7 +461,7 @@ class TrackFilter:
             "liveness": 0.30,  # Liveness is often not critical
             "mode": None,  # Binary, no tolerance
             "key": None,  # Discrete, no tolerance
-            "popularity": 20
+            "popularity": 20,
         }
 
     def _evaluate_feature_violations(
@@ -407,7 +469,7 @@ class TrackFilter:
         recommendation: TrackRecommendation,
         target_features: Dict[str, Any],
         tolerance_extensions: Dict[str, Optional[float]],
-        critical_features: List[str]
+        critical_features: List[str],
     ) -> tuple[List[str], int]:
         """Evaluate all feature violations for a recommendation.
 
@@ -425,14 +487,14 @@ class TrackFilter:
             audio_features=recommendation.audio_features,
             target_features=target_features,
             tolerance_extensions=tolerance_extensions,
-            critical_features=critical_features
+            critical_features=critical_features,
         )
 
     def _should_filter_recommendation(
         self,
         critical_violations: int,
         violations: List[str],
-        recommendation: TrackRecommendation
+        recommendation: TrackRecommendation,
     ) -> bool:
         """Determine if a recommendation should be filtered based on violations.
 

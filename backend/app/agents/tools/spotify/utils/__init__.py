@@ -1,6 +1,10 @@
 """Spotify utility modules for parameter handling, parsing, and operations."""
 
-from .params_utils import build_market_params, normalize_market_for_cache, get_market_label
+from .params_utils import (
+    build_market_params,
+    normalize_market_for_cache,
+    get_market_label,
+)
 from .rate_limiting import (
     wait_for_artist_top_tracks_rate_limit,
     register_artist_top_tracks_retry_after,

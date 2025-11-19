@@ -11,22 +11,21 @@ from . import (
     MoodAnalysisEngine,
     FeatureExtractor,
     PlaylistTargetPlanner,
-    KeywordExtractor
+    KeywordExtractor,
 )
 
 logger = structlog.get_logger(__name__)
 
 
 class MoodAnalyzerAgent(BaseAgent):
-    """Agent for analyzing and understanding user mood prompts.
-    """
+    """Agent for analyzing and understanding user mood prompts."""
 
     def __init__(
         self,
         llm: Optional[BaseLanguageModel] = None,
         spotify_service=None,
         reccobeat_service=None,
-        verbose: bool = False
+        verbose: bool = False,
     ):
         """Initialize the mood analyzer agent.
 
@@ -40,7 +39,7 @@ class MoodAnalyzerAgent(BaseAgent):
             name="mood_analyzer",
             description="Analyzes user mood prompts and translates them into audio features",
             llm=llm,
-            verbose=verbose
+            verbose=verbose,
         )
 
         # Note: spotify_service and reccobeat_service kept for backward compatibility
@@ -71,10 +70,10 @@ class MoodAnalyzerAgent(BaseAgent):
 
             # STEP 1: Perform mood analysis
             mood_analysis = await self._perform_mood_analysis(state)
-            
+
             # STEP 2: Extract and store features
             await self._extract_and_store_features(state, mood_analysis)
-            
+
             # STEP 3: Determine playlist target
             await self._determine_playlist_target(state, mood_analysis)
 
@@ -88,15 +87,15 @@ class MoodAnalyzerAgent(BaseAgent):
 
     async def _perform_mood_analysis(self, state: AgentState) -> dict:
         """Perform mood analysis to extract audio features.
-        
+
         Args:
             state: Current agent state
-            
+
         Returns:
             Mood analysis dictionary
         """
         logger.info("Performing mood analysis for audio features")
-        
+
         # Perform mood analysis
         mood_analysis = await self.mood_analysis_engine.analyze_mood(state.mood_prompt)
 
@@ -106,7 +105,7 @@ class MoodAnalyzerAgent(BaseAgent):
         # The diversity manager will handle deduplication if needed
         intent_analysis = state.metadata.get("intent_analysis", {})
         user_mentioned_artists = intent_analysis.get("user_mentioned_artists", [])
-        
+
         if user_mentioned_artists:
             logger.info(
                 f"User mentioned {len(user_mentioned_artists)} artist(s): {', '.join(user_mentioned_artists)}. "
@@ -120,12 +119,14 @@ class MoodAnalyzerAgent(BaseAgent):
             f"Mood analysis: {len(mood_analysis.get('genre_keywords', []))} genres, "
             f"primary emotion: {mood_analysis.get('primary_emotion', 'unknown')}"
         )
-        
+
         return mood_analysis
 
-    async def _extract_and_store_features(self, state: AgentState, mood_analysis: dict) -> None:
+    async def _extract_and_store_features(
+        self, state: AgentState, mood_analysis: dict
+    ) -> None:
         """Extract target features and weights from mood analysis.
-        
+
         Args:
             state: Current agent state
             mood_analysis: Mood analysis dictionary
@@ -144,28 +145,34 @@ class MoodAnalyzerAgent(BaseAgent):
         state.metadata["feature_weights"].update(feature_weights)
 
         # Also store mood analysis details for reference
-        state.metadata["mood_interpretation"] = mood_analysis.get("mood_interpretation", "")
-        state.metadata["primary_emotion"] = mood_analysis.get("primary_emotion", "neutral")
+        state.metadata["mood_interpretation"] = mood_analysis.get(
+            "mood_interpretation", ""
+        )
+        state.metadata["primary_emotion"] = mood_analysis.get(
+            "primary_emotion", "neutral"
+        )
         state.metadata["search_keywords"] = mood_analysis.get("search_keywords", [])
-        state.metadata["artist_recommendations"] = mood_analysis.get("artist_recommendations", [])
+        state.metadata["artist_recommendations"] = mood_analysis.get(
+            "artist_recommendations", []
+        )
         state.metadata["genre_keywords"] = mood_analysis.get("genre_keywords", [])
 
         logger.info(f"Target features: {list(target_features.keys())}")
         logger.info(f"Feature weights: {feature_weights}")
 
-    async def _determine_playlist_target(self, state: AgentState, mood_analysis: dict) -> None:
+    async def _determine_playlist_target(
+        self, state: AgentState, mood_analysis: dict
+    ) -> None:
         """Determine playlist target plan based on mood.
-        
+
         Args:
             state: Current agent state
             mood_analysis: Mood analysis dictionary
         """
         target_features = state.metadata.get("target_features", {})
-        
+
         playlist_target = self.playlist_target_planner.determine_playlist_target(
-            state.mood_prompt,
-            mood_analysis,
-            target_features
+            state.mood_prompt, mood_analysis, target_features
         )
         state.metadata["playlist_target"] = playlist_target
 

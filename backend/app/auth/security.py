@@ -10,32 +10,44 @@ from app.core.config import settings
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(
+    data: Dict[str, Any], expires_delta: Optional[timedelta] = None
+) -> str:
     """Create JWT access token."""
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRATION_MINUTES)
-    
+        expire = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.JWT_EXPIRATION_MINUTES
+        )
+
     to_encode.update({"exp": expire, "type": "access"})
-    encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    encoded_jwt = jwt.encode(
+        to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+    )
     return encoded_jwt
 
 
 def create_refresh_token(data: Dict[str, Any]) -> str:
     """Create JWT refresh token."""
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(days=settings.JWT_REFRESH_EXPIRATION_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(
+        days=settings.JWT_REFRESH_EXPIRATION_DAYS
+    )
     to_encode.update({"exp": expire, "type": "refresh"})
-    encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    encoded_jwt = jwt.encode(
+        to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+    )
     return encoded_jwt
 
 
 def verify_token(token: str, expected_type: str = "access") -> Optional[Dict[str, Any]]:
     """Verify and decode JWT token."""
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        payload = jwt.decode(
+            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+        )
         if payload.get("type") != expected_type:
             return None
         return payload
@@ -69,10 +81,10 @@ def hash_token(token: str) -> str:
         The hashed token as a string
     """
     # Convert token to bytes and hash it
-    token_bytes = token.encode('utf-8')
+    token_bytes = token.encode("utf-8")
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(token_bytes, salt)
-    return hashed.decode('utf-8')
+    return hashed.decode("utf-8")
 
 
 def verify_hashed_token(plain_token: str, hashed_token: str) -> bool:
@@ -85,13 +97,13 @@ def verify_hashed_token(plain_token: str, hashed_token: str) -> bool:
     Returns:
         True if the token matches the hash, False otherwise
     """
-    plain_bytes = plain_token.encode('utf-8')
-    hashed_bytes = hashed_token.encode('utf-8')
+    plain_bytes = plain_token.encode("utf-8")
+    hashed_bytes = hashed_token.encode("utf-8")
     return bcrypt.checkpw(plain_bytes, hashed_bytes)
 
 
 def generate_session_token() -> str:
     """Generate a secure session token."""
     import secrets
-    return secrets.token_urlsafe(32)
 
+    return secrets.token_urlsafe(32)

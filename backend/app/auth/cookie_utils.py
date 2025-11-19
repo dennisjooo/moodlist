@@ -1,4 +1,5 @@
 """Cookie management utilities."""
+
 import structlog
 
 from fastapi import Response
@@ -13,10 +14,12 @@ def _is_localhost_origin(origin: str) -> bool:
     """Check if origin is localhost/127.0.0.1."""
     if not origin:
         return False
-    return any(host in origin.lower() for host in ['localhost', '127.0.0.1'])
+    return any(host in origin.lower() for host in ["localhost", "127.0.0.1"])
 
 
-def set_session_cookie(response: Response, session_token: str, origin: str = None) -> None:
+def set_session_cookie(
+    response: Response, session_token: str, origin: str = None
+) -> None:
     """Set session cookie with standard parameters.
 
     Args:
@@ -31,13 +34,13 @@ def set_session_cookie(response: Response, session_token: str, origin: str = Non
     # When backend is on different domain than frontend (cross-site), we need:
     # - secure=True (HTTPS required for cross-site cookies)
     # - samesite="none" (required for cross-site)
-    # 
+    #
     # PROBLEM: localhost is HTTP, but cross-site cookies require HTTPS + SameSite=None
     # SOLUTION: For localhost, we have to compromise security for development:
     #   - Use secure=False (allow HTTP)
     #   - Use samesite="none" (allow cross-site)
     #   - This works in Chrome but may not work in all browsers
-    
+
     if is_production:
         if is_localhost:
             # SPECIAL CASE: localhost frontend + production backend
@@ -73,10 +76,12 @@ def set_session_cookie(response: Response, session_token: str, origin: str = Non
     # Add Partitioned attribute for cross-site cookies in production
     if is_production and not is_localhost and samesite == "None":
         cookie_parts.append("Partitioned")
-        logger.info("Setting partitioned cross-site cookie",
-                   origin=origin,
-                   secure=secure,
-                   samesite=samesite)
+        logger.info(
+            "Setting partitioned cross-site cookie",
+            origin=origin,
+            secure=secure,
+            samesite=samesite,
+        )
 
     cookie_string = "; ".join(cookie_parts)
 

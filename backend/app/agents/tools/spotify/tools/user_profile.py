@@ -33,7 +33,7 @@ class GetUserProfileTool(RateLimitedTool):
             name="get_user_profile",
             description="Get user profile from Spotify API",
             base_url=SpotifyEndpoints.API_BASE,
-            rate_limit_per_minute=60
+            rate_limit_per_minute=60,
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:
@@ -56,7 +56,7 @@ class GetUserProfileTool(RateLimitedTool):
             response_data = await self._make_request(
                 method="GET",
                 endpoint="/me",
-                headers={"Authorization": f"Bearer {access_token}"}
+                headers={"Authorization": f"Bearer {access_token}"},
             )
 
             # Validate response structure
@@ -64,7 +64,7 @@ class GetUserProfileTool(RateLimitedTool):
             if not self._validate_response(response_data, required_fields):
                 return ToolResult.error_result(
                     "Invalid response structure from Spotify API",
-                    api_response=response_data
+                    api_response=response_data,
                 )
 
             # Parse user profile
@@ -76,7 +76,7 @@ class GetUserProfileTool(RateLimitedTool):
                 "profile_image_url": None,
                 "country": response_data.get("country"),
                 "followers": response_data.get("followers", {}).get("total", 0),
-                "product": response_data.get("product")  # Premium, Free, etc.
+                "product": response_data.get("product"),  # Premium, Free, etc.
             }
 
             # Get profile image if available
@@ -87,16 +87,11 @@ class GetUserProfileTool(RateLimitedTool):
             logger.info(f"Successfully retrieved profile for user {user_profile['id']}")
 
             return ToolResult.success_result(
-                data=user_profile,
-                metadata={
-                    "source": "spotify",
-                    "api_endpoint": "/me"
-                }
+                data=user_profile, metadata={"source": "spotify", "api_endpoint": "/me"}
             )
 
         except Exception as e:
             logger.error(f"Error getting user profile: {str(e)}", exc_info=True)
             return ToolResult.error_result(
-                f"Failed to get user profile: {str(e)}",
-                error_type=type(e).__name__
+                f"Failed to get user profile: {str(e)}", error_type=type(e).__name__
             )

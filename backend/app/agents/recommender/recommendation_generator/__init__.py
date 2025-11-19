@@ -6,7 +6,7 @@ from .handlers import (
     AudioFeaturesHandler,
     TrackFilter,
     ScoringEngine,
-    DiversityManager
+    DiversityManager,
 )
 
 __all__ = [
@@ -16,5 +16,5 @@ __all__ = [
     "AudioFeaturesHandler",
     "TrackFilter",
     "ScoringEngine",
-    "DiversityManager"
+    "DiversityManager",
 ]

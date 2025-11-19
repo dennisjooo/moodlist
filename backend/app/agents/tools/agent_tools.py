@@ -16,7 +16,6 @@ from ..core.cache import cache_manager
 from .rate_limit_handlers import handle_rate_limit_error
 
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -109,7 +108,12 @@ class AgentTools:
 class APIError(Exception):
     """Exception raised for API-related errors."""
 
-    def __init__(self, message: str, status_code: Optional[int] = None, response_data: Optional[Dict] = None):
+    def __init__(
+        self,
+        message: str,
+        status_code: Optional[int] = None,
+        response_data: Optional[Dict] = None,
+    ):
         super().__init__(message)
         self.status_code = status_code
         self.response_data = response_data
@@ -120,6 +124,7 @@ class BaseAPITool(BaseTool, ABC):
 
     class Config:
         """Pydantic configuration."""
+
         arbitrary_types_allowed = True
         extra = "allow"  # Allow extra attributes beyond the BaseTool fields
 
@@ -130,7 +135,7 @@ class BaseAPITool(BaseTool, ABC):
         base_url: str,
         timeout: int = 30,
         max_retries: int = 3,
-        **kwargs
+        **kwargs,
     ):
         """Initialize the API tool.
 
@@ -143,7 +148,7 @@ class BaseAPITool(BaseTool, ABC):
         """
         # Only pass valid BaseTool fields to parent
         super().__init__(name=name, description=description, **kwargs)
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.max_retries = max_retries
 
@@ -153,10 +158,10 @@ class BaseAPITool(BaseTool, ABC):
             limits=httpx.Limits(
                 max_keepalive_connections=50,  # Increased for better connection reuse
                 max_connections=200,  # Increased for higher concurrency
-                keepalive_expiry=30.0  # Keep connections alive longer
+                keepalive_expiry=30.0,  # Keep connections alive longer
             ),
             # Enable HTTP/2 for better performance
-            http2=True
+            http2=True,
         )
         self._closed = False
 
@@ -170,11 +175,12 @@ class BaseAPITool(BaseTool, ABC):
         """Warn if client wasn't properly closed."""
         if not self._closed and self.client:
             import warnings
+
             warnings.warn(
                 f"HTTP client for {self.__class__.__name__} was not properly closed. "
                 f"Use 'async with' or call 'await close()' explicitly.",
                 ResourceWarning,
-                stacklevel=2
+                stacklevel=2,
             )
 
     async def __aenter__(self):
@@ -185,8 +191,13 @@ class BaseAPITool(BaseTool, ABC):
         """Clean up resources on context exit regardless of success or failure."""
         await self.close()
 
-    def _make_cache_key(self, method: str, endpoint: str, params: Optional[Dict[str, Any]] = None,
-                       json_data: Optional[Dict[str, Any]] = None) -> str:
+    def _make_cache_key(
+        self,
+        method: str,
+        endpoint: str,
+        params: Optional[Dict[str, Any]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+    ) -> str:
         """Generate a cache key for API requests.
 
         Args:
@@ -208,7 +219,9 @@ class BaseAPITool(BaseTool, ABC):
 
         if json_data:
             # Sort JSON data for consistent key generation
-            sorted_json = sorted(json_data.items()) if isinstance(json_data, dict) else json_data
+            sorted_json = (
+                sorted(json_data.items()) if isinstance(json_data, dict) else json_data
+            )
             key_parts.append(str(sorted_json))
 
         key_string = "|".join(key_parts)
@@ -232,7 +245,9 @@ class BaseAPITool(BaseTool, ABC):
             logger.warning(f"Error retrieving cached response: {e}")
         return None
 
-    async def _cache_response(self, cache_key: str, response_data: Dict[str, Any], ttl: int = 300) -> None:
+    async def _cache_response(
+        self, cache_key: str, response_data: Dict[str, Any], ttl: int = 300
+    ) -> None:
         """Cache API response.
 
         Args:
@@ -242,7 +257,9 @@ class BaseAPITool(BaseTool, ABC):
         """
         try:
             await cache_manager.cache.set(cache_key, response_data, ttl=ttl)
-            logger.debug(f"Cached response for {self.name} (key: {cache_key[:8]}..., ttl: {ttl}s)")
+            logger.debug(
+                f"Cached response for {self.name} (key: {cache_key[:8]}..., ttl: {ttl}s)"
+            )
         except Exception as e:
             logger.warning(f"Error caching response: {e}")
 
@@ -270,10 +287,15 @@ class BaseAPITool(BaseTool, ABC):
                 return await request_func()
 
             except httpx.TimeoutException:
-                last_exception = APIError(f"Request timeout on attempt {attempt + 1}", response_data={"error": "timeout"})
+                last_exception = APIError(
+                    f"Request timeout on attempt {attempt + 1}",
+                    response_data={"error": "timeout"},
+                )
                 if attempt < self.max_retries - 1:
-                    wait_time = (2 ** attempt) * 0.5  # Exponential backoff
-                    logger.warning(f"Timeout when calling {self.name}, retrying in {wait_time}s...")
+                    wait_time = (2**attempt) * 0.5  # Exponential backoff
+                    logger.warning(
+                        f"Timeout when calling {self.name}, retrying in {wait_time}s..."
+                    )
                     await asyncio.sleep(wait_time)
                     continue
 
@@ -287,8 +309,10 @@ class BaseAPITool(BaseTool, ABC):
 
                 if e.response.status_code >= 500 and attempt < self.max_retries - 1:
                     # Retry on server errors
-                    wait_time = (2 ** attempt) * 0.5
-                    logger.warning(f"Server error ({e.response.status_code}) when calling {self.name}, retrying in {wait_time}s...")
+                    wait_time = (2**attempt) * 0.5
+                    logger.warning(
+                        f"Server error ({e.response.status_code}) when calling {self.name}, retrying in {wait_time}s..."
+                    )
                     await asyncio.sleep(wait_time)
                     continue
 
@@ -307,7 +331,7 @@ class BaseAPITool(BaseTool, ABC):
                 last_exception = APIError(
                     f"HTTP {e.response.status_code}: {str(e)}",
                     status_code=e.response.status_code,
-                    response_data=error_data
+                    response_data=error_data,
                 )
                 break
 
@@ -320,13 +344,10 @@ class BaseAPITool(BaseTool, ABC):
                     "error_type": e.__class__.__name__,
                 }
 
-                last_exception = APIError(
-                    error_message,
-                    response_data=error_data
-                )
+                last_exception = APIError(error_message, response_data=error_data)
 
                 if attempt < self.max_retries - 1:
-                    wait_time = (2 ** attempt) * 0.5
+                    wait_time = (2**attempt) * 0.5
                     logger.warning(
                         "Request error when calling tool, retrying",
                         tool=self.name,
@@ -341,11 +362,15 @@ class BaseAPITool(BaseTool, ABC):
                 break
 
             except Exception as e:
-                last_exception = APIError(f"Unexpected error: {str(e)}", response_data={"error": str(e)})
+                last_exception = APIError(
+                    f"Unexpected error: {str(e)}", response_data={"error": str(e)}
+                )
                 break
 
         # All retries failed
-        logger.error(f"All {self.max_retries} attempts failed for {self.name} when calling {self.name}")
+        logger.error(
+            f"All {self.max_retries} attempts failed for {self.name} when calling {self.name}"
+        )
         raise last_exception or APIError("Unknown error occurred")
 
     async def _make_request(
@@ -356,7 +381,7 @@ class BaseAPITool(BaseTool, ABC):
         json_data: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
         use_cache: bool = False,
-        cache_ttl: int = 300
+        cache_ttl: int = 300,
     ) -> Dict[str, Any]:
         """Make an HTTP request.
 
@@ -384,7 +409,7 @@ class BaseAPITool(BaseTool, ABC):
         # Default headers
         request_headers = {
             "Accept": "application/json",
-            "User-Agent": "MoodList-Agent/1.0"
+            "User-Agent": "MoodList-Agent/1.0",
         }
         if headers:
             request_headers.update(headers)
@@ -398,7 +423,7 @@ class BaseAPITool(BaseTool, ABC):
                 url=url,
                 params=params,
                 json=json_data,
-                headers=request_headers
+                headers=request_headers,
             )
             response.raise_for_status()
             return response.json()
@@ -412,7 +437,9 @@ class BaseAPITool(BaseTool, ABC):
 
         return response
 
-    def _validate_response(self, response_data: Dict[str, Any], required_fields: List[str]) -> bool:
+    def _validate_response(
+        self, response_data: Dict[str, Any], required_fields: List[str]
+    ) -> bool:
         """Validate response contains required fields.
 
         Args:
@@ -424,7 +451,9 @@ class BaseAPITool(BaseTool, ABC):
         """
         for field in required_fields:
             if field not in response_data:
-                logger.error(f"Required field '{field}' missing from response for {self.name}")
+                logger.error(
+                    f"Required field '{field}' missing from response for {self.name}"
+                )
                 return False
         return True
 
@@ -440,7 +469,7 @@ class RateLimitedTool(BaseAPITool):
         rate_limit_per_minute: int = 60,
         min_request_interval: float = 0.0,
         use_global_semaphore: bool = False,  # NEW: Enable global request queuing
-        **kwargs
+        **kwargs,
     ):
         """Initialize rate-limited tool.
 
@@ -453,7 +482,9 @@ class RateLimitedTool(BaseAPITool):
             use_global_semaphore: Use global semaphore to limit concurrent requests
             **kwargs: Additional arguments for BaseAPITool
         """
-        super().__init__(name=name, description=description, base_url=base_url, **kwargs)
+        super().__init__(
+            name=name, description=description, base_url=base_url, **kwargs
+        )
         self.rate_limit_per_minute = rate_limit_per_minute
         self.min_request_interval = min_request_interval
         self.use_global_semaphore = use_global_semaphore
@@ -465,7 +496,9 @@ class RateLimitedTool(BaseAPITool):
         # Rate limiting state
         self._last_cleanup = datetime.now(timezone.utc)
         self._request_count = 0
-        self._interval_lock = asyncio.Lock()  # Protect _last_request_time from race conditions
+        self._interval_lock = (
+            asyncio.Lock()
+        )  # Protect _last_request_time from race conditions
 
     def configure_scope_limits(
         self,
@@ -517,26 +550,28 @@ class RateLimitedTool(BaseAPITool):
         self.request_times.setdefault(scope, []).append(now)
         self._request_count += 1
 
-    def _format_params(self, params: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def _format_params(
+        self, params: Optional[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
         """Format parameters for the API request.
-        
+
         By default, converts list values to comma-separated strings.
         Override this method if the API requires different formatting.
-        
+
         Args:
             params: Raw query parameters
-            
+
         Returns:
             Formatted query parameters
         """
         if not params:
             return params
-            
+
         formatted = {}
         for key, value in params.items():
             if isinstance(value, list):
                 # Convert lists to comma-separated strings by default
-                formatted[key] = ','.join(str(v) for v in value)
+                formatted[key] = ",".join(str(v) for v in value)
             else:
                 formatted[key] = value
         return formatted
@@ -550,10 +585,10 @@ class RateLimitedTool(BaseAPITool):
         headers: Optional[Dict[str, str]] = None,
         use_cache: bool = False,
         cache_ttl: int = 300,
-        request_scope: str = "default"
+        request_scope: str = "default",
     ) -> Dict[str, Any]:
         """Make a rate-limited HTTP request.
-        
+
         Args mirror BaseAPITool plus optional request_scope to separate rate buckets.
         """
         # Use global semaphore if enabled (for APIs that don't handle concurrency well)
@@ -581,7 +616,7 @@ class RateLimitedTool(BaseAPITool):
                 cache_ttl,
                 request_scope,
             )
-    
+
     async def _make_request_internal(
         self,
         method: str,
@@ -591,7 +626,7 @@ class RateLimitedTool(BaseAPITool):
         headers: Optional[Dict[str, str]] = None,
         use_cache: bool = False,
         cache_ttl: int = 300,
-        request_scope: str = "default"
+        request_scope: str = "default",
     ) -> Dict[str, Any]:
         """Internal method to make a rate-limited HTTP request.
 
@@ -612,7 +647,7 @@ class RateLimitedTool(BaseAPITool):
             # Request deduplication: Check if same request is already in flight
             global _inflight_requests, _inflight_lock
             request_key = f"{self.name}:{cache_key}"
-            
+
             created_future: Optional[asyncio.Future] = None
             async with _inflight_lock:
                 if request_key in _inflight_requests:
@@ -632,10 +667,14 @@ class RateLimitedTool(BaseAPITool):
                 # Check minimum interval since last request (only for cache misses)
                 # Use lock to prevent race conditions with concurrent requests
                 async with self._interval_lock:
-                    min_interval = self._scope_min_intervals.get(request_scope, self.min_request_interval)
+                    min_interval = self._scope_min_intervals.get(
+                        request_scope, self.min_request_interval
+                    )
                     last_request_time = self._scope_last_request_time.get(request_scope)
                     if last_request_time and min_interval > 0:
-                        elapsed = (datetime.now(timezone.utc) - last_request_time).total_seconds()
+                        elapsed = (
+                            datetime.now(timezone.utc) - last_request_time
+                        ).total_seconds()
                         if elapsed < min_interval:
                             wait_time = min_interval - elapsed
                             logger.debug(
@@ -643,9 +682,11 @@ class RateLimitedTool(BaseAPITool):
                                 f"waiting {wait_time:.2f}s"
                             )
                             await asyncio.sleep(wait_time)
-                    
+
                     # Update last request time immediately to block other concurrent requests
-                    self._scope_last_request_time[request_scope] = datetime.now(timezone.utc)
+                    self._scope_last_request_time[request_scope] = datetime.now(
+                        timezone.utc
+                    )
 
                 await self._check_rate_limit(request_scope)
 
@@ -656,17 +697,27 @@ class RateLimitedTool(BaseAPITool):
                 request_start = datetime.now(timezone.utc)
 
                 # Make the actual request (pass use_cache=False since we handled caching above)
-                response = await super()._make_request(method, endpoint, formatted_params, json_data, headers, use_cache=False, cache_ttl=cache_ttl)
+                response = await super()._make_request(
+                    method,
+                    endpoint,
+                    formatted_params,
+                    json_data,
+                    headers,
+                    use_cache=False,
+                    cache_ttl=cache_ttl,
+                )
 
                 # Log slow requests (>20s) for RecoBeat API monitoring
-                request_duration = (datetime.now(timezone.utc) - request_start).total_seconds()
+                request_duration = (
+                    datetime.now(timezone.utc) - request_start
+                ).total_seconds()
                 if request_duration > 20.0:
                     logger.warning(
                         "Slow RecoBeat API request detected",
                         tool=self.name,
                         endpoint=endpoint,
                         duration_seconds=request_duration,
-                        params=formatted_params
+                        params=formatted_params,
                     )
 
                 # Cache the response if caching was requested
@@ -696,10 +747,14 @@ class RateLimitedTool(BaseAPITool):
                             _inflight_requests.pop(request_key, None)
         else:
             # Non-cached requests: use original flow without deduplication
-            min_interval = self._scope_min_intervals.get(request_scope, self.min_request_interval)
+            min_interval = self._scope_min_intervals.get(
+                request_scope, self.min_request_interval
+            )
             last_request_time = self._scope_last_request_time.get(request_scope)
             if last_request_time and min_interval > 0:
-                elapsed = (datetime.now(timezone.utc) - last_request_time).total_seconds()
+                elapsed = (
+                    datetime.now(timezone.utc) - last_request_time
+                ).total_seconds()
                 if elapsed < min_interval:
                     wait_time = min_interval - elapsed
                     logger.debug(
@@ -710,23 +765,33 @@ class RateLimitedTool(BaseAPITool):
 
             await self._check_rate_limit(request_scope)
             formatted_params = self._format_params(params)
-            
+
             # Track request timing for monitoring
             request_start = datetime.now(timezone.utc)
-            
-            response = await super()._make_request(method, endpoint, formatted_params, json_data, headers, use_cache=False, cache_ttl=cache_ttl)
-            
+
+            response = await super()._make_request(
+                method,
+                endpoint,
+                formatted_params,
+                json_data,
+                headers,
+                use_cache=False,
+                cache_ttl=cache_ttl,
+            )
+
             # Log slow requests (>20s) for monitoring
-            request_duration = (datetime.now(timezone.utc) - request_start).total_seconds()
+            request_duration = (
+                datetime.now(timezone.utc) - request_start
+            ).total_seconds()
             if request_duration > 20.0:
                 logger.warning(
                     "Slow API request detected",
                     tool=self.name,
                     endpoint=endpoint,
                     duration_seconds=request_duration,
-                    params=formatted_params
+                    params=formatted_params,
                 )
-            
+
             self._scope_last_request_time[request_scope] = datetime.now(timezone.utc)
             await self._record_request(request_scope)
             return response
@@ -738,7 +803,9 @@ class ToolResult(BaseModel):
     success: bool = Field(..., description="Whether the tool execution was successful")
     data: Optional[Dict[str, Any]] = Field(None, description="Result data")
     error: Optional[str] = Field(None, description="Error message if failed")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional metadata"
+    )
 
     @classmethod
     def success_result(cls, data: Dict[str, Any], **metadata) -> "ToolResult":

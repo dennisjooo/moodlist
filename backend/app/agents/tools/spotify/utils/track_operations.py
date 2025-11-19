@@ -17,32 +17,32 @@ async def get_track_info(
     make_request: Callable,
     access_token: str,
     track_id: str,
-    market: Optional[str] = None
+    market: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Get full track information including popularity.
-    
+
     Args:
         make_request: Async function to make API requests
         access_token: Spotify access token
         track_id: Spotify track ID
         market: Optional ISO 3166-1 alpha-2 country code (None for global)
-        
+
     Returns:
         Track dictionary or None if failed
     """
     try:
         params = build_market_params(market=market)
-        
+
         response_data = await make_request(
             method="GET",
             endpoint=f"/tracks/{track_id}",
             params=params,
-            headers={"Authorization": f"Bearer {access_token}"}
+            headers={"Authorization": f"Bearer {access_token}"},
         )
-        
+
         if not response_data.get("id"):
             return None
-        
+
         return {
             "id": response_data.get("id"),
             "name": response_data.get("name"),
@@ -56,7 +56,7 @@ async def get_track_info(
                 {
                     "id": artist.get("id"),
                     "name": artist.get("name"),
-                    "uri": artist.get("uri")
+                    "uri": artist.get("uri"),
                 }
                 for artist in response_data.get("artists", [])
             ],
@@ -64,10 +64,12 @@ async def get_track_info(
                 "id": response_data.get("album", {}).get("id"),
                 "name": response_data.get("album", {}).get("name"),
                 "uri": response_data.get("album", {}).get("uri"),
-                "release_date": response_data.get("album", {}).get("release_date")
-            } if response_data.get("album") else None
+                "release_date": response_data.get("album", {}).get("release_date"),
+            }
+            if response_data.get("album")
+            else None,
         }
-        
+
     except Exception as e:
         logger.warning(f"Error fetching track info for {track_id}: {e}")
         return None
@@ -80,12 +82,12 @@ async def search_artist_tracks(
     artist_id: str,
     artist_name: str,
     market: Optional[str] = None,
-    limit: int = 20
+    limit: int = 20,
 ) -> Optional[Dict[str, Any]]:
     """Search for artist tracks using the search API.
-    
+
     This is a fallback strategy when the top-tracks endpoint fails.
-    
+
     Args:
         make_request: Async function to make API requests
         validate_response: Function to validate API responses
@@ -94,61 +96,59 @@ async def search_artist_tracks(
         artist_name: Artist name for search query
         market: Optional ISO 3166-1 alpha-2 country code (None for global)
         limit: Maximum number of tracks to return
-        
+
     Returns:
         Dictionary with tracks and metadata, or None if failed
     """
     try:
         search_query = f"artist:{artist_name}"
         params = build_market_params(
-            market=market,
-            q=search_query,
-            type="track",
-            limit=limit
+            market=market, q=search_query, type="track", limit=limit
         )
-        
+
         search_response = await make_request(
             method="GET",
             endpoint="/search",
             params=params,
-            headers={"Authorization": f"Bearer {access_token}"}
+            headers={"Authorization": f"Bearer {access_token}"},
         )
-        
+
         if not validate_response(search_response, ["tracks"]):
             return None
-        
+
         # Parse tracks from search results
         tracks = []
         tracks_data = search_response.get("tracks", {})
         items = tracks_data.get("items", [])
-        
+
         for track_data in items:
             try:
                 # Only include tracks where this artist is the primary artist
                 track_artists = track_data.get("artists", [])
                 if not track_artists or track_artists[0].get("id") != artist_id:
                     continue
-                
+
                 track_info = parse_track_data(track_data)
                 tracks.append(track_info)
-                
+
             except Exception as e:
-                logger.warning(f"Failed to parse search track data: {track_data}, error: {e}")
+                logger.warning(
+                    f"Failed to parse search track data: {track_data}, error: {e}"
+                )
                 continue
-        
+
         # Sort by popularity (most popular first) and take top 10
         tracks.sort(key=lambda x: x.get("popularity", 0), reverse=True)
         tracks = tracks[:10]
-        
+
         return {
             "tracks": tracks,
             "total_count": len(tracks),
             "artist_id": artist_id,
             "artist_name": artist_name,
-            "search_query": search_query
+            "search_query": search_query,
         }
-        
+
     except Exception as e:
         logger.error(f"Error searching for artist tracks: {str(e)}", exc_info=True)
         return None
-

@@ -5,4 +5,3 @@ from .ordering_agent import PlaylistOrderingAgent
 __all__ = [
     "PlaylistOrderingAgent",
 ]
-

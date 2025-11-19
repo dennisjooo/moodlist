@@ -7,8 +7,9 @@ from app.core.database import Base
 
 class User(Base):
     """User model for storing user information."""
+
     __tablename__ = "users"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     spotify_id = Column(String(255), unique=True, index=True, nullable=False)
     email = Column(String(255), unique=True, index=True, nullable=True)
@@ -18,15 +19,27 @@ class User(Base):
     token_expires_at = Column(DateTime(timezone=True), nullable=False)
     profile_image_url = Column(String(500), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
-    is_spotify_whitelisted = Column(Boolean, default=True, nullable=False)  # Track if user has Spotify API access
+    is_spotify_whitelisted = Column(
+        Boolean, default=True, nullable=False
+    )  # Track if user has Spotify API access
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
     # Relationships
-    sessions = relationship("Session", back_populates="user", cascade="all, delete-orphan")
-    playlists = relationship("Playlist", back_populates="user", cascade="all, delete-orphan")
-    invocations = relationship("Invocation", back_populates="user", cascade="all, delete-orphan")
-    llm_invocations = relationship("LLMInvocation", back_populates="user", cascade="all, delete-orphan")
-    
+    sessions = relationship(
+        "Session", back_populates="user", cascade="all, delete-orphan"
+    )
+    playlists = relationship(
+        "Playlist", back_populates="user", cascade="all, delete-orphan"
+    )
+    invocations = relationship(
+        "Invocation", back_populates="user", cascade="all, delete-orphan"
+    )
+    llm_invocations = relationship(
+        "LLMInvocation", back_populates="user", cascade="all, delete-orphan"
+    )
+
     def __repr__(self):
         return f"<User(id={self.id}, spotify_id={self.spotify_id}, display_name={self.display_name})>"

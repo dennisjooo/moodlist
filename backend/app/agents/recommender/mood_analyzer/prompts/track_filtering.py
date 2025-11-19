@@ -4,9 +4,7 @@ from typing import Dict, Any, List
 
 
 def get_artist_validation_prompt(
-    artist_info: Dict[str, Any],
-    mood_prompt: str,
-    mood_analysis: Dict[str, Any]
+    artist_info: Dict[str, Any], mood_prompt: str, mood_analysis: Dict[str, Any]
 ) -> str:
     """Get prompt for validating if an artist matches the mood request.
 
@@ -18,17 +16,19 @@ def get_artist_validation_prompt(
     Returns:
         Prompt string for artist validation
     """
-    artist_name = artist_info.get('name', 'Unknown')
-    genres = artist_info.get('genres', [])
-    genres_str = ', '.join(genres) if genres else 'No genres listed'
-    popularity = artist_info.get('popularity', 0)
-    
-    mood_interpretation = mood_analysis.get('mood_interpretation', '')
-    target_genres = ', '.join(mood_analysis.get('genre_keywords', []))
-    recommended_artists = ', '.join(mood_analysis.get('artist_recommendations', [])[:10])
-    preferred_regions = ', '.join(mood_analysis.get('preferred_regions', []))
-    excluded_regions = ', '.join(mood_analysis.get('excluded_regions', []))
-    excluded_themes = ', '.join(mood_analysis.get('excluded_themes', []))
+    artist_name = artist_info.get("name", "Unknown")
+    genres = artist_info.get("genres", [])
+    genres_str = ", ".join(genres) if genres else "No genres listed"
+    popularity = artist_info.get("popularity", 0)
+
+    mood_interpretation = mood_analysis.get("mood_interpretation", "")
+    target_genres = ", ".join(mood_analysis.get("genre_keywords", []))
+    recommended_artists = ", ".join(
+        mood_analysis.get("artist_recommendations", [])[:10]
+    )
+    preferred_regions = ", ".join(mood_analysis.get("preferred_regions", []))
+    excluded_regions = ", ".join(mood_analysis.get("excluded_regions", []))
+    excluded_themes = ", ".join(mood_analysis.get("excluded_themes", []))
 
     return f"""Validate whether this artist is appropriate for the user's music request.
 
@@ -74,9 +74,7 @@ Set `is_valid` to false if there's a clear mismatch. Add specific concerns if ne
 
 
 def get_batch_track_filter_prompt(
-    tracks: List[Dict[str, Any]],
-    mood_prompt: str,
-    mood_analysis: Dict[str, Any]
+    tracks: List[Dict[str, Any]], mood_prompt: str, mood_analysis: Dict[str, Any]
 ) -> str:
     """Get prompt for batch filtering tracks for cultural/linguistic relevance.
 
@@ -88,21 +86,21 @@ def get_batch_track_filter_prompt(
     Returns:
         Prompt string for batch track filtering
     """
-    mood_interpretation = mood_analysis.get('mood_interpretation', '')
-    genre_keywords = ', '.join(mood_analysis.get('genre_keywords', []))
-    preferred_regions = ', '.join(mood_analysis.get('preferred_regions', []))
-    excluded_regions = ', '.join(mood_analysis.get('excluded_regions', []))
-    excluded_themes = ', '.join(mood_analysis.get('excluded_themes', []))
+    mood_interpretation = mood_analysis.get("mood_interpretation", "")
+    genre_keywords = ", ".join(mood_analysis.get("genre_keywords", []))
+    preferred_regions = ", ".join(mood_analysis.get("preferred_regions", []))
+    excluded_regions = ", ".join(mood_analysis.get("excluded_regions", []))
+    excluded_themes = ", ".join(mood_analysis.get("excluded_themes", []))
 
     # Format tracks
     tracks_info = []
     for i, track in enumerate(tracks[:20]):  # Limit to 20 for prompt size
-        artists = [a.get('name', '') for a in track.get('artists', [])]
-        artist_str = ', '.join(artists) if artists else 'Unknown'
-        tracks_info.append(f"{i+1}. '{track.get('name', 'Unknown')}' by {artist_str}")
-    
-    tracks_context = '\n'.join(tracks_info)
-    
+        artists = [a.get("name", "") for a in track.get("artists", [])]
+        artist_str = ", ".join(artists) if artists else "Unknown"
+        tracks_info.append(f"{i + 1}. '{track.get('name', 'Unknown')}' by {artist_str}")
+
+    tracks_context = "\n".join(tracks_info)
+
     return f"""Filter these tracks for cultural and linguistic relevance to the user's request.
 
 User's mood request: "{mood_prompt}"
@@ -152,4 +150,3 @@ Respond in JSON format:
 }}
 
 Return indices of tracks that should be KEPT in `relevant_tracks`."""
-

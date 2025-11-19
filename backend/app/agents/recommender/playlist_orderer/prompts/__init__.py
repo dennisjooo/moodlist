@@ -13,4 +13,3 @@ __all__ = [
     "get_ordering_strategy_system_prompt",
     "get_ordering_strategy_user_prompt",
 ]
-

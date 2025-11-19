@@ -18,7 +18,7 @@ class PlaylistTargetPlanner:
         self,
         mood_prompt: str,
         mood_analysis: Dict[str, Any],
-        target_features: Dict[str, Any]
+        target_features: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Determine target playlist size and quality thresholds based on mood.
 
@@ -41,7 +41,9 @@ class PlaylistTargetPlanner:
 
         # Analyze mood complexity and specificity
         feature_count = len(target_features)
-        high_weight_features = sum(1 for w in mood_analysis.get("feature_weights", {}).values() if w > 0.7)
+        high_weight_features = sum(
+            1 for w in mood_analysis.get("feature_weights", {}).values() if w > 0.7
+        )
 
         # Adjust based on mood specificity
         if feature_count <= 4 or high_weight_features <= 2:
@@ -55,7 +57,9 @@ class PlaylistTargetPlanner:
             target_count = 19 + random.randint(-1, 2)  # 18-21 range
             min_count = 16
             quality_threshold = 0.78
-            reasoning = "Specific mood requires focused, high-quality ~20 track selection"
+            reasoning = (
+                "Specific mood requires focused, high-quality ~20 track selection"
+            )
         else:
             # Moderate specificity
             target_count = 20 + random.randint(-2, 2)  # 18-22 range
@@ -75,5 +79,5 @@ class PlaylistTargetPlanner:
             "min_count": min_count,
             "max_count": max_count,
             "quality_threshold": quality_threshold,
-            "reasoning": reasoning
+            "reasoning": reasoning,
         }

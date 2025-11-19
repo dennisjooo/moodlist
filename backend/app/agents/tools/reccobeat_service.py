@@ -3,12 +3,26 @@
 import asyncio
 import hashlib
 import structlog
-from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Tuple, TypeVar
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    TypeVar,
+)
 
 from .agent_tools import AgentTools
 from .reccobeat.track_recommendations import TrackRecommendationsTool
 from .reccobeat.track_info import GetMultipleTracksTool, GetTrackAudioFeaturesTool
-from .reccobeat.artist_info import SearchArtistTool, GetMultipleArtistsTool, GetArtistTracksTool
+from .reccobeat.artist_info import (
+    SearchArtistTool,
+    GetMultipleArtistsTool,
+    GetArtistTracksTool,
+)
 from ..core.cache import cache_manager
 from ..core.seed_guardrails import SeedGuardrails
 from ..core.id_registry import RecoBeatIDRegistry
@@ -24,9 +38,13 @@ R = TypeVar("R")
 class RecoBeatService:
     """Service for coordinating RecoBeat API operations."""
 
-    AUDIO_FEATURE_BATCH_SIZE = 20  # Increased from 5 for better throughput (4x improvement)
+    AUDIO_FEATURE_BATCH_SIZE = (
+        20  # Increased from 5 for better throughput (4x improvement)
+    )
     AUDIO_FEATURE_MAX_CONCURRENCY = 3  # Reduced from 10 to respect rate limits (50/min = ~0.83/sec, so 3 concurrent * 1.2s interval = ~2.5 req/sec)
-    AUDIO_FEATURE_THROTTLE_SECONDS = 1.5  # Increased from 0.5s to give more spacing between batches
+    AUDIO_FEATURE_THROTTLE_SECONDS = (
+        1.5  # Increased from 0.5s to give more spacing between batches
+    )
 
     def __init__(self):
         """Initialize the RecoBeat service."""
@@ -63,9 +81,7 @@ class RecoBeatService:
     ) -> Tuple[str, Dict[str, Any]]:
         """Construct a deterministic cache key and normalized metadata."""
 
-        normalized_mood = (
-            sorted(mood_features.items()) if mood_features else None
-        )
+        normalized_mood = sorted(mood_features.items()) if mood_features else None
         normalized_kwargs = sorted(extra_kwargs.items())
 
         key_components = [repr(tuple(seeds)), str(size)]
@@ -111,7 +127,7 @@ class RecoBeatService:
         seeds: List[str],
         size: int,
         mood_features: Optional[Dict[str, float]] = None,
-        **kwargs
+        **kwargs,
     ) -> Optional[List[Dict[str, Any]]]:
         """Get cached track recommendations if available.
 
@@ -134,7 +150,9 @@ class RecoBeatService:
         # Try to get from cache (7 day TTL for recommendations)
         cached_result = await cache_manager.cache.get(cache_key)
         if cached_result:
-            logger.info(f"Cache hit for track recommendations (key: {cache_key[:8]}...)")
+            logger.info(
+                f"Cache hit for track recommendations (key: {cache_key[:8]}...)"
+            )
             return cached_result.get("recommendations", [])
 
         return None
@@ -145,7 +163,7 @@ class RecoBeatService:
         size: int,
         recommendations: List[Dict[str, Any]],
         mood_features: Optional[Dict[str, float]] = None,
-        **kwargs
+        **kwargs,
     ) -> None:
         """Cache track recommendations for future use.
 
@@ -181,7 +199,7 @@ class RecoBeatService:
             GetTrackAudioFeaturesTool(),
             SearchArtistTool(),
             GetMultipleArtistsTool(),
-            GetArtistTracksTool()
+            GetArtistTracksTool(),
         ]
 
         for tool in tools_to_register:
@@ -192,7 +210,7 @@ class RecoBeatService:
         seeds: List[str],
         size: int = 20,
         mood_features: Optional[Dict[str, float]] = None,
-        **kwargs
+        **kwargs,
     ) -> List[Dict[str, Any]]:
         """Get track recommendations with mood-based features.
 
@@ -211,7 +229,9 @@ class RecoBeatService:
         )
 
         if cached_recommendations:
-            logger.info(f"Returning {len(cached_recommendations)} cached recommendations")
+            logger.info(
+                f"Returning {len(cached_recommendations)} cached recommendations"
+            )
             return cached_recommendations
 
         # Cache miss - fetch from API
@@ -234,9 +254,7 @@ class RecoBeatService:
         if not result.success:
             negative_seeds = api_params.get("negative_seeds")
             fallback = SeedGuardrails.suggest_fallback_strategy(
-                seeds=seeds,
-                negative_seeds=negative_seeds,
-                error_reason=result.error
+                seeds=seeds, negative_seeds=negative_seeds, error_reason=result.error
             )
 
             if fallback:
@@ -250,9 +268,7 @@ class RecoBeatService:
 
                 # Retry with fallback
                 result = await tool._run(
-                    seeds=fallback["seeds"],
-                    size=size,
-                    **fallback_params
+                    seeds=fallback["seeds"], size=size, **fallback_params
                 )
 
                 if result.success:
@@ -261,7 +277,9 @@ class RecoBeatService:
                     logger.warning(f"Fallback strategy also failed: {result.error}")
 
         if not result.success:
-            logger.error(f"Failed to get recommendations after fallback attempts: {result.error}")
+            logger.error(
+                f"Failed to get recommendations after fallback attempts: {result.error}"
+            )
             return []
 
         recommendations = result.data.get("recommendations", [])
@@ -275,8 +293,7 @@ class RecoBeatService:
         return recommendations
 
     async def convert_spotify_tracks_to_reccobeat(
-        self,
-        spotify_track_ids: List[str]
+        self, spotify_track_ids: List[str]
     ) -> Dict[str, str]:
         """Convert Spotify track IDs to RecoBeat IDs using batch lookup with parallel processing.
 
@@ -297,16 +314,18 @@ class RecoBeatService:
         # Check cache for validated IDs first
         cached_mappings = await RecoBeatIDRegistry.bulk_get_validated(spotify_track_ids)
         id_mapping.update(cached_mappings)
-        
+
         # Filter out known-missing IDs and already-validated IDs
         remaining_ids = [sid for sid in spotify_track_ids if sid not in id_mapping]
-        ids_to_check, known_missing = await RecoBeatIDRegistry.bulk_check_missing(remaining_ids)
-        
+        ids_to_check, known_missing = await RecoBeatIDRegistry.bulk_check_missing(
+            remaining_ids
+        )
+
         if not ids_to_check:
             logger.info(
                 "All IDs resolved from cache/registry",
                 cached={len(cached_mappings)},
-                known_missing={len(known_missing)}
+                known_missing={len(known_missing)},
             )
             return id_mapping
 
@@ -321,7 +340,10 @@ class RecoBeatService:
 
         # Batch size: 40 IDs per chunk (RecoBeat API limit is 40)
         chunk_size = 40
-        chunks = [ids_to_check[i:i + chunk_size] for i in range(0, len(ids_to_check), chunk_size)]
+        chunks = [
+            ids_to_check[i : i + chunk_size]
+            for i in range(0, len(ids_to_check), chunk_size)
+        ]
 
         async def process_chunk(chunk: List[str]) -> Dict[str, str]:
             """Process a single chunk of track IDs with retry logic.
@@ -360,31 +382,40 @@ class RecoBeatService:
                                 chunk_mapping[spotify_id] = reccobeat_id
                                 found_ids.add(spotify_id)
                                 # Mark successful conversions in registry
-                                await RecoBeatIDRegistry.mark_validated(spotify_id, reccobeat_id)
+                                await RecoBeatIDRegistry.mark_validated(
+                                    spotify_id, reccobeat_id
+                                )
 
                         # Mark missing IDs in registry
                         for orig_id in chunk:
                             if orig_id not in found_ids:
                                 await RecoBeatIDRegistry.mark_missing(
-                                    orig_id,
-                                    reason="ID not found in RecoBeat response"
+                                    orig_id, reason="ID not found in RecoBeat response"
                                 )
 
                         return chunk_mapping
 
                 except Exception as e:
                     if attempt < max_retries - 1:
-                        logger.debug(f"Error converting track IDs chunk (attempt {attempt + 1}/{max_retries}): {e}, retrying...")
-                        await asyncio.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                        logger.debug(
+                            f"Error converting track IDs chunk (attempt {attempt + 1}/{max_retries}): {e}, retrying..."
+                        )
+                        await asyncio.sleep(
+                            retry_delay * (attempt + 1)
+                        )  # Exponential backoff
                     else:
-                        logger.warning(f"Failed to convert track IDs chunk after {max_retries} attempts: {e}")
+                        logger.warning(
+                            f"Failed to convert track IDs chunk after {max_retries} attempts: {e}"
+                        )
 
             return {}
 
         # Execute all chunks in parallel with optimized concurrency
         try:
             # Increased to 10 concurrent chunk requests for better throughput
-            chunk_results = await self._bounded_gather(chunks, process_chunk, concurrency=10)
+            chunk_results = await self._bounded_gather(
+                chunks, process_chunk, concurrency=10
+            )
 
             # Combine results from all chunks
             for chunk_result in chunk_results:
@@ -397,11 +428,13 @@ class RecoBeatService:
             f"Converted {len(id_mapping)}/{len(spotify_track_ids)} Spotify track IDs to RecoBeat IDs",
             cached={len(cached_mappings)},
             newly_converted={len(id_mapping) - len(cached_mappings)},
-            known_missing={len(known_missing)}
+            known_missing={len(known_missing)},
         )
         return id_mapping
 
-    async def get_tracks_audio_features(self, track_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    async def get_tracks_audio_features(
+        self, track_ids: List[str]
+    ) -> Dict[str, Dict[str, Any]]:
         """Get audio features for multiple tracks with parallel processing.
 
         Args:
@@ -420,14 +453,18 @@ class RecoBeatService:
 
         # Try to convert Spotify IDs to RecoBeat IDs first (already batched and parallel)
         id_mapping = await self.convert_spotify_tracks_to_reccobeat(track_ids)
-        logger.info(f"Successfully converted {len(id_mapping)}/{len(track_ids)} Spotify tracks to RecoBeat IDs")
+        logger.info(
+            f"Successfully converted {len(id_mapping)}/{len(track_ids)} Spotify tracks to RecoBeat IDs"
+        )
 
         # First pass: check cache for all tracks
         tracks_needing_fetch = []
         for track_id in track_ids:
             # Skip if we couldn't convert the Spotify ID to RecoBeat ID
             if track_id not in id_mapping:
-                logger.debug(f"Skipping track {track_id} - not found in RecoBeat database")
+                logger.debug(
+                    f"Skipping track {track_id} - not found in RecoBeat database"
+                )
                 continue
 
             reccobeat_id = id_mapping[track_id]
@@ -453,7 +490,7 @@ class RecoBeatService:
         )
 
         async def fetch_single_track_features(
-            item: Tuple[str, str]
+            item: Tuple[str, str],
         ) -> tuple[str, Optional[Dict[str, Any]]]:
             """Fetch audio features for a single track."""
 
@@ -463,7 +500,9 @@ class RecoBeatService:
                 result = await features_tool._run(track_id=reccobeat_id)
                 if result.success:
                     # Cache individual track features for 90 days (immutable per track)
-                    cache_key = self._make_cache_key("track_audio_features", reccobeat_id)
+                    cache_key = self._make_cache_key(
+                        "track_audio_features", reccobeat_id
+                    )
                     await cache_manager.cache.set(cache_key, result.data, ttl=7776000)
                     logger.debug(f"Cached audio features for track {reccobeat_id}")
                     return track_id, result.data
@@ -471,17 +510,23 @@ class RecoBeatService:
                 if "404" in str(result.error):
                     logger.debug(f"Track {reccobeat_id} not found in RecoBeat (404)")
                 else:
-                    logger.warning(f"Failed to get features for track {reccobeat_id}: {result.error}")
+                    logger.warning(
+                        f"Failed to get features for track {reccobeat_id}: {result.error}"
+                    )
                 return track_id, None
             except Exception as e:
                 # 404 errors are expected for many Spotify tracks
                 if "404" in str(e):
                     logger.debug(f"Track {reccobeat_id} not found in RecoBeat: {e}")
                 else:
-                    logger.error(f"Error getting features for track {reccobeat_id}: {e}")
+                    logger.error(
+                        f"Error getting features for track {reccobeat_id}: {e}"
+                    )
                 return track_id, None
 
-        total_batches = (len(tracks_needing_fetch) + self.AUDIO_FEATURE_BATCH_SIZE - 1) // self.AUDIO_FEATURE_BATCH_SIZE
+        total_batches = (
+            len(tracks_needing_fetch) + self.AUDIO_FEATURE_BATCH_SIZE - 1
+        ) // self.AUDIO_FEATURE_BATCH_SIZE
         results: List[Tuple[str, Optional[Dict[str, Any]]]] = []
 
         # Execute batches sequentially to stay under upstream quotas
@@ -489,7 +534,9 @@ class RecoBeatService:
         try:
             for batch_index in range(total_batches):
                 start = batch_index * self.AUDIO_FEATURE_BATCH_SIZE
-                chunk = tracks_needing_fetch[start:start + self.AUDIO_FEATURE_BATCH_SIZE]
+                chunk = tracks_needing_fetch[
+                    start : start + self.AUDIO_FEATURE_BATCH_SIZE
+                ]
                 chunk_results = await self._bounded_gather(
                     chunk,
                     fetch_single_track_features,
@@ -507,7 +554,9 @@ class RecoBeatService:
                     # Minimal throttling since we have better concurrency control
                     # Only add extra delay every 20 batches to prevent accumulation
                     base_throttle = self.AUDIO_FEATURE_THROTTLE_SECONDS
-                    adaptive_throttle = base_throttle + (0.2 if batch_index % 20 == 19 else 0.0)
+                    adaptive_throttle = base_throttle + (
+                        0.2 if batch_index % 20 == 19 else 0.0
+                    )
                     await asyncio.sleep(adaptive_throttle)
 
             # Combine results
@@ -525,7 +574,9 @@ class RecoBeatService:
 
         return features_map
 
-    async def search_artists_by_mood(self, mood_keywords: List[str], limit: int = 10) -> List[Dict[str, Any]]:
+    async def search_artists_by_mood(
+        self, mood_keywords: List[str], limit: int = 10
+    ) -> List[Dict[str, Any]]:
         """Search for artists that match mood keywords.
 
         Args:
@@ -547,7 +598,7 @@ class RecoBeatService:
             try:
                 result = await search_tool._run(
                     search_text=keyword,
-                    size=min(limit, 25)  # RecoBeat max per page
+                    size=min(limit, 25),  # RecoBeat max per page
                 )
 
                 if result.success:
@@ -559,7 +610,9 @@ class RecoBeatService:
                         break
 
             except Exception as e:
-                logger.error(f"Error searching for artists with keyword '{keyword}': {e}")
+                logger.error(
+                    f"Error searching for artists with keyword '{keyword}': {e}"
+                )
 
         # Remove duplicates and limit results
         seen_ids = set()
@@ -599,7 +652,9 @@ class RecoBeatService:
 
         # Split into chunks to respect API limits (40 per request)
         chunk_size = 40
-        chunks = [track_ids[i:i + chunk_size] for i in range(0, len(track_ids), chunk_size)]
+        chunks = [
+            track_ids[i : i + chunk_size] for i in range(0, len(track_ids), chunk_size)
+        ]
 
         tracks_tool = self.tools.get_tool("get_multiple_tracks")
         if not tracks_tool:
@@ -618,7 +673,9 @@ class RecoBeatService:
                         tracks = result.data.get("tracks", [])
                         return tracks
                     else:
-                        logger.warning(f"Failed to get tracks for chunk: {result.error}")
+                        logger.warning(
+                            f"Failed to get tracks for chunk: {result.error}"
+                        )
                         return []
 
                 except Exception as e:
@@ -627,7 +684,9 @@ class RecoBeatService:
 
         # Execute all chunks in parallel
         try:
-            chunk_results = await asyncio.gather(*[process_track_chunk(chunk) for chunk in chunks])
+            chunk_results = await asyncio.gather(
+                *[process_track_chunk(chunk) for chunk in chunks]
+            )
 
             # Combine results from all chunks
             all_tracks = []
@@ -643,7 +702,7 @@ class RecoBeatService:
             cache_data = {
                 "tracks": all_tracks,
                 "cached_at": asyncio.get_running_loop().time(),
-                "track_ids": track_ids
+                "track_ids": track_ids,
             }
             await cache_manager.cache.set(cache_key, cache_data, ttl=2592000)  # 30 days
             logger.debug(f"Cached track lookup result (key: {cache_key[:8]}...)")
@@ -651,8 +710,7 @@ class RecoBeatService:
         return all_tracks
 
     async def convert_spotify_artist_to_reccobeat(
-        self,
-        spotify_artist_ids: List[str]
+        self, spotify_artist_ids: List[str]
     ) -> Dict[str, str]:
         """Convert Spotify artist IDs to RecoBeat IDs using batch lookup.
 
@@ -664,28 +722,28 @@ class RecoBeatService:
         """
         if not spotify_artist_ids:
             return {}
-        
+
         id_mapping = {}
-        
+
         # Get multiple artists tool
         artists_tool = self.tools.get_tool("get_multiple_artists")
         if not artists_tool:
             logger.warning("Multiple artists tool not available for ID conversion")
             return {}
-        
+
         # Process in chunks of 40 (API limit)
         for i in range(0, len(spotify_artist_ids), 40):
-            chunk = spotify_artist_ids[i:i + 40]
-            
+            chunk = spotify_artist_ids[i : i + 40]
+
             try:
                 result = await artists_tool._run(ids=chunk)
-                
+
                 if result.success:
                     artists = result.data.get("artists", [])
                     for artist in artists:
                         reccobeat_id = artist.get("id")
                         spotify_uri = artist.get("href", "")
-                        
+
                         # Extract Spotify ID from URI or href
                         if spotify_uri and "spotify:artist:" in spotify_uri:
                             spotify_id = spotify_uri.replace("spotify:artist:", "")
@@ -697,21 +755,21 @@ class RecoBeatService:
                                 if orig_id not in id_mapping:
                                     spotify_id = orig_id
                                     break
-                        
+
                         if reccobeat_id:
                             id_mapping[spotify_id] = reccobeat_id
-                            
+
             except Exception as e:
                 logger.debug(f"Error converting artist IDs chunk: {e}")
                 continue
-        
-        logger.info(f"Converted {len(id_mapping)}/{len(spotify_artist_ids)} Spotify artist IDs to RecoBeat IDs")
+
+        logger.info(
+            f"Converted {len(id_mapping)}/{len(spotify_artist_ids)} Spotify artist IDs to RecoBeat IDs"
+        )
         return id_mapping
 
     async def get_artist_tracks(
-        self,
-        artist_id: str,
-        limit: int = 25
+        self, artist_id: str, limit: int = 25
     ) -> List[Dict[str, Any]]:
         """Get tracks from a specific artist.
 
@@ -729,20 +787,22 @@ class RecoBeatService:
 
         # Try to convert Spotify ID to RecoBeat ID first
         id_mapping = await self.convert_spotify_artist_to_reccobeat([artist_id])
-        
+
         # Skip if artist not in RecoBeat database
         if artist_id not in id_mapping:
-            logger.debug(f"Artist {artist_id} not found in RecoBeat database - skipping")
+            logger.debug(
+                f"Artist {artist_id} not found in RecoBeat database - skipping"
+            )
             return []
-        
+
         reccobeat_artist_id = id_mapping[artist_id]
-        logger.debug(f"Converted Spotify artist {artist_id} to RecoBeat ID {reccobeat_artist_id}")
+        logger.debug(
+            f"Converted Spotify artist {artist_id} to RecoBeat ID {reccobeat_artist_id}"
+        )
 
         try:
             result = await artist_tracks_tool._run(
-                artist_id=reccobeat_artist_id,
-                page=0,
-                size=min(limit, 50)
+                artist_id=reccobeat_artist_id, page=0, size=min(limit, 50)
             )
 
             if result.success:
@@ -750,9 +810,13 @@ class RecoBeatService:
             else:
                 # 404 errors are common - artist might not exist in RecoBeat
                 if "404" in str(result.error):
-                    logger.debug(f"Artist {reccobeat_artist_id} not found in RecoBeat (404)")
+                    logger.debug(
+                        f"Artist {reccobeat_artist_id} not found in RecoBeat (404)"
+                    )
                 else:
-                    logger.warning(f"Failed to get tracks for artist {reccobeat_artist_id}: {result.error}")
+                    logger.warning(
+                        f"Failed to get tracks for artist {reccobeat_artist_id}: {result.error}"
+                    )
                 return []
 
         except Exception as e:
@@ -760,7 +824,9 @@ class RecoBeatService:
             if "404" in str(e):
                 logger.debug(f"Artist {reccobeat_artist_id} not found in RecoBeat: {e}")
             else:
-                logger.error(f"Error getting tracks for artist {reccobeat_artist_id}: {e}")
+                logger.error(
+                    f"Error getting tracks for artist {reccobeat_artist_id}: {e}"
+                )
             return []
 
     def get_available_tools(self) -> List[str]:
@@ -775,7 +841,7 @@ class RecoBeatService:
             "get_track_audio_features",
             "search_artists",
             "get_multiple_artists",
-            "get_artist_tracks"
+            "get_artist_tracks",
         ]
 
     def get_tool_descriptions(self) -> Dict[str, str]:

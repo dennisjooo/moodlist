@@ -9,12 +9,14 @@ from .user import UserResponse
 
 class LoginRequest(BaseModel):
     """Schema for login request."""
+
     access_token: str = Field(..., description="Spotify access token")
     refresh_token: str = Field(..., description="Spotify refresh token")
 
 
 class TokenResponse(BaseModel):
     """Schema for token response."""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -24,11 +26,13 @@ class TokenResponse(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     """Schema for refresh token request."""
+
     refresh_token: str = Field(..., description="Refresh token")
 
 
 class SessionResponse(BaseModel):
     """Schema for session response."""
+
     id: int
     user_id: int
     session_token: str
@@ -40,11 +44,13 @@ class SessionResponse(BaseModel):
 
     class Config:
         """Enable ORM-mode serialization from SQLAlchemy models."""
+
         from_attributes = True
 
 
 class AuthResponse(BaseModel):
     """Schema for authentication response."""
+
     user: UserResponse
     session: Optional[SessionResponse] = None
     requires_spotify_auth: bool = False
@@ -52,27 +58,32 @@ class AuthResponse(BaseModel):
 
 class LogoutRequest(BaseModel):
     """Schema for logout request."""
+
     session_token: str = Field(..., description="Session token to invalidate")
 
 
 class LogoutResponse(BaseModel):
     """Schema for logout response."""
+
     success: bool
     message: str
 
 
 class SessionListResponse(BaseModel):
     """Schema for user's active sessions list."""
+
     sessions: list[SessionResponse]
     total: int
 
 
 class PasswordResetRequest(BaseModel):
     """Schema for password reset request (future use)."""
+
     email: EmailStr = Field(..., description="User email address")
 
 
 class PasswordResetConfirm(BaseModel):
     """Schema for password reset confirmation (future use)."""
+
     token: str = Field(..., description="Reset token")
     new_password: str = Field(..., min_length=8, description="New password")

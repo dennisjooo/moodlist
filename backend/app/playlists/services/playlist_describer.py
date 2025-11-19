@@ -35,9 +35,13 @@ class PlaylistDescriber:
         try:
             # Use LLM for creative description if available
             if self.llm:
-                description = await self._generate_description_with_llm(mood_prompt, track_count)
+                description = await self._generate_description_with_llm(
+                    mood_prompt, track_count
+                )
             else:
-                description = self._generate_description_fallback(mood_prompt, track_count)
+                description = self._generate_description_fallback(
+                    mood_prompt, track_count
+                )
 
             return description
 
@@ -46,7 +50,9 @@ class PlaylistDescriber:
             # Fallback to simple description
             return f"Mood-based playlist with {track_count} tracks curated with love by MoodList"
 
-    async def _generate_description_with_llm(self, mood_prompt: str, track_count: int) -> str:
+    async def _generate_description_with_llm(
+        self, mood_prompt: str, track_count: int
+    ) -> str:
         """Generate playlist description using LLM.
 
         Args:
@@ -61,23 +67,29 @@ class PlaylistDescriber:
 
             response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
 
-            description = response.content.strip() if hasattr(response, 'content') else str(response).strip()
+            description = (
+                response.content.strip()
+                if hasattr(response, "content")
+                else str(response).strip()
+            )
 
             # Clean up the description
-            description = re.sub(r'^["\']|["\']$', '', description)  # Remove quotes
+            description = re.sub(r'^["\']|["\']$', "", description)  # Remove quotes
 
             # Ensure it ends with the required format
             required_ending = f"{track_count} tracks curated with love by MoodList"
             if not description.endswith(required_ending):
                 # Remove any existing ending and add the correct one
-                description = re.sub(r'\s*\d+\s*tracks.*$', '', description).strip()
+                description = re.sub(r"\s*\d+\s*tracks.*$", "", description).strip()
                 description += f" {required_ending}"
 
             # Cap at 200 characters
             if len(description) > 200:
                 description = description[:197] + "..."
 
-            return description or self._generate_description_fallback(mood_prompt, track_count)
+            return description or self._generate_description_fallback(
+                mood_prompt, track_count
+            )
 
         except Exception as e:
             logger.error(f"LLM description generation failed: {str(e)}")
@@ -99,17 +111,25 @@ class PlaylistDescriber:
             description = f"Perfect {mood_prompt} soundtrack"
 
             # Add the required ending
-            full_description = f"{description}. {track_count} tracks curated with love by MoodList"
+            full_description = (
+                f"{description}. {track_count} tracks curated with love by MoodList"
+            )
 
             # Cap at 200 characters
             if len(full_description) > 200:
                 # Truncate the description part to fit
-                available_space = 200 - len(f". {track_count} tracks curated with love by MoodList") - 3
+                available_space = (
+                    200
+                    - len(f". {track_count} tracks curated with love by MoodList")
+                    - 3
+                )
                 if available_space > 0:
                     description = description[:available_space] + "..."
                     full_description = f"{description}. {track_count} tracks curated with love by MoodList"
                 else:
-                    full_description = f"{track_count} tracks curated with love by MoodList"
+                    full_description = (
+                        f"{track_count} tracks curated with love by MoodList"
+                    )
 
             return full_description
 

@@ -24,11 +24,15 @@ class IntentFallbackAnalyzer:
         # Determine intent type based on keywords
         intent_type = "mood_variety"  # Default
 
-        if any(phrase in mood_lower for phrase in ["like ", "similar to", "things like"]):
+        if any(
+            phrase in mood_lower for phrase in ["like ", "similar to", "things like"]
+        ):
             intent_type = "specific_track_similar"
         elif any(phrase in mood_lower for phrase in ["playlist", "give me", "only"]):
             intent_type = "artist_focus"
-        elif any(word in mood_lower for word in ["explore", "discover", "variety", "mix"]):
+        elif any(
+            word in mood_lower for word in ["explore", "discover", "variety", "mix"]
+        ):
             intent_type = "genre_exploration"
 
         # Basic genre detection
@@ -52,7 +56,7 @@ class IntentFallbackAnalyzer:
             "exclude_regions": [],
             "allow_obscure_artists": False,
             "quality_threshold": 0.6,
-            "reasoning": "Fallback rule-based analysis"
+            "reasoning": "Fallback rule-based analysis",
         }
 
         logger.info(f"Fallback intent analysis: {intent_type}, genre: {primary_genre}")
@@ -79,7 +83,7 @@ class IntentFallbackAnalyzer:
             "classical": ["classical", "orchestra", "symphony"],
             "country": ["country", "nashville"],
             "funk": ["funk", "funky"],
-            "soul": ["soul", "r&b", "rnb"]
+            "soul": ["soul", "r&b", "rnb"],
         }
 
         for genre, keywords in genre_keywords.items():
@@ -87,4 +91,3 @@ class IntentFallbackAnalyzer:
                 return genre
 
         return None
-

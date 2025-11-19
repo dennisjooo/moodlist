@@ -1,11 +1,12 @@
 """Prompts for LLM-based seed selection."""
 
+
 def get_seed_selection_prompt(
     mood_prompt: str,
     features_summary: list,
     candidate_count: int,
     ideal_count: int,
-    candidate_tracks: list
+    candidate_tracks: list,
 ) -> str:
     """Get the prompt for LLM-based seed selection.
 
@@ -34,7 +35,7 @@ Consider:
 4. Balance between strong mood matches and diversity
 
 **Candidates** (ranked by score):
-{chr(10).join([f"{i+1}. Track {track_id[:8]}..." for i, track_id in enumerate(candidate_tracks)])}
+{chr(10).join([f"{i + 1}. Track {track_id[:8]}..." for i, track_id in enumerate(candidate_tracks)])}
 
 Respond in JSON format:
 {{

@@ -3,10 +3,10 @@
 
 def get_intent_analysis_prompt(mood_prompt: str) -> str:
     """Get the prompt for analyzing user intent.
-    
+
     Args:
         mood_prompt: User's mood/playlist request
-        
+
     Returns:
         Prompt string for LLM intent analysis
     """
@@ -99,4 +99,3 @@ Example 3: "French funk vibes for a party"
 
 Now analyze: "{mood_prompt}"
 """
-

@@ -11,7 +11,11 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from ...models.playlist import Playlist
 from ...agents.states.agent_state import TrackRecommendation
-from ...core.exceptions import NotFoundException, ForbiddenException, ValidationException
+from ...core.exceptions import (
+    NotFoundException,
+    ForbiddenException,
+    ValidationException,
+)
 from .spotify_edit_service import SpotifyEditService
 
 logger = structlog.get_logger(__name__)
@@ -35,7 +39,7 @@ class CompletedPlaylistEditor:
         user_id: int,
         track_id: Optional[str] = None,
         new_position: Optional[int] = None,
-        track_uri: Optional[str] = None
+        track_uri: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Edit a completed playlist with per-session locking to prevent race conditions.
 
@@ -58,7 +62,7 @@ class CompletedPlaylistEditor:
         # Get or create a lock for this session_id to prevent concurrent edits
         if session_id not in self._edit_locks:
             self._edit_locks[session_id] = asyncio.Lock()
-        
+
         async with self._edit_locks[session_id]:
             try:
                 # Load playlist from database
@@ -71,7 +75,9 @@ class CompletedPlaylistEditor:
 
                 # Validate user owns this playlist
                 if playlist.user_id != user_id:
-                    raise ForbiddenException("You don't have permission to edit this playlist")
+                    raise ForbiddenException(
+                        "You don't have permission to edit this playlist"
+                    )
 
                 # Check if playlist has been saved to Spotify
                 is_saved_to_spotify = bool(playlist.spotify_playlist_id)
@@ -86,7 +92,7 @@ class CompletedPlaylistEditor:
                         playlist.spotify_playlist_id,
                         track_id,
                         access_token,
-                        is_saved_to_spotify
+                        is_saved_to_spotify,
                     )
                 elif edit_type == "reorder":
                     recommendations = await self._handle_reorder(
@@ -95,7 +101,7 @@ class CompletedPlaylistEditor:
                         track_id,
                         new_position,
                         access_token,
-                        is_saved_to_spotify
+                        is_saved_to_spotify,
                     )
                 elif edit_type == "add":
                     recommendations = await self._handle_add(
@@ -104,14 +110,18 @@ class CompletedPlaylistEditor:
                         track_uri,
                         new_position,
                         access_token,
-                        is_saved_to_spotify
+                        is_saved_to_spotify,
                     )
                 else:
-                    raise ValidationException(f"Invalid edit_type: {edit_type}. Must be one of: reorder, remove, add")
+                    raise ValidationException(
+                        f"Invalid edit_type: {edit_type}. Must be one of: reorder, remove, add"
+                    )
 
                 # Update database with modified recommendations
                 playlist.recommendations_data = recommendations
-                playlist.track_count = len(recommendations)  # Update track count to match recommendations
+                playlist.track_count = len(
+                    recommendations
+                )  # Update track count to match recommendations
                 flag_modified(playlist, "recommendations_data")
                 playlist.updated_at = datetime.now(timezone.utc)
                 await db.commit()
@@ -122,9 +132,9 @@ class CompletedPlaylistEditor:
                     "status": "success",
                     "edit_type": edit_type,
                     "recommendation_count": len(recommendations),
-                    "message": f"Successfully applied {edit_type} edit to playlist"
+                    "message": f"Successfully applied {edit_type} edit to playlist",
                 }
-                
+
             except Exception as e:
                 await db.rollback()
                 logger.error(f"Failed to edit playlist {session_id}: {str(e)}")
@@ -136,7 +146,7 @@ class CompletedPlaylistEditor:
         spotify_playlist_id: Optional[str],
         track_id: str,
         access_token: str,
-        is_saved_to_spotify: bool
+        is_saved_to_spotify: bool,
     ) -> List[Dict]:
         """Handle remove edit."""
         if not track_id:
@@ -155,13 +165,15 @@ class CompletedPlaylistEditor:
         # Remove from Spotify if playlist is saved
         if is_saved_to_spotify:
             await self.spotify_edit_service.remove_track_from_spotify(
-                spotify_playlist_id,
-                track_to_remove.get("spotify_uri"),
-                access_token
+                spotify_playlist_id, track_to_remove.get("spotify_uri"), access_token
             )
-            logger.info(f"Removed track {track_id} from Spotify playlist {spotify_playlist_id}")
+            logger.info(
+                f"Removed track {track_id} from Spotify playlist {spotify_playlist_id}"
+            )
         else:
-            logger.info(f"Removed track {track_id} from draft playlist (not yet in Spotify)")
+            logger.info(
+                f"Removed track {track_id} from draft playlist (not yet in Spotify)"
+            )
 
         return recommendations
 
@@ -172,11 +184,13 @@ class CompletedPlaylistEditor:
         track_id: str,
         new_position: int,
         access_token: str,
-        is_saved_to_spotify: bool
+        is_saved_to_spotify: bool,
     ) -> List[Dict]:
         """Handle reorder edit."""
         if track_id is None or new_position is None:
-            raise ValidationException("track_id and new_position are required for reorder operation")
+            raise ValidationException(
+                "track_id and new_position are required for reorder operation"
+            )
 
         # Find track index
         old_index = None
@@ -195,14 +209,15 @@ class CompletedPlaylistEditor:
         # Reorder in Spotify if playlist is saved
         if is_saved_to_spotify:
             await self.spotify_edit_service.reorder_track_in_spotify(
-                spotify_playlist_id,
-                old_index,
-                new_position,
-                access_token
+                spotify_playlist_id, old_index, new_position, access_token
             )
-            logger.info(f"Reordered track {track_id} from position {old_index} to {new_position} in Spotify")
+            logger.info(
+                f"Reordered track {track_id} from position {old_index} to {new_position} in Spotify"
+            )
         else:
-            logger.info(f"Reordered track {track_id} from position {old_index} to {new_position} in draft")
+            logger.info(
+                f"Reordered track {track_id} from position {old_index} to {new_position} in draft"
+            )
 
         return recommendations
 
@@ -213,7 +228,7 @@ class CompletedPlaylistEditor:
         track_uri: str,
         new_position: Optional[int],
         access_token: str,
-        is_saved_to_spotify: bool
+        is_saved_to_spotify: bool,
     ) -> List[Dict]:
         """Handle add edit."""
         if not track_uri:
@@ -224,8 +239,7 @@ class CompletedPlaylistEditor:
 
         # Get track details
         track_data = await self.spotify_edit_service.get_track_details(
-            track_id_from_uri,
-            access_token
+            track_id_from_uri, access_token
         )
 
         # Add to local recommendations
@@ -236,7 +250,7 @@ class CompletedPlaylistEditor:
             "spotify_uri": track_data["uri"],
             "confidence_score": 0.5,
             "reasoning": "Added by user",
-            "source": "user_added"
+            "source": "user_added",
         }
 
         # Add to position or end of list
@@ -248,22 +262,20 @@ class CompletedPlaylistEditor:
         # Add to Spotify if playlist is saved
         if is_saved_to_spotify:
             await self.spotify_edit_service.add_track_to_spotify(
-                spotify_playlist_id,
-                track_uri,
-                access_token,
-                new_position
+                spotify_playlist_id, track_uri, access_token, new_position
             )
-            logger.info(f"Added track {track_uri} to Spotify playlist {spotify_playlist_id}")
+            logger.info(
+                f"Added track {track_uri} to Spotify playlist {spotify_playlist_id}"
+            )
         else:
-            logger.info(f"Added track {track_uri} to draft playlist (not yet in Spotify)")
+            logger.info(
+                f"Added track {track_uri} to draft playlist (not yet in Spotify)"
+            )
 
         return recommendations
 
     async def update_in_memory_state(
-        self,
-        workflow_manager,
-        session_id: str,
-        recommendations: List[Dict]
+        self, workflow_manager, session_id: str, recommendations: List[Dict]
     ) -> None:
         """Update in-memory workflow state if it exists.
 
@@ -283,9 +295,8 @@ class CompletedPlaylistEditor:
                     spotify_uri=rec.get("spotify_uri"),
                     confidence_score=rec.get("confidence_score", 0.5),
                     reasoning=rec.get("reasoning", ""),
-                    source=rec.get("source", "unknown")
+                    source=rec.get("source", "unknown"),
                 )
                 for rec in recommendations
             ]
             logger.info(f"Updated in-memory state for session {session_id}")
-

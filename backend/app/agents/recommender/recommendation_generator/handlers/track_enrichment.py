@@ -20,9 +20,7 @@ class TrackEnrichmentService:
         self.spotify_service = spotify_service
 
     async def enrich_recommendations(
-        self,
-        recommendations: List[TrackRecommendation],
-        access_token: str
+        self, recommendations: List[TrackRecommendation], access_token: str
     ) -> List[TrackRecommendation]:
         """Enrich recommendations by finding missing Spotify URIs.
 
@@ -39,16 +37,16 @@ class TrackEnrichmentService:
             "already_valid": 0,
             "enriched": 0,
             "failed": 0,
-            "removed": 0
+            "removed": 0,
         }
 
         for rec in recommendations:
             # Check if track needs enrichment
             needs_enrichment = (
-                not rec.spotify_uri or
-                rec.spotify_uri == "null" or
-                "Unknown Artist" in rec.artists or
-                rec.track_name == "Unknown Track"
+                not rec.spotify_uri
+                or rec.spotify_uri == "null"
+                or "Unknown Artist" in rec.artists
+                or rec.track_name == "Unknown Track"
             )
 
             if not needs_enrichment:
@@ -94,9 +92,7 @@ class TrackEnrichmentService:
         return enriched_recommendations
 
     async def _enrich_track(
-        self,
-        rec: TrackRecommendation,
-        access_token: str
+        self, rec: TrackRecommendation, access_token: str
     ) -> Optional[TrackRecommendation]:
         """Enrich a single track recommendation with Spotify data.
 
@@ -117,9 +113,7 @@ class TrackEnrichmentService:
         try:
             # Search Spotify for the track
             search_results = await self.spotify_service.search_spotify_tracks(
-                access_token=access_token,
-                query=search_query,
-                limit=5
+                access_token=access_token, query=search_query, limit=5
             )
 
             if not search_results:
@@ -137,7 +131,9 @@ class TrackEnrichmentService:
             return self._create_enriched_recommendation(rec, best_match)
 
         except Exception as e:
-            logger.error(f"Error enriching track '{rec.track_name}': {e}", exc_info=True)
+            logger.error(
+                f"Error enriching track '{rec.track_name}': {e}", exc_info=True
+            )
             return None
 
     def _build_search_query(self, rec: TrackRecommendation) -> Optional[str]:
@@ -168,9 +164,7 @@ class TrackEnrichmentService:
             return f"track:{track_name}"
 
     def _find_best_match(
-        self,
-        rec: TrackRecommendation,
-        search_results: List[Dict[str, Any]]
+        self, rec: TrackRecommendation, search_results: List[Dict[str, Any]]
     ) -> Optional[Dict[str, Any]]:
         """Find the best matching track from search results.
 
@@ -200,9 +194,9 @@ class TrackEnrichmentService:
                     for track_artist in track_artists:
                         # Fuzzy match - check if artist names are similar
                         if (
-                            rec_artist in track_artist or
-                            track_artist in rec_artist or
-                            self._artist_names_similar(rec_artist, track_artist)
+                            rec_artist in track_artist
+                            or track_artist in rec_artist
+                            or self._artist_names_similar(rec_artist, track_artist)
                         ):
                             logger.info(
                                 f"Found match: '{track.get('name')}' by "
@@ -247,9 +241,7 @@ class TrackEnrichmentService:
         return len(intersection) / min_length >= 0.5
 
     def _create_enriched_recommendation(
-        self,
-        original_rec: TrackRecommendation,
-        spotify_track: Dict[str, Any]
+        self, original_rec: TrackRecommendation, spotify_track: Dict[str, Any]
     ) -> TrackRecommendation:
         """Create an enriched recommendation from Spotify track data.
 
@@ -282,6 +274,5 @@ class TrackEnrichmentService:
             user_mentioned=original_rec.user_mentioned,
             user_mentioned_artist=original_rec.user_mentioned_artist,
             anchor_type=original_rec.anchor_type,
-            protected=original_rec.protected
+            protected=original_rec.protected,
         )
-

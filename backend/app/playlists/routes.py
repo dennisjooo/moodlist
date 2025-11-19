@@ -13,14 +13,18 @@ from ..core.exceptions import (
     NotFoundException,
     ForbiddenException,
     ValidationException,
-    InternalServerError
+    InternalServerError,
 )
 from ..dependencies import get_playlist_service
 from ..services.playlist_service import PlaylistService
 from ..auth.dependencies import require_auth, refresh_spotify_token_if_expired
 from ..models.user import User
 from ..agents.workflows.workflow_manager import WorkflowManager
-from ..agents.states.agent_state import AgentState, RecommendationStatus, TrackRecommendation
+from ..agents.states.agent_state import (
+    AgentState,
+    RecommendationStatus,
+    TrackRecommendation,
+)
 from ..agents.tools.reccobeat_service import RecoBeatService
 from ..agents.tools.spotify_service import SpotifyService
 from ..core.config import settings
@@ -39,7 +43,7 @@ llm = create_logged_llm(
     model="openai/gpt-oss-120b",
     temperature=1,
     base_url="https://api.groq.com/openai/v1",
-    api_key=settings.GROQ_API_KEY
+    api_key=settings.GROQ_API_KEY,
 )
 
 # Initialize playlist services
@@ -57,7 +61,10 @@ async def get_user_playlists(
         default=None,
         description="Comma-separated list of statuses to exclude (e.g., 'failed,cancelled')",
     ),
-    search: Optional[str] = Query(default=None, description="Filter playlists by prompt, name, track name, artist name, mood, or status"),
+    search: Optional[str] = Query(
+        default=None,
+        description="Filter playlists by prompt, name, track name, artist name, mood, or status",
+    ),
     sort_by: Literal["created_at", "name", "track_count"] = Query(default="created_at"),
     sort_order: Literal["asc", "desc"] = Query(default="desc"),
 ):
@@ -77,12 +84,19 @@ async def get_user_playlists(
         # Parse exclude statuses
         exclude_status_list = None
         if exclude_statuses:
-            exclude_status_list = [status.strip() for status in exclude_statuses.split(',') if status.strip()]
+            exclude_status_list = [
+                status.strip()
+                for status in exclude_statuses.split(",")
+                if status.strip()
+            ]
 
         search_query = search.strip() if search else None
 
         # Get playlists and count in a single optimized query
-        playlists, total_count = await playlist_service.playlist_repository.get_by_user_id_with_filters_and_count(
+        (
+            playlists,
+            total_count,
+        ) = await playlist_service.playlist_repository.get_by_user_id_with_filters_and_count(
             user_id=current_user.id,
             exclude_statuses=exclude_status_list,
             skip=offset,
@@ -101,8 +115,12 @@ async def get_user_playlists(
                 "mood_prompt": playlist.mood_prompt,
                 "status": playlist.status,
                 "track_count": playlist.track_count,
-                "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
-                "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
+                "created_at": playlist.created_at.isoformat()
+                if playlist.created_at
+                else None,
+                "updated_at": playlist.updated_at.isoformat()
+                if playlist.updated_at
+                else None,
             }
 
             # Add playlist data if available
@@ -148,7 +166,7 @@ async def get_user_playlists(
 async def get_playlist(
     playlist_id: int,
     current_user: User = Depends(require_auth),
-    playlist_service: PlaylistService = Depends(get_playlist_service)
+    playlist_service: PlaylistService = Depends(get_playlist_service),
 ):
     """Get a specific playlist by ID.
 
@@ -173,7 +191,7 @@ async def get_playlist(
 async def get_playlist_by_session(
     session_id: str,
     current_user: User = Depends(require_auth),
-    playlist_service: PlaylistService = Depends(get_playlist_service)
+    playlist_service: PlaylistService = Depends(get_playlist_service),
 ):
     """Get a playlist by its session ID.
 
@@ -187,8 +205,10 @@ async def get_playlist_by_session(
     """
     try:
         # Get playlist entity from repository
-        playlist = await playlist_service.playlist_repository.get_by_session_id_for_user(
-            session_id, current_user.id
+        playlist = (
+            await playlist_service.playlist_repository.get_by_session_id_for_user(
+                session_id, current_user.id
+            )
         )
 
         if not playlist:
@@ -209,11 +229,17 @@ async def get_playlist_by_session(
             "color_primary": playlist.color_primary,
             "color_secondary": playlist.color_secondary,
             "color_tertiary": playlist.color_tertiary,
-            "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
-            "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
+            "created_at": playlist.created_at.isoformat()
+            if playlist.created_at
+            else None,
+            "updated_at": playlist.updated_at.isoformat()
+            if playlist.updated_at
+            else None,
         }
 
-        cost_summary = await playlist_service.get_cost_summary_for_session(playlist.session_id)
+        cost_summary = await playlist_service.get_cost_summary_for_session(
+            playlist.session_id
+        )
         if cost_summary:
             playlist_data.update(cost_summary)
 
@@ -222,7 +248,9 @@ async def get_playlist_by_session(
     except NotFoundException:
         raise
     except Exception as e:
-        logger.error(f"Error getting playlist by session {session_id}: {str(e)}", exc_info=True)
+        logger.error(
+            f"Error getting playlist by session {session_id}: {str(e)}", exc_info=True
+        )
         raise InternalServerError(f"Failed to get playlist: {str(e)}")
 
 
@@ -230,7 +258,7 @@ async def get_playlist_by_session(
 async def delete_playlist(
     playlist_id: int,
     current_user: User = Depends(require_auth),
-    playlist_service: PlaylistService = Depends(get_playlist_service)
+    playlist_service: PlaylistService = Depends(get_playlist_service),
 ):
     """Soft delete a playlist.
 
@@ -259,10 +287,7 @@ async def delete_playlist(
 
         logger.info(f"Soft deleted playlist {playlist_id} for user {current_user.id}")
 
-        return {
-            "message": "Playlist deleted successfully",
-            "playlist_id": playlist_id
-        }
+        return {"message": "Playlist deleted successfully", "playlist_id": playlist_id}
 
     except NotFoundException:
         raise
@@ -274,7 +299,7 @@ async def delete_playlist(
 @router.get("/playlists/stats/summary")
 async def get_playlist_stats(
     current_user: User = Depends(require_auth),
-    playlist_service: PlaylistService = Depends(get_playlist_service)
+    playlist_service: PlaylistService = Depends(get_playlist_service),
 ):
     """Get user's playlist statistics.
 
@@ -287,12 +312,11 @@ async def get_playlist_stats(
     """
     try:
         # Get statistics from repository
-        stats = await playlist_service.playlist_repository.get_user_playlist_stats(current_user.id)
+        stats = await playlist_service.playlist_repository.get_user_playlist_stats(
+            current_user.id
+        )
 
-        return {
-            **stats,
-            "user_id": current_user.id
-        }
+        return {**stats, "user_id": current_user.id}
 
     except Exception as e:
         logger.error(f"Error getting playlist stats: {str(e)}", exc_info=True)
@@ -301,7 +325,7 @@ async def get_playlist_stats(
 
 @router.get("/stats/public")
 async def get_public_stats(
-    playlist_service: PlaylistService = Depends(get_playlist_service)
+    playlist_service: PlaylistService = Depends(get_playlist_service),
 ):
     """Get public platform statistics (no authentication required).
 
@@ -328,12 +352,12 @@ async def edit_playlist(
     new_position: Optional[int] = Query(None, description="New position for reorder"),
     track_uri: Optional[str] = Query(None, description="Track URI for add operations"),
     current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Edit a playlist by modifying both local state and Spotify playlist.
-    
+
     This endpoint allows editing of both draft and saved playlists.
-    
+
     Args:
         session_id: Playlist session ID
         edit_type: Type of edit (reorder/remove/add)
@@ -342,14 +366,14 @@ async def edit_playlist(
         track_uri: Track URI for add operations
         current_user: Authenticated user
         db: Database session
-    
+
     Returns:
         Updated playlist information
     """
     try:
         # Refresh Spotify token if expired
         current_user = await refresh_spotify_token_if_expired(current_user, db)
-        
+
         # Use the completed playlist editor service
         result = await completed_playlist_editor.edit_playlist(
             session_id=session_id,
@@ -359,11 +383,11 @@ async def edit_playlist(
             user_id=current_user.id,
             track_id=track_id,
             new_position=new_position,
-            track_uri=track_uri
+            track_uri=track_uri,
         )
-        
+
         return result
-    
+
     except PermissionError as e:
         raise ForbiddenException(str(e))
     except ValueError as e:
@@ -379,7 +403,7 @@ async def edit_playlist(
 async def save_playlist_to_spotify(
     session_id: str,
     current_user: User = Depends(require_auth),
-    playlist_service: PlaylistService = Depends(get_playlist_service)
+    playlist_service: PlaylistService = Depends(get_playlist_service),
 ):
     """Save the draft playlist to Spotify.
 
@@ -394,6 +418,7 @@ async def save_playlist_to_spotify(
     try:
         # Refresh Spotify token if expired before saving to Spotify
         from app.core.database import async_session_factory
+
         async with async_session_factory() as db:
             current_user = await refresh_spotify_token_if_expired(current_user, db)
 
@@ -406,7 +431,7 @@ async def save_playlist_to_spotify(
             timeout_per_agent=120,
             max_recommendations=25,
             enable_human_loop=True,
-            require_approval=True
+            require_approval=True,
         )
 
         # Create minimal workflow manager just to access workflow state
@@ -417,7 +442,11 @@ async def save_playlist_to_spotify(
 
         # If not in cache, load from database
         if not state:
-            playlist = await playlist_service.playlist_repository.get_by_session_id_for_update(session_id)
+            playlist = (
+                await playlist_service.playlist_repository.get_by_session_id_for_update(
+                    session_id
+                )
+            )
 
             if not playlist:
                 raise NotFoundException("Playlist", session_id)
@@ -428,9 +457,13 @@ async def save_playlist_to_spotify(
                     "session_id": session_id,
                     "already_saved": True,
                     "playlist_id": playlist.spotify_playlist_id,
-                    "playlist_name": playlist.playlist_data.get("name") if playlist.playlist_data else None,
-                    "spotify_url": playlist.playlist_data.get("spotify_url") if playlist.playlist_data else None,
-                    "message": "Playlist already saved to Spotify"
+                    "playlist_name": playlist.playlist_data.get("name")
+                    if playlist.playlist_data
+                    else None,
+                    "spotify_url": playlist.playlist_data.get("spotify_url")
+                    if playlist.playlist_data
+                    else None,
+                    "message": "Playlist already saved to Spotify",
                 }
 
             # Reconstruct state from database
@@ -442,7 +475,7 @@ async def save_playlist_to_spotify(
                     spotify_uri=rec.get("spotify_uri"),
                     confidence_score=rec.get("confidence_score", 0.5),
                     reasoning=rec.get("reasoning", ""),
-                    source=rec.get("source", "unknown")
+                    source=rec.get("source", "unknown"),
                 )
                 for rec in (playlist.recommendations_data or [])
             ]
@@ -456,7 +489,7 @@ async def save_playlist_to_spotify(
                 current_step="completed",
                 recommendations=recommendations,
                 mood_analysis=playlist.mood_analysis_data,
-                metadata={"spotify_access_token": current_user.access_token}
+                metadata={"spotify_access_token": current_user.access_token},
             )
         else:
             # In-memory state exists
@@ -471,19 +504,21 @@ async def save_playlist_to_spotify(
                     "playlist_id": state.playlist_id,
                     "playlist_name": state.playlist_name,
                     "spotify_url": state.metadata.get("playlist_url"),
-                    "message": "Playlist already saved to Spotify"
+                    "message": "Playlist already saved to Spotify",
                 }
 
             # Add access token to metadata for playlist creation
             state.metadata["spotify_access_token"] = current_user.access_token
 
             # Get playlist record for context
-            playlist = await playlist_service.playlist_repository.get_by_session_id(session_id)
+            playlist = await playlist_service.playlist_repository.get_by_session_id(
+                session_id
+            )
             if playlist:
                 llm.set_context(
                     user_id=current_user.id,
                     playlist_id=playlist.id,
-                    session_id=session_id
+                    session_id=session_id,
                 )
 
         # Create playlist on Spotify using the playlist creation service
@@ -494,19 +529,25 @@ async def save_playlist_to_spotify(
 
         # Mark as saved
         state.metadata["playlist_saved_to_spotify"] = True
-        state.metadata["spotify_save_timestamp"] = datetime.now(timezone.utc).isoformat()
+        state.metadata["spotify_save_timestamp"] = datetime.now(
+            timezone.utc
+        ).isoformat()
 
         # Update database with final playlist info
-        updated = await playlist_service.playlist_repository.update_playlist_spotify_info(
-            session_id=session_id,
-            spotify_playlist_id=state.playlist_id,
-            playlist_name=state.playlist_name,
-            spotify_url=state.metadata.get("playlist_url"),
-            spotify_uri=state.metadata.get("playlist_uri")
+        updated = (
+            await playlist_service.playlist_repository.update_playlist_spotify_info(
+                session_id=session_id,
+                spotify_playlist_id=state.playlist_id,
+                playlist_name=state.playlist_name,
+                spotify_url=state.metadata.get("playlist_url"),
+                spotify_uri=state.metadata.get("playlist_uri"),
+            )
         )
 
         if updated:
-            logger.info(f"Updated playlist with session_id {session_id} with Spotify info")
+            logger.info(
+                f"Updated playlist with session_id {session_id} with Spotify info"
+            )
 
         return {
             "session_id": session_id,
@@ -515,7 +556,7 @@ async def save_playlist_to_spotify(
             "spotify_url": state.metadata.get("playlist_url"),
             "spotify_uri": state.metadata.get("playlist_uri"),
             "tracks_added": len(state.recommendations),
-            "message": "Playlist successfully saved to Spotify!"
+            "message": "Playlist successfully saved to Spotify!",
         }
 
     except (ValidationException, InternalServerError):
@@ -529,7 +570,7 @@ async def save_playlist_to_spotify(
 async def sync_playlist_from_spotify(
     session_id: str,
     current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Sync playlist tracks from Spotify to local database.
 
@@ -557,9 +598,7 @@ async def sync_playlist_from_spotify(
 
         # Perform sync
         result = await sync_service.sync_from_spotify(
-            session_id,
-            current_user.access_token,
-            current_user.id
+            session_id, current_user.access_token, current_user.id
         )
 
         return result

@@ -1,4 +1,5 @@
 """Prompt templates for track energy analysis."""
+
 import json
 from typing import Any, Dict, List
 
@@ -81,15 +82,14 @@ Phase assignments should be one of:
 
 
 def get_track_energy_analysis_user_prompt(
-    mood_prompt: str,
-    tracks_info: List[Dict[str, Any]]
+    mood_prompt: str, tracks_info: List[Dict[str, Any]]
 ) -> str:
     """Get the user prompt for track energy analysis.
-    
+
     Args:
         mood_prompt: User's mood description
         tracks_info: List of track information dictionaries
-        
+
     Returns:
         Formatted user prompt
     """
@@ -101,4 +101,3 @@ Tracks to analyze:
 {json.dumps(tracks_info, indent=2)}
 
 Provide energy analysis for each track to determine optimal ordering."""
-

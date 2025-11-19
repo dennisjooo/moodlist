@@ -25,7 +25,7 @@ class LLMSeedSelector:
         candidate_track_ids: List[str],
         mood_prompt: str,
         target_features: Dict[str, Any],
-        ideal_count: int = 8
+        ideal_count: int = 8,
     ) -> List[str]:
         """Use LLM to select the best seed tracks from candidates.
 
@@ -47,14 +47,18 @@ class LLMSeedSelector:
             # For now, use the track IDs directly and trust the scoring
             # In a more complete implementation, we'd fetch track metadata
 
-            logger.info(f"LLM selecting seeds from {len(candidate_track_ids)} candidates for mood: '{mood_prompt}'")
+            logger.info(
+                f"LLM selecting seeds from {len(candidate_track_ids)} candidates for mood: '{mood_prompt}'"
+            )
 
             # Create a summary of target features for LLM
             features_summary = []
             for feature, value in list(target_features.items())[:5]:
                 if feature != "_weights":
                     if isinstance(value, list):
-                        features_summary.append(f"{feature}: {value[0]:.2f}-{value[1]:.2f}")
+                        features_summary.append(
+                            f"{feature}: {value[0]:.2f}-{value[1]:.2f}"
+                        )
                     else:
                         features_summary.append(f"{feature}: {value:.2f}")
 
@@ -63,11 +67,11 @@ class LLMSeedSelector:
                 features_summary=features_summary,
                 candidate_count=len(candidate_track_ids),
                 ideal_count=ideal_count,
-                candidate_tracks=candidate_track_ids
+                candidate_tracks=candidate_track_ids,
             )
 
             response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
-            
+
             # Parse JSON response using centralized parser
             result = LLMResponseParser.extract_json_from_response(response)
 

@@ -28,7 +28,7 @@ class RecommendationGeneratorAgent(BaseAgent):
         spotify_service: SpotifyService,
         max_recommendations: int = 30,
         diversity_factor: float = 0.7,
-        verbose: bool = False
+        verbose: bool = False,
     ):
         """Initialize the recommendation generator agent.
 
@@ -42,7 +42,7 @@ class RecommendationGeneratorAgent(BaseAgent):
         super().__init__(
             name="recommendation_generator",
             description="Generates sophisticated mood-based track recommendations using RecoBeat API",
-            verbose=verbose
+            verbose=verbose,
         )
 
         self.reccobeat_service = reccobeat_service
@@ -52,7 +52,9 @@ class RecommendationGeneratorAgent(BaseAgent):
 
         # Initialize component classes
         self.token_manager = TokenManager()
-        self.recommendation_engine = RecommendationEngine(reccobeat_service, spotify_service)
+        self.recommendation_engine = RecommendationEngine(
+            reccobeat_service, spotify_service
+        )
         self.audio_features_handler = AudioFeaturesHandler(reccobeat_service)
         self.track_filter = TrackFilter()
         self.scoring_engine = ScoringEngine()
@@ -82,7 +84,9 @@ class RecommendationGeneratorAgent(BaseAgent):
             recommendations = await self._get_recommendations(state)
 
             # Progress update after fetching
-            state.current_step = f"generating_recommendations_fetched_{len(recommendations)}"
+            state.current_step = (
+                f"generating_recommendations_fetched_{len(recommendations)}"
+            )
             await self._notify_progress(state)
 
             # Update: Processing and ranking
@@ -90,10 +94,14 @@ class RecommendationGeneratorAgent(BaseAgent):
             await self._notify_progress(state)
 
             # Process recommendations (filter, rank, diversify)
-            processed_recommendations = await self._process_recommendations(recommendations, state)
+            processed_recommendations = await self._process_recommendations(
+                recommendations, state
+            )
 
             # Progress update after processing
-            state.current_step = f"generating_recommendations_processed_{len(processed_recommendations)}"
+            state.current_step = (
+                f"generating_recommendations_processed_{len(processed_recommendations)}"
+            )
             await self._notify_progress(state)
 
             # Update: Applying diversity
@@ -106,7 +114,7 @@ class RecommendationGeneratorAgent(BaseAgent):
             final_recommendations = self.recommendation_processor.enforce_source_ratio(
                 recommendations=processed_recommendations,
                 max_count=max_recommendations,
-                artist_ratio=1.0
+                artist_ratio=1.0,
             )
 
             # Deduplicate and add to state
@@ -144,7 +152,9 @@ class RecommendationGeneratorAgent(BaseAgent):
             recommendation = handler._create_anchor_recommendation(anchor_track)
             state.add_recommendation(recommendation)
 
-        logger.info(f"Added {len(anchor_tracks)} anchor tracks to state for real-time display")
+        logger.info(
+            f"Added {len(anchor_tracks)} anchor tracks to state for real-time display"
+        )
 
         # Send progress update to show anchors immediately
         state.current_step = f"generating_recommendations_anchors_{len(anchor_tracks)}"
@@ -160,21 +170,27 @@ class RecommendationGeneratorAgent(BaseAgent):
             Raw recommendations list
         """
         # Pass through progress callback to sub-components
-        if hasattr(self, '_progress_callback'):
+        if hasattr(self, "_progress_callback"):
             # Pass to artist-based generator
-            if hasattr(self.recommendation_engine, 'artist_generator'):
-                self.recommendation_engine.artist_generator._progress_callback = self._progress_callback
+            if hasattr(self.recommendation_engine, "artist_generator"):
+                self.recommendation_engine.artist_generator._progress_callback = (
+                    self._progress_callback
+                )
 
         if not state.seed_tracks:
             logger.warning("No seed tracks available for recommendations")
-            return await self.recommendation_engine._generate_fallback_recommendations(state)
+            return await self.recommendation_engine._generate_fallback_recommendations(
+                state
+            )
         else:
-            return await self.recommendation_engine._generate_mood_based_recommendations(state)
+            return (
+                await self.recommendation_engine._generate_mood_based_recommendations(
+                    state
+                )
+            )
 
     async def _process_recommendations(
-        self,
-        recommendations: List[Dict[str, Any]],
-        state: AgentState
+        self, recommendations: List[Dict[str, Any]], state: AgentState
     ) -> List[TrackRecommendation]:
         """Process recommendations through filtering, ranking, and diversity steps.
 
@@ -194,10 +210,8 @@ class RecommendationGeneratorAgent(BaseAgent):
         playlist_target = state.metadata.get("playlist_target", {})
         target_count = playlist_target.get("target_count")
         return self.diversity_manager._ensure_diversity(
-            filtered_recommendations,
-            target_count=target_count
+            filtered_recommendations, target_count=target_count
         )
-
 
     def _get_max_recommendations(self, state: AgentState) -> int:
         """Get maximum recommendations from playlist target.
@@ -212,9 +226,7 @@ class RecommendationGeneratorAgent(BaseAgent):
         return playlist_target.get("max_count", self.max_recommendations)
 
     def _deduplicate_and_add_recommendations(
-        self,
-        recommendations: List[TrackRecommendation],
-        state: AgentState
+        self, recommendations: List[TrackRecommendation], state: AgentState
     ) -> None:
         """Deduplicate recommendations and add them to state.
 
@@ -230,14 +242,18 @@ class RecommendationGeneratorAgent(BaseAgent):
 
         for rec in recommendations:
             # Check for duplicates
-            if self._is_duplicate(rec, seen_track_ids, seen_normalized_names, seen_spotify_uris):
+            if self._is_duplicate(
+                rec, seen_track_ids, seen_normalized_names, seen_spotify_uris
+            ):
                 continue
 
             # No duplicates found, add the track
             state.add_recommendation(rec)
             new_tracks_added = True
             tracks_added_count += 1
-            self._mark_as_seen(rec, seen_track_ids, seen_normalized_names, seen_spotify_uris)
+            self._mark_as_seen(
+                rec, seen_track_ids, seen_normalized_names, seen_spotify_uris
+            )
 
             # Note: We don't send progress updates here because tracks are already
             # being added incrementally during artist processing. These updates would
@@ -245,9 +261,12 @@ class RecommendationGeneratorAgent(BaseAgent):
 
         if new_tracks_added:
             # Send final progress update with total count
-            state.current_step = f"generating_recommendations_streaming_{len(state.recommendations)}"
+            state.current_step = (
+                f"generating_recommendations_streaming_{len(state.recommendations)}"
+            )
             try:
                 import asyncio
+
                 asyncio.create_task(self._notify_progress(state))
             except RuntimeError:
                 # Fallback if create_task is not available (e.g., synchronous tests)
@@ -262,7 +281,7 @@ class RecommendationGeneratorAgent(BaseAgent):
         rec: TrackRecommendation,
         seen_track_ids: set,
         seen_normalized_names: set,
-        seen_spotify_uris: set
+        seen_spotify_uris: set,
     ) -> bool:
         """Check if recommendation is a duplicate.
 
@@ -277,18 +296,24 @@ class RecommendationGeneratorAgent(BaseAgent):
         """
         # Check track ID
         if rec.track_id in seen_track_ids:
-            logger.debug(f"Skipping duplicate track ID: {rec.track_name} by {', '.join(rec.artists)}")
+            logger.debug(
+                f"Skipping duplicate track ID: {rec.track_name} by {', '.join(rec.artists)}"
+            )
             return True
 
         # Check normalized track name
         normalized_name = self._normalize_track_name(rec.track_name)
         if normalized_name in seen_normalized_names:
-            logger.debug(f"Skipping duplicate track name: {rec.track_name} by {', '.join(rec.artists)}")
+            logger.debug(
+                f"Skipping duplicate track name: {rec.track_name} by {', '.join(rec.artists)}"
+            )
             return True
 
         # Check Spotify URI
         if rec.spotify_uri and rec.spotify_uri in seen_spotify_uris:
-            logger.debug(f"Skipping duplicate Spotify URI: {rec.track_name} by {', '.join(rec.artists)}")
+            logger.debug(
+                f"Skipping duplicate Spotify URI: {rec.track_name} by {', '.join(rec.artists)}"
+            )
             return True
 
         return False
@@ -303,18 +328,21 @@ class RecommendationGeneratorAgent(BaseAgent):
             Normalized track name
         """
         normalized_name = track_name.lower()
-        
+
         # Remove common variations that create duplicates
         variants = [
-            " (radio edit)", " - radio edit", 
-            " (feat.", " (featuring ", 
-            " - feat.", " - featuring "
+            " (radio edit)",
+            " - radio edit",
+            " (feat.",
+            " (featuring ",
+            " - feat.",
+            " - featuring ",
         ]
-        
+
         for variant in variants:
             if variant in normalized_name:
                 normalized_name = normalized_name.split(variant)[0]
-        
+
         return normalized_name.strip()
 
     def _mark_as_seen(
@@ -322,7 +350,7 @@ class RecommendationGeneratorAgent(BaseAgent):
         rec: TrackRecommendation,
         seen_track_ids: set,
         seen_normalized_names: set,
-        seen_spotify_uris: set
+        seen_spotify_uris: set,
     ) -> None:
         """Mark recommendation as seen in tracking sets.
 
@@ -338,9 +366,7 @@ class RecommendationGeneratorAgent(BaseAgent):
             seen_spotify_uris.add(rec.spotify_uri)
 
     def _update_state_metadata(
-        self,
-        state: AgentState,
-        processed_recommendations: List[TrackRecommendation]
+        self, state: AgentState, processed_recommendations: List[TrackRecommendation]
     ) -> None:
         """Update state with final metadata.
 
@@ -352,6 +378,8 @@ class RecommendationGeneratorAgent(BaseAgent):
         state.status = RecommendationStatus.GENERATING_RECOMMENDATIONS
 
         # Store metadata
-        state.metadata["total_recommendations_generated"] = len(processed_recommendations)
+        state.metadata["total_recommendations_generated"] = len(
+            processed_recommendations
+        )
         state.metadata["final_recommendation_count"] = len(state.recommendations)
         state.metadata["recommendation_strategy"] = "mood_based_with_seeds"

@@ -1,4 +1,5 @@
 """Root application routes."""
+
 from fastapi import APIRouter
 
 from app.core.config import settings
@@ -12,7 +13,7 @@ async def root():
     return {
         "message": f"Welcome to {settings.APP_NAME}",
         "version": settings.APP_VERSION,
-        "environment": settings.APP_ENV
+        "environment": settings.APP_ENV,
     }
 
 
@@ -20,4 +21,3 @@ async def root():
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
-

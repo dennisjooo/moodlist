@@ -55,10 +55,14 @@ class TokenService:
 
                 # If token is still valid (more than 5 minutes remaining), no need to refresh
                 if token_expires_at > now + timedelta(minutes=5):
-                    logger.info(f"Token still valid until {token_expires_at}, no refresh needed")
+                    logger.info(
+                        f"Token still valid until {token_expires_at}, no refresh needed"
+                    )
                     return state
 
-                logger.warning(f"Spotify token expired or expiring soon (expires at {token_expires_at}), refreshing now...")
+                logger.warning(
+                    f"Spotify token expired or expiring soon (expires at {token_expires_at}), refreshing now..."
+                )
 
                 # Refresh the token
                 refreshed_state = await TokenService._refresh_token_for_user(user, db)
@@ -66,10 +70,14 @@ class TokenService:
                     # Update the state with new token
                     state.metadata["spotify_access_token"] = user.access_token
 
-                    logger.info(f"Successfully refreshed Spotify token for user {user.id}, new token expires at {user.token_expires_at}")
+                    logger.info(
+                        f"Successfully refreshed Spotify token for user {user.id}, new token expires at {user.token_expires_at}"
+                    )
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error refreshing Spotify token: {e.response.status_code} - {e.response.text}")
+            logger.error(
+                f"HTTP error refreshing Spotify token: {e.response.status_code} - {e.response.text}"
+            )
         except Exception as e:
             logger.error(f"Failed to refresh Spotify token: {str(e)}", exc_info=True)
 
@@ -96,8 +104,9 @@ class TokenService:
 
         # Update expiration time
         expires_in = token_data.get("expires_in", 3600)
-        user.token_expires_at = datetime.now(timezone.utc).replace(microsecond=0) + \
-                               timedelta(seconds=expires_in)
+        user.token_expires_at = datetime.now(timezone.utc).replace(
+            microsecond=0
+        ) + timedelta(seconds=expires_in)
 
         await db.commit()
         return True
@@ -114,9 +123,7 @@ class TokenService:
         """
         try:
             async with async_session_factory() as db:
-                result = await db.execute(
-                    select(User).where(User.id == user_id)
-                )
+                result = await db.execute(select(User).where(User.id == user_id))
                 user = result.scalar_one_or_none()
 
                 if not user:
@@ -156,7 +163,11 @@ class TokenService:
             return False
 
         now = datetime.now(timezone.utc)
-        expires_at_utc = expires_at.replace(tzinfo=timezone.utc) if expires_at.tzinfo is None else expires_at
+        expires_at_utc = (
+            expires_at.replace(tzinfo=timezone.utc)
+            if expires_at.tzinfo is None
+            else expires_at
+        )
 
         # Consider token valid if it has more than 5 minutes remaining
         return expires_at_utc > now + timedelta(minutes=5)

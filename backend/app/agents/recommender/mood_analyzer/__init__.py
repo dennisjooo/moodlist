@@ -7,7 +7,13 @@ from .discovery import ArtistDiscovery
 from .planning import PlaylistTargetPlanner
 from .text import TextProcessor, KeywordExtractor
 from .mood_analyzer import MoodAnalyzerAgent
-from .config import STOP_WORDS, MOOD_SYNONYMS, KNOWN_GENRES, LANGUAGE_INDICATORS, MOOD_PROFILES
+from .config import (
+    STOP_WORDS,
+    MOOD_SYNONYMS,
+    KNOWN_GENRES,
+    LANGUAGE_INDICATORS,
+    MOOD_PROFILES,
+)
 from .anchor_selection import AnchorTrackSelector
 
 __all__ = [
@@ -24,5 +30,5 @@ __all__ = [
     "MOOD_SYNONYMS",
     "KNOWN_GENRES",
     "LANGUAGE_INDICATORS",
-    "MOOD_PROFILES"
+    "MOOD_PROFILES",
 ]

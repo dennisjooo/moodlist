@@ -7,6 +7,7 @@ from datetime import datetime
 
 class UserCreate(BaseModel):
     """Schema for creating a new user (simplified - profile fetched from Spotify)."""
+
     access_token: str = Field(..., description="Spotify access token")
     refresh_token: str = Field(..., description="Spotify refresh token")
     token_expires_at: datetime = Field(..., description="Token expiration time")
@@ -14,6 +15,7 @@ class UserCreate(BaseModel):
 
 class UserCreateInternal(BaseModel):
     """Internal schema for creating a user with profile data."""
+
     spotify_id: str = Field(..., description="Spotify user ID")
     email: Optional[EmailStr] = Field(None, description="User email")
     display_name: str = Field(..., description="Display name")
@@ -25,6 +27,7 @@ class UserCreateInternal(BaseModel):
 
 class UserResponse(BaseModel):
     """Schema for user response."""
+
     id: int
     spotify_id: str
     email: Optional[str]
@@ -33,20 +36,23 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         """Enable ORM compatibility for SQLAlchemy models."""
+
         from_attributes = True
 
 
 class LoginRequest(BaseModel):
     """Schema for login request."""
+
     access_token: str = Field(..., description="Spotify access token")
     refresh_token: str = Field(..., description="Spotify refresh token")
 
 
 class TokenResponse(BaseModel):
     """Schema for token response."""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -56,11 +62,13 @@ class TokenResponse(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     """Schema for refresh token request."""
+
     refresh_token: str = Field(..., description="Refresh token")
 
 
 class SessionResponse(BaseModel):
     """Schema for session response."""
+
     id: int
     user_id: int
     session_token: str
@@ -69,14 +77,16 @@ class SessionResponse(BaseModel):
     expires_at: datetime
     created_at: datetime
     last_activity: datetime
-    
+
     class Config:
         """Enable ORM compatibility for SQLAlchemy models."""
+
         from_attributes = True
 
 
 class AuthResponse(BaseModel):
     """Schema for authentication response."""
+
     user: Optional[UserResponse] = None
     session: Optional[SessionResponse] = None
     requires_spotify_auth: bool = False

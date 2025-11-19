@@ -160,5 +160,3 @@ Provide your analysis in valid JSON format with this structure:
   },
   "reasoning": "Explanation of feature choices and mood interpretation"
 }"""
-
-

@@ -18,8 +18,7 @@ class AudioEnricher:
         self.reccobeat_service = reccobeat_service
 
     async def enrich_tracks_with_features(
-        self,
-        tracks: List[Dict[str, Any]]
+        self, tracks: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Enrich tracks with audio features from RecoBeat.
 
@@ -33,23 +32,25 @@ class AudioEnricher:
             return tracks
 
         logger.info(f"Fetching audio features for {len(tracks)} tracks")
-        
+
         # Extract all track IDs
         track_id_to_track = {}
         for track in tracks:
             track_id = track.get("track_id") or track.get("id")
             if track_id:
                 track_id_to_track[track_id] = track
-        
+
         # Batch fetch all audio features at once
         track_ids = list(track_id_to_track.keys())
         if not track_ids:
             return tracks
-        
+
         try:
             # Fetch audio features for all tracks in a single batch call
-            features_map = await self.reccobeat_service.get_tracks_audio_features(track_ids)
-            
+            features_map = await self.reccobeat_service.get_tracks_audio_features(
+                track_ids
+            )
+
             # Merge features into tracks
             enriched_tracks = []
             for track in tracks:
@@ -61,10 +62,12 @@ class AudioEnricher:
                     enriched_tracks.append(track_with_features)
                 else:
                     enriched_tracks.append(track)
-            
-            logger.info(f"Successfully enriched {len([t for t in enriched_tracks if 'energy' in t])} tracks with audio features")
+
+            logger.info(
+                f"Successfully enriched {len([t for t in enriched_tracks if 'energy' in t])} tracks with audio features"
+            )
             return enriched_tracks
-            
+
         except Exception as e:
             logger.warning(f"Failed to fetch features for tracks: {e}")
             return tracks

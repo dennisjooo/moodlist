@@ -11,5 +11,5 @@ __all__ = [
     "MoodAnalyzerAgent",
     "SeedGathererAgent",
     "RecommendationGeneratorAgent",
-    "OrchestratorAgent"
+    "OrchestratorAgent",
 ]

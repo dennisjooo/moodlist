@@ -15,7 +15,7 @@ class PhaseSorter:
         self,
         tracks: List[TrackRecommendation],
         analysis_map: Dict[str, Dict[str, Any]],
-        phase: str
+        phase: str,
     ) -> List[TrackRecommendation]:
         """Sort tracks within a phase for smooth transitions.
 
@@ -47,73 +47,62 @@ class PhaseSorter:
         return sorters.get(phase, self._sort_mid)
 
     def _sort_opening(
-        self,
-        tracks: List[TrackRecommendation],
-        analysis_map: Dict[str, Dict[str, Any]]
+        self, tracks: List[TrackRecommendation], analysis_map: Dict[str, Dict[str, Any]]
     ) -> List[TrackRecommendation]:
         """Sort opening phase - start with most welcoming, gradually build."""
         return sorted(
             tracks,
             key=lambda t: analysis_map.get(t.track_id, {}).get("opening_potential", 50),
-            reverse=True
+            reverse=True,
         )
 
     def _sort_build(
-        self,
-        tracks: List[TrackRecommendation],
-        analysis_map: Dict[str, Dict[str, Any]]
+        self, tracks: List[TrackRecommendation], analysis_map: Dict[str, Dict[str, Any]]
     ) -> List[TrackRecommendation]:
         """Sort build phase - gradually increase energy."""
         return sorted(
             tracks,
-            key=lambda t: analysis_map.get(t.track_id, {}).get("energy_level", 50)
+            key=lambda t: analysis_map.get(t.track_id, {}).get("energy_level", 50),
         )
 
     def _sort_mid(
-        self,
-        tracks: List[TrackRecommendation],
-        analysis_map: Dict[str, Dict[str, Any]]
+        self, tracks: List[TrackRecommendation], analysis_map: Dict[str, Dict[str, Any]]
     ) -> List[TrackRecommendation]:
         """Sort mid phase - maintain consistent energy, vary by emotional intensity."""
         return sorted(
             tracks,
-            key=lambda t: analysis_map.get(t.track_id, {}).get("emotional_intensity", 50),
-            reverse=True
+            key=lambda t: analysis_map.get(t.track_id, {}).get(
+                "emotional_intensity", 50
+            ),
+            reverse=True,
         )
 
     def _sort_high(
-        self,
-        tracks: List[TrackRecommendation],
-        analysis_map: Dict[str, Dict[str, Any]]
+        self, tracks: List[TrackRecommendation], analysis_map: Dict[str, Dict[str, Any]]
     ) -> List[TrackRecommendation]:
         """Sort high phase - keep peak energy, vary to maintain interest."""
         return sorted(
             tracks,
             key=lambda t: analysis_map.get(t.track_id, {}).get("peak_potential", 50),
-            reverse=True
+            reverse=True,
         )
 
     def _sort_descent(
-        self,
-        tracks: List[TrackRecommendation],
-        analysis_map: Dict[str, Dict[str, Any]]
+        self, tracks: List[TrackRecommendation], analysis_map: Dict[str, Dict[str, Any]]
     ) -> List[TrackRecommendation]:
         """Sort descent phase - gradually decrease energy."""
         return sorted(
             tracks,
             key=lambda t: analysis_map.get(t.track_id, {}).get("energy_level", 50),
-            reverse=True
+            reverse=True,
         )
 
     def _sort_closure(
-        self,
-        tracks: List[TrackRecommendation],
-        analysis_map: Dict[str, Dict[str, Any]]
+        self, tracks: List[TrackRecommendation], analysis_map: Dict[str, Dict[str, Any]]
     ) -> List[TrackRecommendation]:
         """Sort closure phase - end with most satisfying resolution."""
         return sorted(
             tracks,
             key=lambda t: analysis_map.get(t.track_id, {}).get("closing_potential", 50),
-            reverse=True
+            reverse=True,
         )
-

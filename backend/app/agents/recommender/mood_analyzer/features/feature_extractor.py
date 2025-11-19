@@ -13,7 +13,9 @@ class FeatureExtractor:
         """Initialize the feature extractor."""
         pass
 
-    def extract_target_features(self, mood_analysis: Dict[str, Any]) -> Dict[str, float]:
+    def extract_target_features(
+        self, mood_analysis: Dict[str, Any]
+    ) -> Dict[str, float]:
         """Extract target audio features from mood analysis with full feature set support.
 
         Args:
@@ -42,13 +44,15 @@ class FeatureExtractor:
                 "energy": 0.5,
                 "valence": 0.5,
                 "danceability": 0.5,
-                "acousticness": 0.5
+                "acousticness": 0.5,
             }
 
         logger.info(f"Extracted target features: {list(target_features.keys())}")
         return target_features
 
-    def extract_feature_weights(self, mood_analysis: Dict[str, Any]) -> Dict[str, float]:
+    def extract_feature_weights(
+        self, mood_analysis: Dict[str, Any]
+    ) -> Dict[str, float]:
         """Extract feature importance weights from mood analysis.
 
         Args:
@@ -74,7 +78,7 @@ class FeatureExtractor:
                 "speechiness": 0.3,
                 "liveness": 0.2,
                 "key": 0.2,
-                "popularity": 0.1
+                "popularity": 0.1,
             }
 
         return feature_weights

@@ -34,7 +34,7 @@ class MoodProfileMatcher:
         self,
         matched_profiles: List[Tuple[str, Dict[str, Any]]],
         mood_prompt: str,
-        analysis: Dict[str, Any]
+        analysis: Dict[str, Any],
     ) -> None:
         """Apply matched mood profiles to the analysis result.
 
@@ -48,7 +48,9 @@ class MoodProfileMatcher:
 
         for mood_name, profile in matched_profiles:
             # Update mood interpretation
-            analysis["mood_interpretation"] = f"{mood_name.capitalize()} mood based on: {mood_prompt}"
+            analysis["mood_interpretation"] = (
+                f"{mood_name.capitalize()} mood based on: {mood_prompt}"
+            )
 
             # Merge target features
             analysis["target_features"].update(profile["features"])

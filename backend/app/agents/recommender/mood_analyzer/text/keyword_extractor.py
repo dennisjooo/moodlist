@@ -23,7 +23,9 @@ class KeywordExtractor:
         """
         return self._processor.extract_search_keywords(mood_prompt)
 
-    def extract_genres_and_artists(self, mood_prompt: str) -> tuple[List[str], List[str]]:
+    def extract_genres_and_artists(
+        self, mood_prompt: str
+    ) -> tuple[List[str], List[str]]:
         """Extract genre keywords and artist names from mood prompt.
 
         Args:

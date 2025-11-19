@@ -35,7 +35,7 @@ class ArtistRecommendationPipeline:
         self,
         spotify_service: SpotifyService,
         reccobeat_service: RecoBeatService,
-        use_failed_artist_caching: bool = False
+        use_failed_artist_caching: bool = False,
     ):
         """Initialize the artist recommendation pipeline.
 
@@ -53,9 +53,12 @@ class ArtistRecommendationPipeline:
     async def process_artists(
         self,
         state: AgentState,
-        create_recommendation_fn: Callable[[Dict[str, Any], Dict[str, Any], Dict[str, Dict[str, Any]]], Optional[TrackRecommendation]],
+        create_recommendation_fn: Callable[
+            [Dict[str, Any], Dict[str, Any], Dict[str, Dict[str, Any]]],
+            Optional[TrackRecommendation],
+        ],
         calculate_score_fn: Callable[[Optional[Dict[str, Any]], Dict[str, Any]], float],
-        add_to_state_incrementally: bool = True
+        add_to_state_incrementally: bool = True,
     ) -> List[Dict[str, Any]]:
         """Process mood-matched artists and generate recommendations.
 
@@ -81,29 +84,41 @@ class ArtistRecommendationPipeline:
 
         # Filter failed artists if caching is enabled
         if self.use_failed_artist_caching:
-            mood_matched_artists = await self._filter_failed_artists(mood_matched_artists)
+            mood_matched_artists = await self._filter_failed_artists(
+                mood_matched_artists
+            )
 
         if not mood_matched_artists:
             logger.info("No valid artists remaining after filtering")
             return []
 
-        artist_processing_cap = min(len(mood_matched_artists), config.artist_discovery_result_limit)
-        logger.info(f"Generating recommendations from {len(mood_matched_artists)} discovered artists")
+        artist_processing_cap = min(
+            len(mood_matched_artists), config.artist_discovery_result_limit
+        )
+        logger.info(
+            f"Generating recommendations from {len(mood_matched_artists)} discovered artists"
+        )
 
         # Prepare parameters and refresh token
-        access_token, target_features, tracks_per_artist = await self._prepare_params(state)
+        access_token, target_features, tracks_per_artist = await self._prepare_params(
+            state
+        )
 
         if not access_token:
             return []
 
         # Process all artists
-        all_recommendations, successful_artists, failed_artists = await self._process_all_artists(
+        (
+            all_recommendations,
+            successful_artists,
+            failed_artists,
+        ) = await self._process_all_artists(
             mood_matched_artists,
             access_token,
             target_features,
             tracks_per_artist,
             create_recommendation_fn,
-            calculate_score_fn
+            calculate_score_fn,
         )
 
         # Handle error cases
@@ -143,7 +158,9 @@ class ArtistRecommendationPipeline:
 
         return filtered_artists
 
-    async def _prepare_params(self, state: AgentState) -> Tuple[Optional[str], Dict[str, Any], int]:
+    async def _prepare_params(
+        self, state: AgentState
+    ) -> Tuple[Optional[str], Dict[str, Any], int]:
         """Prepare parameters for artist discovery.
 
         Args:
@@ -168,10 +185,15 @@ class ArtistRecommendationPipeline:
             return None, {}, 0
 
         # Maximize diversity: Use more artists with more tracks to account for filtering
-        artist_count = min(len(state.metadata.get("mood_matched_artists", [])), config.artist_discovery_result_limit)
+        artist_count = min(
+            len(state.metadata.get("mood_matched_artists", [])),
+            config.artist_discovery_result_limit,
+        )
         # Guard against zero division when artist_count is zero (should be prevented earlier)
         safe_artist_count = max(artist_count, 1)
-        tracks_per_artist = max(4, min(int((target_artist_recs * 4.0) // safe_artist_count) + 2, 10))
+        tracks_per_artist = max(
+            4, min(int((target_artist_recs * 4.0) // safe_artist_count) + 2, 10)
+        )
 
         logger.info(
             f"Fetching {tracks_per_artist} tracks from up to {artist_count} artists "
@@ -187,7 +209,7 @@ class ArtistRecommendationPipeline:
         target_features: Dict[str, Any],
         tracks_per_artist: int,
         create_recommendation_fn: Callable,
-        calculate_score_fn: Callable
+        calculate_score_fn: Callable,
     ) -> Tuple[List[TrackRecommendation], int, int]:
         """Process all artists to get recommendations in parallel.
 
@@ -203,7 +225,9 @@ class ArtistRecommendationPipeline:
             Tuple of (recommendations, successful_artists, failed_artists)
         """
         # Use up to the configured artist discovery limit for coverage
-        artist_limit = min(len(mood_matched_artists), config.artist_discovery_result_limit)
+        artist_limit = min(
+            len(mood_matched_artists), config.artist_discovery_result_limit
+        )
         artists_to_process = mood_matched_artists[:artist_limit]
         total_artists = len(artists_to_process)
 
@@ -222,7 +246,9 @@ class ArtistRecommendationPipeline:
         completed_artists = 0
         progress_lock = asyncio.Lock()
 
-        async def process_artist_bounded(idx: int, artist_id: str) -> Tuple[List[TrackRecommendation], bool]:
+        async def process_artist_bounded(
+            idx: int, artist_id: str
+        ) -> Tuple[List[TrackRecommendation], bool]:
             """Process a single artist with concurrency control."""
             nonlocal completed_artists
             async with semaphore:
@@ -236,28 +262,32 @@ class ArtistRecommendationPipeline:
                         tracks_per_artist,
                         create_recommendation_fn,
                         calculate_score_fn,
-                        prefetched_top_tracks
+                        prefetched_top_tracks,
                     )
                     success = len(artist_recommendations) > 0
 
                     # Send progress update for EVERY artist (maximum real-time feedback)
                     async with progress_lock:
                         completed_artists += 1
-                        await self._send_progress_update(completed_artists, total_artists)
+                        await self._send_progress_update(
+                            completed_artists, total_artists
+                        )
 
                     return artist_recommendations, success
 
                 except Exception as e:
                     logger.error(
                         f"Error getting tracks for artist {artist_id} "
-                        f"(artist {idx+1}/{total_artists}): {e}",
-                        exc_info=True
+                        f"(artist {idx + 1}/{total_artists}): {e}",
+                        exc_info=True,
                     )
 
                     # Still update progress counter on failure
                     async with progress_lock:
                         completed_artists += 1
-                        await self._send_progress_update(completed_artists, total_artists)
+                        await self._send_progress_update(
+                            completed_artists, total_artists
+                        )
 
                     return [], False
 
@@ -279,12 +309,18 @@ class ArtistRecommendationPipeline:
             all_recommendations.extend(artist_recommendations)
 
             # Add to state incrementally for real-time frontend updates
-            if self._add_to_state_incrementally and artist_recommendations and hasattr(self, '_state'):
+            if (
+                self._add_to_state_incrementally
+                and artist_recommendations
+                and hasattr(self, "_state")
+            ):
                 for rec in artist_recommendations:
                     self._state.add_recommendation(rec)
 
                 # Send progress update with current count
-                if hasattr(self, '_progress_callback') and callable(self._progress_callback):
+                if hasattr(self, "_progress_callback") and callable(
+                    self._progress_callback
+                ):
                     try:
                         await self._progress_callback(self._state)
                     except Exception as e:
@@ -304,16 +340,22 @@ class ArtistRecommendationPipeline:
             completed: Number of completed artists
             total: Total number of artists
         """
-        logger.info(f"Artist processing progress: {completed}/{total} artists processed")
+        logger.info(
+            f"Artist processing progress: {completed}/{total} artists processed"
+        )
 
         # Send progress notification through state if available
-        if hasattr(self, '_state') and self._state:
+        if hasattr(self, "_state") and self._state:
             # Update the current step with progress info
-            self._state.current_step = f"generating_recommendations_processing_artists_{completed}_{total}"
+            self._state.current_step = (
+                f"generating_recommendations_processing_artists_{completed}_{total}"
+            )
 
             # Try to get the notify_progress callback from the base agent
             # This callback is set by the orchestrator when it passes the progress callback down
-            if hasattr(self, '_progress_callback') and callable(self._progress_callback):
+            if hasattr(self, "_progress_callback") and callable(
+                self._progress_callback
+            ):
                 try:
                     await self._progress_callback(self._state)
                 except Exception as e:
@@ -354,12 +396,12 @@ class ArtistRecommendationPipeline:
             if await cache_manager.is_artist_failed(artist_id):
                 logger.debug(
                     f"Skipping previously failed artist {artist_id} "
-                    f"(artist {artist_index+1}/{artist_progress_total})"
+                    f"(artist {artist_index + 1}/{artist_progress_total})"
                 )
                 return []
 
         logger.info(
-            f"Fetching hybrid tracks for artist {artist_index+1}/{artist_progress_total}: {artist_id}"
+            f"Fetching hybrid tracks for artist {artist_index + 1}/{artist_progress_total}: {artist_id}"
         )
 
         # Get diverse tracks using hybrid strategy (top tracks + album deep cuts)
@@ -383,7 +425,7 @@ class ArtistRecommendationPipeline:
         if not artist_tracks:
             logger.warning(
                 f"No tracks returned for artist {artist_id} "
-                f"(artist {artist_index+1}/{artist_progress_total})"
+                f"(artist {artist_index + 1}/{artist_progress_total})"
             )
             # Mark this artist as failed (if caching enabled)
             if self.use_failed_artist_caching:
@@ -405,7 +447,7 @@ class ArtistRecommendationPipeline:
             artist_id,
             target_features,
             create_recommendation_fn,
-            calculate_score_fn
+            calculate_score_fn,
         )
 
     async def _process_artist_tracks(
@@ -414,7 +456,7 @@ class ArtistRecommendationPipeline:
         artist_id: str,
         target_features: Dict[str, Any],
         create_recommendation_fn: Callable,
-        calculate_score_fn: Callable
+        calculate_score_fn: Callable,
     ) -> List[TrackRecommendation]:
         """Process tracks from an artist into recommendations.
 
@@ -435,8 +477,10 @@ class ArtistRecommendationPipeline:
             if track_id:
                 track_data.append((track_id, None))
 
-        audio_features_map = await self.audio_features_handler.get_batch_complete_audio_features(
-            track_data
+        audio_features_map = (
+            await self.audio_features_handler.get_batch_complete_audio_features(
+                track_data
+            )
         )
 
         recommendations = []
@@ -445,10 +489,7 @@ class ArtistRecommendationPipeline:
         for track in artist_tracks:
             try:
                 recommendation = await create_recommendation_fn(
-                    track,
-                    target_features,
-                    audio_features_map,
-                    calculate_score_fn
+                    track, target_features, audio_features_map, calculate_score_fn
                 )
                 if recommendation:
                     recommendations.append(recommendation)
@@ -466,10 +507,7 @@ class ArtistRecommendationPipeline:
         return recommendations
 
     def _handle_errors(
-        self,
-        successful_artists: int,
-        failed_artists: int,
-        total_artists: int
+        self, successful_artists: int, failed_artists: int, total_artists: int
     ) -> None:
         """Handle error cases for artist discovery.
 

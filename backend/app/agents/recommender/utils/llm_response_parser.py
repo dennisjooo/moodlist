@@ -15,7 +15,7 @@ class LLMResponseParser:
     @staticmethod
     def extract_json_from_response(
         response_content: Union[str, AIMessage],
-        fallback: Optional[Dict[str, Any]] = None
+        fallback: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Extract JSON from LLM response content with robust error handling.
 
@@ -30,20 +30,22 @@ class LLMResponseParser:
             # Extract content from response object if needed
             content = (
                 response_content.content
-                if hasattr(response_content, 'content')
+                if hasattr(response_content, "content")
                 else str(response_content)
             )
 
             # Find JSON boundaries
-            json_start = content.find('{')
-            json_end = content.rfind('}') + 1
+            json_start = content.find("{")
+            json_end = content.rfind("}") + 1
 
             if json_start >= 0 and json_end > json_start:
                 json_str = content[json_start:json_end]
 
                 # Parse JSON
                 result = json.loads(json_str)
-                logger.debug(f"Successfully parsed JSON from LLM response: {list(result.keys())}")
+                logger.debug(
+                    f"Successfully parsed JSON from LLM response: {list(result.keys())}"
+                )
                 return result
             else:
                 logger.warning("No JSON object found in LLM response")
@@ -58,8 +60,7 @@ class LLMResponseParser:
 
     @staticmethod
     def safe_json_parse(
-        json_str: str,
-        fallback: Optional[Dict[str, Any]] = None
+        json_str: str, fallback: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Safely parse a JSON string with error handling.
 
@@ -82,8 +83,7 @@ class LLMResponseParser:
 
     @staticmethod
     def extract_json_array_from_response(
-        response_content: Union[str, AIMessage],
-        fallback: Optional[list] = None
+        response_content: Union[str, AIMessage], fallback: Optional[list] = None
     ) -> list:
         """Extract JSON array from LLM response content.
 
@@ -98,13 +98,13 @@ class LLMResponseParser:
             # Extract content from response object if needed
             content = (
                 response_content.content
-                if hasattr(response_content, 'content')
+                if hasattr(response_content, "content")
                 else str(response_content)
             )
 
             # Find JSON array boundaries
-            array_start = content.find('[')
-            array_end = content.rfind(']') + 1
+            array_start = content.find("[")
+            array_end = content.rfind("]") + 1
 
             if array_start >= 0 and array_end > array_start:
                 json_str = content[array_start:array_end]
@@ -112,7 +112,9 @@ class LLMResponseParser:
                 # Parse JSON array
                 result = json.loads(json_str)
                 if isinstance(result, list):
-                    logger.debug(f"Successfully parsed JSON array from LLM response: {len(result)} items")
+                    logger.debug(
+                        f"Successfully parsed JSON array from LLM response: {len(result)} items"
+                    )
                     return result
                 else:
                     logger.warning("Parsed JSON is not an array")

@@ -22,7 +22,9 @@ class SearchSpotifyArtistsInput(BaseModel):
 
     access_token: str = Field(..., description="Spotify access token")
     query: str = Field(..., description="Search query (artist name, genre, etc.)")
-    limit: int = Field(default=20, ge=1, le=50, description="Number of results to return")
+    limit: int = Field(
+        default=20, ge=1, le=50, description="Number of results to return"
+    )
 
 
 class SearchSpotifyArtistsTool(RateLimitedTool):
@@ -41,19 +43,14 @@ class SearchSpotifyArtistsTool(RateLimitedTool):
             name="search_spotify_artists",
             description="Search artists on Spotify API",
             base_url="https://api.spotify.com/v1",
-            rate_limit_per_minute=60
+            rate_limit_per_minute=60,
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:
         """Get the input schema for this tool."""
         return SearchSpotifyArtistsInput
 
-    async def _run(
-        self,
-        access_token: str,
-        query: str,
-        limit: int = 20
-    ) -> ToolResult:
+    async def _run(self, access_token: str, query: str, limit: int = 20) -> ToolResult:
         """Search for artists on Spotify.
 
         Args:
@@ -71,21 +68,17 @@ class SearchSpotifyArtistsTool(RateLimitedTool):
             response_data = await self._make_request(
                 method="GET",
                 endpoint="/search",
-                params={
-                    "q": query,
-                    "type": "artist",
-                    "limit": limit
-                },
+                params={"q": query, "type": "artist", "limit": limit},
                 headers={"Authorization": f"Bearer {access_token}"},
                 use_cache=True,
-                cache_ttl=900  # 15 minutes - artist data doesn't change frequently
+                cache_ttl=900,  # 15 minutes - artist data doesn't change frequently
             )
 
             # Validate response structure
             if not self._validate_response(response_data, ["artists"]):
                 return ToolResult.error_result(
                     "Invalid response structure from Spotify API",
-                    api_response=response_data
+                    api_response=response_data,
                 )
 
             # Parse artists from response
@@ -102,36 +95,40 @@ class SearchSpotifyArtistsTool(RateLimitedTool):
                         "genres": artist_data.get("genres", []),
                         "popularity": artist_data.get("popularity", 50),
                         "followers": artist_data.get("followers", {}).get("total", 0),
-                        "images": artist_data.get("images", [])
+                        "images": artist_data.get("images", []),
                     }
                     artists.append(artist_info)
 
                 except Exception as e:
-                    logger.warning(f"Failed to parse artist data: {artist_data}, error: {e}")
+                    logger.warning(
+                        f"Failed to parse artist data: {artist_data}, error: {e}"
+                    )
                     continue
 
-            logger.info(f"Successfully found {len(artists)} artists for query '{query}'")
+            logger.info(
+                f"Successfully found {len(artists)} artists for query '{query}'"
+            )
 
             return ToolResult.success_result(
                 data={
                     "artists": artists,
                     "total_count": len(artists),
                     "query": query,
-                    "total_available": artists_data.get("total", len(artists))
+                    "total_available": artists_data.get("total", len(artists)),
                 },
                 metadata={
                     "source": "spotify",
                     "api_endpoint": "/search",
                     "search_type": "artist",
-                    "result_count": len(artists)
-                }
+                    "result_count": len(artists),
+                },
             )
 
         except Exception as e:
             logger.error(f"Error searching Spotify artists: {str(e)}", exc_info=True)
             return ToolResult.error_result(
                 f"Failed to search Spotify artists: {str(e)}",
-                error_type=type(e).__name__
+                error_type=type(e).__name__,
             )
 
 
@@ -140,20 +137,28 @@ class GetArtistTopTracksInput(BaseModel):
 
     access_token: str = Field(..., description="Spotify access token")
     artist_id: str = Field(..., description="Spotify artist ID")
-    market: Optional[str] = Field(default=None, description="ISO 3166-1 alpha-2 country code (optional, defaults to global)")
+    market: Optional[str] = Field(
+        default=None,
+        description="ISO 3166-1 alpha-2 country code (optional, defaults to global)",
+    )
 
 
 class BatchGetArtistTopTracksInput(BaseModel):
     """Input schema for batching artist top tracks requests."""
 
     access_token: str = Field(..., description="Spotify access token")
-    artist_ids: List[str] = Field(..., min_items=1, max_items=20, description="Artist IDs to fetch top tracks for")
-    market: Optional[str] = Field(default=None, description="ISO 3166-1 alpha-2 country code (optional, defaults to global)")
+    artist_ids: List[str] = Field(
+        ..., min_items=1, max_items=20, description="Artist IDs to fetch top tracks for"
+    )
+    market: Optional[str] = Field(
+        default=None,
+        description="ISO 3166-1 alpha-2 country code (optional, defaults to global)",
+    )
 
 
 class BatchGetArtistTopTracksTool(RateLimitedTool):
     """Tool for parallel fetching of multiple artists' top tracks.
-    
+
     Note: Spotify doesn't have a batch endpoint, so this tool makes parallel
     individual requests with concurrency control to respect rate limits.
     """
@@ -191,29 +196,31 @@ class BatchGetArtistTopTracksTool(RateLimitedTool):
             return ToolResult.error_result("No artist IDs provided", skip_retry=True)
 
         unique_artist_ids = list(dict.fromkeys(artist_ids))
-        
+
         # Use semaphore to control concurrency (increased from 2 to 4 concurrent requests)
         # Works with global rate limiter to prevent overload
         semaphore = asyncio.Semaphore(4)
-        
-        async def fetch_artist_tracks(artist_id: str) -> Tuple[str, List[Dict[str, Any]]]:
+
+        async def fetch_artist_tracks(
+            artist_id: str,
+        ) -> Tuple[str, List[Dict[str, Any]]]:
             """Fetch tracks for a single artist."""
             async with semaphore:
                 try:
                     # Use global rate limiter to prevent overwhelming Spotify API
                     await wait_for_artist_top_tracks_rate_limit()
-                    
+
                     # Build params using utility
                     params = build_market_params(market=market)
-                    
+
                     # Make individual API request
                     response_data = await self._make_request(
                         method="GET",
                         endpoint=f"/artists/{artist_id}/top-tracks",
                         params=params,
-                        headers={"Authorization": f"Bearer {access_token}"}
+                        headers={"Authorization": f"Bearer {access_token}"},
                     )
-                    
+
                     # Parse tracks
                     tracks = []
                     for track_data in response_data.get("tracks", []):
@@ -221,28 +228,32 @@ class BatchGetArtistTopTracksTool(RateLimitedTool):
                             track_info = parse_track_data(track_data)
                             tracks.append(track_info)
                         except Exception as e:
-                            logger.warning(f"Failed to parse track data for artist {artist_id}: {e}")
+                            logger.warning(
+                                f"Failed to parse track data for artist {artist_id}: {e}"
+                            )
                             continue
-                    
+
                     return artist_id, tracks
                 except Exception as e:
-                    logger.warning(f"Failed to fetch top tracks for artist {artist_id}: {e}")
+                    logger.warning(
+                        f"Failed to fetch top tracks for artist {artist_id}: {e}"
+                    )
                     return artist_id, []
-        
+
         try:
             # Fetch all artists in parallel
             tasks = [fetch_artist_tracks(artist_id) for artist_id in unique_artist_ids]
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            
+
             artist_tracks: Dict[str, List[Dict[str, Any]]] = {}
             failed_artists: List[str] = []
-            
+
             for result in results:
                 if isinstance(result, Exception):
                     # If gather returned an exception, we can't identify which artist failed
                     logger.error(f"Unexpected error in batch fetch: {result}")
                     continue
-                
+
                 artist_id, tracks = result
                 if tracks:
                     artist_tracks[artist_id] = tracks
@@ -271,7 +282,9 @@ class BatchGetArtistTopTracksTool(RateLimitedTool):
             )
 
         except Exception as e:
-            logger.error(f"Error during batch artist top tracks fetch: {e}", exc_info=True)
+            logger.error(
+                f"Error during batch artist top tracks fetch: {e}", exc_info=True
+            )
             return ToolResult.error_result(
                 f"Failed to batch fetch artist top tracks: {e}",
                 error_type=type(e).__name__,
@@ -318,10 +331,7 @@ class GetArtistTopTracksTool(RateLimitedTool):
         return GetArtistTopTracksInput
 
     async def _run(
-        self,
-        access_token: str,
-        artist_id: str,
-        market: Optional[str] = None
+        self, access_token: str, artist_id: str, market: Optional[str] = None
     ) -> ToolResult:
         """Get an artist's top tracks from Spotify.
 
@@ -339,39 +349,40 @@ class GetArtistTopTracksTool(RateLimitedTool):
             return result
 
         # Strategy 2: If failed, fallback to search by artist name
-        logger.warning(f"Failed to get top tracks for artist {artist_id}, trying search fallback")
+        logger.warning(
+            f"Failed to get top tracks for artist {artist_id}, trying search fallback"
+        )
         return await self._try_search_fallback(access_token, artist_id, market)
 
     async def _try_top_tracks(
-        self,
-        access_token: str,
-        artist_id: str,
-        market: Optional[str]
+        self, access_token: str, artist_id: str, market: Optional[str]
     ) -> ToolResult:
         """Try getting top tracks using the top-tracks endpoint (global if market is None)."""
         try:
             market_label = get_market_label(market)
-            logger.info(f"Getting top tracks for artist {artist_id} (market: {market_label})")
+            logger.info(
+                f"Getting top tracks for artist {artist_id} (market: {market_label})"
+            )
 
             # Use global rate limiter to prevent overwhelming Spotify API
             await wait_for_artist_top_tracks_rate_limit()
-            
+
             # Build params using utility
             params = build_market_params(market=market)
-            
+
             # Make API request
             response_data = await self._make_request(
                 method="GET",
                 endpoint=f"/artists/{artist_id}/top-tracks",
                 params=params,
-                headers={"Authorization": f"Bearer {access_token}"}
+                headers={"Authorization": f"Bearer {access_token}"},
             )
 
             # Validate response structure
             if not self._validate_response(response_data, ["tracks"]):
                 return ToolResult.error_result(
                     "Invalid response structure from Spotify API",
-                    api_response=response_data
+                    api_response=response_data,
                 )
 
             # Parse tracks
@@ -381,60 +392,65 @@ class GetArtistTopTracksTool(RateLimitedTool):
                     track_info = parse_track_data(track_data)
                     tracks.append(track_info)
                 except Exception as e:
-                    logger.warning(f"Failed to parse track data: {track_data}, error: {e}")
+                    logger.warning(
+                        f"Failed to parse track data: {track_data}, error: {e}"
+                    )
                     continue
 
             # Return success if we got tracks
             if tracks:
-                logger.info(f"Successfully retrieved {len(tracks)} top tracks for artist {artist_id} (market: {market_label})")
+                logger.info(
+                    f"Successfully retrieved {len(tracks)} top tracks for artist {artist_id} (market: {market_label})"
+                )
                 return ToolResult.success_result(
                     data={
                         "tracks": tracks,
                         "total_count": len(tracks),
-                        "artist_id": artist_id
+                        "artist_id": artist_id,
                     },
                     metadata={
                         "source": "spotify",
                         "api_endpoint": f"/artists/{artist_id}/top-tracks",
                         "market": market,
-                        "strategy": "top_tracks"
-                    }
+                        "strategy": "top_tracks",
+                    },
                 )
             else:
-                logger.warning(f"No tracks found for artist {artist_id} (market: {market_label})")
+                logger.warning(
+                    f"No tracks found for artist {artist_id} (market: {market_label})"
+                )
                 return ToolResult.error_result(
                     f"No tracks available for artist {artist_id}",
-                    api_response=response_data
+                    api_response=response_data,
                 )
 
         except Exception as e:
             logger.error(f"Error getting artist top tracks: {str(e)}", exc_info=True)
             return ToolResult.error_result(
                 f"Failed to get artist top tracks: {str(e)}",
-                error_type=type(e).__name__
+                error_type=type(e).__name__,
             )
 
     async def _try_search_fallback(
-        self,
-        access_token: str,
-        artist_id: str,
-        market: Optional[str]
+        self, access_token: str, artist_id: str, market: Optional[str]
     ) -> ToolResult:
         """Fallback strategy: get artist name and search for tracks."""
         try:
             # First, get the artist name
-            logger.info(f"Getting artist name for ID {artist_id} to perform search fallback")
+            logger.info(
+                f"Getting artist name for ID {artist_id} to perform search fallback"
+            )
 
             artist_response = await self._make_request(
                 method="GET",
                 endpoint=f"/artists/{artist_id}",
-                headers={"Authorization": f"Bearer {access_token}"}
+                headers={"Authorization": f"Bearer {access_token}"},
             )
 
             if not self._validate_response(artist_response, []):
                 return ToolResult.error_result(
                     "Failed to get artist information for search fallback",
-                    api_response=artist_response
+                    api_response=artist_response,
                 )
 
             artist_name = artist_response.get("name")
@@ -453,17 +469,19 @@ class GetArtistTopTracksTool(RateLimitedTool):
                 artist_id=artist_id,
                 artist_name=artist_name,
                 market=market,
-                limit=20
+                limit=20,
             )
 
             if result and result.get("tracks"):
                 tracks = result["tracks"]
-                logger.info(f"Successfully retrieved {len(tracks)} tracks for artist {artist_name} via search fallback")
+                logger.info(
+                    f"Successfully retrieved {len(tracks)} tracks for artist {artist_name} via search fallback"
+                )
                 return ToolResult.success_result(
                     data={
                         "tracks": tracks,
                         "total_count": len(tracks),
-                        "artist_id": artist_id
+                        "artist_id": artist_id,
                     },
                     metadata={
                         "source": "spotify",
@@ -471,21 +489,25 @@ class GetArtistTopTracksTool(RateLimitedTool):
                         "market": market,
                         "artist_name": artist_name,
                         "strategy": "search_fallback",
-                        "search_query": result.get("search_query")
-                    }
+                        "search_query": result.get("search_query"),
+                    },
                 )
             else:
-                logger.warning(f"No tracks found for artist {artist_name} even with search fallback")
+                logger.warning(
+                    f"No tracks found for artist {artist_name} even with search fallback"
+                )
                 return ToolResult.error_result(
                     f"No tracks found for artist {artist_name} using any method",
-                    error_type="NoTracksFound"
+                    error_type="NoTracksFound",
                 )
 
         except Exception as e:
-            logger.error(f"Error in search fallback for artist {artist_id}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error in search fallback for artist {artist_id}: {str(e)}",
+                exc_info=True,
+            )
             return ToolResult.error_result(
-                f"Failed search fallback: {str(e)}",
-                error_type=type(e).__name__
+                f"Failed search fallback: {str(e)}", error_type=type(e).__name__
             )
 
     async def _make_album_request(
@@ -519,7 +541,7 @@ class GetArtistTopTracksTool(RateLimitedTool):
         min_popularity: int = 20,
         target_count: int = 10,
         top_tracks_ratio: float = 0.4,
-        prefetched_top_tracks: Optional[List[Dict[str, Any]]] = None
+        prefetched_top_tracks: Optional[List[Dict[str, Any]]] = None,
     ) -> List[Dict[str, Any]]:
         """Get diverse tracks using hybrid strategy: top tracks + album deep cuts.
 
@@ -560,13 +582,18 @@ class GetArtistTopTracksTool(RateLimitedTool):
         # that can cause rate limits when processing multiple artists in parallel
         top_tracks = prefetched_top_tracks if prefetched_top_tracks is not None else []
         if top_tracks:
-            logger.debug(f"Using {len(top_tracks)} prefetched top tracks for artist {artist_id}")
+            logger.debug(
+                f"Using {len(top_tracks)} prefetched top tracks for artist {artist_id}"
+            )
         else:
-            logger.debug(f"No prefetched top tracks for artist {artist_id}, will rely on album tracks")
+            logger.debug(
+                f"No prefetched top tracks for artist {artist_id}, will rely on album tracks"
+            )
 
         if top_tracks:
             filtered_top_tracks = [
-                track for track in top_tracks
+                track
+                for track in top_tracks
                 if min_popularity <= track.get("popularity", 50) <= max_popularity
             ]
             logger.info(
@@ -589,11 +616,13 @@ class GetArtistTopTracksTool(RateLimitedTool):
                     access_token=access_token,
                     artist_id=artist_id,
                     market=market,
-                    limit=5  # Reduced from 10 to 5 albums to reduce API calls and avoid rate limits
+                    limit=5,  # Reduced from 10 to 5 albums to reduce API calls and avoid rate limits
                 )
 
                 if albums:
-                    logger.info(f"Found {len(albums)} albums, sampling tracks for diversity")
+                    logger.info(
+                        f"Found {len(albums)} albums, sampling tracks for diversity"
+                    )
                     # Sample tracks from albums
                     album_tracks = await sample_album_tracks(
                         make_request=self._make_album_request,
@@ -604,7 +633,7 @@ class GetArtistTopTracksTool(RateLimitedTool):
                         max_tracks=album_tracks_count,
                         track_ids_seen=track_ids_seen,
                         min_popularity=min_popularity,
-                        max_popularity=max_popularity
+                        max_popularity=max_popularity,
                     )
                     all_tracks.extend(album_tracks)
 
@@ -635,7 +664,9 @@ class GetSeveralSpotifyArtistsInput(BaseModel):
     """Input schema for getting multiple artists from Spotify."""
 
     access_token: str = Field(..., description="Spotify access token")
-    artist_ids: List[str] = Field(..., min_items=1, max_items=50, description="List of artist IDs")
+    artist_ids: List[str] = Field(
+        ..., min_items=1, max_items=50, description="List of artist IDs"
+    )
 
 
 class GetSeveralSpotifyArtistsTool(RateLimitedTool):
@@ -654,18 +685,14 @@ class GetSeveralSpotifyArtistsTool(RateLimitedTool):
             name="get_several_spotify_artists",
             description="Get multiple artists from Spotify API",
             base_url="https://api.spotify.com/v1",
-            rate_limit_per_minute=60
+            rate_limit_per_minute=60,
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:
         """Get the input schema for this tool."""
         return GetSeveralSpotifyArtistsInput
 
-    async def _run(
-        self,
-        access_token: str,
-        artist_ids: List[str]
-    ) -> ToolResult:
+    async def _run(self, access_token: str, artist_ids: List[str]) -> ToolResult:
         """Get multiple artists from Spotify.
 
         Args:
@@ -683,14 +710,14 @@ class GetSeveralSpotifyArtistsTool(RateLimitedTool):
                 method="GET",
                 endpoint="/artists",
                 params={"ids": ",".join(artist_ids)},
-                headers={"Authorization": f"Bearer {access_token}"}
+                headers={"Authorization": f"Bearer {access_token}"},
             )
 
             # Validate response structure
             if not self._validate_response(response_data, ["artists"]):
                 return ToolResult.error_result(
                     "Invalid response structure from Spotify API",
-                    api_response=response_data
+                    api_response=response_data,
                 )
 
             # Parse artists
@@ -707,12 +734,14 @@ class GetSeveralSpotifyArtistsTool(RateLimitedTool):
                         "genres": artist_data.get("genres", []),
                         "popularity": artist_data.get("popularity", 50),
                         "followers": artist_data.get("followers", {}).get("total", 0),
-                        "images": artist_data.get("images", [])
+                        "images": artist_data.get("images", []),
                     }
                     artists.append(artist_info)
 
                 except Exception as e:
-                    logger.warning(f"Failed to parse artist data: {artist_data}, error: {e}")
+                    logger.warning(
+                        f"Failed to parse artist data: {artist_data}, error: {e}"
+                    )
                     continue
 
             logger.info(f"Successfully retrieved {len(artists)} artists from Spotify")
@@ -721,17 +750,16 @@ class GetSeveralSpotifyArtistsTool(RateLimitedTool):
                 data={
                     "artists": artists,
                     "total_count": len(artists),
-                    "requested_count": len(artist_ids)
+                    "requested_count": len(artist_ids),
                 },
-                metadata={
-                    "source": "spotify",
-                    "api_endpoint": "/artists"
-                }
+                metadata={"source": "spotify", "api_endpoint": "/artists"},
             )
 
         except Exception as e:
-            logger.error(f"Error getting several Spotify artists: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error getting several Spotify artists: {str(e)}", exc_info=True
+            )
             return ToolResult.error_result(
                 f"Failed to get several Spotify artists: {str(e)}",
-                error_type=type(e).__name__
+                error_type=type(e).__name__,
             )

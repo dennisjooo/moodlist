@@ -20,7 +20,7 @@ class CohesionCalculator:
         self,
         recommendations: List[TrackRecommendation],
         target_features: Dict[str, Any],
-        feature_weights: Optional[Dict[str, float]] = None
+        feature_weights: Optional[Dict[str, float]] = None,
     ) -> Dict[str, Any]:
         """Calculate how cohesive the recommendations are relative to target mood.
 
@@ -57,7 +57,7 @@ class CohesionCalculator:
         return {
             "score": overall_cohesion,
             "outliers": outliers,
-            "track_scores": track_scores
+            "track_scores": track_scores,
         }
 
     def get_default_feature_weights(self) -> Dict[str, float]:
@@ -74,7 +74,7 @@ class CohesionCalculator:
             "loudness": 0.3,
             "liveness": 0.2,
             "key": 0.2,
-            "popularity": 0.1
+            "popularity": 0.1,
         }
 
     def get_tolerance_thresholds(self) -> Dict[str, float]:
@@ -89,22 +89,19 @@ class CohesionCalculator:
             "loudness": 5.0,
             "acousticness": 0.30,
             "liveness": 0.30,
-            "popularity": 25
+            "popularity": 25,
         }
 
     def get_critical_features(self, feature_weights: Dict[str, float]) -> List[str]:
         """Get list of critical features based on high weights."""
-        return [
-            feature for feature, weight in feature_weights.items()
-            if weight > 0.65
-        ]
+        return [feature for feature, weight in feature_weights.items() if weight > 0.65]
 
     def calculate_track_cohesion(
         self,
         track: TrackRecommendation,
         target_features: Dict[str, Any],
         feature_weights: Dict[str, float],
-        tolerance_thresholds: Dict[str, float]
+        tolerance_thresholds: Dict[str, float],
     ) -> float:
         """Calculate cohesion score for a single track.
 
@@ -124,14 +121,14 @@ class CohesionCalculator:
             target_features=target_features,
             feature_weights=feature_weights,
             source=track.source,
-            tolerance_mode="base"
+            tolerance_mode="base",
         )
 
     def detect_outliers(
         self,
         recommendations: List[TrackRecommendation],
         track_scores: Dict[str, float],
-        critical_features: List[str]
+        critical_features: List[str],
     ) -> tuple[List[str], List[float]]:
         """Detect outlier tracks based on cohesion scores and violations.
 
@@ -156,7 +153,7 @@ class CohesionCalculator:
                 # Include in cohesion scores with perfect score (don't penalize playlist)
                 cohesion_scores.append(1.0)
                 continue
-            
+
             track_cohesion = track_scores[rec.track_id]
             is_reccobeat = rec.source == "reccobeat"
 
@@ -202,46 +199,47 @@ class CohesionCalculator:
             return 0.0
 
     def extract_llm_outliers(
-        self,
-        specific_concerns: List[str],
-        recommendations: List[TrackRecommendation]
+        self, specific_concerns: List[str], recommendations: List[TrackRecommendation]
     ) -> List[str]:
         """Extract track IDs from LLM's specific concerns.
-        
+
         LLM provides concerns in format: "Track Name by Artist Name feels out of place because..."
         We need to match these to actual track IDs in recommendations.
-        
+
         Args:
             specific_concerns: List of LLM concern strings
             recommendations: List of current track recommendations
-            
+
         Returns:
             List of track IDs identified as outliers by LLM
         """
         if not specific_concerns:
             return []
-        
+
         outlier_track_ids = []
-        
+
         for concern in specific_concerns:
             # Extract track name from concern (format: "Track Name by Artist Name feels...")
             # Split on " by " to get track name
             if " by " not in concern:
                 continue
-            
+
             track_name_part = concern.split(" by ")[0].strip()
-            
+
             # Match against recommendations (case-insensitive, partial match for robustness)
             for rec in recommendations:
                 # CRITICAL: Skip protected tracks (user-mentioned anchors)
                 if rec.protected or rec.user_mentioned:
-                    if rec.track_name.lower() == track_name_part.lower() or track_name_part.lower() in rec.track_name.lower():
+                    if (
+                        rec.track_name.lower() == track_name_part.lower()
+                        or track_name_part.lower() in rec.track_name.lower()
+                    ):
                         logger.warning(
                             f"LLM tried to flag protected track as outlier: {rec.track_name} by {', '.join(rec.artists)} "
                             f"(user_mentioned={rec.user_mentioned}) - IGNORING LLM suggestion"
                         )
                     continue
-                
+
                 # Exact match (case-insensitive)
                 if rec.track_name.lower() == track_name_part.lower():
                     outlier_track_ids.append(rec.track_id)
@@ -258,5 +256,5 @@ class CohesionCalculator:
                         f"(matched '{track_name_part}' from concern)"
                     )
                     break
-        
+
         return outlier_track_ids

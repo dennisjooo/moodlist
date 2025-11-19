@@ -19,7 +19,9 @@ class SeedGuardrails:
 
     # Cache key prefix for denied combinations
     DENY_LIST_PREFIX = "seed_guardrails:denied:"
-    DENY_LIST_TTL = 3600 * 24  # 24 hours - give failed combinations a fresh chance daily
+    DENY_LIST_TTL = (
+        3600 * 24
+    )  # 24 hours - give failed combinations a fresh chance daily
 
     # Error patterns that indicate permanent failures vs retriable ones
     PERMANENT_ERROR_PATTERNS = [
@@ -28,14 +30,14 @@ class SeedGuardrails:
         "bad request",
         "too many negative seeds",
         "overlapping ids",
-        "empty or whitespace"
+        "empty or whitespace",
     ]
 
     @staticmethod
     def _make_combination_key(
         seeds: List[str],
         negative_seeds: Optional[List[str]] = None,
-        feature_params: Optional[Dict] = None
+        feature_params: Optional[Dict] = None,
     ) -> str:
         """Create a unique key for a seed combination.
 
@@ -59,7 +61,9 @@ class SeedGuardrails:
 
         # Include feature params if provided (simplified - only include if present)
         if feature_params:
-            feature_str = ",".join(f"{k}:{v}" for k, v in sorted(feature_params.items()) if v is not None)
+            feature_str = ",".join(
+                f"{k}:{v}" for k, v in sorted(feature_params.items()) if v is not None
+            )
             if feature_str:
                 key_parts.append("features:" + feature_str)
 
@@ -71,7 +75,7 @@ class SeedGuardrails:
         cls,
         seeds: List[str],
         negative_seeds: Optional[List[str]] = None,
-        feature_params: Optional[Dict] = None
+        feature_params: Optional[Dict] = None,
     ) -> Tuple[bool, Optional[str]]:
         """Check if a seed combination is on the deny list.
 
@@ -83,7 +87,9 @@ class SeedGuardrails:
         Returns:
             Tuple of (is_denied, reason)
         """
-        combination_key = cls._make_combination_key(seeds, negative_seeds, feature_params)
+        combination_key = cls._make_combination_key(
+            seeds, negative_seeds, feature_params
+        )
         cache_key = f"{cls.DENY_LIST_PREFIX}{combination_key}"
 
         try:
@@ -93,7 +99,7 @@ class SeedGuardrails:
                 logger.info(
                     f"Seed combination denied by guardrails: {reason}",
                     seed_count=len(seeds),
-                    negative_seed_count=len(negative_seeds) if negative_seeds else 0
+                    negative_seed_count=len(negative_seeds) if negative_seeds else 0,
                 )
                 return True, reason
         except Exception as e:
@@ -107,7 +113,7 @@ class SeedGuardrails:
         seeds: List[str],
         negative_seeds: Optional[List[str]] = None,
         feature_params: Optional[Dict] = None,
-        reason: str = "API failure"
+        reason: str = "API failure",
     ) -> None:
         """Add a failing seed combination to the deny list.
 
@@ -117,14 +123,16 @@ class SeedGuardrails:
             feature_params: Optional audio feature parameters
             reason: Reason for denial
         """
-        combination_key = cls._make_combination_key(seeds, negative_seeds, feature_params)
+        combination_key = cls._make_combination_key(
+            seeds, negative_seeds, feature_params
+        )
         cache_key = f"{cls.DENY_LIST_PREFIX}{combination_key}"
 
         denied_info = {
             "reason": reason,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "seed_count": len(seeds),
-            "negative_seed_count": len(negative_seeds) if negative_seeds else 0
+            "negative_seed_count": len(negative_seeds) if negative_seeds else 0,
         }
 
         try:
@@ -132,7 +140,7 @@ class SeedGuardrails:
             logger.info(
                 f"Added seed combination to deny list: {reason}",
                 seed_count=len(seeds),
-                negative_seed_count=len(negative_seeds) if negative_seeds else 0
+                negative_seed_count=len(negative_seeds) if negative_seeds else 0,
             )
         except Exception as e:
             logger.warning(f"Error adding to deny list: {e}")
@@ -155,7 +163,7 @@ class SeedGuardrails:
         cls,
         seeds: List[str],
         negative_seeds: Optional[List[str]] = None,
-        error_reason: Optional[str] = None
+        error_reason: Optional[str] = None,
     ) -> Optional[Dict]:
         """Suggest a fallback strategy for failed seed combinations.
 
@@ -176,7 +184,7 @@ class SeedGuardrails:
             "strategy": "unknown",
             "seeds": seeds.copy(),
             "negative_seeds": None,
-            "reason": ""
+            "reason": "",
         }
 
         error_lower = (error_reason or "").lower()
@@ -185,8 +193,12 @@ class SeedGuardrails:
         if negative_seeds and ("negative" in error_lower or "ratio" in error_lower):
             fallback["strategy"] = "drop_negative_seeds"
             fallback["negative_seeds"] = None
-            fallback["reason"] = "Dropped negative seeds due to ratio or compatibility issues"
-            logger.info(f"Suggesting fallback: drop negative seeds ({len(negative_seeds)} removed)")
+            fallback["reason"] = (
+                "Dropped negative seeds due to ratio or compatibility issues"
+            )
+            logger.info(
+                f"Suggesting fallback: drop negative seeds ({len(negative_seeds)} removed)"
+            )
             return fallback
 
         # Strategy 2: Reduce negative seeds to safe ratio (< 50% of positive seeds)
@@ -194,7 +206,9 @@ class SeedGuardrails:
             max_negative = max(1, len(seeds) // 2 - 1)  # Keep it well under 50%
             fallback["strategy"] = "reduce_negative_seeds"
             fallback["negative_seeds"] = negative_seeds[:max_negative]
-            fallback["reason"] = f"Reduced negative seeds from {len(negative_seeds)} to {max_negative}"
+            fallback["reason"] = (
+                f"Reduced negative seeds from {len(negative_seeds)} to {max_negative}"
+            )
             logger.info(f"Suggesting fallback: reduce negative seeds to {max_negative}")
             return fallback
 
@@ -223,7 +237,7 @@ class SeedGuardrails:
         cls,
         seeds: List[str],
         negative_seeds: Optional[List[str]] = None,
-        size: int = 20
+        size: int = 20,
     ) -> Tuple[bool, Optional[str], Optional[Dict]]:
         """Validate seed parameters and suggest auto-balancing if needed.
 
@@ -256,7 +270,11 @@ class SeedGuardrails:
         # Validate negative seeds if provided
         if negative_seeds:
             if any(not s or not s.strip() for s in negative_seeds):
-                return False, "Negative seeds contain empty or whitespace-only IDs", None
+                return (
+                    False,
+                    "Negative seeds contain empty or whitespace-only IDs",
+                    None,
+                )
 
             # Auto-balance: negative seeds should be < 50% of positive seeds
             if len(negative_seeds) >= len(seeds):
@@ -264,14 +282,18 @@ class SeedGuardrails:
                 suggested = {
                     "seeds": seeds,
                     "negative_seeds": negative_seeds[:max_negative],
-                    "size": size
+                    "size": size,
                 }
                 logger.info(
                     f"Auto-balancing: reduced negative seeds from {len(negative_seeds)} to {max_negative}",
                     original_ratio=f"{len(negative_seeds)}/{len(seeds)}",
-                    new_ratio=f"{max_negative}/{len(seeds)}"
+                    new_ratio=f"{max_negative}/{len(seeds)}",
                 )
-                return False, f"Auto-balanced: too many negative seeds ({len(negative_seeds)} >= {len(seeds)})", suggested
+                return (
+                    False,
+                    f"Auto-balanced: too many negative seeds ({len(negative_seeds)} >= {len(seeds)})",
+                    suggested,
+                )
 
             # Check for overlap
             seed_set = set(seeds)
@@ -282,24 +304,30 @@ class SeedGuardrails:
                 fixed_negatives = [ns for ns in negative_seeds if ns not in seed_set]
                 if not fixed_negatives:
                     # All negatives overlapped, drop them entirely
-                    suggested = {
-                        "seeds": seeds,
-                        "negative_seeds": None,
-                        "size": size
-                    }
-                    logger.info("Auto-balancing: removed all negative seeds (all overlapped with seeds)")
-                    return False, "Auto-balanced: removed overlapping negative seeds", suggested
+                    suggested = {"seeds": seeds, "negative_seeds": None, "size": size}
+                    logger.info(
+                        "Auto-balancing: removed all negative seeds (all overlapped with seeds)"
+                    )
+                    return (
+                        False,
+                        "Auto-balanced: removed overlapping negative seeds",
+                        suggested,
+                    )
                 else:
                     suggested = {
                         "seeds": seeds,
                         "negative_seeds": fixed_negatives,
-                        "size": size
+                        "size": size,
                     }
                     logger.info(
                         f"Auto-balancing: removed {len(overlap)} overlapping negative seeds",
-                        removed=list(overlap)[:3]
+                        removed=list(overlap)[:3],
                     )
-                    return False, f"Auto-balanced: removed {len(overlap)} overlapping IDs", suggested
+                    return (
+                        False,
+                        f"Auto-balanced: removed {len(overlap)} overlapping IDs",
+                        suggested,
+                    )
 
         # All validations passed
         return True, None, None

@@ -12,9 +12,7 @@ class AnchorTrackHandler:
     """Handles inclusion of anchor tracks in recommendations."""
 
     def include_anchor_tracks(
-        self,
-        state: AgentState,
-        all_recommendations: List[Dict[str, Any]]
+        self, state: AgentState, all_recommendations: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Include anchor tracks in recommendations with high confidence.
 
@@ -47,7 +45,9 @@ class AnchorTrackHandler:
 
         return all_recommendations
 
-    def _create_anchor_recommendation(self, anchor_track: Dict[str, Any]) -> TrackRecommendation:
+    def _create_anchor_recommendation(
+        self, anchor_track: Dict[str, Any]
+    ) -> TrackRecommendation:
         """Create a TrackRecommendation from an anchor track.
 
         Args:
@@ -86,7 +86,7 @@ class AnchorTrackHandler:
             source="anchor_track",
             user_mentioned=user_mentioned,
             anchor_type=anchor_type,
-            protected=protected
+            protected=protected,
         )
 
         # Verify metadata was preserved
@@ -97,4 +97,3 @@ class AnchorTrackHandler:
         )
 
         return rec
-

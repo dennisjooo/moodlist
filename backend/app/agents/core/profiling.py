@@ -30,7 +30,7 @@ class PerformanceProfiler:
         cls,
         metric_name: str,
         duration_seconds: float,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Record a performance metric.
 
@@ -42,7 +42,7 @@ class PerformanceProfiler:
         record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "duration_seconds": duration_seconds,
-            "metadata": metadata or {}
+            "metadata": metadata or {},
         }
 
         # Store in memory
@@ -50,7 +50,9 @@ class PerformanceProfiler:
 
         # Trim to max samples
         if len(cls._metrics[metric_name]) > cls._max_samples_per_metric:
-            cls._metrics[metric_name] = cls._metrics[metric_name][-cls._max_samples_per_metric:]
+            cls._metrics[metric_name] = cls._metrics[metric_name][
+                -cls._max_samples_per_metric :
+            ]
 
         # Also cache for persistence (1 hour TTL)
         cache_key = f"profiling:{metric_name}:latest"
@@ -60,13 +62,15 @@ class PerformanceProfiler:
             logger.warning(f"Failed to cache profiling metric: {e}")
 
         # Log if duration exceeds threshold
-        threshold = metadata.get("expected_duration_seconds", 10.0) if metadata else 10.0
+        threshold = (
+            metadata.get("expected_duration_seconds", 10.0) if metadata else 10.0
+        )
         if duration_seconds > threshold:
             logger.warning(
                 f"Performance threshold exceeded: {metric_name}",
                 duration_seconds=f"{duration_seconds:.2f}",
                 threshold_seconds=threshold,
-                metadata=metadata
+                metadata=metadata,
             )
 
     @classmethod
@@ -99,7 +103,7 @@ class PerformanceProfiler:
                 "count": 0,
                 "min": None,
                 "max": None,
-                "avg": None
+                "avg": None,
             }
 
         durations = [s["duration_seconds"] for s in samples]
@@ -109,7 +113,7 @@ class PerformanceProfiler:
             "min": min(durations),
             "max": max(durations),
             "avg": sum(durations) / len(durations),
-            "recent_samples": samples[-5:]  # Last 5 samples
+            "recent_samples": samples[-5:],  # Last 5 samples
         }
 
     @classmethod
@@ -151,7 +155,7 @@ def profile(metric_name: str, metadata: Optional[Dict[str, Any]] = None):
             logger.info(
                 f"Profile: {metric_name}",
                 duration_seconds=f"{duration:.2f}",
-                metadata=metadata
+                metadata=metadata,
             )
 
 
@@ -188,22 +192,27 @@ def profile_function(metric_name: Optional[str] = None):
             # ... code
             pass
     """
+
     def decorator(func: Callable):
         nonlocal metric_name
         if metric_name is None:
             metric_name = f"{func.__module__}.{func.__name__}"
 
         if asyncio.iscoroutinefunction(func):
+
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
                 async with profile_async(metric_name, {"function": func.__name__}):
                     return await func(*args, **kwargs)
+
             return async_wrapper
         else:
+
             @functools.wraps(func)
             def sync_wrapper(*args, **kwargs):
                 with profile(metric_name, {"function": func.__name__}):
                     return func(*args, **kwargs)
+
             return sync_wrapper
 
     return decorator

@@ -15,26 +15,39 @@ from tenacity import (
     wait_exponential,
     retry_if_exception_type,
     before_sleep_log,
-    wait_exponential_jitter
+    wait_exponential_jitter,
 )
 from sqlalchemy.exc import OperationalError, DBAPIError
-from openai import RateLimitError, APIConnectionError, APITimeoutError, InternalServerError
+from openai import (
+    RateLimitError,
+    APIConnectionError,
+    APITimeoutError,
+    InternalServerError,
+)
 
 from app.repositories.llm_invocation_repository import LLMInvocationRepository
 
 logger = structlog.get_logger(__name__)
 
 # Context variables for tracking current context
-current_user_id: ContextVar[Optional[int]] = ContextVar('current_user_id', default=None)
-current_playlist_id: ContextVar[Optional[int]] = ContextVar('current_playlist_id', default=None)
-current_session_id: ContextVar[Optional[str]] = ContextVar('current_session_id', default=None)
-current_agent_name: ContextVar[Optional[str]] = ContextVar('current_agent_name', default=None)
-current_operation: ContextVar[Optional[str]] = ContextVar('current_operation', default=None)
+current_user_id: ContextVar[Optional[int]] = ContextVar("current_user_id", default=None)
+current_playlist_id: ContextVar[Optional[int]] = ContextVar(
+    "current_playlist_id", default=None
+)
+current_session_id: ContextVar[Optional[str]] = ContextVar(
+    "current_session_id", default=None
+)
+current_agent_name: ContextVar[Optional[str]] = ContextVar(
+    "current_agent_name", default=None
+)
+current_operation: ContextVar[Optional[str]] = ContextVar(
+    "current_operation", default=None
+)
 
 
 class LoggingChatModel(BaseChatModel):
     """Wrapper around LangChain chat models that logs invocations to database.
-    
+
     This wrapper intercepts calls to the underlying LLM and logs:
     - Input prompts and messages
     - Output responses
@@ -42,34 +55,34 @@ class LoggingChatModel(BaseChatModel):
     - Latency
     - Cost estimates
     - Context (user, session, agent, operation)
-    
+
     Multi-worker Safety:
     - Uses ContextVars for async task isolation
     - Safe to share a single instance across multiple concurrent workflows
     - Each workflow's context (session_id, user_id, etc.) is isolated per async task
     - Creates a new database session for each logging operation to prevent
       concurrent access issues
-    
+
     Usage:
         llm = ChatOpenAI(model="gpt-4", temperature=0.7)
         logged_llm = LoggingChatModel(llm)
-        
+
         # Set context (automatically uses ContextVars for isolation)
         logged_llm.set_context(
             user_id=123,
             session_id="abc-123",
             agent_name="MoodAnalyzer"
         )
-        
+
         # Use normally
         response = logged_llm.invoke("Hello")
     """
-    
+
     wrapped_llm: BaseChatModel
     provider: Optional[str] = None
     enable_logging: bool = True
     log_full_response: bool = True
-    
+
     # Context for logging
     # Note: These are fallback values. Primary context is stored in ContextVars
     # for async task isolation (multi-worker safety)
@@ -86,10 +99,10 @@ class LoggingChatModel(BaseChatModel):
         provider: Optional[str] = None,
         enable_logging: bool = True,
         log_full_response: bool = True,
-        **kwargs
+        **kwargs,
     ):
         """Initialize the logging wrapper.
-        
+
         Args:
             wrapped_llm: The underlying LangChain chat model to wrap
             provider: LLM provider name (e.g., "openai", "anthropic", "openrouter")
@@ -109,13 +122,13 @@ class LoggingChatModel(BaseChatModel):
         session_id: Optional[str] = None,
         agent_name: Optional[str] = None,
         operation: Optional[str] = None,
-        context_metadata: Optional[Dict[str, Any]] = None
+        context_metadata: Optional[Dict[str, Any]] = None,
     ):
         """Set context for logging using ContextVars (thread-safe for async).
-        
+
         ContextVars are isolated per asyncio task, making this safe for
         concurrent workflows in multi-worker setups.
-        
+
         Args:
             user_id: User ID
             playlist_id: Playlist ID
@@ -145,48 +158,44 @@ class LoggingChatModel(BaseChatModel):
     def _infer_provider(self, llm: BaseChatModel) -> str:
         """Infer the provider from the LLM class name."""
         class_name = llm.__class__.__name__.lower()
-        if 'openai' in class_name:
-            return 'openai'
-        elif 'anthropic' in class_name:
-            return 'anthropic'
-        elif 'google' in class_name or 'gemini' in class_name:
-            return 'google'
-        elif 'cohere' in class_name:
-            return 'cohere'
+        if "openai" in class_name:
+            return "openai"
+        elif "anthropic" in class_name:
+            return "anthropic"
+        elif "google" in class_name or "gemini" in class_name:
+            return "google"
+        elif "cohere" in class_name:
+            return "cohere"
         else:
-            return 'unknown'
+            return "unknown"
 
     def _extract_model_config(self) -> Dict[str, Any]:
         """Extract model configuration from the wrapped LLM."""
         config = {}
-        
+
         # Try to get common attributes
-        if hasattr(self.wrapped_llm, 'model_name'):
-            config['model_name'] = self.wrapped_llm.model_name
-        elif hasattr(self.wrapped_llm, 'model'):
-            config['model_name'] = self.wrapped_llm.model
+        if hasattr(self.wrapped_llm, "model_name"):
+            config["model_name"] = self.wrapped_llm.model_name
+        elif hasattr(self.wrapped_llm, "model"):
+            config["model_name"] = self.wrapped_llm.model
         else:
-            config['model_name'] = 'unknown'
-            
-        if hasattr(self.wrapped_llm, 'temperature'):
-            config['temperature'] = self.wrapped_llm.temperature
-            
-        if hasattr(self.wrapped_llm, 'max_tokens'):
-            config['max_tokens'] = self.wrapped_llm.max_tokens
-            
+            config["model_name"] = "unknown"
+
+        if hasattr(self.wrapped_llm, "temperature"):
+            config["temperature"] = self.wrapped_llm.temperature
+
+        if hasattr(self.wrapped_llm, "max_tokens"):
+            config["max_tokens"] = self.wrapped_llm.max_tokens
+
         return config
 
     def _messages_to_dict(self, messages: List[BaseMessage]) -> List[Dict[str, Any]]:
         """Convert messages to dictionary format for logging."""
-        return [
-            {
-                'role': msg.type,
-                'content': msg.content
-            }
-            for msg in messages
-        ]
+        return [{"role": msg.type, "content": msg.content} for msg in messages]
 
-    def _convert_to_messages(self, input_messages: Union[List[BaseMessage], List[Dict[str, str]]]) -> List[BaseMessage]:
+    def _convert_to_messages(
+        self, input_messages: Union[List[BaseMessage], List[Dict[str, str]]]
+    ) -> List[BaseMessage]:
         """Convert input messages to BaseMessage objects."""
         if not input_messages:
             return []
@@ -200,14 +209,14 @@ class LoggingChatModel(BaseChatModel):
 
         messages = []
         for msg_dict in input_messages:
-            role = msg_dict.get('role', '').lower()
-            content = msg_dict.get('content', '')
+            role = msg_dict.get("role", "").lower()
+            content = msg_dict.get("content", "")
 
-            if role == 'user' or role == 'human':
+            if role == "user" or role == "human":
                 messages.append(HumanMessage(content=content))
-            elif role == 'assistant' or role == 'ai':
+            elif role == "assistant" or role == "ai":
                 messages.append(AIMessage(content=content))
-            elif role == 'system':
+            elif role == "system":
                 messages.append(SystemMessage(content=content))
             else:
                 # Default to HumanMessage for unknown roles
@@ -219,34 +228,37 @@ class LoggingChatModel(BaseChatModel):
         """Extract a string representation of the prompt from messages."""
         return "\n".join([f"{msg.type}: {msg.content}" for msg in messages])
 
-    def _calculate_cost(self, model_name: str, prompt_tokens: int, completion_tokens: int) -> float:
+    def _calculate_cost(
+        self, model_name: str, prompt_tokens: int, completion_tokens: int
+    ) -> float:
         """Estimate cost based on token usage.
-        
+
         This is a simplified cost calculation. Update with actual pricing.
         """
         # Simplified pricing (per 1K tokens)
         pricing = {
-            'gpt-4': {'prompt': 0.03, 'completion': 0.06},
-            'gpt-3.5-turbo': {'prompt': 0.0015, 'completion': 0.002},
-            'google/gemini-2.5-flash-lite': {'prompt': 0.0001, 'completion': 0.0002},
-            'claude-3-opus': {'prompt': 0.015, 'completion': 0.075},
-            'claude-3-sonnet': {'prompt': 0.003, 'completion': 0.015},
+            "gpt-4": {"prompt": 0.03, "completion": 0.06},
+            "gpt-3.5-turbo": {"prompt": 0.0015, "completion": 0.002},
+            "google/gemini-2.5-flash-lite": {"prompt": 0.0001, "completion": 0.0002},
+            "claude-3-opus": {"prompt": 0.015, "completion": 0.075},
+            "claude-3-sonnet": {"prompt": 0.003, "completion": 0.015},
         }
-        
+
         # Find matching pricing
         model_pricing = None
         for key, value in pricing.items():
             if key.lower() in model_name.lower():
                 model_pricing = value
                 break
-        
+
         if not model_pricing:
             # Default to very low estimate
-            model_pricing = {'prompt': 0.0001, 'completion': 0.0002}
-        
-        cost = (prompt_tokens / 1000.0 * model_pricing['prompt']) + \
-               (completion_tokens / 1000.0 * model_pricing['completion'])
-        
+            model_pricing = {"prompt": 0.0001, "completion": 0.0002}
+
+        cost = (prompt_tokens / 1000.0 * model_pricing["prompt"]) + (
+            completion_tokens / 1000.0 * model_pricing["completion"]
+        )
+
         return round(cost, 6)
 
     @retry(
@@ -254,14 +266,14 @@ class LoggingChatModel(BaseChatModel):
         wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
         retry=retry_if_exception_type((OperationalError, DBAPIError)),
         before_sleep=before_sleep_log(logger, "WARNING"),
-        reraise=True
+        reraise=True,
     )
     async def _log_invocation(
         self,
         messages: List[BaseMessage],
         response: ChatResult,
         latency_ms: int,
-        error: Optional[Exception] = None
+        error: Optional[Exception] = None,
     ):
         """Log the invocation to the database.
 
@@ -281,27 +293,25 @@ class LoggingChatModel(BaseChatModel):
         async with async_session_factory() as db:
             try:
                 config = self._extract_model_config()
-                
+
                 # Extract token usage
                 prompt_tokens = None
                 completion_tokens = None
                 total_tokens = None
-                
+
                 if response and response.llm_output:
-                    token_usage = response.llm_output.get('token_usage', {})
-                    prompt_tokens = token_usage.get('prompt_tokens')
-                    completion_tokens = token_usage.get('completion_tokens')
-                    total_tokens = token_usage.get('total_tokens')
-                
+                    token_usage = response.llm_output.get("token_usage", {})
+                    prompt_tokens = token_usage.get("prompt_tokens")
+                    completion_tokens = token_usage.get("completion_tokens")
+                    total_tokens = token_usage.get("total_tokens")
+
                 # Calculate cost
                 cost_usd = None
                 if prompt_tokens and completion_tokens:
                     cost_usd = self._calculate_cost(
-                        config.get('model_name', ''),
-                        prompt_tokens,
-                        completion_tokens
+                        config.get("model_name", ""), prompt_tokens, completion_tokens
                     )
-                
+
                 # Extract response text
                 response_text = None
                 response_metadata = None
@@ -310,16 +320,16 @@ class LoggingChatModel(BaseChatModel):
                         # response.generations[0] is already a ChatGeneration object
                         response_text = response.generations[0].text
                     response_metadata = response.llm_output
-                
+
                 # Prepare repository with new session
                 repo = LLMInvocationRepository(db)
-                
+
                 # Create log entry
                 await repo.create_llm_invocation_log(
-                    model_name=config.get('model_name', 'unknown'),
+                    model_name=config.get("model_name", "unknown"),
                     provider=self.provider,
-                    temperature=config.get('temperature'),
-                    max_tokens=config.get('max_tokens'),
+                    temperature=config.get("temperature"),
+                    max_tokens=config.get("max_tokens"),
                     prompt=self._extract_prompt_from_messages(messages),
                     messages=self._messages_to_dict(messages),
                     response=response_text,
@@ -337,22 +347,24 @@ class LoggingChatModel(BaseChatModel):
                     session_id=current_session_id.get() or self._session_id,
                     agent_name=current_agent_name.get() or self._agent_name,
                     operation=current_operation.get() or self._operation,
-                    context_metadata=self._context_metadata
+                    context_metadata=self._context_metadata,
                 )
-                
+
                 logger.debug(
                     "LLM invocation logged",
-                    model=config.get('model_name'),
+                    model=config.get("model_name"),
                     playlist_id=current_playlist_id.get() or self._playlist_id,
                     session_id=current_session_id.get() or self._session_id,
                     agent=self._agent_name,
                     tokens=total_tokens,
                     latency_ms=latency_ms,
-                    cost_usd=cost_usd
+                    cost_usd=cost_usd,
                 )
-                
+
             except Exception as e:
-                logger.error("Failed to log LLM invocation", error=str(e), exc_info=True)
+                logger.error(
+                    "Failed to log LLM invocation", error=str(e), exc_info=True
+                )
 
     @property
     def _llm_type(self) -> str:
@@ -375,7 +387,9 @@ class LoggingChatModel(BaseChatModel):
         result = None
 
         try:
-            result = self.wrapped_llm._generate(converted_messages, stop, run_manager, **kwargs)
+            result = self.wrapped_llm._generate(
+                converted_messages, stop, run_manager, **kwargs
+            )
             return result
         except Exception as e:
             error = e
@@ -388,15 +402,17 @@ class LoggingChatModel(BaseChatModel):
                 logger.debug(
                     "LLM invocation completed (sync)",
                     latency_ms=latency_ms,
-                    error=str(error) if error else None
+                    error=str(error) if error else None,
                 )
 
     @retry(
         stop=stop_after_attempt(5),
         wait=wait_exponential_jitter(initial=1, max=60),
-        retry=retry_if_exception_type((RateLimitError, APIConnectionError, APITimeoutError, InternalServerError)),
+        retry=retry_if_exception_type(
+            (RateLimitError, APIConnectionError, APITimeoutError, InternalServerError)
+        ),
         before_sleep=before_sleep_log(logger, "WARNING"),
-        reraise=True
+        reraise=True,
     )
     async def _agenerate(
         self,
@@ -418,7 +434,9 @@ class LoggingChatModel(BaseChatModel):
         result = None
 
         try:
-            result = await self.wrapped_llm._agenerate(converted_messages, stop, run_manager, **kwargs)
+            result = await self.wrapped_llm._agenerate(
+                converted_messages, stop, run_manager, **kwargs
+            )
             return result
         except Exception as e:
             error = e
@@ -437,7 +455,7 @@ class LoggingChatModel(BaseChatModel):
         start_time = time.time()
         error = None
         result = None
-        
+
         try:
             result = self.wrapped_llm.invoke(input, config, **kwargs)
             return result
@@ -450,15 +468,17 @@ class LoggingChatModel(BaseChatModel):
                 logger.debug(
                     "LLM invocation completed (sync invoke)",
                     latency_ms=latency_ms,
-                    error=str(error) if error else None
+                    error=str(error) if error else None,
                 )
 
     @retry(
         stop=stop_after_attempt(5),
         wait=wait_exponential_jitter(initial=1, max=60),
-        retry=retry_if_exception_type((RateLimitError, APIConnectionError, APITimeoutError, InternalServerError)),
+        retry=retry_if_exception_type(
+            (RateLimitError, APIConnectionError, APITimeoutError, InternalServerError)
+        ),
         before_sleep=before_sleep_log(logger, "WARNING"),
-        reraise=True
+        reraise=True,
     )
     async def ainvoke(
         self,
@@ -473,6 +493,7 @@ class LoggingChatModel(BaseChatModel):
         """
         if isinstance(input, str):
             from langchain_core.messages import HumanMessage
+
             logged_messages: List[BaseMessage] = [HumanMessage(content=input)]
         else:
             logged_messages = self._convert_to_messages(input)
@@ -493,7 +514,7 @@ class LoggingChatModel(BaseChatModel):
             if result:
                 chat_result = ChatResult(
                     generations=[ChatGeneration(message=result)],
-                    llm_output=getattr(result, 'response_metadata', {})
+                    llm_output=getattr(result, "response_metadata", {}),
                 )
             else:
                 chat_result = None

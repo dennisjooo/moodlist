@@ -7,7 +7,10 @@ from typing import Dict, List, Optional, Any
 from ..core.cache import cache_manager
 from .agent_tools import AgentTools
 from .spotify.tools.user_data import GetUserTopTracksTool, GetUserTopArtistsTool
-from .spotify.tools.playlist_management import CreatePlaylistTool, AddTracksToPlaylistTool
+from .spotify.tools.playlist_management import (
+    CreatePlaylistTool,
+    AddTracksToPlaylistTool,
+)
 from .spotify.tools.user_profile import GetUserProfileTool
 from .spotify.tools.artist_search import (
     SearchSpotifyArtistsTool,
@@ -45,7 +48,7 @@ class SpotifyService:
             GetSeveralSpotifyArtistsTool(),
             GetArtistTopTracksTool(),
             BatchGetArtistTopTracksTool(),
-            SearchSpotifyTracksTool()
+            SearchSpotifyTracksTool(),
         ]
 
         for tool in tools_to_register:
@@ -56,7 +59,7 @@ class SpotifyService:
         access_token: str,
         limit: int = 20,
         time_range: str = "medium_term",
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Get user's top tracks with caching.
 
@@ -74,9 +77,7 @@ class SpotifyService:
         # Try to get from cache if user_id is provided
         if user_id:
             cached_tracks = await cache_manager.get_user_top_tracks(
-                user_id=user_id,
-                time_range=time_range,
-                limit=limit
+                user_id=user_id, time_range=time_range, limit=limit
             )
             if cached_tracks is not None:
                 logger.info(f"Cache hit for user {user_id} top tracks")
@@ -88,9 +89,7 @@ class SpotifyService:
             raise ValueError("User top tracks tool not available")
 
         result = await tool._run(
-            access_token=access_token,
-            limit=limit,
-            time_range=time_range
+            access_token=access_token, limit=limit, time_range=time_range
         )
 
         if not result.success:
@@ -102,10 +101,7 @@ class SpotifyService:
         # Cache the result if user_id is provided
         if user_id and tracks:
             await cache_manager.set_user_top_tracks(
-                user_id=user_id,
-                tracks=tracks,
-                time_range=time_range,
-                limit=limit
+                user_id=user_id, tracks=tracks, time_range=time_range, limit=limit
             )
             logger.info(f"Cached top tracks for user {user_id}")
 
@@ -116,7 +112,7 @@ class SpotifyService:
         access_token: str,
         limit: int = 20,
         time_range: str = "medium_term",
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Get user's top artists with caching.
 
@@ -134,9 +130,7 @@ class SpotifyService:
         # Try to get from cache if user_id is provided
         if user_id:
             cached_artists = await cache_manager.get_user_top_artists(
-                user_id=user_id,
-                time_range=time_range,
-                limit=limit
+                user_id=user_id, time_range=time_range, limit=limit
             )
             if cached_artists is not None:
                 logger.info(f"Cache hit for user {user_id} top artists")
@@ -148,9 +142,7 @@ class SpotifyService:
             raise ValueError("User top artists tool not available")
 
         result = await tool._run(
-            access_token=access_token,
-            limit=limit,
-            time_range=time_range
+            access_token=access_token, limit=limit, time_range=time_range
         )
 
         if not result.success:
@@ -162,10 +154,7 @@ class SpotifyService:
         # Cache the result if user_id is provided
         if user_id and artists:
             await cache_manager.set_user_top_artists(
-                user_id=user_id,
-                artists=artists,
-                time_range=time_range,
-                limit=limit
+                user_id=user_id, artists=artists, time_range=time_range, limit=limit
             )
             logger.info(f"Cached top artists for user {user_id}")
 
@@ -193,11 +182,7 @@ class SpotifyService:
         return result.data
 
     async def create_playlist(
-        self,
-        access_token: str,
-        name: str,
-        description: str = "",
-        public: bool = True
+        self, access_token: str, name: str, description: str = "", public: bool = True
     ) -> Optional[Dict[str, Any]]:
         """Create a new playlist.
 
@@ -215,10 +200,7 @@ class SpotifyService:
             raise ValueError("Create playlist tool not available")
 
         result = await tool._run(
-            access_token=access_token,
-            name=name,
-            description=description,
-            public=public
+            access_token=access_token, name=name, description=description, public=public
         )
 
         if not result.success:
@@ -232,7 +214,7 @@ class SpotifyService:
         access_token: str,
         playlist_id: str,
         track_uris: List[str],
-        position: Optional[int] = None
+        position: Optional[int] = None,
     ) -> bool:
         """Add tracks to a playlist.
 
@@ -253,7 +235,7 @@ class SpotifyService:
             access_token=access_token,
             playlist_id=playlist_id,
             track_uris=track_uris,
-            position=position
+            position=position,
         )
 
         if not result.success:
@@ -263,10 +245,7 @@ class SpotifyService:
         return True
 
     async def search_spotify_artists(
-        self,
-        access_token: str,
-        query: str,
-        limit: int = 20
+        self, access_token: str, query: str, limit: int = 20
     ) -> List[Dict[str, Any]]:
         """Search for artists on Spotify.
 
@@ -282,11 +261,7 @@ class SpotifyService:
         if not tool:
             raise ValueError("Search Spotify artists tool not available")
 
-        result = await tool._run(
-            access_token=access_token,
-            query=query,
-            limit=limit
-        )
+        result = await tool._run(access_token=access_token, query=query, limit=limit)
 
         if not result.success:
             logger.error(f"Failed to search Spotify artists: {result.error}")
@@ -295,9 +270,7 @@ class SpotifyService:
         return result.data.get("artists", [])
 
     async def get_several_spotify_artists(
-        self,
-        access_token: str,
-        artist_ids: List[str]
+        self, access_token: str, artist_ids: List[str]
     ) -> List[Dict[str, Any]]:
         """Get multiple artists from Spotify.
 
@@ -312,10 +285,7 @@ class SpotifyService:
         if not tool:
             raise ValueError("Get several Spotify artists tool not available")
 
-        result = await tool._run(
-            access_token=access_token,
-            artist_ids=artist_ids
-        )
+        result = await tool._run(access_token=access_token, artist_ids=artist_ids)
 
         if not result.success:
             logger.error(f"Failed to get several Spotify artists: {result.error}")
@@ -324,10 +294,7 @@ class SpotifyService:
         return result.data.get("artists", [])
 
     async def get_artist_top_tracks(
-        self,
-        access_token: str,
-        artist_id: str,
-        market: Optional[str] = None
+        self, access_token: str, artist_id: str, market: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Get an artist's top tracks from Spotify.
 
@@ -340,11 +307,12 @@ class SpotifyService:
             List of top tracks for the artist
         """
         cached_tracks = await cache_manager.get_artist_top_tracks_cache(
-            artist_id=artist_id,
-            market=market
+            artist_id=artist_id, market=market
         )
         if cached_tracks is not None:
-            logger.debug(f"Cache hit for artist {artist_id} top tracks ({len(cached_tracks)} tracks)")
+            logger.debug(
+                f"Cache hit for artist {artist_id} top tracks ({len(cached_tracks)} tracks)"
+            )
             return cached_tracks
 
         tool = self.tools.get_tool("get_artist_top_tracks")
@@ -352,9 +320,7 @@ class SpotifyService:
             raise ValueError("Get artist top tracks tool not available")
 
         result = await tool._run(
-            access_token=access_token,
-            artist_id=artist_id,
-            market=market
+            access_token=access_token, artist_id=artist_id, market=market
         )
 
         if not result.success:
@@ -364,9 +330,7 @@ class SpotifyService:
         tracks = result.data.get("tracks", [])
         if tracks:
             await cache_manager.set_artist_top_tracks_cache(
-                artist_id=artist_id,
-                market=market,
-                tracks=tracks
+                artist_id=artist_id, market=market, tracks=tracks
             )
             logger.debug(f"Cached {len(tracks)} top tracks for artist {artist_id}")
 
@@ -419,7 +383,7 @@ class SpotifyService:
         if pending_ids:
             # Use semaphore to limit concurrent requests and respect rate limits
             fallback_semaphore = asyncio.Semaphore(max(1, max_concurrency))
-            
+
             async def fetch_fallback(artist_id: str):
                 async with fallback_semaphore:
                     tracks = await self.get_artist_top_tracks(
@@ -430,8 +394,10 @@ class SpotifyService:
                     return artist_id, tracks
 
             fallback_tasks = [fetch_fallback(artist_id) for artist_id in pending_ids]
-            fallback_results = await asyncio.gather(*fallback_tasks, return_exceptions=True)
-            
+            fallback_results = await asyncio.gather(
+                *fallback_tasks, return_exceptions=True
+            )
+
             for result in fallback_results:
                 if isinstance(result, Exception):
                     logger.warning(f"Fallback fetch failed: {result}")
@@ -449,10 +415,10 @@ class SpotifyService:
         access_token: str,
         market: str,
         max_concurrency: int,
-        results: Dict[str, List[Dict[str, Any]]]
+        results: Dict[str, List[Dict[str, Any]]],
     ) -> List[str]:
         """Process batch artist top tracks requests with chunking and concurrency control.
-        
+
         Args:
             batch_tool: The batch tool instance
             pending_ids: List of artist IDs to fetch
@@ -460,7 +426,7 @@ class SpotifyService:
             market: Market code
             max_concurrency: Maximum concurrent requests
             results: Dictionary to update with fetched results
-            
+
         Returns:
             List of artist IDs that still need fallback fetching
         """
@@ -518,10 +484,12 @@ class SpotifyService:
                     pending_ids.append(failed_id)
 
         # Remove artists already resolved from fallback list
-        pending_ids = [artist_id for artist_id in pending_ids if artist_id not in results]
+        pending_ids = [
+            artist_id for artist_id in pending_ids if artist_id not in results
+        ]
         if pending_ids:
             pending_ids = list(dict.fromkeys(pending_ids))
-        
+
         return pending_ids
 
     async def get_artist_hybrid_tracks(
@@ -581,7 +549,9 @@ class SpotifyService:
             # Use prefetched tracks if provided, otherwise use empty list
             # This avoids individual API calls that can cause rate limits
             # The hybrid strategy will work with just album tracks if needed
-            prefetch_payload = prefetched_top_tracks if prefetched_top_tracks is not None else []
+            prefetch_payload = (
+                prefetched_top_tracks if prefetched_top_tracks is not None else []
+            )
 
             tracks = await tool.get_hybrid_tracks(
                 access_token=access_token,
@@ -591,7 +561,7 @@ class SpotifyService:
                 min_popularity=min_popularity,
                 target_count=target_count,
                 top_tracks_ratio=top_tracks_ratio,
-                prefetched_top_tracks=prefetch_payload
+                prefetched_top_tracks=prefetch_payload,
             )
 
             logger.info(
@@ -605,10 +575,14 @@ class SpotifyService:
             # If we have prefetched tracks, return them; otherwise return empty list
             # Avoid individual API calls on error to prevent rate limits
             if prefetched_top_tracks:
-                logger.info(f"Returning {len(prefetched_top_tracks)} prefetched tracks as fallback")
+                logger.info(
+                    f"Returning {len(prefetched_top_tracks)} prefetched tracks as fallback"
+                )
                 return prefetched_top_tracks[:target_count]
             else:
-                logger.warning(f"No tracks available for artist {artist_id} after hybrid strategy failure")
+                logger.warning(
+                    f"No tracks available for artist {artist_id} after hybrid strategy failure"
+                )
                 return []
         finally:
             # Cache successful fetches only
@@ -628,7 +602,7 @@ class SpotifyService:
         access_token: str,
         query: str,
         limit: int = 20,
-        market: Optional[str] = None
+        market: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Search for tracks on Spotify.
 
@@ -646,10 +620,7 @@ class SpotifyService:
             raise ValueError("Search Spotify tracks tool not available")
 
         result = await tool._run(
-            access_token=access_token,
-            query=query,
-            limit=limit,
-            market=market
+            access_token=access_token, query=query, limit=limit, market=market
         )
 
         if not result.success:
@@ -659,34 +630,31 @@ class SpotifyService:
         return result.data.get("tracks", [])
 
     async def search_artists_by_genre(
-        self,
-        access_token: str,
-        genre: str,
-        limit: int = 40
+        self, access_token: str, genre: str, limit: int = 40
     ) -> List[Dict[str, Any]]:
         """Search for artists in a specific genre.
-        
+
         Args:
             access_token: Spotify access token
             genre: Genre to search for
             limit: Maximum number of artists to return
-            
+
         Returns:
             List of artist dictionaries
         """
         try:
             search_query = f"genre:{genre}"
-            
+
             # Use the existing search_spotify_artists method which handles the API call
             artists = await self.search_spotify_artists(
                 access_token=access_token,
                 query=search_query,
-                limit=min(limit, 50)  # Spotify API max is 50
+                limit=min(limit, 50),  # Spotify API max is 50
             )
-            
+
             logger.info(f"Found {len(artists)} artists for genre: {genre}")
             return artists
-            
+
         except Exception as e:
             logger.error(f"Failed to search artists by genre '{genre}': {e}")
             return []
@@ -696,7 +664,7 @@ class SpotifyService:
         access_token: str,
         query: str,
         limit: int = 20,
-        market: Optional[str] = None
+        market: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Search for tracks and extract unique artists from results.
 
@@ -711,10 +679,7 @@ class SpotifyService:
         """
         # Search for tracks
         tracks = await self.search_spotify_tracks(
-            access_token=access_token,
-            query=query,
-            limit=limit,
-            market=market
+            access_token=access_token, query=query, limit=limit, market=market
         )
 
         if not tracks:
@@ -731,17 +696,21 @@ class SpotifyService:
                 if artist_id and artist_id not in seen_ids:
                     seen_ids.add(artist_id)
                     # Create artist info structure matching SearchSpotifyArtistsTool output
-                    artists.append({
-                        "id": artist_id,
-                        "name": artist.get("name"),
-                        "spotify_uri": artist.get("uri"),
-                        "genres": [],  # Track search doesn't return genres, would need separate call
-                        "popularity": None,  # Not available in track artist data
-                        "followers": None,  # Not available in track artist data
-                        "images": []  # Not available in track artist data
-                    })
+                    artists.append(
+                        {
+                            "id": artist_id,
+                            "name": artist.get("name"),
+                            "spotify_uri": artist.get("uri"),
+                            "genres": [],  # Track search doesn't return genres, would need separate call
+                            "popularity": None,  # Not available in track artist data
+                            "followers": None,  # Not available in track artist data
+                            "images": [],  # Not available in track artist data
+                        }
+                    )
 
-        logger.info(f"Extracted {len(artists)} unique artists from {len(tracks)} tracks for query '{query}'")
+        logger.info(
+            f"Extracted {len(artists)} unique artists from {len(tracks)} tracks for query '{query}'"
+        )
         return artists
 
     async def upload_playlist_cover_image(
@@ -749,10 +718,10 @@ class SpotifyService:
         access_token: str,
         playlist_id: str,
         image_base64: str,
-        max_retries: int = 3
+        max_retries: int = 3,
     ) -> bool:
         """Upload a custom cover image to a Spotify playlist.
-        
+
         According to Spotify API docs:
         - Endpoint: PUT /playlists/{playlist_id}/images
         - Body: Base64 encoded JPEG image data
@@ -771,19 +740,21 @@ class SpotifyService:
         """
         import aiohttp
         import asyncio
-        
+
         url = f"https://api.spotify.com/v1/playlists/{playlist_id}/images"
         headers = {
             "Authorization": f"Bearer {access_token}",
-            "Content-Type": "image/jpeg"
+            "Content-Type": "image/jpeg",
         }
-        
+
         # Verify payload size (Spotify limit is 256 KB for base64 string)
         payload_size_kb = len(image_base64) / 1024
         if payload_size_kb > 256:
-            logger.error(f"Image payload size ({payload_size_kb:.1f}KB) exceeds Spotify's 256KB limit")
+            logger.error(
+                f"Image payload size ({payload_size_kb:.1f}KB) exceeds Spotify's 256KB limit"
+            )
             return False
-        
+
         logger.debug(f"Uploading cover image: {payload_size_kb:.1f}KB base64 payload")
 
         for attempt in range(max_retries):
@@ -791,13 +762,20 @@ class SpotifyService:
                 # Create session with longer timeout for image uploads
                 timeout = aiohttp.ClientTimeout(total=30, connect=10)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.put(url, headers=headers, data=image_base64) as response:
+                    async with session.put(
+                        url, headers=headers, data=image_base64
+                    ) as response:
                         if response.status == 202:
-                            logger.info(f"Successfully uploaded cover image to playlist {playlist_id}")
+                            logger.info(
+                                f"Successfully uploaded cover image to playlist {playlist_id}"
+                            )
                             return True
-                        elif response.status in [502, 503, 504] and attempt < max_retries - 1:
+                        elif (
+                            response.status in [502, 503, 504]
+                            and attempt < max_retries - 1
+                        ):
                             # Retry on gateway/server errors (common on Railway/cloud deployments)
-                            wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                            wait_time = 2**attempt  # Exponential backoff: 1s, 2s, 4s
                             error_text = await response.text()
                             logger.warning(
                                 f"Transient error uploading cover image (attempt {attempt + 1}/{max_retries}): "
@@ -807,11 +785,13 @@ class SpotifyService:
                             continue
                         else:
                             error_text = await response.text()
-                            logger.error(f"Failed to upload cover image: {response.status} - {error_text}")
+                            logger.error(
+                                f"Failed to upload cover image: {response.status} - {error_text}"
+                            )
                             return False
             except asyncio.TimeoutError:
                 if attempt < max_retries - 1:
-                    wait_time = 2 ** attempt
+                    wait_time = 2**attempt
                     logger.warning(
                         f"Timeout uploading cover image (attempt {attempt + 1}/{max_retries}). "
                         f"Retrying in {wait_time}s..."
@@ -819,11 +799,13 @@ class SpotifyService:
                     await asyncio.sleep(wait_time)
                     continue
                 else:
-                    logger.error(f"Timeout uploading playlist cover image after {max_retries} attempts")
+                    logger.error(
+                        f"Timeout uploading playlist cover image after {max_retries} attempts"
+                    )
                     return False
             except Exception as e:
                 if attempt < max_retries - 1:
-                    wait_time = 2 ** attempt
+                    wait_time = 2**attempt
                     logger.warning(
                         f"Exception uploading cover image (attempt {attempt + 1}/{max_retries}): {str(e)}. "
                         f"Retrying in {wait_time}s..."
@@ -831,9 +813,12 @@ class SpotifyService:
                     await asyncio.sleep(wait_time)
                     continue
                 else:
-                    logger.error(f"Error uploading playlist cover image after {max_retries} attempts: {str(e)}", exc_info=True)
+                    logger.error(
+                        f"Error uploading playlist cover image after {max_retries} attempts: {str(e)}",
+                        exc_info=True,
+                    )
                     return False
-        
+
         return False
 
     def get_available_tools(self) -> List[str]:
@@ -851,7 +836,7 @@ class SpotifyService:
             "search_spotify_artists",
             "get_several_spotify_artists",
             "get_artist_top_tracks",
-            "search_spotify_tracks"
+            "search_spotify_tracks",
         ]
 
     def get_tool_descriptions(self) -> Dict[str, str]:

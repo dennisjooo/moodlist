@@ -10,7 +10,7 @@ from app.core.exceptions import (
     ValidationException,
     InternalServerError,
     SpotifyAuthError,
-    SpotifyAPIException
+    SpotifyAPIException,
 )
 from app.clients import SpotifyAPIClient
 from app.models.user import User
@@ -21,10 +21,7 @@ router = APIRouter()
 
 
 @router.post("/token")
-async def exchange_token(
-    request: Request,
-    db: AsyncSession = Depends(get_db)
-):
+async def exchange_token(request: Request, db: AsyncSession = Depends(get_db)):
     """Exchange authorization code for Spotify access tokens with PKCE support."""
     logger.info("Exchanging authorization code for tokens")
 
@@ -63,15 +60,14 @@ async def exchange_token(
                 data["client_secret"] = settings.SPOTIFY_CLIENT_SECRET
                 logger.info("Using client_secret for token exchange (legacy)")
 
-            response = await client.post(
-                SpotifyEndpoints.TOKEN_URL,
-                data=data
-            )
+            response = await client.post(SpotifyEndpoints.TOKEN_URL, data=data)
             response.raise_for_status()
             token_data = response.json()
 
             # Validate required fields
-            if not token_data.get("access_token") or not token_data.get("refresh_token"):
+            if not token_data.get("access_token") or not token_data.get(
+                "refresh_token"
+            ):
                 logger.error("Invalid token response from Spotify")
                 raise SpotifyAPIException("Invalid token response from Spotify")
 
@@ -81,13 +77,19 @@ async def exchange_token(
                 "access_token": token_data["access_token"],
                 "refresh_token": token_data["refresh_token"],
                 "expires_in": token_data.get("expires_in", 3600),
-                "token_type": token_data.get("token_type", "Bearer")
+                "token_type": token_data.get("token_type", "Bearer"),
             }
 
         except httpx.HTTPStatusError as e:
-            logger.error("Token exchange failed", error=str(e), status_code=e.response.status_code)
+            logger.error(
+                "Token exchange failed",
+                error=str(e),
+                status_code=e.response.status_code,
+            )
             if e.response.status_code == 400:
-                raise ValidationException("Invalid authorization code, redirect URI, or PKCE verification failed")
+                raise ValidationException(
+                    "Invalid authorization code, redirect URI, or PKCE verification failed"
+                )
             raise SpotifyAPIException("Failed to exchange authorization code")
         except Exception as e:
             logger.error("Unexpected error during token exchange", error=str(e))
@@ -96,8 +98,7 @@ async def exchange_token(
 
 @router.get("/profile")
 async def get_spotify_profile(
-    current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)
 ):
     """Get user's Spotify profile information."""
     logger.info("Getting Spotify profile", user_id=current_user.id)
@@ -108,8 +109,10 @@ async def get_spotify_profile(
     # Use centralized Spotify client
     spotify_client = SpotifyAPIClient()
     try:
-        profile_data = await spotify_client.get_user_profile(current_user.access_token, current_user.spotify_id)
-        
+        profile_data = await spotify_client.get_user_profile(
+            current_user.access_token, current_user.spotify_id
+        )
+
         return {
             "id": profile_data["id"],
             "display_name": profile_data["display_name"],
@@ -117,7 +120,7 @@ async def get_spotify_profile(
             "images": profile_data.get("images", []),
             "country": profile_data.get("country"),
             "followers": profile_data.get("followers", {}).get("total", 0),
-            "product": profile_data.get("product")
+            "product": profile_data.get("product"),
         }
     except SpotifyAuthError as e:
         logger.error("Failed to get Spotify profile", error=str(e))
@@ -130,7 +133,7 @@ async def get_spotify_profile(
 @router.get("/profile/public")
 async def get_spotify_profile_public(
     access_token: str = Query(..., description="Spotify access token"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get Spotify profile information using access token (no auth required)."""
     logger.info("Getting Spotify profile with access token")
@@ -160,7 +163,7 @@ async def get_spotify_profile_public(
             "email": profile_data.get("email"),
             "images": profile_data.get("images", []),
             "country": profile_data.get("country"),
-            "followers": profile_data.get("followers", {}).get("total", 0)
+            "followers": profile_data.get("followers", {}).get("total", 0),
         }
     except SpotifyAuthError as e:
         logger.error("Failed to get Spotify profile - auth error", error=str(e))
@@ -172,28 +175,27 @@ async def get_spotify_profile_public(
 
 @router.get("/token/refresh")
 async def refresh_spotify_token(
-    current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)
 ):
     """Refresh the user's Spotify access token."""
     logger.info("Refreshing Spotify token", user_id=current_user.id)
-    
+
     # Use centralized Spotify client
     spotify_client = SpotifyAPIClient()
     try:
         token_data = await spotify_client.refresh_token(current_user.refresh_token)
-        
+
         # Update user's tokens in database
         current_user.access_token = token_data["access_token"]
         if "refresh_token" in token_data:
             current_user.refresh_token = token_data["refresh_token"]
-        
+
         await db.commit()
-        
+
         return {
             "access_token": token_data["access_token"],
             "expires_in": token_data.get("expires_in", 3600),
-            "token_type": token_data.get("token_type", "Bearer")
+            "token_type": token_data.get("token_type", "Bearer"),
         }
     except SpotifyAuthError as e:
         logger.error("Failed to refresh Spotify token", error=str(e))
@@ -208,28 +210,28 @@ async def get_user_playlists(
     current_user: User = Depends(require_auth),
     limit: int = Query(default=20, le=50),
     offset: int = Query(default=0),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get user's Spotify playlists."""
     # Refresh token if expired
     current_user = await refresh_spotify_token_if_expired(current_user, db)
-    
-    logger.info("Getting user playlists", user_id=current_user.id, limit=limit, offset=offset)
-    
+
+    logger.info(
+        "Getting user playlists", user_id=current_user.id, limit=limit, offset=offset
+    )
+
     # Use centralized Spotify client
     spotify_client = SpotifyAPIClient()
     try:
         playlists_data = await spotify_client.get_user_playlists(
-            current_user.access_token,
-            limit=limit,
-            offset=offset
+            current_user.access_token, limit=limit, offset=offset
         )
-        
+
         return {
             "items": playlists_data.get("items", []),
             "total": playlists_data.get("total", 0),
             "limit": playlists_data.get("limit", limit),
-            "offset": playlists_data.get("offset", offset)
+            "offset": playlists_data.get("offset", offset),
         }
     except SpotifyAuthError as e:
         logger.error("Failed to get user playlists", error=str(e))
@@ -244,23 +246,21 @@ async def search_tracks(
     query: str = Query(..., min_length=1, description="Search query for tracks"),
     limit: int = Query(default=20, le=50, description="Maximum number of results"),
     current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Search Spotify tracks for adding to playlists."""
     logger.info("Searching tracks", user_id=current_user.id, query=query, limit=limit)
-    
+
     # Refresh token if expired
     current_user = await refresh_spotify_token_if_expired(current_user, db)
-    
+
     # Use centralized Spotify client
     spotify_client = SpotifyAPIClient()
     try:
         search_data = await spotify_client.search_tracks(
-            current_user.access_token,
-            query=query,
-            limit=limit
+            current_user.access_token, query=query, limit=limit
         )
-        
+
         # Extract and format track results
         tracks = search_data.get("tracks", {}).get("items", [])
         formatted_tracks = [
@@ -270,17 +270,19 @@ async def search_tracks(
                 "artists": [artist["name"] for artist in track["artists"]],
                 "spotify_uri": track["uri"],
                 "album": track["album"]["name"],
-                "album_image": track["album"]["images"][0]["url"] if track["album"]["images"] else None,
+                "album_image": track["album"]["images"][0]["url"]
+                if track["album"]["images"]
+                else None,
                 "duration_ms": track["duration_ms"],
-                "preview_url": track.get("preview_url")
+                "preview_url": track.get("preview_url"),
             }
             for track in tracks
         ]
-        
+
         return {
             "tracks": formatted_tracks,
             "total": len(formatted_tracks),
-            "query": query
+            "query": query,
         }
     except SpotifyAuthError as e:
         logger.error("Failed to search tracks", error=str(e))
@@ -294,18 +296,22 @@ async def search_tracks(
 async def get_track_details(
     track_identifier: str,
     current_user: User = Depends(require_auth),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Get detailed information about a specific track."""
-    logger.info("Getting track details", user_id=current_user.id, track_identifier=track_identifier)
+    logger.info(
+        "Getting track details",
+        user_id=current_user.id,
+        track_identifier=track_identifier,
+    )
 
     # Extract track ID from Spotify URI if needed
     track_id = track_identifier
-    if track_identifier.startswith('spotify:track:'):
-        track_id = track_identifier.split(':')[2]
-    elif track_identifier.startswith('spotify:'):
+    if track_identifier.startswith("spotify:track:"):
+        track_id = track_identifier.split(":")[2]
+    elif track_identifier.startswith("spotify:"):
         # Handle other Spotify URI formats
-        parts = track_identifier.split(':')
+        parts = track_identifier.split(":")
         track_id = parts[-1]
 
     # Refresh token if expired
@@ -314,11 +320,8 @@ async def get_track_details(
     # Use centralized Spotify client
     spotify_client = SpotifyAPIClient()
     try:
-        track_data = await spotify_client.get_track(
-            current_user.access_token,
-            track_id
-        )
-        
+        track_data = await spotify_client.get_track(current_user.access_token, track_id)
+
         # Format response to match frontend expectations
         return {
             "track_id": track_data["id"],
@@ -332,9 +335,11 @@ async def get_track_details(
                 "id": track_data["album"]["id"],
                 "release_date": track_data["album"].get("release_date", ""),
                 "total_tracks": track_data["album"].get("total_tracks", 0),
-                "images": track_data["album"].get("images", [])
+                "images": track_data["album"].get("images", []),
             },
-            "album_image": track_data["album"]["images"][0]["url"] if track_data["album"].get("images") else None,
+            "album_image": track_data["album"]["images"][0]["url"]
+            if track_data["album"].get("images")
+            else None,
             "duration_ms": track_data.get("duration_ms", 0),
             "explicit": track_data.get("explicit", False),
             "popularity": track_data.get("popularity", 0),
@@ -342,11 +347,13 @@ async def get_track_details(
             "spotify_uri": track_data["uri"],
             "spotify_url": track_data.get("external_urls", {}).get("spotify"),
             "track_number": track_data.get("track_number", 0),
-            "disc_number": track_data.get("disc_number", 1)
+            "disc_number": track_data.get("disc_number", 1),
         }
     except SpotifyAuthError as e:
         logger.error("Failed to get track details", error=str(e), track_id=track_id)
         raise SpotifyAuthError("Failed to get track details")
     except Exception as e:
-        logger.error("Unexpected error getting track details", error=str(e), track_id=track_id)
+        logger.error(
+            "Unexpected error getting track details", error=str(e), track_id=track_id
+        )
         raise InternalServerError("Failed to get track details")

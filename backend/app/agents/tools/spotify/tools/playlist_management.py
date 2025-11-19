@@ -35,7 +35,7 @@ class CreatePlaylistTool(RateLimitedTool):
             name="create_playlist",
             description="Create playlist on Spotify",
             base_url="https://api.spotify.com/v1",
-            rate_limit_per_minute=60
+            rate_limit_per_minute=60,
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:
@@ -43,11 +43,7 @@ class CreatePlaylistTool(RateLimitedTool):
         return CreatePlaylistInput
 
     async def _run(
-        self,
-        access_token: str,
-        name: str,
-        description: str = "",
-        public: bool = True
+        self, access_token: str, name: str, description: str = "", public: bool = True
     ) -> ToolResult:
         """Create a playlist on Spotify.
 
@@ -64,18 +60,14 @@ class CreatePlaylistTool(RateLimitedTool):
             logger.info(f"Creating playlist '{name}' for user")
 
             # Prepare request data
-            playlist_data = {
-                "name": name,
-                "description": description,
-                "public": public
-            }
+            playlist_data = {"name": name, "description": description, "public": public}
 
             # Make API request
             response_data = await self._make_request(
                 method="POST",
                 endpoint="/me/playlists",
                 json_data=playlist_data,
-                headers={"Authorization": f"Bearer {access_token}"}
+                headers={"Authorization": f"Bearer {access_token}"},
             )
 
             # Validate response structure
@@ -83,7 +75,7 @@ class CreatePlaylistTool(RateLimitedTool):
             if not self._validate_response(response_data, required_fields):
                 return ToolResult.error_result(
                     "Invalid response structure from Spotify API",
-                    api_response=response_data
+                    api_response=response_data,
                 )
 
             # Parse playlist data
@@ -94,24 +86,22 @@ class CreatePlaylistTool(RateLimitedTool):
                 "spotify_uri": response_data.get("uri"),
                 "external_urls": response_data.get("external_urls", {}),
                 "public": response_data.get("public", False),
-                "snapshot_id": response_data.get("snapshot_id")
+                "snapshot_id": response_data.get("snapshot_id"),
             }
 
-            logger.info(f"Successfully created playlist '{name}' with ID: {playlist_info['id']}")
+            logger.info(
+                f"Successfully created playlist '{name}' with ID: {playlist_info['id']}"
+            )
 
             return ToolResult.success_result(
                 data=playlist_info,
-                metadata={
-                    "source": "spotify",
-                    "api_endpoint": "/me/playlists"
-                }
+                metadata={"source": "spotify", "api_endpoint": "/me/playlists"},
             )
 
         except Exception as e:
             logger.error(f"Error creating playlist: {str(e)}", exc_info=True)
             return ToolResult.error_result(
-                f"Failed to create playlist: {str(e)}",
-                error_type=type(e).__name__
+                f"Failed to create playlist: {str(e)}", error_type=type(e).__name__
             )
 
 
@@ -139,7 +129,7 @@ class AddTracksToPlaylistTool(RateLimitedTool):
             name="add_tracks_to_playlist",
             description="Add tracks to Spotify playlist",
             base_url="https://api.spotify.com/v1",
-            rate_limit_per_minute=60
+            rate_limit_per_minute=60,
         )
 
     def _get_input_schema(self) -> Type[BaseModel]:
@@ -151,7 +141,7 @@ class AddTracksToPlaylistTool(RateLimitedTool):
         access_token: str,
         playlist_id: str,
         track_uris: List[str],
-        position: Optional[int] = None
+        position: Optional[int] = None,
     ) -> ToolResult:
         """Add tracks to a Spotify playlist.
 
@@ -166,16 +156,22 @@ class AddTracksToPlaylistTool(RateLimitedTool):
         """
         try:
             logger.info(f"Adding {len(track_uris)} tracks to playlist {playlist_id}")
-            
+
             # Validate track URIs format
-            invalid_uris = [uri for uri in track_uris if not uri or not uri.startswith('spotify:track:')]
+            invalid_uris = [
+                uri
+                for uri in track_uris
+                if not uri or not uri.startswith("spotify:track:")
+            ]
             if invalid_uris:
-                logger.error(f"Found {len(invalid_uris)} invalid URIs: {invalid_uris[:3]}")
+                logger.error(
+                    f"Found {len(invalid_uris)} invalid URIs: {invalid_uris[:3]}"
+                )
                 return ToolResult.error_result(
                     f"Invalid track URI format. Expected 'spotify:track:ID', got: {invalid_uris[:3]}",
-                    error_type="ValidationError"
+                    error_type="ValidationError",
                 )
-            
+
             # Log sample URIs for debugging
             logger.debug(f"Sample URIs being added: {track_uris[:3]}")
 
@@ -189,14 +185,14 @@ class AddTracksToPlaylistTool(RateLimitedTool):
                 method="POST",
                 endpoint=f"/playlists/{playlist_id}/tracks",
                 json_data=request_data,
-                headers={"Authorization": f"Bearer {access_token}"}
+                headers={"Authorization": f"Bearer {access_token}"},
             )
 
             # Validate response structure
             if not self._validate_response(response_data, ["snapshot_id"]):
                 return ToolResult.error_result(
                     "Invalid response structure from Spotify API",
-                    api_response=response_data
+                    api_response=response_data,
                 )
 
             # Parse response
@@ -204,22 +200,26 @@ class AddTracksToPlaylistTool(RateLimitedTool):
                 "playlist_id": playlist_id,
                 "snapshot_id": response_data.get("snapshot_id"),
                 "tracks_added": len(track_uris),
-                "track_uris": track_uris[:5] + ["..."] if len(track_uris) > 5 else track_uris  # Truncate for logging
+                "track_uris": track_uris[:5] + ["..."]
+                if len(track_uris) > 5
+                else track_uris,  # Truncate for logging
             }
 
-            logger.info(f"Successfully added {len(track_uris)} tracks to playlist {playlist_id}")
+            logger.info(
+                f"Successfully added {len(track_uris)} tracks to playlist {playlist_id}"
+            )
 
             return ToolResult.success_result(
                 data=result_info,
                 metadata={
                     "source": "spotify",
-                    "api_endpoint": f"/playlists/{playlist_id}/tracks"
-                }
+                    "api_endpoint": f"/playlists/{playlist_id}/tracks",
+                },
             )
 
         except Exception as e:
             logger.error(f"Error adding tracks to playlist: {str(e)}", exc_info=True)
             return ToolResult.error_result(
                 f"Failed to add tracks to playlist: {str(e)}",
-                error_type=type(e).__name__
+                error_type=type(e).__name__,
             )

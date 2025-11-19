@@ -8,7 +8,7 @@ def get_anchor_strategy_prompt(
     mood_analysis: Dict[str, Any],
     genre_keywords: List[str],
     target_features: Dict[str, Any],
-    available_tracks: List[Dict[str, Any]]
+    available_tracks: List[Dict[str, Any]],
 ) -> str:
     """Get prompt for determining anchor track selection strategy.
 
@@ -22,31 +22,39 @@ def get_anchor_strategy_prompt(
     Returns:
         Prompt string for anchor track strategy
     """
-    genres_str = ', '.join(genre_keywords) if genre_keywords else 'None'
-    artists_str = ', '.join(mood_analysis.get('artist_recommendations', [])) if mood_analysis.get('artist_recommendations') else 'None'
+    genres_str = ", ".join(genre_keywords) if genre_keywords else "None"
+    artists_str = (
+        ", ".join(mood_analysis.get("artist_recommendations", []))
+        if mood_analysis.get("artist_recommendations")
+        else "None"
+    )
 
     # Format available tracks info
     tracks_info = []
     for i, track in enumerate(available_tracks[:20]):  # Limit to 20 for prompt size
-        artists = [a.get('name', '') for a in track.get('artists', [])]
-        artist_str = ', '.join(artists) if artists else 'Unknown'
-        features = track.get('audio_features', {})
+        artists = [a.get("name", "") for a in track.get("artists", [])]
+        artist_str = ", ".join(artists) if artists else "Unknown"
+        features = track.get("audio_features", {})
 
-        track_info = f"{i+1}. '{track.get('name', 'Unknown')}' by {artist_str}"
+        track_info = f"{i + 1}. '{track.get('name', 'Unknown')}' by {artist_str}"
         if features:
-            key_features = {k: v for k, v in features.items()
-                          if k in ['danceability', 'energy', 'valence', 'tempo', 'instrumentalness']}
+            key_features = {
+                k: v
+                for k, v in features.items()
+                if k
+                in ["danceability", "energy", "valence", "tempo", "instrumentalness"]
+            }
             track_info += f" - Features: {key_features}"
         tracks_info.append(track_info)
 
-    tracks_context = '\n'.join(tracks_info)
+    tracks_context = "\n".join(tracks_info)
 
     return f"""Analyze this music request and determine the optimal strategy for selecting ANCHOR TRACKS.
 
 User's request: "{mood_prompt}"
 
 Mood Analysis Summary:
-- Primary emotion: {mood_analysis.get('primary_emotion', 'Unknown')}
+- Primary emotion: {mood_analysis.get("primary_emotion", "Unknown")}
 - Genres: {genres_str}
 - Artists: {artists_str}
 - Target features: {target_features}
@@ -98,7 +106,7 @@ The anchor_count should be between 3-8. Higher counts work for diverse moods, lo
 def get_anchor_scoring_prompt(
     track_candidates: List[Dict[str, Any]],
     target_features: Dict[str, Any],
-    selection_criteria: Dict[str, Any]
+    selection_criteria: Dict[str, Any],
 ) -> str:
     """Get prompt for scoring anchor track candidates.
 
@@ -114,27 +122,31 @@ def get_anchor_scoring_prompt(
     # Format track candidates
     candidates_info = []
     for i, candidate in enumerate(track_candidates):
-        track = candidate.get('track', {})
-        artists = [a.get('name', '') for a in track.get('artists', [])]
-        artist_str = ', '.join(artists) if artists else 'Unknown'
+        track = candidate.get("track", {})
+        artists = [a.get("name", "") for a in track.get("artists", [])]
+        artist_str = ", ".join(artists) if artists else "Unknown"
 
-        features = candidate.get('features', {})
-        source = candidate.get('source', 'unknown')
-        user_mentioned = candidate.get('user_mentioned', False)
+        features = candidate.get("features", {})
+        source = candidate.get("source", "unknown")
+        user_mentioned = candidate.get("user_mentioned", False)
 
-        candidate_info = f"{i+1}. '{track.get('name', 'Unknown')}' by {artist_str}"
+        candidate_info = f"{i + 1}. '{track.get('name', 'Unknown')}' by {artist_str}"
         candidate_info += f" (Source: {source})"
         if user_mentioned:
             candidate_info += " [USER MENTIONED]"
 
         if features:
-            key_features = {k: round(float(v), 3) for k, v in features.items()
-                          if k in ['danceability', 'energy', 'valence', 'tempo', 'instrumentalness']}
+            key_features = {
+                k: round(float(v), 3)
+                for k, v in features.items()
+                if k
+                in ["danceability", "energy", "valence", "tempo", "instrumentalness"]
+            }
             candidate_info += f" - Features: {key_features}"
 
         candidates_info.append(candidate_info)
 
-    candidates_context = '\n'.join(candidates_info)
+    candidates_context = "\n".join(candidates_info)
 
     return f"""Score these track candidates for use as ANCHOR TRACKS in a playlist.
 
@@ -178,7 +190,7 @@ Only score tracks that would make good anchor tracks. Be selective - not all can
 def get_anchor_finalization_prompt(
     scored_candidates: List[Dict[str, Any]],
     target_count: int,
-    mood_context: Dict[str, Any]
+    mood_context: Dict[str, Any],
 ) -> str:
     """Get prompt for finalizing anchor track selection.
 
@@ -193,25 +205,27 @@ def get_anchor_finalization_prompt(
     # Format scored candidates
     candidates_info = []
     for candidate in scored_candidates:
-        track_index = candidate.get('track_index', 0)
-        score = candidate.get('score', 0.0)
-        reasoning = candidate.get('reasoning', '')
+        track_index = candidate.get("track_index", 0)
+        score = candidate.get("score", 0.0)
+        reasoning = candidate.get("reasoning", "")
 
-        original_track = candidate.get('original_candidate', {})
-        track = original_track.get('track', {})
-        artists = [a.get('name', '') for a in track.get('artists', [])]
-        artist_str = ', '.join(artists) if artists else 'Unknown'
+        original_track = candidate.get("original_candidate", {})
+        track = original_track.get("track", {})
+        artists = [a.get("name", "") for a in track.get("artists", [])]
+        artist_str = ", ".join(artists) if artists else "Unknown"
 
-        candidate_info = f"Track {track_index}: '{track.get('name', 'Unknown')}' by {artist_str}"
+        candidate_info = (
+            f"Track {track_index}: '{track.get('name', 'Unknown')}' by {artist_str}"
+        )
         candidate_info += f" - Score: {score:.2f} - {reasoning}"
         candidates_info.append(candidate_info)
 
-    candidates_context = '\n'.join(candidates_info)
+    candidates_context = "\n".join(candidates_info)
 
     return f"""Finalize the selection of ANCHOR TRACKS from these scored candidates.
 
 Target number of anchors: {target_count}
-Mood context: {mood_context.get('mood_interpretation', '')}
+Mood context: {mood_context.get("mood_interpretation", "")}
 
 Scored candidates:
 {candidates_context}

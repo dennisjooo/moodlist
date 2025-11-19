@@ -19,9 +19,7 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
     """Strategy for generating recommendations from mood-matched artists discovered from user listening history."""
 
     def __init__(
-        self,
-        reccobeat_service: RecoBeatService,
-        spotify_service: SpotifyService
+        self, reccobeat_service: RecoBeatService, spotify_service: SpotifyService
     ):
         """Initialize the artist discovery strategy.
 
@@ -38,13 +36,11 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
         self.pipeline = ArtistRecommendationPipeline(
             spotify_service=spotify_service,
             reccobeat_service=reccobeat_service,
-            use_failed_artist_caching=True
+            use_failed_artist_caching=True,
         )
 
     async def generate_recommendations(
-        self,
-        state: AgentState,
-        target_count: int
+        self, state: AgentState, target_count: int
     ) -> List[Dict[str, Any]]:
         """Generate recommendations from mood-matched artists.
 
@@ -62,7 +58,7 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
         return await self.pipeline.process_artists(
             state=state,
             create_recommendation_fn=self._create_recommendation_wrapper,
-            calculate_score_fn=self._calculate_artist_track_score
+            calculate_score_fn=self._calculate_artist_track_score,
         )
 
     async def _create_recommendation_wrapper(
@@ -70,7 +66,7 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
         track: Dict[str, Any],
         target_features: Dict[str, Any],
         audio_features_map: Dict[str, Dict[str, Any]],
-        calculate_score_fn: callable
+        calculate_score_fn: callable,
     ) -> Optional[TrackRecommendation]:
         """Wrapper to adapt _create_artist_track_recommendation to pipeline signature.
 
@@ -83,13 +79,15 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
         Returns:
             TrackRecommendation object or None if filtered out
         """
-        return await self._create_artist_track_recommendation(track, target_features, audio_features_map)
+        return await self._create_artist_track_recommendation(
+            track, target_features, audio_features_map
+        )
 
     async def _create_artist_track_recommendation(
         self,
         track: Dict[str, Any],
         target_features: Dict[str, Any],
-        audio_features_map: Dict[str, Dict[str, Any]]
+        audio_features_map: Dict[str, Dict[str, Any]],
     ) -> Any:
         """Create a recommendation from an artist track.
 
@@ -110,13 +108,15 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
         # Validate track relevance (regional/language/theme filtering)
         track_name = track.get("name", "")
         artists = [artist.get("name", "") for artist in track.get("artists", [])]
-        mood_analysis = self._current_state.mood_analysis if hasattr(self, '_current_state') else None
+        mood_analysis = (
+            self._current_state.mood_analysis
+            if hasattr(self, "_current_state")
+            else None
+        )
 
         if mood_analysis:
             is_valid, reason = self.track_filter.validate_track_relevance(
-                track_name=track_name,
-                artists=artists,
-                mood_analysis=mood_analysis
+                track_name=track_name, artists=artists, mood_analysis=mood_analysis
             )
             if not is_valid:
                 logger.info(
@@ -128,7 +128,9 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
         audio_features = audio_features_map.get(track_id, {})
 
         # Score track against mood (RELAXED for artist tracks)
-        cohesion_score = self._calculate_artist_track_score(audio_features, target_features)
+        cohesion_score = self._calculate_artist_track_score(
+            audio_features, target_features
+        )
 
         # Ultra-relaxed threshold for artist tracks (0.2 vs 0.6 for RecoBeat)
         # Lower threshold to ensure enough tracks pass filtering
@@ -148,13 +150,11 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
             track_data=enhanced_track,
             artist_id="",  # We don't have the artist_id here, but the method doesn't require it
             confidence_score=cohesion_score,
-            reasoning=f"From mood-matched artist (cohesion: {cohesion_score:.2f})"
+            reasoning=f"From mood-matched artist (cohesion: {cohesion_score:.2f})",
         )
 
     def _calculate_artist_track_score(
-        self,
-        audio_features: Any,
-        target_features: Dict[str, Any]
+        self, audio_features: Any, target_features: Dict[str, Any]
     ) -> float:
         """Calculate confidence score for an artist track.
 
@@ -172,5 +172,5 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
             target_features=target_features,
             feature_weights=None,  # No weights = simple average
             source="artist_discovery",
-            tolerance_mode="relaxed"
+            tolerance_mode="relaxed",
         )

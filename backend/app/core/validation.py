@@ -1,4 +1,5 @@
 """Configuration validation utilities."""
+
 import structlog
 
 from app.core.config import settings
@@ -45,10 +46,12 @@ def validate_required_secrets():
     llm_keys_set = [
         settings.OPENROUTER_API_KEY,
         settings.GROQ_API_KEY,
-        settings.CEREBRAS_API_KEY
+        settings.CEREBRAS_API_KEY,
     ]
     if not any(llm_keys_set):
-        errors.append("At least one LLM provider API key must be set (OPENROUTER, GROQ, or CEREBRAS)")
+        errors.append(
+            "At least one LLM provider API key must be set (OPENROUTER, GROQ, or CEREBRAS)"
+        )
 
     # If there are errors, log them and raise exception
     if errors:
@@ -60,4 +63,3 @@ def validate_required_secrets():
         )
 
     logger.info("All required secrets validated successfully")
-

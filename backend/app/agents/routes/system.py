@@ -36,8 +36,7 @@ async def get_system_status(
         workflow_stats = await workflow_manager.get_performance_stats()
 
         agent_stats = {
-            name: agent.get_performance_stats()
-            for name, agent in agents.items()
+            name: agent.get_performance_stats() for name, agent in agents.items()
         }
 
         return {
@@ -94,7 +93,9 @@ async def list_recent_workflows(
 
 @router.get("/system/profiling/metrics")
 async def get_profiling_metrics(
-    metric_name: Optional[str] = Query(None, description="Specific metric name to retrieve"),
+    metric_name: Optional[str] = Query(
+        None, description="Specific metric name to retrieve"
+    ),
 ):
     """Get performance profiling metrics.
 
@@ -104,10 +105,7 @@ async def get_profiling_metrics(
         if metric_name:
             # Get specific metric stats
             stats = PerformanceProfiler.get_metric_stats(metric_name)
-            return {
-                "metric": metric_name,
-                "stats": stats
-            }
+            return {"metric": metric_name, "stats": stats}
         else:
             # Get all metrics
             all_metrics = PerformanceProfiler.list_all_metrics()
@@ -118,18 +116,22 @@ async def get_profiling_metrics(
             return {
                 "metrics": all_metrics,
                 "stats": stats_by_metric,
-                "total_metrics": len(all_metrics)
+                "total_metrics": len(all_metrics),
             }
 
     except Exception as exc:
-        logger.error("Error retrieving profiling metrics", error=str(exc), exc_info=True)
+        logger.error(
+            "Error retrieving profiling metrics", error=str(exc), exc_info=True
+        )
         raise InternalServerError(f"Failed to get profiling metrics: {exc}") from exc
 
 
 @router.get("/system/profiling/samples/{metric_name}")
 async def get_profiling_samples(
     metric_name: str,
-    limit: int = Query(default=10, le=100, description="Number of recent samples to return"),
+    limit: int = Query(
+        default=10, le=100, description="Number of recent samples to return"
+    ),
 ):
     """Get recent samples for a specific metric.
 
@@ -137,36 +139,34 @@ async def get_profiling_samples(
     """
     try:
         samples = PerformanceProfiler.get_metrics(metric_name, limit)
-        return {
-            "metric_name": metric_name,
-            "samples": samples,
-            "count": len(samples)
-        }
+        return {"metric_name": metric_name, "samples": samples, "count": len(samples)}
 
     except Exception as exc:
-        logger.error("Error retrieving profiling samples", error=str(exc), exc_info=True)
+        logger.error(
+            "Error retrieving profiling samples", error=str(exc), exc_info=True
+        )
         raise InternalServerError(f"Failed to get profiling samples: {exc}") from exc
 
 
 @router.get("/system/cache/stats")
 async def get_cache_stats():
     """Get comprehensive cache statistics.
-    
+
     Monitor cache performance across all layers
     (in-memory, Redis, workflow artifacts, ID registry).
     """
     try:
         # Base cache stats
         base_stats = cache_manager.get_cache_stats()
-        
+
         # ID registry stats
         registry_stats = await RecoBeatIDRegistry.get_registry_stats()
-        
+
         return {
             "cache": base_stats,
             "id_registry": registry_stats,
         }
-    
+
     except Exception as exc:
         logger.error("Error getting cache stats", error=str(exc), exc_info=True)
         raise InternalServerError(f"Failed to get cache stats: {exc}") from exc
@@ -174,10 +174,12 @@ async def get_cache_stats():
 
 @router.post("/system/cache/invalidate")
 async def invalidate_cache(
-    category: Optional[str] = Query(None, description="Cache category to invalidate (all if not specified)"),
+    category: Optional[str] = Query(
+        None, description="Cache category to invalidate (all if not specified)"
+    ),
 ):
     """Invalidate cache entries.
-    
+
     Administrative endpoint for cache management.
     """
     try:
@@ -190,12 +192,9 @@ async def invalidate_cache(
             await cache_manager.cache.clear()
             logger.info("Cleared entire cache")
             result = {"invalidated": "all"}
-        
-        return {
-            "status": "success",
-            "result": result
-        }
-    
+
+        return {"status": "success", "result": result}
+
     except Exception as exc:
         logger.error("Error invalidating cache", error=str(exc), exc_info=True)
         raise InternalServerError(f"Failed to invalidate cache: {exc}") from exc
@@ -204,21 +203,21 @@ async def invalidate_cache(
 @router.get("/system/id-registry/stats")
 async def get_id_registry_stats():
     """Get RecoBeat ID registry statistics.
-    
+
     Monitor ID validation and missing ID tracking.
     """
     try:
         stats = await RecoBeatIDRegistry.get_registry_stats()
-        
+
         return {
             "id_registry": stats,
             "description": "Tracks validated and missing Spotify<->RecoBeat ID mappings",
             "ttls": {
                 "missing_ids": f"{RecoBeatIDRegistry.MISSING_ID_TTL / 86400} days",
-                "validated_ids": f"{RecoBeatIDRegistry.VALIDATED_ID_TTL / 86400} days"
-            }
+                "validated_ids": f"{RecoBeatIDRegistry.VALIDATED_ID_TTL / 86400} days",
+            },
         }
-    
+
     except Exception as exc:
         logger.error("Error getting ID registry stats", error=str(exc), exc_info=True)
         raise InternalServerError(f"Failed to get ID registry stats: {exc}") from exc

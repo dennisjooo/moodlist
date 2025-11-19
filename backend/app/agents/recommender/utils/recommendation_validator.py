@@ -31,9 +31,7 @@ class RecommendationValidator:
 
     @staticmethod
     def validate_track_relevance(
-        track_name: str,
-        artists: list,
-        mood_analysis: Optional[Dict[str, Any]]
+        track_name: str, artists: list, mood_analysis: Optional[Dict[str, Any]]
     ) -> ValidationResult:
         """Validate if a track is relevant to the mood before accepting.
 
@@ -51,7 +49,9 @@ class RecommendationValidator:
             return ValidationResult(True, "No mood analysis available")
 
         # Prepare validation context
-        context = RecommendationValidator._prepare_validation_context(track_name, artists, mood_analysis)
+        context = RecommendationValidator._prepare_validation_context(
+            track_name, artists, mood_analysis
+        )
 
         # Check 1: Artist matching (always accept if artist matches)
         artist_match = RecommendationValidator._check_artist_match(context)
@@ -59,12 +59,16 @@ class RecommendationValidator:
             return artist_match
 
         # Check 2: Language compatibility
-        language_validation = RecommendationValidator._validate_language_compatibility(context)
+        language_validation = RecommendationValidator._validate_language_compatibility(
+            context
+        )
         if not language_validation.is_valid:
             return language_validation
 
         # Check 3: Genre compatibility
-        genre_validation = RecommendationValidator._validate_genre_compatibility(context)
+        genre_validation = RecommendationValidator._validate_genre_compatibility(
+            context
+        )
         if not genre_validation.is_valid:
             return genre_validation
 
@@ -73,9 +77,7 @@ class RecommendationValidator:
 
     @staticmethod
     def _prepare_validation_context(
-        track_name: str,
-        artists: list,
-        mood_analysis: Dict[str, Any]
+        track_name: str, artists: list, mood_analysis: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Prepare context data for validation checks.
 
@@ -106,7 +108,7 @@ class RecommendationValidator:
             "artist_recs_lower": artist_recs_lower,
             "all_keywords": all_keywords,
             "track_and_artists": track_and_artists,
-            "mood_analysis": mood_analysis
+            "mood_analysis": mood_analysis,
         }
 
     @staticmethod
@@ -120,7 +122,10 @@ class RecommendationValidator:
             ValidationResult indicating if artist matches
         """
         for artist in context["artists_lower"]:
-            if any(rec_artist in artist or artist in rec_artist for rec_artist in context["artist_recs_lower"]):
+            if any(
+                rec_artist in artist or artist in rec_artist
+                for rec_artist in context["artist_recs_lower"]
+            ):
                 return ValidationResult(True, "Artist matches mood recommendations")
         return ValidationResult(False, "")
 
@@ -134,7 +139,9 @@ class RecommendationValidator:
         Returns:
             ValidationResult indicating if language is compatible
         """
-        mood_language = RecommendationValidator._detect_mood_language(context["all_keywords"])
+        mood_language = RecommendationValidator._detect_mood_language(
+            context["all_keywords"]
+        )
         if not mood_language:
             return ValidationResult(True, "No specific mood language detected")
 
@@ -150,15 +157,21 @@ class RecommendationValidator:
                     if indicator in context["track_and_artists"]:
                         return ValidationResult(
                             False,
-                            f"Language mismatch: track appears to be {lang}, mood is {mood_language}"
+                            f"Language mismatch: track appears to be {lang}, mood is {mood_language}",
                         )
                 else:
                     # Unicode range check for CJK languages
                     for char in context["track_name"]:
-                        if indicator <= char <= language_indicators[lang][language_indicators[lang].index(indicator) + 1]:
+                        if (
+                            indicator
+                            <= char
+                            <= language_indicators[lang][
+                                language_indicators[lang].index(indicator) + 1
+                            ]
+                        ):
                             return ValidationResult(
                                 False,
-                                f"Language mismatch: track appears to be {lang}, mood is {mood_language}"
+                                f"Language mismatch: track appears to be {lang}, mood is {mood_language}",
                             )
 
         return ValidationResult(True, "Language compatible")
@@ -177,13 +190,24 @@ class RecommendationValidator:
             keyword_lower = keyword.lower()
             if any(lang_word in keyword_lower for lang_word in ["french", "français"]):
                 return "french"
-            elif any(lang_word in keyword_lower for lang_word in ["spanish", "latin", "latino"]):
+            elif any(
+                lang_word in keyword_lower
+                for lang_word in ["spanish", "latin", "latino"]
+            ):
                 return "spanish"
-            elif any(lang_word in keyword_lower for lang_word in ["korean", "k-pop", "kpop"]):
+            elif any(
+                lang_word in keyword_lower for lang_word in ["korean", "k-pop", "kpop"]
+            ):
                 return "korean"
-            elif any(lang_word in keyword_lower for lang_word in ["japanese", "j-pop", "jpop", "city pop"]):
+            elif any(
+                lang_word in keyword_lower
+                for lang_word in ["japanese", "j-pop", "jpop", "city pop"]
+            ):
                 return "japanese"
-            elif any(lang_word in keyword_lower for lang_word in ["portuguese", "brazilian", "bossa"]):
+            elif any(
+                lang_word in keyword_lower
+                for lang_word in ["portuguese", "brazilian", "bossa"]
+            ):
                 return "portuguese"
         return None
 
@@ -197,9 +221,29 @@ class RecommendationValidator:
         Returns:
             ValidationResult indicating if genres are compatible
         """
-        genre_terms = ["funk", "disco", "house", "techno", "jazz", "rock", "pop", "indie",
-                       "electronic", "hip hop", "rap", "soul", "blues", "metal", "punk",
-                       "reggae", "country", "folk", "classical", "ambient", "trap"]
+        genre_terms = [
+            "funk",
+            "disco",
+            "house",
+            "techno",
+            "jazz",
+            "rock",
+            "pop",
+            "indie",
+            "electronic",
+            "hip hop",
+            "rap",
+            "soul",
+            "blues",
+            "metal",
+            "punk",
+            "reggae",
+            "country",
+            "folk",
+            "classical",
+            "ambient",
+            "trap",
+        ]
 
         track_genres = []
         mood_genres = []
@@ -222,7 +266,7 @@ class RecommendationValidator:
             conflicting_pairs = [
                 (["classical", "jazz", "blues"], ["metal", "punk", "trap"]),
                 (["folk", "country", "indie"], ["electronic", "techno", "house"]),
-                (["hip hop", "rap", "trap"], ["rock", "indie", "folk"])
+                (["hip hop", "rap", "trap"], ["rock", "indie", "folk"]),
             ]
 
             for group1, group2 in conflicting_pairs:
@@ -231,7 +275,7 @@ class RecommendationValidator:
                 if has_group1 and has_group2:
                     return ValidationResult(
                         False,
-                        f"Genre conflict: track appears to be {track_genres}, mood is {mood_genres}"
+                        f"Genre conflict: track appears to be {track_genres}, mood is {mood_genres}",
                     )
 
                 # Check reverse
@@ -240,7 +284,7 @@ class RecommendationValidator:
                 if has_group1_mood and has_group2_track:
                     return ValidationResult(
                         False,
-                        f"Genre conflict: track appears to be {track_genres}, mood is {mood_genres}"
+                        f"Genre conflict: track appears to be {track_genres}, mood is {mood_genres}",
                     )
 
         return ValidationResult(True, "Genres compatible")

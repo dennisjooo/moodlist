@@ -1,4 +1,5 @@
 """Prompt templates for determining playlist ordering strategy."""
+
 import json
 from typing import Any, Dict, List
 
@@ -110,10 +111,10 @@ def get_ordering_strategy_user_prompt(
     min_energy: float,
     energy_range: float,
     track_analyses: List[Dict[str, Any]],
-    user_mentioned_count: int
+    user_mentioned_count: int,
 ) -> str:
     """Get the user prompt for ordering strategy determination.
-    
+
     Args:
         mood_prompt: User's mood description
         track_count: Number of tracks
@@ -123,7 +124,7 @@ def get_ordering_strategy_user_prompt(
         energy_range: Range of energy levels
         track_analyses: List of track analyses
         user_mentioned_count: Number of user-mentioned tracks
-        
+
     Returns:
         Formatted user prompt
     """
@@ -139,7 +140,7 @@ Energy Statistics:
 
 Track Analyses Summary:
 {json.dumps(track_analyses[:10], indent=2)}
-{'... and more tracks' if len(track_analyses) > 10 else ''}
+{"... and more tracks" if len(track_analyses) > 10 else ""}
 
 User Mentioned Tracks: {user_mentioned_count} tracks
 
@@ -149,4 +150,3 @@ User Mentioned Tracks: {user_mentioned_count} tracks
 - You can set phases to 0 if they don't fit the mood, but include them in the response
 
 Provide an ordering strategy that creates the best listening experience."""
-

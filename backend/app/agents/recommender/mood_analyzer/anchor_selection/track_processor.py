@@ -19,7 +19,9 @@ class TrackProcessor:
         """
         self.reccobeat_service = reccobeat_service
 
-    async def get_track_features_batch(self, track_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    async def get_track_features_batch(
+        self, track_ids: List[str]
+    ) -> Dict[str, Dict[str, Any]]:
         """Get audio features for multiple tracks in batch.
 
         Args:
@@ -37,7 +39,9 @@ class TrackProcessor:
             logger.warning(f"Failed to get batch audio features: {e}")
             return {}
 
-    def calculate_feature_match(self, track_features: Dict[str, Any], target_features: Dict[str, Any]) -> float:
+    def calculate_feature_match(
+        self, track_features: Dict[str, Any], target_features: Dict[str, Any]
+    ) -> float:
         """Calculate how well track features match target features.
 
         Args:
@@ -53,7 +57,13 @@ class TrackProcessor:
         scores = []
 
         # Key features to match
-        feature_keys = ["energy", "valence", "danceability", "acousticness", "instrumentalness"]
+        feature_keys = [
+            "energy",
+            "valence",
+            "danceability",
+            "acousticness",
+            "instrumentalness",
+        ]
 
         for key in feature_keys:
             if key not in track_features or key not in target_features:
@@ -93,33 +103,32 @@ class TrackProcessor:
         text = f"{track_name} {' '.join(artist_names)}"
 
         # Check for various scripts (order matters - check more specific first)
-        if any('\u4e00' <= char <= '\u9fff' or  # Chinese
-                '\u3040' <= char <= '\u309f' or  # Hiragana
-                '\u30a0' <= char <= '\u30ff' or  # Katakana
-                '\uac00' <= char <= '\ud7af'     # Korean
-                for char in text):
-            return 'cjk'
+        if any(
+            "\u4e00" <= char <= "\u9fff"  # Chinese
+            or "\u3040" <= char <= "\u309f"  # Hiragana
+            or "\u30a0" <= char <= "\u30ff"  # Katakana
+            or "\uac00" <= char <= "\ud7af"  # Korean
+            for char in text
+        ):
+            return "cjk"
 
-        if any('\u0600' <= char <= '\u06ff' for char in text):
-            return 'arabic'
+        if any("\u0600" <= char <= "\u06ff" for char in text):
+            return "arabic"
 
-        if any('\u0590' <= char <= '\u05ff' for char in text):
-            return 'hebrew'
+        if any("\u0590" <= char <= "\u05ff" for char in text):
+            return "hebrew"
 
-        if any('\u0e00' <= char <= '\u0e7f' for char in text):
-            return 'thai'
+        if any("\u0e00" <= char <= "\u0e7f" for char in text):
+            return "thai"
 
-        if any('\u0400' <= char <= '\u04ff' for char in text):
-            return 'cyrillic'
+        if any("\u0400" <= char <= "\u04ff" for char in text):
+            return "cyrillic"
 
         # Default to Latin (English, Spanish, French, German, etc.)
-        return 'latin'
+        return "latin"
 
     def should_apply_language_penalty(
-        self,
-        track_script: str,
-        mood_prompt: str,
-        genre_keywords: List[str]
+        self, track_script: str, mood_prompt: str, genre_keywords: List[str]
     ) -> bool:
         """Determine if a language penalty should be applied based on context.
 
@@ -135,21 +144,34 @@ class TrackProcessor:
         """
         # If track is Latin script (English/European languages), never penalize
         # This covers the vast majority of music and avoids false positives
-        if track_script == 'latin':
+        if track_script == "latin":
             return False
 
         # Check if user explicitly requested non-English music
         prompt_lower = mood_prompt.lower()
-        genres_lower = ' '.join(genre_keywords).lower()
+        genres_lower = " ".join(genre_keywords).lower()
 
         # Language/region indicators in prompt or genres
         non_english_indicators = {
-            'cjk': ['korean', 'k-pop', 'kpop', 'japanese', 'j-pop', 'jpop', 'chinese',
-                    'c-pop', 'cpop', 'mandarin', 'cantonese', 'anime', 'asian'],
-            'arabic': ['arabic', 'middle eastern', 'persian', 'turkish'],
-            'hebrew': ['hebrew', 'israeli'],
-            'thai': ['thai', 'southeast asian'],
-            'cyrillic': ['russian', 'cyrillic', 'slavic']
+            "cjk": [
+                "korean",
+                "k-pop",
+                "kpop",
+                "japanese",
+                "j-pop",
+                "jpop",
+                "chinese",
+                "c-pop",
+                "cpop",
+                "mandarin",
+                "cantonese",
+                "anime",
+                "asian",
+            ],
+            "arabic": ["arabic", "middle eastern", "persian", "turkish"],
+            "hebrew": ["hebrew", "israeli"],
+            "thai": ["thai", "southeast asian"],
+            "cyrillic": ["russian", "cyrillic", "slavic"],
         }
 
         # If user explicitly wants this language/region, don't penalize
@@ -166,9 +188,7 @@ class TrackProcessor:
         return True
 
     def check_temporal_match(
-        self,
-        track: Dict[str, Any],
-        temporal_context: Optional[Dict[str, Any]]
+        self, track: Dict[str, Any], temporal_context: Optional[Dict[str, Any]]
     ) -> Tuple[bool, Optional[str]]:
         """Check if a track matches the temporal context requirements.
 
@@ -191,7 +211,7 @@ class TrackProcessor:
         genre_keywords: List[str],
         features: Optional[Dict[str, Any]] = None,
         source: str = "genre_search",
-        temporal_context: Optional[Dict[str, Any]] = None
+        temporal_context: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Create an anchor candidate from a track with scoring.
 
@@ -208,14 +228,16 @@ class TrackProcessor:
         Returns:
             Anchor candidate dictionary, or None if track should be filtered
         """
-        track_id = track.get('id')
+        track_id = track.get("id")
         if not track_id:
             return None
 
         # CRITICAL: Check temporal match first - filter out before any processing
-        is_temporal_match, temporal_reason = self.check_temporal_match(track, temporal_context)
+        is_temporal_match, temporal_reason = self.check_temporal_match(
+            track, temporal_context
+        )
         if not is_temporal_match:
-            artist_names = [a.get('name', '') for a in track.get('artists', [])]
+            artist_names = [a.get("name", "") for a in track.get("artists", [])]
             logger.info(
                 f"✗ Filtered '{track.get('name')}' by {', '.join(artist_names)}: {temporal_reason}"
             )
@@ -229,7 +251,7 @@ class TrackProcessor:
                     features_map = self.get_track_features_batch([track_id])
                     features = features_map.get(track_id, {})
                     if features:
-                        track['audio_features'] = features
+                        track["audio_features"] = features
                 except Exception as e:
                     logger.warning(f"Failed to get features for track {track_id}: {e}")
 
@@ -240,14 +262,16 @@ class TrackProcessor:
             feature_score = 0.6
 
         # Weight popularity for better mainstream alignment
-        popularity = track.get('popularity', 50) / 100.0  # Normalize to 0-1
+        popularity = track.get("popularity", 50) / 100.0  # Normalize to 0-1
         final_score = feature_score * 0.7 + popularity * 0.3
 
         # Context-aware language filtering
-        artist_names = [a.get('name', '') for a in track.get('artists', [])]
-        track_script = self.detect_track_script(track.get('name', ''), artist_names)
+        artist_names = [a.get("name", "") for a in track.get("artists", [])]
+        track_script = self.detect_track_script(track.get("name", ""), artist_names)
 
-        if self.should_apply_language_penalty(track_script, mood_prompt, genre_keywords):
+        if self.should_apply_language_penalty(
+            track_script, mood_prompt, genre_keywords
+        ):
             final_score *= 0.5
             logger.debug(
                 f"Applied language mismatch penalty to '{track.get('name')}' "
@@ -255,18 +279,18 @@ class TrackProcessor:
             )
 
         # Mark genre-based anchor metadata (can be filtered if poor fit)
-        track['user_mentioned'] = False
-        track['anchor_type'] = 'genre'
-        track['protected'] = False  # Genre anchors can be filtered
+        track["user_mentioned"] = False
+        track["anchor_type"] = "genre"
+        track["protected"] = False  # Genre anchors can be filtered
 
         return {
-            'track': track,
-            'score': final_score,
-            'confidence': 0.85,  # Standard confidence for genre anchors
-            'features': features,
-            'genre': genre,
-            'anchor_type': 'genre',
-            'user_mentioned': False,
-            'protected': False,
-            'source': source
+            "track": track,
+            "score": final_score,
+            "confidence": 0.85,  # Standard confidence for genre anchors
+            "features": features,
+            "genre": genre,
+            "anchor_type": "genre",
+            "user_mentioned": False,
+            "protected": False,
+            "source": source,
         }

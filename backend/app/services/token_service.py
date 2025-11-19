@@ -16,9 +16,7 @@ class TokenService:
     """Service for handling Spotify token operations."""
 
     def __init__(
-        self,
-        spotify_client: SpotifyAPIClient,
-        user_repository: UserRepository
+        self, spotify_client: SpotifyAPIClient, user_repository: UserRepository
     ):
         """Initialize the token service.
 
@@ -57,14 +55,18 @@ class TokenService:
 
             # Calculate new expiration time
             expires_in = token_data.get("expires_in", 3600)
-            token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+            token_expires_at = datetime.now(timezone.utc) + timedelta(
+                seconds=expires_in
+            )
 
             # Update user tokens in database
             updated_user = await self.user_repository.update_tokens(
                 user_id=user_id,
                 access_token=token_data["access_token"],
-                refresh_token=token_data.get("refresh_token", user.refresh_token),  # May not be returned
-                token_expires_at=token_expires_at
+                refresh_token=token_data.get(
+                    "refresh_token", user.refresh_token
+                ),  # May not be returned
+                token_expires_at=token_expires_at,
             )
 
             self.logger.info("Successfully refreshed Spotify token", user_id=user_id)
@@ -73,14 +75,12 @@ class TokenService:
                 "access_token": updated_user.access_token,
                 "refresh_token": updated_user.refresh_token,
                 "expires_at": updated_user.token_expires_at.isoformat(),
-                "expires_in": expires_in
+                "expires_in": expires_in,
             }
 
         except Exception as e:
             self.logger.error(
-                "Failed to refresh user token",
-                user_id=user_id,
-                error=str(e)
+                "Failed to refresh user token", user_id=user_id, error=str(e)
             )
             raise
 
@@ -104,11 +104,7 @@ class TokenService:
             return datetime.now(timezone.utc) < (user.token_expires_at - buffer_time)
 
         except Exception as e:
-            self.logger.error(
-                "Error validating token",
-                user_id=user_id,
-                error=str(e)
-            )
+            self.logger.error("Error validating token", user_id=user_id, error=str(e))
             return False
 
     async def ensure_valid_token(self, user_id: int) -> str:
@@ -138,9 +134,7 @@ class TokenService:
 
         except Exception as e:
             self.logger.error(
-                "Failed to ensure valid token",
-                user_id=user_id,
-                error=str(e)
+                "Failed to ensure valid token", user_id=user_id, error=str(e)
             )
             raise
 
@@ -159,10 +153,7 @@ class TokenService:
         try:
             # Clear tokens by setting them to None
             await self.user_repository.update(
-                user_id,
-                access_token=None,
-                refresh_token=None,
-                token_expires_at=None
+                user_id, access_token=None, refresh_token=None, token_expires_at=None
             )
 
             self.logger.info("Successfully revoked user tokens", user_id=user_id)
@@ -170,8 +161,6 @@ class TokenService:
 
         except Exception as e:
             self.logger.error(
-                "Failed to revoke user tokens",
-                user_id=user_id,
-                error=str(e)
+                "Failed to revoke user tokens", user_id=user_id, error=str(e)
             )
             raise

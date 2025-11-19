@@ -21,6 +21,7 @@ from app.services.auth_service import AuthService
 # Singletons
 _spotify_client: Optional[SpotifyAPIClient] = None
 
+
 def get_spotify_client() -> SpotifyAPIClient:
     """Get Spotify API client singleton."""
     global _spotify_client
@@ -30,36 +31,30 @@ def get_spotify_client() -> SpotifyAPIClient:
 
 
 # Repository dependencies
-def get_playlist_repository(
-    db: AsyncSession = Depends(get_db)
-) -> PlaylistRepository:
+def get_playlist_repository(db: AsyncSession = Depends(get_db)) -> PlaylistRepository:
     """Get playlist repository."""
     return PlaylistRepository(db)
 
 
-def get_user_repository(
-    db: AsyncSession = Depends(get_db)
-) -> UserRepository:
+def get_user_repository(db: AsyncSession = Depends(get_db)) -> UserRepository:
     """Get user repository."""
     return UserRepository(db)
 
 
-def get_session_repository(
-    db: AsyncSession = Depends(get_db)
-) -> SessionRepository:
+def get_session_repository(db: AsyncSession = Depends(get_db)) -> SessionRepository:
     """Get session repository."""
     return SessionRepository(db)
 
 
 def get_invocation_repository(
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ) -> InvocationRepository:
     """Get invocation repository."""
     return InvocationRepository(db)
 
 
 def get_llm_invocation_repository(
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ) -> LLMInvocationRepository:
     """Get LLM invocation repository."""
     return LLMInvocationRepository(db)
@@ -68,7 +63,7 @@ def get_llm_invocation_repository(
 # Service dependencies
 def get_token_service(
     user_repo: UserRepository = Depends(get_user_repository),
-    spotify_client: SpotifyAPIClient = Depends(get_spotify_client)
+    spotify_client: SpotifyAPIClient = Depends(get_spotify_client),
 ) -> TokenService:
     """Get token service."""
     return TokenService(spotify_client, user_repo)
@@ -77,7 +72,7 @@ def get_token_service(
 def get_auth_service(
     spotify_client: SpotifyAPIClient = Depends(get_spotify_client),
     user_repo: UserRepository = Depends(get_user_repository),
-    session_repo: SessionRepository = Depends(get_session_repository)
+    session_repo: SessionRepository = Depends(get_session_repository),
 ) -> AuthService:
     """Get auth service."""
     return AuthService(spotify_client, user_repo, session_repo)
@@ -86,7 +81,7 @@ def get_auth_service(
 def get_workflow_state_service(
     session_repo: SessionRepository = Depends(get_session_repository),
     playlist_repo: PlaylistRepository = Depends(get_playlist_repository),
-    user_repo: UserRepository = Depends(get_user_repository)
+    user_repo: UserRepository = Depends(get_user_repository),
 ) -> WorkflowStateService:
     """Get workflow state service."""
     return WorkflowStateService(session_repo, playlist_repo, user_repo)
@@ -96,10 +91,14 @@ def get_playlist_service(
     playlist_repo: PlaylistRepository = Depends(get_playlist_repository),
     user_repo: UserRepository = Depends(get_user_repository),
     spotify_client: SpotifyAPIClient = Depends(get_spotify_client),
-    llm_invocation_repo: LLMInvocationRepository = Depends(get_llm_invocation_repository),
+    llm_invocation_repo: LLMInvocationRepository = Depends(
+        get_llm_invocation_repository
+    ),
 ) -> PlaylistService:
     """Get playlist service."""
-    return PlaylistService(spotify_client, playlist_repo, user_repo, llm_invocation_repo)
+    return PlaylistService(
+        spotify_client, playlist_repo, user_repo, llm_invocation_repo
+    )
 
 
 def get_quota_service(

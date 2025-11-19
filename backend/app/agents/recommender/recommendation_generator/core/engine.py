@@ -16,11 +16,13 @@ logger = structlog.get_logger(__name__)
 
 class RecommendationEngine:
     """Engine for generating track recommendations from various sources.
-    
+
     Uses specialized generators for better separation of concerns.
     """
 
-    def __init__(self, reccobeat_service: RecoBeatService, spotify_service: SpotifyService):
+    def __init__(
+        self, reccobeat_service: RecoBeatService, spotify_service: SpotifyService
+    ):
         """Initialize the recommendation engine.
 
         Args:
@@ -35,7 +37,9 @@ class RecommendationEngine:
         self.artist_generator = ArtistBasedGenerator(spotify_service, reccobeat_service)
         self.anchor_handler = AnchorTrackHandler()
 
-    async def _generate_mood_based_recommendations(self, state: AgentState) -> List[Dict[str, Any]]:
+    async def _generate_mood_based_recommendations(
+        self, state: AgentState
+    ) -> List[Dict[str, Any]]:
         """Generate recommendations based on mood analysis, seeds, and discovered artists.
 
         Recommendation mix with User Anchor Strategy:
@@ -64,7 +68,7 @@ class RecommendationEngine:
             self._generate_from_user_anchors(state),
             self.artist_generator.generate_recommendations(state),
             self.seed_generator.generate_recommendations(state),
-            return_exceptions=True  # Continue if one strategy fails
+            return_exceptions=True,  # Continue if one strategy fails
         )
 
         # Handle exceptions from parallel execution
@@ -140,7 +144,9 @@ class RecommendationEngine:
         state.metadata["_temp_artist_target"] = target_artist_recs
         state.metadata["_temp_user_anchor_target"] = target_user_anchor_recs
 
-    async def _generate_from_user_anchors(self, state: AgentState) -> List[Dict[str, Any]]:
+    async def _generate_from_user_anchors(
+        self, state: AgentState
+    ) -> List[Dict[str, Any]]:
         """Generate recommendations using the user anchor strategy.
 
         Args:
@@ -159,13 +165,17 @@ class RecommendationEngine:
             # Initialize user anchor strategy
             user_anchor_strategy = UserAnchorStrategy(
                 spotify_service=self.spotify_service,
-                reccobeat_service=self.reccobeat_service
+                reccobeat_service=self.reccobeat_service,
             )
 
             # Generate recommendations
-            recommendations = await user_anchor_strategy.generate_recommendations(state, target_count)
+            recommendations = await user_anchor_strategy.generate_recommendations(
+                state, target_count
+            )
 
-            logger.info(f"User anchor strategy generated {len(recommendations)} recommendations")
+            logger.info(
+                f"User anchor strategy generated {len(recommendations)} recommendations"
+            )
 
             return recommendations
 
@@ -173,7 +183,9 @@ class RecommendationEngine:
             logger.error(f"Error in user anchor strategy: {e}", exc_info=True)
             return []
 
-    async def _generate_fallback_recommendations(self, state: AgentState) -> List[Dict[str, Any]]:
+    async def _generate_fallback_recommendations(
+        self, state: AgentState
+    ) -> List[Dict[str, Any]]:
         """Generate fallback recommendations when no seeds are available.
 
         Args:
@@ -186,28 +198,34 @@ class RecommendationEngine:
 
         # Use mood-based search with artist keywords
         if state.mood_analysis:
-            keywords = state.mood_analysis.get("keywords") or state.mood_analysis.get("search_keywords")
+            keywords = state.mood_analysis.get("keywords") or state.mood_analysis.get(
+                "search_keywords"
+            )
 
             if keywords:
                 # Use top 3 keywords
-                keywords_to_use = keywords[:3] if isinstance(keywords, list) else [keywords]
+                keywords_to_use = (
+                    keywords[:3] if isinstance(keywords, list) else [keywords]
+                )
 
                 # Search for artists matching mood keywords
                 matching_artists = await self.reccobeat_service.search_artists_by_mood(
-                    keywords_to_use,
-                    limit=5
+                    keywords_to_use, limit=5
                 )
 
                 if matching_artists:
                     # Use found artists as seeds for recommendations
-                    artist_ids = [artist["id"] for artist in matching_artists if artist.get("id")]
+                    artist_ids = [
+                        artist["id"] for artist in matching_artists if artist.get("id")
+                    ]
 
                     if artist_ids:
                         # Deduplicate artist IDs
                         unique_artist_ids = list(dict.fromkeys(artist_ids[:3]))
-                        fallback_recommendations = await self.reccobeat_service.get_track_recommendations(
-                            seeds=unique_artist_ids,
-                            size=20
+                        fallback_recommendations = (
+                            await self.reccobeat_service.get_track_recommendations(
+                                seeds=unique_artist_ids, size=20
+                            )
                         )
 
                         logger.info(

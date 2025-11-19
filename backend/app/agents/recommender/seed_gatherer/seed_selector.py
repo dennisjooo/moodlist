@@ -18,7 +18,7 @@ class SeedSelector:
     def select_seed_tracks(
         self,
         top_tracks: List[Dict[str, Any]],
-        target_features: Optional[Dict[str, Any]] = None
+        target_features: Optional[Dict[str, Any]] = None,
     ) -> List[str]:
         """Select the best tracks to use as seeds with scoring.
 
@@ -45,21 +45,23 @@ class SeedSelector:
             # Score tracks based on how well they match the target features
             scored_tracks = []
             for track in valid_tracks[:30]:  # Consider top 30 tracks
-                score = self.feature_matcher.calculate_mood_match_score(track, target_features)
+                score = self.feature_matcher.calculate_mood_match_score(
+                    track, target_features
+                )
                 scored_tracks.append((track["id"], score, track))
 
             # Sort by score and return track IDs
             scored_tracks.sort(key=lambda x: x[1], reverse=True)
             selected_tracks = [track_id for track_id, _, _ in scored_tracks]
 
-            logger.info(f"Scored {len(scored_tracks)} tracks, top score: {scored_tracks[0][1]:.2f}")
+            logger.info(
+                f"Scored {len(scored_tracks)} tracks, top score: {scored_tracks[0][1]:.2f}"
+            )
             return selected_tracks
         else:
             # Default selection: take top tracks by popularity
             sorted_tracks = sorted(
-                valid_tracks,
-                key=lambda x: x.get("popularity", 0),
-                reverse=True
+                valid_tracks, key=lambda x: x.get("popularity", 0), reverse=True
             )
             selected_tracks = [track["id"] for track in sorted_tracks]
 
@@ -70,7 +72,7 @@ class SeedSelector:
         self,
         top_tracks: List[Dict[str, Any]],
         mood_analysis: Optional[Dict[str, Any]] = None,
-        limit: int = 5
+        limit: int = 5,
     ) -> List[str]:
         """Get tracks to avoid in recommendations.
 
@@ -88,10 +90,7 @@ class SeedSelector:
         valid_tracks = [track for track in top_tracks if track.get("id")]
 
         # Sort by popularity (ascending) - least popular first
-        sorted_tracks = sorted(
-            valid_tracks,
-            key=lambda x: x.get("popularity", 50)
-        )
+        sorted_tracks = sorted(valid_tracks, key=lambda x: x.get("popularity", 50))
 
         # Take least popular tracks as negative examples
         negative_seeds = [track["id"] for track in sorted_tracks[:limit]]

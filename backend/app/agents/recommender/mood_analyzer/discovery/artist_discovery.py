@@ -35,10 +35,7 @@ class ArtistDiscovery:
         self._text_processor = TextProcessor()
 
     def _should_filter_artist_by_region(
-        self,
-        artist_name: str,
-        artist_genres: List[str],
-        excluded_regions: List[str]
+        self, artist_name: str, artist_genres: List[str], excluded_regions: List[str]
     ) -> tuple[bool, Optional[str]]:
         """Check if an artist should be filtered based on regional preferences.
 
@@ -54,15 +51,15 @@ class ArtistDiscovery:
             return False, None
 
         artist_region = RegionalFilter.detect_artist_region(artist_name, artist_genres)
-        if artist_region and RegionalFilter.is_region_excluded(artist_region, excluded_regions):
+        if artist_region and RegionalFilter.is_region_excluded(
+            artist_region, excluded_regions
+        ):
             return True, artist_region
 
         return False, artist_region
 
     def _get_popularity_sorted_artists(
-        self,
-        artists: List[Dict[str, Any]],
-        limit: int
+        self, artists: List[Dict[str, Any]], limit: int
     ) -> List[Dict[str, Any]]:
         """Sort artists by popularity and return top N.
 
@@ -73,11 +70,9 @@ class ArtistDiscovery:
         Returns:
             Top artists sorted by popularity
         """
-        return sorted(
-            artists,
-            key=lambda x: x.get("popularity") or 0,
-            reverse=True
-        )[:limit]
+        return sorted(artists, key=lambda x: x.get("popularity") or 0, reverse=True)[
+            :limit
+        ]
 
     async def discover_mood_artists(self, state, mood_analysis: Dict[str, Any]) -> None:
         """Discover artists matching the mood using Spotify search and LLM filtering.
@@ -108,7 +103,10 @@ class ArtistDiscovery:
                 return
 
             # Phase 2: Filter and validate artists
-            filtered_artists, llm_filtered_ids = await self._filter_and_validate_artists(
+            (
+                filtered_artists,
+                llm_filtered_ids,
+            ) = await self._filter_and_validate_artists(
                 all_artists, state, mood_analysis
             )
             if not filtered_artists:
@@ -139,10 +137,7 @@ class ArtistDiscovery:
         return access_token
 
     async def _collect_candidate_artists(
-        self,
-        state,
-        mood_analysis: Dict[str, Any],
-        access_token: str
+        self, state, mood_analysis: Dict[str, Any], access_token: str
     ) -> List[Dict[str, Any]]:
         """Collect candidate artists from all available sources.
 
@@ -155,7 +150,9 @@ class ArtistDiscovery:
             List of unique candidate artists
         """
         search_params = self._extract_search_parameters(state, mood_analysis)
-        all_artists = await self._gather_artists_from_sources(search_params, access_token)
+        all_artists = await self._gather_artists_from_sources(
+            search_params, access_token
+        )
 
         unique_artists = ArtistDeduplicator.deduplicate(all_artists)
         logger.info(f"Found {len(unique_artists)} unique artists from search")
@@ -163,9 +160,7 @@ class ArtistDiscovery:
         return unique_artists
 
     def _extract_search_parameters(
-        self,
-        state,
-        mood_analysis: Dict[str, Any]
+        self, state, mood_analysis: Dict[str, Any]
     ) -> Dict[str, List[str]]:
         """Extract search parameters from mood analysis.
 
@@ -182,18 +177,18 @@ class ArtistDiscovery:
 
         # Fallback to extracting keywords from prompt if none provided
         if not genre_keywords and not artist_recommendations and not search_keywords:
-            search_keywords = self._text_processor.extract_search_keywords(state.mood_prompt)
+            search_keywords = self._text_processor.extract_search_keywords(
+                state.mood_prompt
+            )
 
         return {
             "genre_keywords": genre_keywords,
             "artist_recommendations": artist_recommendations,
-            "search_keywords": search_keywords
+            "search_keywords": search_keywords,
         }
 
     async def _gather_artists_from_sources(
-        self,
-        search_params: Dict[str, List[str]],
-        access_token: str
+        self, search_params: Dict[str, List[str]], access_token: str
     ) -> List[Dict[str, Any]]:
         """Gather artists from all available sources.
 
@@ -230,9 +225,7 @@ class ArtistDiscovery:
         return all_artists
 
     async def _discover_from_keywords(
-        self,
-        search_keywords: List[str],
-        access_token: str
+        self, search_keywords: List[str], access_token: str
     ) -> List[Dict[str, Any]]:
         """Discover artists using general keyword search as fallback.
 
@@ -249,7 +242,7 @@ class ArtistDiscovery:
                 keyword_artists = await self.spotify_service.search_spotify_artists(
                     access_token=access_token,
                     query=keyword,
-                    limit=config.fallback_artist_search_limit
+                    limit=config.fallback_artist_search_limit,
                 )
                 artists.extend(keyword_artists)
             except Exception as e:
@@ -259,10 +252,7 @@ class ArtistDiscovery:
         return artists
 
     async def _filter_and_validate_artists(
-        self,
-        artists: List[Dict[str, Any]],
-        state,
-        mood_analysis: Dict[str, Any]
+        self, artists: List[Dict[str, Any]], state, mood_analysis: Dict[str, Any]
     ) -> tuple[List[Dict[str, Any]], Set[str]]:
         """Filter and validate artists using heuristics and LLM.
 
@@ -276,7 +266,9 @@ class ArtistDiscovery:
         """
         # Step 1: Apply heuristic pruning to reduce cost
         pruned_artists = self._heuristic_prune_artists(artists, mood_analysis)
-        logger.info(f"After heuristic pruning: {len(pruned_artists)} artists (from {len(artists)})")
+        logger.info(
+            f"After heuristic pruning: {len(pruned_artists)} artists (from {len(artists)})"
+        )
 
         # Step 2: Apply LLM validation if available and needed
         llm_filtered_ids = set()
@@ -296,10 +288,7 @@ class ArtistDiscovery:
         return filtered_artists, llm_filtered_ids
 
     async def _apply_llm_validation(
-        self,
-        artists: List[Dict[str, Any]],
-        state,
-        mood_analysis: Dict[str, Any]
+        self, artists: List[Dict[str, Any]], state, mood_analysis: Dict[str, Any]
     ) -> tuple[List[Dict[str, Any]], Set[str]]:
         """Apply LLM batch validation to filter artists.
 
@@ -321,7 +310,9 @@ class ArtistDiscovery:
         # Only do expensive 2nd LLM call if batch returned very few results (< 3)
         if len(filtered_artists) < config.llm_minimum_filtered_artists:
             if len(filtered_artists) < 3:
-                logger.warning("LLM batch validation returned very few artists, trying alternative LLM filter")
+                logger.warning(
+                    "LLM batch validation returned very few artists, trying alternative LLM filter"
+                )
                 filtered_artists = await self._llm_filter_artists(
                     artists, state.mood_prompt, mood_analysis
                 )
@@ -350,7 +341,7 @@ class ArtistDiscovery:
                 "id": artist.get("id"),
                 "name": artist.get("name"),
                 "genres": artist.get("genres", []),
-                "popularity": artist.get("popularity", 50)
+                "popularity": artist.get("popularity", 50),
             }
             for artist in artists
         ]
@@ -361,7 +352,7 @@ class ArtistDiscovery:
         llm_filtered_ids: Set[str],
         state,
         mood_analysis: Dict[str, Any],
-        access_token: str
+        access_token: str,
     ) -> None:
         """Expand artist pool with genre-based discovery and finalize.
 
@@ -381,7 +372,7 @@ class ArtistDiscovery:
             existing_artist_ids=set(core_artist_ids),
             mood_analysis=mood_analysis,
             llm_filtered_artist_ids=llm_filtered_ids,
-            state=state
+            state=state,
         )
 
         # Validate expanded artists with LLM
@@ -406,7 +397,7 @@ class ArtistDiscovery:
         expanded_details: List[Dict[str, Any]],
         expanded_ids: List[str],
         state,
-        mood_analysis: Dict[str, Any]
+        mood_analysis: Dict[str, Any],
     ) -> List[str]:
         """Validate expanded artists using LLM.
 
@@ -422,13 +413,17 @@ class ArtistDiscovery:
         if not self.llm or not expanded_details:
             return expanded_ids
 
-        logger.info(f"Running LLM batch validation on {len(expanded_details)} expanded artists")
+        logger.info(
+            f"Running LLM batch validation on {len(expanded_details)} expanded artists"
+        )
         validated_artists, _ = await self._llm_batch_validate_artists(
             expanded_details, state.mood_prompt, mood_analysis
         )
 
         validated_ids = [a.get("id") for a in validated_artists if a.get("id")]
-        logger.info(f"LLM validated {len(validated_ids)}/{len(expanded_details)} expanded artists")
+        logger.info(
+            f"LLM validated {len(validated_ids)}/{len(expanded_details)} expanded artists"
+        )
 
         return validated_ids
 
@@ -436,7 +431,7 @@ class ArtistDiscovery:
         self,
         artists: List[Dict[str, Any]],
         mood_prompt: str,
-        mood_analysis: Dict[str, Any]
+        mood_analysis: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
         """Use LLM to filter and select artists that best match the mood.
 
@@ -451,25 +446,37 @@ class ArtistDiscovery:
         try:
             # Prepare artist summary for LLM
             artists_summary = []
-            for i, artist in enumerate(artists[: config.artist_discovery_result_limit], 1):
-                genres_str = ", ".join(artist.get("genres", [])[:3]) or "no genres listed"
+            for i, artist in enumerate(
+                artists[: config.artist_discovery_result_limit], 1
+            ):
+                genres_str = (
+                    ", ".join(artist.get("genres", [])[:3]) or "no genres listed"
+                )
                 artists_summary.append(
                     f"{i}. {artist.get('name')} - Genres: {genres_str}, Popularity: {artist.get('popularity', 50)}"
                 )
 
             mood_interpretation = mood_analysis.get("mood_interpretation", mood_prompt)
 
-            prompt = get_artist_filtering_prompt(mood_prompt, mood_interpretation, chr(10).join(artists_summary))
+            prompt = get_artist_filtering_prompt(
+                mood_prompt, mood_interpretation, chr(10).join(artists_summary)
+            )
 
             response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
-            content = response.content if hasattr(response, 'content') else str(response)
+            content = (
+                response.content if hasattr(response, "content") else str(response)
+            )
 
             # Parse JSON response
             filtered_artists = self._parse_llm_artist_response(content, artists)
-            
+
             if not filtered_artists:
-                logger.warning("No valid artists selected by LLM, falling back to popularity-based selection")
-                return self._get_popularity_sorted_artists(artists, config.artist_discovery_result_limit)
+                logger.warning(
+                    "No valid artists selected by LLM, falling back to popularity-based selection"
+                )
+                return self._get_popularity_sorted_artists(
+                    artists, config.artist_discovery_result_limit
+                )
 
             logger.info(f"LLM selected {len(filtered_artists)} artists")
             return filtered_artists[: config.artist_discovery_result_limit]
@@ -477,12 +484,12 @@ class ArtistDiscovery:
         except Exception as e:
             logger.error(f"LLM artist filtering failed with unexpected error: {str(e)}")
             # Fallback to popularity-based selection
-            return self._get_popularity_sorted_artists(artists, config.artist_discovery_result_limit)
+            return self._get_popularity_sorted_artists(
+                artists, config.artist_discovery_result_limit
+            )
 
     def _parse_llm_artist_response(
-        self,
-        content: str,
-        artists: List[Dict[str, Any]]
+        self, content: str, artists: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Parse LLM response and extract selected artists.
 
@@ -495,20 +502,22 @@ class ArtistDiscovery:
         """
         # Parse using centralized parser utility
         result = LLMResponseParser.extract_json_from_response(content, fallback={})
-        
+
         if not result:
             logger.warning("Could not find JSON in LLM artist filtering response")
             logger.debug(f"Raw LLM response: {content[:500]}")
             return []
-        
+
         # Extract and validate selected indices
         selected_indices = result.get("selected_artist_indices", [])
         reasoning = result.get("reasoning", "")
-        
+
         if not isinstance(selected_indices, list):
-            logger.warning(f"selected_artist_indices is not a list: {type(selected_indices)}")
+            logger.warning(
+                f"selected_artist_indices is not a list: {type(selected_indices)}"
+            )
             return []
-        
+
         # Map indices to artists (1-indexed in prompt, 0-indexed in list)
         filtered_artists = []
         for idx in selected_indices:
@@ -516,34 +525,32 @@ class ArtistDiscovery:
                 filtered_artists.append(artists[idx - 1])
             else:
                 logger.warning(f"Invalid artist index: {idx}")
-        
+
         if not filtered_artists:
             logger.warning("No valid artists selected by LLM")
             return []
-        
+
         # Store reasoning in state metadata
-        if hasattr(self, '_current_state'):
+        if hasattr(self, "_current_state"):
             self._current_state.metadata["artist_discovery_reasoning"] = reasoning
-        
+
         logger.info(f"LLM artist selection reasoning: {reasoning}")
         return filtered_artists
 
     async def _discover_from_llm_suggestions(
-        self,
-        artist_recommendations: List[str],
-        access_token: str
+        self, artist_recommendations: List[str], access_token: str
     ) -> List[Dict[str, Any]]:
         """Discover artists from LLM-suggested artist names.
-        
+
         Args:
             artist_recommendations: List of artist names suggested by LLM
             access_token: Spotify access token
-            
+
         Returns:
             List of artist dictionaries
         """
         llm_artists = []
-        
+
         # Search for artists by name
         for artist_name in artist_recommendations[: config.artist_recommendation_limit]:
             try:
@@ -551,62 +558,60 @@ class ArtistDiscovery:
                 artists = await self.spotify_service.search_spotify_artists(
                     access_token=access_token,
                     query=artist_name,
-                    limit=config.artist_search_limit
+                    limit=config.artist_search_limit,
                 )
                 llm_artists.extend(artists)
             except Exception as e:
                 logger.error(f"Failed to search for artist '{artist_name}': {e}")
-        
+
         return llm_artists
 
     async def _discover_from_genres(
-        self,
-        genre_keywords: List[str],
-        access_token: str
+        self, genre_keywords: List[str], access_token: str
     ) -> List[Dict[str, Any]]:
         """Discover artists directly from genres (enhanced for 50% weight).
-        
+
         Optimized: All genre searches run in parallel for better performance.
-        
+
         Args:
             genre_keywords: List of genre keywords
             access_token: Spotify access token
-            
+
         Returns:
             List of artist dictionaries
         """
+
         async def search_genre(genre: str) -> List[Dict[str, Any]]:
             """Search artists for a single genre."""
             try:
                 logger.info(f"Searching artists for genre: {genre}")
-                
+
                 # Direct artist search by genre (NEW - primary method)
                 direct_artists = await self.spotify_service.search_artists_by_genre(
                     access_token=access_token,
                     genre=genre,
-                    limit=config.genre_artist_search_limit
+                    limit=config.genre_artist_search_limit,
                 )
-                
+
                 # Also search tracks for additional artist discovery
                 track_artists = await self.spotify_service.search_tracks_for_artists(
                     access_token=access_token,
                     query=f"genre:{genre}",
-                    limit=config.genre_track_search_limit
+                    limit=config.genre_track_search_limit,
                 )
-                
+
                 return direct_artists + track_artists
-                
+
             except Exception as e:
                 logger.error(f"Failed to search for genre '{genre}': {e}")
                 return []
-        
+
         # Process genres in parallel using configured limit
         genres_to_search = genre_keywords[: config.genre_anchor_search_limit]
         results = await asyncio.gather(
-            *[search_genre(genre) for genre in genres_to_search],
-            return_exceptions=True
+            *[search_genre(genre) for genre in genres_to_search], return_exceptions=True
         )
-        
+
         # Flatten results and filter out exceptions
         genre_artists = []
         for result in results:
@@ -614,14 +619,14 @@ class ArtistDiscovery:
                 genre_artists.extend(result)
             elif isinstance(result, Exception):
                 logger.warning(f"Exception in genre artist discovery: {result}")
-        
+
         return genre_artists
 
     async def _llm_batch_validate_artists(
         self,
         artists: List[Dict[str, Any]],
         mood_prompt: str,
-        mood_analysis: Dict[str, Any]
+        mood_analysis: Dict[str, Any],
     ) -> tuple[List[Dict[str, Any]], Set[str]]:
         """Use LLM to batch validate artists for cultural/genre relevance.
 
@@ -646,24 +651,26 @@ class ArtistDiscovery:
             batch_size = config.artist_batch_validation_size
 
             for i in range(0, len(artists), batch_size):
-                batch = artists[i:i + batch_size]
+                batch = artists[i : i + batch_size]
 
-                prompt = get_batch_artist_validation_prompt(batch, mood_prompt, mood_analysis)
+                prompt = get_batch_artist_validation_prompt(
+                    batch, mood_prompt, mood_analysis
+                )
                 response = await self.llm.ainvoke([{"role": "user", "content": prompt}])
                 result = LLMResponseParser.extract_json_from_response(response)
 
-                keep_indices = result.get('keep_artists', [])
-                filtered_info = result.get('filtered_artists', [])
+                keep_indices = result.get("keep_artists", [])
+                filtered_info = result.get("filtered_artists", [])
 
                 # Log filtered artists and track their IDs
                 for filter_info in filtered_info:
-                    artist_idx = filter_info.get('index', -1)
-                    reason = filter_info.get('reason', '')
-                    name = filter_info.get('name', 'Unknown')
+                    artist_idx = filter_info.get("index", -1)
+                    reason = filter_info.get("reason", "")
+                    name = filter_info.get("name", "Unknown")
 
                     # Track the filtered artist ID
                     if 0 <= artist_idx < len(batch):
-                        artist_id = batch[artist_idx].get('id')
+                        artist_id = batch[artist_idx].get("id")
                         if artist_id:
                             filtered_artist_ids.add(artist_id)
                             logger.info(
@@ -689,7 +696,9 @@ class ArtistDiscovery:
                 f"filtered {len(filtered_artist_ids)} artist IDs"
             )
 
-            return all_validated[: config.artist_discovery_result_limit], filtered_artist_ids
+            return all_validated[
+                : config.artist_discovery_result_limit
+            ], filtered_artist_ids
 
         except Exception as e:
             logger.error(f"LLM batch artist validation failed: {e}")
@@ -697,9 +706,7 @@ class ArtistDiscovery:
             return artists, set()
 
     def _heuristic_prune_artists(
-        self,
-        artists: List[Dict[str, Any]],
-        mood_analysis: Dict[str, Any]
+        self, artists: List[Dict[str, Any]], mood_analysis: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """Apply heuristic rules to prune artists BEFORE LLM filtering.
 
@@ -724,7 +731,7 @@ class ArtistDiscovery:
         excluded_regions = mood_analysis.get("excluded_regions", [])
 
         for artist in artists:
-            artist_name = artist.get('name', '')
+            artist_name = artist.get("name", "")
 
             # Rule 1: Filter out artists with very low popularity (< 15)
             # These are likely obscure or have data quality issues
@@ -732,7 +739,9 @@ class ArtistDiscovery:
             if popularity is None:
                 popularity = 0
             if popularity < config.heuristic_min_artist_popularity:
-                logger.debug(f"Filtered artist {artist_name} - low popularity: {popularity}")
+                logger.debug(
+                    f"Filtered artist {artist_name} - low popularity: {popularity}"
+                )
                 continue
 
             # Rule 2: Filter out artists with no genre information
@@ -764,7 +773,10 @@ class ArtistDiscovery:
             pruned.append(artist_copy)
 
         # Sort by: genre match first, then popularity
-        pruned.sort(key=lambda a: (a.get("_genre_match", False), a.get("popularity", 0)), reverse=True)
+        pruned.sort(
+            key=lambda a: (a.get("_genre_match", False), a.get("popularity", 0)),
+            reverse=True,
+        )
 
         # Remove the temporary _genre_match field
         for artist in pruned:
@@ -788,7 +800,7 @@ class ArtistDiscovery:
         existing_artist_ids: Optional[Set[str]] = None,
         mood_analysis: Optional[Dict[str, Any]] = None,
         llm_filtered_artist_ids: Optional[Set[str]] = None,
-        state: Optional[Any] = None
+        state: Optional[Any] = None,
     ) -> tuple[List[str], List[Dict[str, Any]]]:
         """Expand artist pool with genre-based artist discovery for diversity.
 
@@ -818,8 +830,7 @@ class ArtistDiscovery:
             return [], []
 
         top_genres = self._extract_top_genres_from_artists(
-            expansion_config["top_core_artists"],
-            expansion_config["max_genres"]
+            expansion_config["top_core_artists"], expansion_config["max_genres"]
         )
 
         if not top_genres:
@@ -828,10 +839,12 @@ class ArtistDiscovery:
 
         logger.info(f"Expanding with genres: {top_genres[:3]}")
 
-        expanded_artist_ids, expanded_artists_details, stats = await self._search_genre_based_artists(
-            top_genres,
-            access_token,
-            expansion_config
+        (
+            expanded_artist_ids,
+            expanded_artists_details,
+            stats,
+        ) = await self._search_genre_based_artists(
+            top_genres, access_token, expansion_config
         )
 
         logger.info(
@@ -845,7 +858,7 @@ class ArtistDiscovery:
         core_artists: List[Dict[str, Any]],
         existing_artist_ids: Optional[Set[str]],
         llm_filtered_artist_ids: Optional[Set[str]],
-        mood_analysis: Optional[Dict[str, Any]]
+        mood_analysis: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Prepare configuration for genre expansion.
 
@@ -867,7 +880,9 @@ class ArtistDiscovery:
 
         expansion_capacity = max(max_total_artists - len(existing_artist_ids), 0)
         expansion_target = min(limits.genre_expansion_target, expansion_capacity)
-        excluded_regions = mood_analysis.get("excluded_regions", []) if mood_analysis else []
+        excluded_regions = (
+            mood_analysis.get("excluded_regions", []) if mood_analysis else []
+        )
 
         return {
             "top_core_artists": core_artists[:core_limit],
@@ -882,9 +897,7 @@ class ArtistDiscovery:
         }
 
     def _extract_top_genres_from_artists(
-        self,
-        artists: List[Dict[str, Any]],
-        max_genres: int
+        self, artists: List[Dict[str, Any]], max_genres: int
     ) -> List[str]:
         """Extract top genres from a list of artists, weighted by artist order.
 
@@ -909,10 +922,7 @@ class ArtistDiscovery:
         return [genre for genre, _ in genre_counts.most_common(max_genres)]
 
     async def _search_genre_based_artists(
-        self,
-        genres: List[str],
-        access_token: str,
-        expansion_config: Dict[str, Any]
+        self, genres: List[str], access_token: str, expansion_config: Dict[str, Any]
     ) -> tuple[List[str], List[Dict[str, Any]], Dict[str, int]]:
         """Search for artists in specified genres.
 
@@ -944,7 +954,7 @@ class ArtistDiscovery:
                     search_results = await self.spotify_service.search_spotify_artists(
                         access_token=access_token,
                         query=f'genre:"{genre}"',
-                        limit=search_limit
+                        limit=search_limit,
                     )
                     return search_results if search_results else []
                 except Exception as e:
@@ -952,7 +962,9 @@ class ArtistDiscovery:
                     return []
 
             # Execute all genre searches concurrently
-            genre_search_results = await asyncio.gather(*[search_genre(g) for g in genres])
+            genre_search_results = await asyncio.gather(
+                *[search_genre(g) for g in genres]
+            )
 
             # Process results from all genres
             for search_results in genre_search_results:
@@ -963,13 +975,15 @@ class ArtistDiscovery:
                     if len(expanded_artist_ids) >= expansion_target:
                         break
 
-                    should_add, filter_reason, filter_type = self._should_add_expanded_artist(
-                        artist,
-                        existing_artist_ids,
-                        expanded_artist_ids,
-                        llm_filtered_artist_ids,
-                        min_popularity,
-                        excluded_regions
+                    should_add, filter_reason, filter_type = (
+                        self._should_add_expanded_artist(
+                            artist,
+                            existing_artist_ids,
+                            expanded_artist_ids,
+                            llm_filtered_artist_ids,
+                            min_popularity,
+                            excluded_regions,
+                        )
                     )
 
                     if not should_add:
@@ -988,10 +1002,14 @@ class ArtistDiscovery:
         except Exception as e:
             logger.error(f"Error searching genre-based artists: {e}", exc_info=True)
 
-        return expanded_artist_ids, expanded_artists_details, {
-            "llm_filtered_count": llm_filtered_count,
-            "regional_filtered_count": regional_filtered_count
-        }
+        return (
+            expanded_artist_ids,
+            expanded_artists_details,
+            {
+                "llm_filtered_count": llm_filtered_count,
+                "regional_filtered_count": regional_filtered_count,
+            },
+        )
 
     def _should_add_expanded_artist(
         self,
@@ -1000,7 +1018,7 @@ class ArtistDiscovery:
         expanded_artist_ids: List[str],
         llm_filtered_artist_ids: Set[str],
         min_popularity: int,
-        excluded_regions: List[str]
+        excluded_regions: List[str],
     ) -> tuple[bool, Optional[str], Optional[str]]:
         """Check if an artist should be added to the expanded pool.
 

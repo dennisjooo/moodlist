@@ -21,7 +21,7 @@ class WorkflowStateService:
         self,
         session_repository: SessionRepository,
         playlist_repository: PlaylistRepository,
-        user_repository: UserRepository
+        user_repository: UserRepository,
     ):
         """Initialize the workflow state service.
 
@@ -73,12 +73,16 @@ class WorkflowStateService:
             state_data = {
                 "session_id": session.session_token,
                 "user_id": session.user_id,
-                "status": session.metadata.get("status", "unknown") if session.metadata else "unknown",
-                "current_step": session.metadata.get("current_step") if session.metadata else None,
+                "status": session.metadata.get("status", "unknown")
+                if session.metadata
+                else "unknown",
+                "current_step": session.metadata.get("current_step")
+                if session.metadata
+                else None,
                 "created_at": session.created_at.isoformat(),
                 "last_activity": session.last_activity.isoformat(),
                 "expires_at": session.expires_at.isoformat(),
-                "metadata": session.metadata or {}
+                "metadata": session.metadata or {},
             }
 
             # Add playlist info if available
@@ -88,7 +92,7 @@ class WorkflowStateService:
                     "spotify_id": playlist.spotify_playlist_id,
                     "name": playlist.name,
                     "status": playlist.status,
-                    "track_count": playlist.track_count
+                    "track_count": playlist.track_count,
                 }
 
             return state_data
@@ -100,7 +104,7 @@ class WorkflowStateService:
                 "Failed to get workflow state",
                 session_id=session_id,
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise
 
@@ -111,7 +115,7 @@ class WorkflowStateService:
         status: str,
         current_step: Optional[str] = None,
         error_message: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Update workflow status and metadata.
 
@@ -153,15 +157,14 @@ class WorkflowStateService:
                 updated_metadata["current_step"] = current_step
             if error_message is not None:
                 updated_metadata["error_message"] = error_message
-                updated_metadata["error_timestamp"] = datetime.now(timezone.utc).isoformat()
+                updated_metadata["error_timestamp"] = datetime.now(
+                    timezone.utc
+                ).isoformat()
             if metadata:
                 updated_metadata.update(metadata)
 
             # Update session
-            await self.session_repository.update(
-                session.id,
-                metadata=updated_metadata
-            )
+            await self.session_repository.update(session.id, metadata=updated_metadata)
 
             # Update last activity
             await self.session_repository.update_last_activity(session.id)
@@ -171,7 +174,7 @@ class WorkflowStateService:
                 session_id=session_id,
                 user_id=user_id,
                 status=status,
-                current_step=current_step
+                current_step=current_step,
             )
 
             return await self.get_workflow_state(session_id, user_id)
@@ -183,15 +186,12 @@ class WorkflowStateService:
                 "Failed to update workflow status",
                 session_id=session_id,
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise
 
     async def associate_playlist_with_session(
-        self,
-        session_id: str,
-        user_id: int,
-        playlist_id: int
+        self, session_id: str, user_id: int, playlist_id: int
     ) -> Dict[str, Any]:
         """Associate a playlist with a workflow session.
 
@@ -228,22 +228,16 @@ class WorkflowStateService:
             updated_metadata["playlist_id"] = playlist_id
             updated_metadata["spotify_playlist_id"] = playlist.spotify_playlist_id
 
-            await self.session_repository.update(
-                session.id,
-                metadata=updated_metadata
-            )
+            await self.session_repository.update(session.id, metadata=updated_metadata)
 
             # Update playlist with session reference
-            await self.playlist_repository.update(
-                playlist_id,
-                session_id=session_id
-            )
+            await self.playlist_repository.update(playlist_id, session_id=session_id)
 
             self.logger.info(
                 "Associated playlist with session",
                 session_id=session_id,
                 playlist_id=playlist_id,
-                user_id=user_id
+                user_id=user_id,
             )
 
             return await self.get_workflow_state(session_id, user_id)
@@ -256,14 +250,12 @@ class WorkflowStateService:
                 session_id=session_id,
                 playlist_id=playlist_id,
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise
 
     async def get_user_active_sessions(
-        self,
-        user_id: int,
-        limit: int = 10
+        self, user_id: int, limit: int = 10
     ) -> List[Dict[str, Any]]:
         """Get active workflow sessions for a user.
 
@@ -276,31 +268,34 @@ class WorkflowStateService:
         """
         try:
             sessions = await self.session_repository.get_active_sessions(
-                user_id=user_id,
-                limit=limit
+                user_id=user_id, limit=limit
             )
 
             return [
                 {
                     "session_id": s.session_token,
-                    "status": s.metadata.get("status", "unknown") if s.metadata else "unknown",
-                    "current_step": s.metadata.get("current_step") if s.metadata else None,
+                    "status": s.metadata.get("status", "unknown")
+                    if s.metadata
+                    else "unknown",
+                    "current_step": s.metadata.get("current_step")
+                    if s.metadata
+                    else None,
                     "created_at": s.created_at.isoformat(),
                     "last_activity": s.last_activity.isoformat(),
-                    "expires_at": s.expires_at.isoformat()
+                    "expires_at": s.expires_at.isoformat(),
                 }
                 for s in sessions
             ]
 
         except Exception as e:
             self.logger.error(
-                "Failed to get user active sessions",
-                user_id=user_id,
-                error=str(e)
+                "Failed to get user active sessions", user_id=user_id, error=str(e)
             )
             raise
 
-    async def cleanup_expired_sessions(self, before_timestamp: Optional[datetime] = None) -> int:
+    async def cleanup_expired_sessions(
+        self, before_timestamp: Optional[datetime] = None
+    ) -> int:
         """Clean up expired sessions.
 
         Args:
@@ -310,24 +305,27 @@ class WorkflowStateService:
             Number of sessions deleted
         """
         try:
-            deleted_count = await self.session_repository.delete_expired_sessions(before_timestamp)
+            deleted_count = await self.session_repository.delete_expired_sessions(
+                before_timestamp
+            )
 
             self.logger.info(
                 "Cleaned up expired sessions",
                 deleted_count=deleted_count,
-                before_timestamp=before_timestamp.isoformat() if before_timestamp else None
+                before_timestamp=before_timestamp.isoformat()
+                if before_timestamp
+                else None,
             )
 
             return deleted_count
 
         except Exception as e:
-            self.logger.error(
-                "Failed to cleanup expired sessions",
-                error=str(e)
-            )
+            self.logger.error("Failed to cleanup expired sessions", error=str(e))
             raise
 
-    async def extend_session(self, session_id: str, user_id: int, new_expires_at: datetime) -> Dict[str, Any]:
+    async def extend_session(
+        self, session_id: str, user_id: int, new_expires_at: datetime
+    ) -> Dict[str, Any]:
         """Extend session expiration time.
 
         Args:
@@ -358,7 +356,7 @@ class WorkflowStateService:
                 "Extended session expiration",
                 session_id=session_id,
                 user_id=user_id,
-                new_expires_at=new_expires_at.isoformat()
+                new_expires_at=new_expires_at.isoformat(),
             )
 
             return await self.get_workflow_state(session_id, user_id)
@@ -370,6 +368,6 @@ class WorkflowStateService:
                 "Failed to extend session",
                 session_id=session_id,
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise

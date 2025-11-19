@@ -23,4 +23,6 @@ class OrchestrationConfig:
     min_playlist_count: int = 15
     max_playlist_count: int = 30
     max_tracks_per_artist: int = 2  # Hard cap for repeat artists (excluding protected)
-    user_mentioned_artist_ratio: float = 0.5  # Max share of playlist for user-mentioned artists
+    user_mentioned_artist_ratio: float = (
+        0.5  # Max share of playlist for user-mentioned artists
+    )

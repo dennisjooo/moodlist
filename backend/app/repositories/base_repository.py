@@ -14,12 +14,16 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
     retry_if_exception_type,
-    before_sleep_log
+    before_sleep_log,
 )
 
-from app.core.exceptions import NotFoundException, ValidationException, InternalServerError
+from app.core.exceptions import (
+    NotFoundException,
+    ValidationException,
+    InternalServerError,
+)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 # Pagination constants to prevent DOS attacks
 DEFAULT_LIMIT = 50
@@ -51,9 +55,11 @@ class BaseRepository(ABC, Generic[T]):
         wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
         retry=retry_if_exception_type((OperationalError, DBAPIError)),
         before_sleep=before_sleep_log(logger, "WARNING"),
-        reraise=True
+        reraise=True,
     )
-    async def get_by_id(self, id: int, load_relationships: Optional[List[str]] = None) -> Optional[T]:
+    async def get_by_id(
+        self, id: int, load_relationships: Optional[List[str]] = None
+    ) -> Optional[T]:
         """Get entity by ID.
 
         Args:
@@ -70,7 +76,9 @@ class BaseRepository(ABC, Generic[T]):
 
             if load_relationships:
                 for relationship in load_relationships:
-                    query = query.options(selectinload(getattr(self.model_class, relationship)))
+                    query = query.options(
+                        selectinload(getattr(self.model_class, relationship))
+                    )
 
             result = await self.session.execute(query)
             entity = result.scalar_one_or_none()
@@ -83,10 +91,14 @@ class BaseRepository(ABC, Generic[T]):
             return entity
 
         except SQLAlchemyError as e:
-            self.logger.error("Database error retrieving entity", entity_id=id, error=str(e))
+            self.logger.error(
+                "Database error retrieving entity", entity_id=id, error=str(e)
+            )
             raise InternalServerError(f"Failed to retrieve {self.model_class.__name__}")
 
-    async def get_by_id_or_fail(self, id: int, load_relationships: Optional[List[str]] = None) -> T:
+    async def get_by_id_or_fail(
+        self, id: int, load_relationships: Optional[List[str]] = None
+    ) -> T:
         """Get entity by ID or raise NotFoundException.
 
         Args:
@@ -109,7 +121,7 @@ class BaseRepository(ABC, Generic[T]):
         wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
         retry=retry_if_exception_type((OperationalError, DBAPIError)),
         before_sleep=before_sleep_log(logger, "WARNING"),
-        reraise=True
+        reraise=True,
     )
     async def get_all(
         self,
@@ -118,7 +130,7 @@ class BaseRepository(ABC, Generic[T]):
         order_by: Optional[str] = None,
         order_desc: bool = False,
         filters: Optional[Dict[str, Any]] = None,
-        load_relationships: Optional[List[str]] = None
+        load_relationships: Optional[List[str]] = None,
     ) -> List[T]:
         """Get all entities with optional filtering and pagination.
 
@@ -152,7 +164,7 @@ class BaseRepository(ABC, Generic[T]):
                 self.logger.warning(
                     f"Limit {limit} exceeds maximum {MAX_LIMIT}, capping to max",
                     requested_limit=limit,
-                    max_limit=MAX_LIMIT
+                    max_limit=MAX_LIMIT,
                 )
                 limit = MAX_LIMIT
 
@@ -180,7 +192,9 @@ class BaseRepository(ABC, Generic[T]):
             # Apply eager loading
             if load_relationships:
                 for relationship in load_relationships:
-                    query = query.options(selectinload(getattr(self.model_class, relationship)))
+                    query = query.options(
+                        selectinload(getattr(self.model_class, relationship))
+                    )
 
             result = await self.session.execute(query)
             entities = result.scalars().all()
@@ -190,14 +204,16 @@ class BaseRepository(ABC, Generic[T]):
                 count=len(entities),
                 filters=filters,
                 skip=skip,
-                limit=limit
+                limit=limit,
             )
 
             return list(entities)
 
         except SQLAlchemyError as e:
             self.logger.error("Database error retrieving entities", error=str(e))
-            raise InternalServerError(f"Failed to retrieve {self.model_class.__name__} entities")
+            raise InternalServerError(
+                f"Failed to retrieve {self.model_class.__name__} entities"
+            )
 
     async def create(self, **kwargs) -> T:
         """Create a new entity.
@@ -217,13 +233,17 @@ class BaseRepository(ABC, Generic[T]):
             await self.session.flush()  # Get the ID
             await self.session.commit()  # Persist the change
 
-            self.logger.info("Entity created successfully", entity_id=getattr(entity, 'id', None))
+            self.logger.info(
+                "Entity created successfully", entity_id=getattr(entity, "id", None)
+            )
             return entity
 
         except IntegrityError as e:
             self.logger.error("Integrity error creating entity", error=str(e))
             await self.session.rollback()
-            raise ValidationException("Entity creation failed due to constraint violation")
+            raise ValidationException(
+                "Entity creation failed due to constraint violation"
+            )
 
         except SQLAlchemyError as e:
             self.logger.error("Database error creating entity", error=str(e))
@@ -261,11 +281,17 @@ class BaseRepository(ABC, Generic[T]):
         except NotFoundException:
             raise
         except IntegrityError as e:
-            self.logger.error("Integrity error updating entity", entity_id=id, error=str(e))
+            self.logger.error(
+                "Integrity error updating entity", entity_id=id, error=str(e)
+            )
             await self.session.rollback()
-            raise ValidationException("Entity update failed due to constraint violation")
+            raise ValidationException(
+                "Entity update failed due to constraint violation"
+            )
         except SQLAlchemyError as e:
-            self.logger.error("Database error updating entity", entity_id=id, error=str(e))
+            self.logger.error(
+                "Database error updating entity", entity_id=id, error=str(e)
+            )
             await self.session.rollback()
             raise InternalServerError(f"Failed to update {self.model_class.__name__}")
 
@@ -296,7 +322,9 @@ class BaseRepository(ABC, Generic[T]):
             return deleted
 
         except SQLAlchemyError as e:
-            self.logger.error("Database error deleting entity", entity_id=id, error=str(e))
+            self.logger.error(
+                "Database error deleting entity", entity_id=id, error=str(e)
+            )
             await self.session.rollback()
             raise InternalServerError(f"Failed to delete {self.model_class.__name__}")
 
@@ -318,8 +346,12 @@ class BaseRepository(ABC, Generic[T]):
             return exists
 
         except SQLAlchemyError as e:
-            self.logger.error("Database error checking entity existence", entity_id=id, error=str(e))
-            raise InternalServerError(f"Failed to check {self.model_class.__name__} existence")
+            self.logger.error(
+                "Database error checking entity existence", entity_id=id, error=str(e)
+            )
+            raise InternalServerError(
+                f"Failed to check {self.model_class.__name__} existence"
+            )
 
     async def count(self, filters: Optional[Dict[str, Any]] = None) -> int:
         """Count entities with optional filters.
@@ -350,4 +382,6 @@ class BaseRepository(ABC, Generic[T]):
 
         except SQLAlchemyError as e:
             self.logger.error("Database error counting entities", error=str(e))
-            raise InternalServerError(f"Failed to count {self.model_class.__name__} entities")
+            raise InternalServerError(
+                f"Failed to count {self.model_class.__name__} entities"
+            )

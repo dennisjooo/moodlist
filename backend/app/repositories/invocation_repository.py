@@ -35,7 +35,7 @@ class InvocationRepository(BaseRepository[Invocation]):
         processing_time_ms: Optional[int] = None,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
-        commit: bool = True
+        commit: bool = True,
     ) -> Invocation:
         """Create invocation log entry.
 
@@ -71,7 +71,7 @@ class InvocationRepository(BaseRepository[Invocation]):
                 error_message=error_message,
                 processing_time_ms=processing_time_ms,
                 ip_address=ip_address,
-                user_agent=user_agent
+                user_agent=user_agent,
             )
 
             self.session.add(invocation)
@@ -88,7 +88,7 @@ class InvocationRepository(BaseRepository[Invocation]):
                 endpoint=endpoint,
                 method=method,
                 status_code=status_code,
-                processing_time_ms=getattr(invocation, "processing_time_ms", None)
+                processing_time_ms=getattr(invocation, "processing_time_ms", None),
             )
 
             return invocation
@@ -98,7 +98,7 @@ class InvocationRepository(BaseRepository[Invocation]):
                 "Database error creating invocation log",
                 endpoint=endpoint,
                 method=method,
-                error=str(e)
+                error=str(e),
             )
             await self.session.rollback()
             raise InternalServerError("Failed to create invocation log")
@@ -108,7 +108,7 @@ class InvocationRepository(BaseRepository[Invocation]):
         user_id: int,
         skip: int = 0,
         limit: Optional[int] = None,
-        load_relationships: Optional[List[str]] = None
+        load_relationships: Optional[List[str]] = None,
     ) -> List[Invocation]:
         """Get invocations for a specific user."""
         try:
@@ -123,7 +123,9 @@ class InvocationRepository(BaseRepository[Invocation]):
 
             if load_relationships:
                 for relationship in load_relationships:
-                    query = query.options(selectinload(getattr(Invocation, relationship)))
+                    query = query.options(
+                        selectinload(getattr(Invocation, relationship))
+                    )
 
             result = await self.session.execute(query)
             invocations = result.scalars().all()
@@ -133,7 +135,7 @@ class InvocationRepository(BaseRepository[Invocation]):
                 user_id=user_id,
                 count=len(invocations),
                 skip=skip,
-                limit=limit
+                limit=limit,
             )
 
             return list(invocations)
@@ -142,7 +144,7 @@ class InvocationRepository(BaseRepository[Invocation]):
             self.logger.error(
                 "Database error retrieving user invocations",
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise InternalServerError("Failed to retrieve invocations")
 
@@ -151,7 +153,7 @@ class InvocationRepository(BaseRepository[Invocation]):
         playlist_id: int,
         skip: int = 0,
         limit: Optional[int] = None,
-        load_relationships: Optional[List[str]] = None
+        load_relationships: Optional[List[str]] = None,
     ) -> List[Invocation]:
         """Get invocations for a specific playlist."""
         try:
@@ -166,7 +168,9 @@ class InvocationRepository(BaseRepository[Invocation]):
 
             if load_relationships:
                 for relationship in load_relationships:
-                    query = query.options(selectinload(getattr(Invocation, relationship)))
+                    query = query.options(
+                        selectinload(getattr(Invocation, relationship))
+                    )
 
             result = await self.session.execute(query)
             invocations = result.scalars().all()
@@ -176,7 +180,7 @@ class InvocationRepository(BaseRepository[Invocation]):
                 playlist_id=playlist_id,
                 count=len(invocations),
                 skip=skip,
-                limit=limit
+                limit=limit,
             )
 
             return list(invocations)
@@ -185,7 +189,7 @@ class InvocationRepository(BaseRepository[Invocation]):
             self.logger.error(
                 "Database error retrieving playlist invocations",
                 playlist_id=playlist_id,
-                error=str(e)
+                error=str(e),
             )
             raise InternalServerError("Failed to retrieve invocations")
 
@@ -194,7 +198,7 @@ class InvocationRepository(BaseRepository[Invocation]):
         endpoint: str,
         method: Optional[str] = None,
         skip: int = 0,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
     ) -> List[Invocation]:
         """Get invocations for a specific endpoint."""
         try:
@@ -220,7 +224,7 @@ class InvocationRepository(BaseRepository[Invocation]):
                 method=method,
                 count=len(invocations),
                 skip=skip,
-                limit=limit
+                limit=limit,
             )
 
             return list(invocations)
@@ -230,15 +234,12 @@ class InvocationRepository(BaseRepository[Invocation]):
                 "Database error retrieving endpoint invocations",
                 endpoint=endpoint,
                 method=method,
-                error=str(e)
+                error=str(e),
             )
             raise InternalServerError("Failed to retrieve invocations")
 
     async def get_failed_invocations(
-        self,
-        skip: int = 0,
-        limit: Optional[int] = None,
-        min_status_code: int = 400
+        self, skip: int = 0, limit: Optional[int] = None, min_status_code: int = 400
     ) -> List[Invocation]:
         """Get failed invocations (status code >= min_status_code)."""
         try:
@@ -259,7 +260,7 @@ class InvocationRepository(BaseRepository[Invocation]):
                 min_status_code=min_status_code,
                 count=len(invocations),
                 skip=skip,
-                limit=limit
+                limit=limit,
             )
 
             return list(invocations)
@@ -268,6 +269,6 @@ class InvocationRepository(BaseRepository[Invocation]):
             self.logger.error(
                 "Database error retrieving failed invocations",
                 min_status_code=min_status_code,
-                error=str(e)
+                error=str(e),
             )
             raise InternalServerError("Failed to retrieve failed invocations")

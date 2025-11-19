@@ -18,7 +18,7 @@ async def authenticate_websocket(
 ) -> tuple[User, dict | None, str | None]:
     """
     Authenticate WebSocket connection and verify user access to workflow.
-    
+
     Returns:
         Tuple of (authenticated_user, initial_playlist_data, initial_playlist_status)
         Raises exception if authentication fails
@@ -40,8 +40,13 @@ async def authenticate_websocket(
     )
 
     if not session_token:
-        logger.warn("No session token in WebSocket cookies or query params", session_id=session_id)
-        await websocket.send_json({"type": "error", "message": "Authentication required - no session token"})
+        logger.warn(
+            "No session token in WebSocket cookies or query params",
+            session_id=session_id,
+        )
+        await websocket.send_json(
+            {"type": "error", "message": "Authentication required - no session token"}
+        )
         await websocket.close(code=1008)
         raise ValueError("Authentication required")
 
@@ -78,7 +83,9 @@ async def authenticate_websocket(
                 user_id=current_user.id,
                 playlist_user_id=session_playlist.user_id,
             )
-            await websocket.send_json({"type": "error", "message": "Unauthorized access to workflow"})
+            await websocket.send_json(
+                {"type": "error", "message": "Unauthorized access to workflow"}
+            )
             await websocket.close(code=1008)
             raise ValueError("Unauthorized access")
 
@@ -87,11 +94,17 @@ async def authenticate_websocket(
         initial_playlist_status = None
         if session_playlist:
             from ..serializers import serialize_playlist_status
-            initial_playlist_data = serialize_playlist_status(session_id, session_playlist)
+
+            initial_playlist_data = serialize_playlist_status(
+                session_id, session_playlist
+            )
             initial_playlist_status = session_playlist.status
 
     # DB session is now closed - proceed with long-lived WebSocket connection
-    logger.info("WebSocket authenticated successfully", session_id=session_id, user_id=current_user.id)
+    logger.info(
+        "WebSocket authenticated successfully",
+        session_id=session_id,
+        user_id=current_user.id,
+    )
 
     return current_user, initial_playlist_data, initial_playlist_status
-

@@ -52,10 +52,14 @@ class TokenManager:
 
                 # If token is still valid (more than 5 minutes remaining), no need to refresh
                 if token_expires_at > now + timedelta(minutes=5):
-                    logger.info(f"Token still valid until {token_expires_at}, no refresh needed")
+                    logger.info(
+                        f"Token still valid until {token_expires_at}, no refresh needed"
+                    )
                     return state
 
-                logger.warning(f"Spotify token expired or expiring soon (expires at {token_expires_at}), refreshing now...")
+                logger.warning(
+                    f"Spotify token expired or expiring soon (expires at {token_expires_at}), refreshing now..."
+                )
 
                 spotify_client = SpotifyAPIClient()
                 token_data = await spotify_client.refresh_token(user.refresh_token)
@@ -67,15 +71,18 @@ class TokenManager:
 
                 # Update expiration time
                 expires_in = token_data.get("expires_in", 3600)
-                user.token_expires_at = datetime.now(timezone.utc).replace(microsecond=0) + \
-                                       timedelta(seconds=expires_in)
+                user.token_expires_at = datetime.now(timezone.utc).replace(
+                    microsecond=0
+                ) + timedelta(seconds=expires_in)
 
                 await db.commit()
 
                 # Update the state with new token
                 state.metadata["spotify_access_token"] = user.access_token
 
-                logger.info(f"Successfully refreshed Spotify token for user {user.id}, new token expires at {user.token_expires_at}")
+                logger.info(
+                    f"Successfully refreshed Spotify token for user {user.id}, new token expires at {user.token_expires_at}"
+                )
 
         except Exception as e:
             logger.error(f"Failed to refresh Spotify token: {str(e)}", exc_info=True)

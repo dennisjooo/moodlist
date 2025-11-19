@@ -10,5 +10,5 @@ __all__ = [
     "GetTrackAudioFeaturesTool",
     "SearchArtistTool",
     "GetMultipleArtistsTool",
-    "GetArtistTracksTool"
+    "GetArtistTracksTool",
 ]

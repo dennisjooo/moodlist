@@ -17,7 +17,7 @@ class DiversityManager:
     def __init__(
         self,
         max_tracks_per_artist: Optional[int] = None,
-        user_mentioned_artist_ratio: Optional[float] = None
+        user_mentioned_artist_ratio: Optional[float] = None,
     ):
         """Configure diversity manager.
 
@@ -34,15 +34,17 @@ class DiversityManager:
             user_mentioned_artist_ratio = recommender_config.user_mentioned_artist_ratio
 
         self.max_tracks_per_artist = max_tracks_per_artist
-        self.user_mentioned_artist_ratio = max(0.0, min(1.0, user_mentioned_artist_ratio))
+        self.user_mentioned_artist_ratio = max(
+            0.0, min(1.0, user_mentioned_artist_ratio)
+        )
 
     def _ensure_diversity(
         self,
         recommendations: List[TrackRecommendation],
-        target_count: Optional[int] = None
+        target_count: Optional[int] = None,
     ) -> List[TrackRecommendation]:
         """Ensure diversity in recommendations to avoid repetition.
-        
+
         EXEMPTIONS: User-mentioned and protected tracks are NOT penalized.
 
         Args:
@@ -58,17 +60,18 @@ class DiversityManager:
         artist_counts = self._count_artist_occurrences(recommendations)
 
         # Apply diversity penalties
-        diversified_recommendations, protected_count, penalized_count = self._apply_diversity_penalties(
-            recommendations, artist_counts
+        diversified_recommendations, protected_count, penalized_count = (
+            self._apply_diversity_penalties(recommendations, artist_counts)
         )
 
         # Sort with protected tracks first
-        diversified_recommendations = self._sort_with_protected_priority(diversified_recommendations)
+        diversified_recommendations = self._sort_with_protected_priority(
+            diversified_recommendations
+        )
 
         # Apply hard artist limits (default: 2 tracks per artist)
         diversified_recommendations = self._enforce_artist_limits(
-            diversified_recommendations,
-            target_count=target_count
+            diversified_recommendations, target_count=target_count
         )
 
         logger.info(
@@ -79,8 +82,7 @@ class DiversityManager:
         return diversified_recommendations
 
     def _count_artist_occurrences(
-        self,
-        recommendations: List[TrackRecommendation]
+        self, recommendations: List[TrackRecommendation]
     ) -> Dict[str, int]:
         """Count how many times each artist appears in recommendations.
 
@@ -105,9 +107,7 @@ class DiversityManager:
         return rec.user_mentioned
 
     def _calculate_diversity_penalty(
-        self,
-        rec: TrackRecommendation,
-        artist_counts: Dict[str, int]
+        self, rec: TrackRecommendation, artist_counts: Dict[str, int]
     ) -> float:
         """Calculate diversity penalty for a track based on artist repetition.
 
@@ -125,9 +125,7 @@ class DiversityManager:
         return diversity_penalty
 
     def _create_diversified_recommendation(
-        self,
-        rec: TrackRecommendation,
-        adjusted_confidence: float
+        self, rec: TrackRecommendation, adjusted_confidence: float
     ) -> TrackRecommendation:
         """Create a new recommendation with adjusted confidence score.
 
@@ -150,13 +148,11 @@ class DiversityManager:
             user_mentioned=rec.user_mentioned,
             user_mentioned_artist=rec.user_mentioned_artist,
             anchor_type=rec.anchor_type,
-            protected=rec.protected
+            protected=rec.protected,
         )
 
     def _apply_diversity_penalties(
-        self,
-        recommendations: List[TrackRecommendation],
-        artist_counts: Dict[str, int]
+        self, recommendations: List[TrackRecommendation], artist_counts: Dict[str, int]
     ) -> tuple[List[TrackRecommendation], int, int]:
         """Apply diversity penalties to non-protected tracks.
 
@@ -185,23 +181,26 @@ class DiversityManager:
                 )
             else:
                 # Apply diversity penalty to non-protected tracks
-                diversity_penalty = self._calculate_diversity_penalty(rec, artist_counts)
+                diversity_penalty = self._calculate_diversity_penalty(
+                    rec, artist_counts
+                )
                 adjusted_confidence = rec.confidence_score - diversity_penalty
-                adjusted_confidence = max(adjusted_confidence, 0.1)  # Minimum confidence
+                adjusted_confidence = max(
+                    adjusted_confidence, 0.1
+                )  # Minimum confidence
 
                 diversified_rec = self._create_diversified_recommendation(
                     rec, adjusted_confidence
                 )
                 diversified_recommendations.append(diversified_rec)
-                
+
                 if diversity_penalty > 0:
                     penalized_count += 1
 
         return diversified_recommendations, protected_count, penalized_count
 
     def _sort_with_protected_priority(
-        self,
-        recommendations: List[TrackRecommendation]
+        self, recommendations: List[TrackRecommendation]
     ) -> List[TrackRecommendation]:
         """Sort recommendations with protected tracks first.
 
@@ -212,13 +211,9 @@ class DiversityManager:
             Sorted recommendations with protected tracks first
         """
         # Separate protected and non-protected tracks
-        protected_tracks = [
-            r for r in recommendations
-            if self._is_penalty_exempt(r)
-        ]
+        protected_tracks = [r for r in recommendations if self._is_penalty_exempt(r)]
         non_protected_tracks = [
-            r for r in recommendations
-            if not self._is_penalty_exempt(r)
+            r for r in recommendations if not self._is_penalty_exempt(r)
         ]
 
         # Sort each group independently by confidence score
@@ -231,7 +226,7 @@ class DiversityManager:
     def _enforce_artist_limits(
         self,
         recommendations: List[TrackRecommendation],
-        target_count: Optional[int] = None
+        target_count: Optional[int] = None,
     ) -> List[TrackRecommendation]:
         """Ensure no artist exceeds the configured track limit."""
         if not recommendations or self.max_tracks_per_artist <= 0:
@@ -240,7 +235,7 @@ class DiversityManager:
         target_total = max(target_count or len(recommendations) or 1, 1)
         user_artist_total_limit = max(
             self.max_tracks_per_artist,
-            int(target_total * self.user_mentioned_artist_ratio)
+            int(target_total * self.user_mentioned_artist_ratio),
         )
 
         artist_usage: Dict[str, int] = defaultdict(int)
@@ -256,7 +251,7 @@ class DiversityManager:
                 logger.debug(
                     "artist_limit_bypass_user_track",
                     track_name=rec.track_name,
-                    artists=rec.artists
+                    artists=rec.artists,
                 )
                 continue
 
@@ -265,7 +260,7 @@ class DiversityManager:
                 artist_usage,
                 is_user_artist,
                 user_artist_total,
-                user_artist_total_limit
+                user_artist_total_limit,
             ):
                 dropped_count += 1
                 logger.debug(
@@ -274,7 +269,7 @@ class DiversityManager:
                     artists=rec.artists,
                     limit=self.max_tracks_per_artist,
                     user_artist_limit=user_artist_total_limit,
-                    reason="artist_cap_exceeded"
+                    reason="artist_cap_exceeded",
                 )
                 continue
 
@@ -288,7 +283,7 @@ class DiversityManager:
                 "artist_limit_enforced",
                 dropped=dropped_count,
                 artist_cap=self.max_tracks_per_artist,
-                user_artist_cap=user_artist_total_limit
+                user_artist_cap=user_artist_total_limit,
             )
 
         return limited_recommendations
@@ -299,7 +294,7 @@ class DiversityManager:
         artist_usage: Dict[str, int],
         is_user_artist: bool,
         user_artist_total: int,
-        user_artist_total_limit: int
+        user_artist_total_limit: int,
     ) -> bool:
         """Check if adding this track would violate artist usage limits."""
         if is_user_artist and user_artist_total >= user_artist_total_limit:
@@ -311,18 +306,14 @@ class DiversityManager:
         return True
 
     def _increment_artist_usage(
-        self,
-        artist_usage: Dict[str, int],
-        rec: TrackRecommendation
+        self, artist_usage: Dict[str, int], rec: TrackRecommendation
     ) -> None:
         """Increment usage counters for all artists on the track."""
         for artist in rec.artists:
             artist_usage[artist] += 1
 
     def enforce_popularity_tiers(
-        self,
-        recommendations: List[TrackRecommendation],
-        target_count: int
+        self, recommendations: List[TrackRecommendation], target_count: int
     ) -> List[TrackRecommendation]:
         """Enforce popularity tier balancing to ensure mix of mainstream, mid-tier, and niche tracks.
 
@@ -389,12 +380,12 @@ class DiversityManager:
         # Fill remaining slots with overflow from any tier (highest confidence first)
         if len(balanced) < target_count:
             overflow = (
-                mainstream[mainstream_target:] +
-                mid_tier[mid_target:] +
-                niche[niche_target:]
+                mainstream[mainstream_target:]
+                + mid_tier[mid_target:]
+                + niche[niche_target:]
             )
             overflow.sort(key=lambda r: r.confidence_score, reverse=True)
-            balanced.extend(overflow[:target_count - len(balanced)])
+            balanced.extend(overflow[: target_count - len(balanced)])
 
         logger.info(
             f"Popularity tier balancing: {len(selected_mainstream)} mainstream, "
@@ -405,8 +396,7 @@ class DiversityManager:
         return balanced[:target_count]
 
     def calculate_genre_diversity_score(
-        self,
-        recommendations: List[TrackRecommendation]
+        self, recommendations: List[TrackRecommendation]
     ) -> float:
         """Calculate genre diversity score for recommendations.
 
@@ -443,7 +433,6 @@ class DiversityManager:
 
         # Calculate diversity metrics
         unique_genres = len(all_genres)
-        avg_genres_per_track = unique_genres / max(tracks_with_genres, 1)
 
         # Good diversity: at least 5-8 unique genres for a 20-track playlist
         # Normalize: 8+ genres = 1.0 score, 0 genres = 0.0 score
@@ -457,8 +446,7 @@ class DiversityManager:
         return genre_variety_score
 
     def calculate_temporal_diversity_score(
-        self,
-        recommendations: List[TrackRecommendation]
+        self, recommendations: List[TrackRecommendation]
     ) -> float:
         """Calculate temporal diversity score based on release dates.
 
@@ -484,7 +472,7 @@ class DiversityManager:
                     try:
                         # Handle different date formats (YYYY, YYYY-MM-DD, etc.)
                         if isinstance(release_date, str):
-                            year = int(release_date.split('-')[0])
+                            year = int(release_date.split("-")[0])
                             release_years.append(year)
                         elif isinstance(release_date, int):
                             release_years.append(release_date)
@@ -512,7 +500,7 @@ class DiversityManager:
         span_score = min(year_span / 20.0, 1.0)
 
         # Combine scores (favor decade diversity slightly more)
-        temporal_score = (decade_score * 0.6 + span_score * 0.4)
+        temporal_score = decade_score * 0.6 + span_score * 0.4
 
         logger.debug(
             f"Temporal diversity: {year_span} year span, {unique_decades} decades "

@@ -1,18 +1,22 @@
 """Prompt for extracting user-mentioned tracks from mood prompts."""
 
 
-def get_track_extraction_prompt(mood_prompt: str, artist_recommendations: list[str]) -> str:
+def get_track_extraction_prompt(
+    mood_prompt: str, artist_recommendations: list[str]
+) -> str:
     """Get the prompt for extracting specific tracks mentioned by the user.
-    
+
     Args:
         mood_prompt: User's original mood description
         artist_recommendations: List of artist names from mood analysis
-        
+
     Returns:
         Prompt string for track extraction
     """
-    artists_context = ', '.join(artist_recommendations) if artist_recommendations else 'None'
-    
+    artists_context = (
+        ", ".join(artist_recommendations) if artist_recommendations else "None"
+    )
+
     return f"""Analyze this user's music request and extract any SPECIFIC TRACK NAMES they explicitly mentioned.
 
 User's request: "{mood_prompt}"
@@ -51,4 +55,3 @@ Respond in JSON format:
 
 If no specific tracks are mentioned BY NAME, return an empty array for mentioned_tracks.
 Only include tracks that are clearly mentioned by their actual track name, not just genres, moods, or artist names."""
-

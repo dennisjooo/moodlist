@@ -26,7 +26,8 @@ class TextProcessor:
 
         # Filter meaningful words (length > 3, not common stop words)
         meaningful_words = [
-            word.lower() for word in words
+            word.lower()
+            for word in words
             if len(word) > 3 and word.lower() not in STOP_WORDS
         ]
 
@@ -105,7 +106,13 @@ class TextProcessor:
                 else:
                     # Unicode range check for CJK languages
                     for char in text:
-                        if indicator <= char <= LANGUAGE_INDICATORS[lang][LANGUAGE_INDICATORS[lang].index(indicator) + 1]:
+                        if (
+                            indicator
+                            <= char
+                            <= LANGUAGE_INDICATORS[lang][
+                                LANGUAGE_INDICATORS[lang].index(indicator) + 1
+                            ]
+                        ):
                             return lang
 
         return "english"  # Default fallback

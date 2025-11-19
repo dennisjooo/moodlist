@@ -3,7 +3,4 @@
 from .agent import RecommendationGeneratorAgent
 from .engine import RecommendationEngine
 
-__all__ = [
-    "RecommendationGeneratorAgent",
-    "RecommendationEngine"
-]
+__all__ = ["RecommendationGeneratorAgent", "RecommendationEngine"]

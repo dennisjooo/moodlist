@@ -45,7 +45,9 @@ router = APIRouter()
 @limiter.limit(settings.RATE_LIMITS.get("workflow_start", "10/minute"))
 async def start_recommendation(
     request: Request,
-    mood_prompt: str = Query(..., description="Mood description for playlist generation"),
+    mood_prompt: str = Query(
+        ..., description="Mood description for playlist generation"
+    ),
     current_user: User = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
     playlist_repo=Depends(get_playlist_repository),
@@ -88,7 +90,9 @@ async def start_recommendation(
             session_id=session_id,
         )
 
-        logger.info("Created playlist record", playlist_id=playlist.id, session_id=session_id)
+        logger.info(
+            "Created playlist record", playlist_id=playlist.id, session_id=session_id
+        )
         await quota_service.increment_daily_usage(current_user.id)
 
         return {
@@ -99,8 +103,12 @@ async def start_recommendation(
         }
 
     except Exception as exc:
-        logger.error("Error starting recommendation workflow", error=str(exc), exc_info=True)
-        raise InternalServerError(f"Failed to start recommendation workflow: {exc}") from exc
+        logger.error(
+            "Error starting recommendation workflow", error=str(exc), exc_info=True
+        )
+        raise InternalServerError(
+            f"Failed to start recommendation workflow: {exc}"
+        ) from exc
 
 
 @router.get("/recommendations/{session_id}/status")
@@ -147,6 +155,7 @@ async def stream_workflow_status(
 
     # Verify authorization BEFORE starting stream to avoid blocking inside generator
     from ...repositories.playlist_repository import PlaylistRepository
+
     playlist_repo = PlaylistRepository(db)
     session_playlist = await playlist_repo.get_by_session_id(session_id)
 
@@ -237,16 +246,26 @@ async def get_workflow_results(
                 "playlist": (
                     {
                         "id": playlist.spotify_playlist_id,
-                        "name": playlist.playlist_data.get("name") if playlist.playlist_data else None,
-                        "spotify_url": playlist.playlist_data.get("spotify_url") if playlist.playlist_data else None,
-                        "spotify_uri": playlist.playlist_data.get("spotify_uri") if playlist.playlist_data else None,
+                        "name": playlist.playlist_data.get("name")
+                        if playlist.playlist_data
+                        else None,
+                        "spotify_url": playlist.playlist_data.get("spotify_url")
+                        if playlist.playlist_data
+                        else None,
+                        "spotify_uri": playlist.playlist_data.get("spotify_uri")
+                        if playlist.playlist_data
+                        else None,
                     }
                     if playlist.spotify_playlist_id
                     else None
                 ),
                 "metadata": {},
-                "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
-                "completed_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
+                "created_at": playlist.created_at.isoformat()
+                if playlist.created_at
+                else None,
+                "completed_at": playlist.updated_at.isoformat()
+                if playlist.updated_at
+                else None,
             }
 
         state = workflow_manager.get_workflow_state(session_id)
@@ -282,7 +301,9 @@ async def get_workflow_results(
                 ),
                 "metadata": state.metadata,
                 "created_at": state.created_at.isoformat(),
-                "completed_at": state.updated_at.isoformat() if state.is_complete() else None,
+                "completed_at": state.updated_at.isoformat()
+                if state.is_complete()
+                else None,
             }
 
         raise NotFoundException("Workflow", session_id)
@@ -325,7 +346,9 @@ async def get_workflow_cost(
         }
 
     except Exception as exc:
-        logger.error("Error getting workflow cost summary", error=str(exc), exc_info=True)
+        logger.error(
+            "Error getting workflow cost summary", error=str(exc), exc_info=True
+        )
         raise InternalServerError(f"Failed to get workflow cost: {exc}") from exc
 
 
@@ -401,14 +424,14 @@ async def prefetch_user_cache(
                 user_id=str(current_user.id),
                 spotify_service=spotify_service,
                 reccobeat_service=reccobeat_service,
-                access_token=current_user.access_token
+                access_token=current_user.access_token,
             )
         )
 
         return {
             "status": "prefetch_started",
             "message": "Cache warming initiated in background",
-            "user_id": current_user.id
+            "user_id": current_user.id,
         }
 
     except Exception as exc:
@@ -417,5 +440,5 @@ async def prefetch_user_cache(
         return {
             "status": "prefetch_failed",
             "message": "Cache prefetch could not be started",
-            "error": str(exc)
+            "error": str(exc),
         }

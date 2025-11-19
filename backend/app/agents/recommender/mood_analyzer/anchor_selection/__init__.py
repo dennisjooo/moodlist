@@ -2,6 +2,7 @@
 
 This module provides backward compatibility while using the new modular anchor selection engine.
 """
+
 from typing import List, Dict, Any
 
 from ...utils.config import config
@@ -34,7 +35,7 @@ class AnchorTrackSelector:
         artist_recommendations: List[str] = None,
         mood_analysis: Dict[str, Any] = None,
         limit: int = config.anchor_track_limit,
-        user_mentioned_artists: List[str] = None
+        user_mentioned_artists: List[str] = None,
     ) -> tuple[List[Dict[str, Any]], List[str]]:
         """
         Select anchor tracks using LLM-guided analysis instead of hard-coded logic.
@@ -53,6 +54,12 @@ class AnchorTrackSelector:
             Tuple of (anchor_tracks_for_playlist, anchor_track_ids_for_reference)
         """
         return await self.engine.select_anchor_tracks(
-            genre_keywords, target_features, access_token, mood_prompt,
-            artist_recommendations, mood_analysis, limit, user_mentioned_artists
+            genre_keywords,
+            target_features,
+            access_token,
+            mood_prompt,
+            artist_recommendations,
+            mood_analysis,
+            limit,
+            user_mentioned_artists,
         )

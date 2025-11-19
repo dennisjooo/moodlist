@@ -17,22 +17,54 @@ logger = structlog.get_logger(__name__)
 class TrackRecommendationsInput(BaseModel):
     """Input schema for track recommendations tool."""
 
-    seeds: List[str] = Field(..., min_items=1, max_items=5, description="List of track IDs to use as seeds")
-    size: int = Field(default=20, ge=1, le=100, description="Number of recommendations to return")
-    negative_seeds: Optional[List[str]] = Field(default=None, max_items=5, description="Tracks to avoid")
-    acousticness: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Acousticness preference")
-    danceability: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Danceability preference")
-    energy: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Energy preference")
-    instrumentalness: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Instrumentalness preference")
-    key: Optional[int] = Field(default=None, ge=-1, le=11, description="Musical key preference")
-    liveness: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Liveness preference")
-    loudness: Optional[float] = Field(default=None, ge=-60.0, le=2.0, description="Loudness preference")
-    mode: Optional[int] = Field(default=None, ge=0, le=1, description="Mode preference (0=minor, 1=major)")
-    speechiness: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Speechiness preference")
-    tempo: Optional[float] = Field(default=None, ge=0.0, le=250.0, description="Tempo preference")
-    valence: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Valence preference")
-    popularity: Optional[int] = Field(default=None, ge=0, le=100, description="Popularity preference")
-    feature_weight: Optional[float] = Field(default=None, ge=1.0, le=5.0, description="Feature influence scaling")
+    seeds: List[str] = Field(
+        ..., min_items=1, max_items=5, description="List of track IDs to use as seeds"
+    )
+    size: int = Field(
+        default=20, ge=1, le=100, description="Number of recommendations to return"
+    )
+    negative_seeds: Optional[List[str]] = Field(
+        default=None, max_items=5, description="Tracks to avoid"
+    )
+    acousticness: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0, description="Acousticness preference"
+    )
+    danceability: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0, description="Danceability preference"
+    )
+    energy: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0, description="Energy preference"
+    )
+    instrumentalness: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0, description="Instrumentalness preference"
+    )
+    key: Optional[int] = Field(
+        default=None, ge=-1, le=11, description="Musical key preference"
+    )
+    liveness: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0, description="Liveness preference"
+    )
+    loudness: Optional[float] = Field(
+        default=None, ge=-60.0, le=2.0, description="Loudness preference"
+    )
+    mode: Optional[int] = Field(
+        default=None, ge=0, le=1, description="Mode preference (0=minor, 1=major)"
+    )
+    speechiness: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0, description="Speechiness preference"
+    )
+    tempo: Optional[float] = Field(
+        default=None, ge=0.0, le=250.0, description="Tempo preference"
+    )
+    valence: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0, description="Valence preference"
+    )
+    popularity: Optional[int] = Field(
+        default=None, ge=0, le=100, description="Popularity preference"
+    )
+    feature_weight: Optional[float] = Field(
+        default=None, ge=1.0, le=5.0, description="Feature influence scaling"
+    )
 
 
 class TrackRecommendationsTool(RateLimitedTool):
@@ -50,48 +82,48 @@ class TrackRecommendationsTool(RateLimitedTool):
             name="get_track_recommendations",
             description="Get track recommendations from RecoBeat API",
             base_url="https://api.reccobeats.com",
-            rate_limit_per_minute=80,    # Conservative limit to avoid 429 responses
-            min_request_interval=0.75,   # Spread calls more evenly across the minute
-            use_global_semaphore=True,   # Use global semaphore to limit concurrent requests
-            timeout=180                   # Increased from 60s to 180s for slow RecoBeat responses
+            rate_limit_per_minute=80,  # Conservative limit to avoid 429 responses
+            min_request_interval=0.75,  # Spread calls more evenly across the minute
+            use_global_semaphore=True,  # Use global semaphore to limit concurrent requests
+            timeout=180,  # Increased from 60s to 180s for slow RecoBeat responses
         )
 
     def _normalize_spotify_uri(self, href: str, track_id: str) -> str:
         """Normalize Spotify URI from href or track ID.
-        
+
         Args:
             href: URL or URI from RecoBeat
             track_id: Track ID as fallback
-            
+
         Returns:
             Properly formatted Spotify URI
         """
         if not href and not track_id:
             return None
-            
+
         # If href is already a proper URI
-        if href and href.startswith('spotify:track:'):
+        if href and href.startswith("spotify:track:"):
             return href
-            
+
         # If href is a URL, extract ID
-        if href and 'spotify.com/track/' in href:
-            track_id = href.split('/track/')[-1].split('?')[0]
+        if href and "spotify.com/track/" in href:
+            track_id = href.split("/track/")[-1].split("?")[0]
             return f"spotify:track:{track_id}"
-            
+
         # If href has spotify: prefix but wrong format
-        if href and 'spotify:' in href:
-            parts = href.split(':')
+        if href and "spotify:" in href:
+            parts = href.split(":")
             if len(parts) >= 3:
                 return f"spotify:track:{parts[-1]}"
-        
+
         # Use track_id as fallback
         if track_id:
             # Remove any prefixes
-            clean_id = track_id.split('/')[-1].split('?')[0]
+            clean_id = track_id.split("/")[-1].split("?")[0]
             return f"spotify:track:{clean_id}"
-            
+
         return None
-    
+
     def _get_input_schema(self) -> Type[BaseModel]:
         """Get the input schema for this tool."""
         return TrackRecommendationsInput
@@ -100,7 +132,7 @@ class TrackRecommendationsTool(RateLimitedTool):
         self,
         seeds: List[str],
         negative_seeds: Optional[List[str]] = None,
-        size: int = 20
+        size: int = 20,
     ) -> Optional[str]:
         """Validate recommendation parameters to detect known-bad combinations.
 
@@ -181,7 +213,9 @@ class TrackRecommendationsTool(RateLimitedTool):
                     )
 
                     if not self._validate_response(response_data, ["content"]):
-                        logger.warning("Invalid response structure from track details API")
+                        logger.warning(
+                            "Invalid response structure from track details API"
+                        )
                         return {}
 
                     parsed: Dict[str, int] = {}
@@ -200,10 +234,14 @@ class TrackRecommendationsTool(RateLimitedTool):
                     return parsed
 
                 except Exception as exc:
-                    logger.error(f"Error getting track details chunk: {exc}", exc_info=True)
+                    logger.error(
+                        f"Error getting track details chunk: {exc}", exc_info=True
+                    )
                     return {}
 
-        chunk_results = await asyncio.gather(*[process_chunk(chunk) for chunk in chunks])
+        chunk_results = await asyncio.gather(
+            *[process_chunk(chunk) for chunk in chunks]
+        )
 
         for chunk_detail in chunk_results:
             details.update(chunk_detail)
@@ -243,7 +281,7 @@ class TrackRecommendationsTool(RateLimitedTool):
         tempo: Optional[float] = None,
         valence: Optional[float] = None,
         popularity: Optional[int] = None,
-        feature_weight: Optional[float] = None
+        feature_weight: Optional[float] = None,
     ) -> ToolResult:
         """Get track recommendations from RecoBeat.
 
@@ -270,7 +308,11 @@ class TrackRecommendationsTool(RateLimitedTool):
         """
         try:
             # PHASE 3: Validate with guardrails and auto-balancing
-            is_valid, validation_error, suggested_params = await SeedGuardrails.validate_and_auto_balance(
+            (
+                is_valid,
+                validation_error,
+                suggested_params,
+            ) = await SeedGuardrails.validate_and_auto_balance(
                 seeds, negative_seeds, size
             )
 
@@ -280,21 +322,22 @@ class TrackRecommendationsTool(RateLimitedTool):
                     logger.info(f"Auto-balancing parameters: {validation_error}")
                     # Retry with suggested parameters
                     seeds = suggested_params.get("seeds", seeds)
-                    negative_seeds = suggested_params.get("negative_seeds", negative_seeds)
+                    negative_seeds = suggested_params.get(
+                        "negative_seeds", negative_seeds
+                    )
                     size = suggested_params.get("size", size)
                 else:
                     # No fallback available, fail fast
-                    logger.warning(f"Invalid recommendation parameters: {validation_error}")
+                    logger.warning(
+                        f"Invalid recommendation parameters: {validation_error}"
+                    )
                     return ToolResult.error_result(
                         f"Invalid parameters: {validation_error}",
                         error_type="ValidationError",
-                        skip_retry=True
+                        skip_retry=True,
                     )
             # Build query parameters
-            params = {
-                "seeds": seeds,
-                "size": size
-            }
+            params = {"seeds": seeds, "size": size}
 
             # Add optional parameters
             optional_params = {
@@ -311,7 +354,7 @@ class TrackRecommendationsTool(RateLimitedTool):
                 "tempo": tempo,
                 "valence": valence,
                 "popularity": popularity,
-                "featureWeight": feature_weight
+                "featureWeight": feature_weight,
             }
 
             # Only add non-None parameters
@@ -326,7 +369,7 @@ class TrackRecommendationsTool(RateLimitedTool):
                 "energy": energy,
                 "instrumentalness": instrumentalness,
                 "valence": valence,
-                "tempo": tempo
+                "tempo": tempo,
             }
             # Remove None values
             feature_params = {k: v for k, v in feature_params.items() if v is not None}
@@ -366,7 +409,7 @@ class TrackRecommendationsTool(RateLimitedTool):
             if not self._validate_response(response_data, ["content"]):
                 return ToolResult.error_result(
                     "Invalid response structure from RecoBeat API",
-                    api_response=response_data
+                    api_response=response_data,
                 )
 
             # Extract track IDs from recommendations for getting duration_ms from track endpoint
@@ -386,7 +429,9 @@ class TrackRecommendationsTool(RateLimitedTool):
                         else:
                             missing_duration_ids.append(track_id)
                 except Exception as e:
-                    logger.warning(f"Failed to extract track ID: {track_data}, error: {e}")
+                    logger.warning(
+                        f"Failed to extract track ID: {track_data}, error: {e}"
+                    )
                     continue
 
             track_details: Dict[str, int]
@@ -408,8 +453,10 @@ class TrackRecommendationsTool(RateLimitedTool):
                     # Extract track information
                     track_id = track_data.get("id")
                     track_name = track_data.get("trackTitle", "Unknown Track")
-                    artists = [artist.get("name", "Unknown Artist")
-                              for artist in track_data.get("artists", [])]
+                    artists = [
+                        artist.get("name", "Unknown Artist")
+                        for artist in track_data.get("artists", [])
+                    ]
 
                     # Extract and normalize Spotify URI
                     href = track_data.get("href", "")
@@ -417,16 +464,19 @@ class TrackRecommendationsTool(RateLimitedTool):
 
                     # Calculate confidence from popularity and relevance
                     popularity = track_data.get("popularity", 50)
-                    relevance_score = track_data.get("relevanceScore", 0.8)  # RecoBeat's relevance
+                    relevance_score = track_data.get(
+                        "relevanceScore", 0.8
+                    )  # RecoBeat's relevance
 
                     # Combine factors for final confidence
                     confidence_score = min(
-                        (relevance_score * 0.6) + (popularity / 100.0 * 0.4),
-                        1.0
+                        (relevance_score * 0.6) + (popularity / 100.0 * 0.4), 1.0
                     )
 
                     # Get duration_ms from track endpoint, fallback to recommendations response
-                    duration_ms = track_details.get(track_id, track_data.get("durationMs"))
+                    duration_ms = track_details.get(
+                        track_id, track_data.get("durationMs")
+                    )
 
                     # Create recommendation object
                     recommendation = TrackRecommendation(
@@ -438,49 +488,57 @@ class TrackRecommendationsTool(RateLimitedTool):
                         audio_features={
                             "popularity": popularity,
                             "duration_ms": duration_ms,
-                            "relevance_score": relevance_score
+                            "relevance_score": relevance_score,
                         },
                         reasoning=f"Recommended based on {len(seeds)} seed tracks (relevance: {int(relevance_score * 100)}%)",
-                        source="reccobeat"
+                        source="reccobeat",
                     )
 
                     recommendations.append(recommendation)
 
                 except Exception as e:
-                    logger.warning(f"Failed to parse track data: {track_data}, error: {e}")
+                    logger.warning(
+                        f"Failed to parse track data: {track_data}, error: {e}"
+                    )
                     continue
 
-            logger.info(f"Successfully retrieved {len(recommendations)} recommendations")
+            logger.info(
+                f"Successfully retrieved {len(recommendations)} recommendations"
+            )
 
             return ToolResult.success_result(
                 data={
                     "recommendations": [rec.dict() for rec in recommendations],
                     "total_count": len(recommendations),
                     "seed_count": len(seeds),
-                    "api_params": params
+                    "api_params": params,
                 },
                 metadata={
                     "source": "reccobeat",
                     "recommendation_count": len(recommendations),
-                    "api_endpoint": "/v1/track/recommendation"
-                }
+                    "api_endpoint": "/v1/track/recommendation",
+                },
             )
 
         except Exception as e:
             error_message = str(e)
-            logger.error(f"Error getting track recommendations: {error_message}", exc_info=True)
+            logger.error(
+                f"Error getting track recommendations: {error_message}", exc_info=True
+            )
 
             # PHASE 3: Add to deny list if it's a permanent error
             if SeedGuardrails.should_skip_retry(error_message):
                 await SeedGuardrails.add_to_deny_list(
                     seeds=seeds,
                     negative_seeds=negative_seeds,
-                    feature_params=feature_params if 'feature_params' in locals() else None,
-                    reason=error_message
+                    feature_params=feature_params
+                    if "feature_params" in locals()
+                    else None,
+                    reason=error_message,
                 )
 
             return ToolResult.error_result(
                 f"Failed to get track recommendations: {error_message}",
                 error_type=type(e).__name__,
-                skip_retry=SeedGuardrails.should_skip_retry(error_message)
+                skip_retry=SeedGuardrails.should_skip_retry(error_message),
             )

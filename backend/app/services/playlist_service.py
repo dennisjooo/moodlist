@@ -39,7 +39,9 @@ class PlaylistService:
         self.logger = logger.bind(service="PlaylistService")
 
     @staticmethod
-    def _format_cost_summary(cost_summary: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def _format_cost_summary(
+        cost_summary: Optional[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
         """Normalize cost summary payload for API responses."""
         if cost_summary is None:
             return None
@@ -51,13 +53,17 @@ class PlaylistService:
             "total_tokens": cost_summary.get("total_tokens", 0),
         }
 
-    async def _get_session_cost_summary(self, session_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    async def _get_session_cost_summary(
+        self, session_id: Optional[str]
+    ) -> Optional[Dict[str, Any]]:
         """Fetch aggregated LLM cost metrics for a workflow session."""
         if not session_id or not self.llm_invocation_repository:
             return None
 
         try:
-            return await self.llm_invocation_repository.get_session_cost_summary(session_id)
+            return await self.llm_invocation_repository.get_session_cost_summary(
+                session_id
+            )
         except Exception as exc:
             self.logger.error(
                 "Failed to retrieve session cost summary",
@@ -66,7 +72,9 @@ class PlaylistService:
             )
             return None
 
-    async def get_cost_summary_for_session(self, session_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    async def get_cost_summary_for_session(
+        self, session_id: Optional[str]
+    ) -> Optional[Dict[str, Any]]:
         """Public helper to retrieve formatted cost summary data for a session."""
         summary = await self._get_session_cost_summary(session_id)
         return self._format_cost_summary(summary)
@@ -77,7 +85,7 @@ class PlaylistService:
         name: str,
         description: str = "",
         public: bool = False,
-        track_uris: Optional[List[str]] = None
+        track_uris: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Create a new playlist for a user.
 
@@ -106,7 +114,7 @@ class PlaylistService:
                 "Creating playlist",
                 user_id=user_id,
                 spotify_user_id=user.spotify_id,
-                playlist_name=name
+                playlist_name=name,
             )
 
             # Create playlist on Spotify
@@ -115,7 +123,7 @@ class PlaylistService:
                 user_id=user.spotify_id,
                 name=name,
                 description=description,
-                public=public
+                public=public,
             )
 
             # Save playlist to database
@@ -129,9 +137,11 @@ class PlaylistService:
                 track_count=len(track_uris) if track_uris else 0,
                 metadata={
                     "spotify_uri": spotify_playlist.get("uri"),
-                    "spotify_url": spotify_playlist.get("external_urls", {}).get("spotify"),
-                    "public": public
-                }
+                    "spotify_url": spotify_playlist.get("external_urls", {}).get(
+                        "spotify"
+                    ),
+                    "public": public,
+                },
             )
 
             # Add tracks if provided
@@ -139,13 +149,13 @@ class PlaylistService:
                 await self.spotify_client.add_tracks_to_playlist(
                     access_token=user.access_token,
                     playlist_id=spotify_playlist["id"],
-                    track_uris=track_uris
+                    track_uris=track_uris,
                 )
 
             self.logger.info(
                 "Successfully created playlist",
                 playlist_id=db_playlist.id,
-                spotify_playlist_id=spotify_playlist["id"]
+                spotify_playlist_id=spotify_playlist["id"],
             )
 
             return {
@@ -155,14 +165,12 @@ class PlaylistService:
                 "description": description,
                 "track_count": len(track_uris) if track_uris else 0,
                 "spotify_url": spotify_playlist.get("external_urls", {}).get("spotify"),
-                "created_at": db_playlist.created_at.isoformat()
+                "created_at": db_playlist.created_at.isoformat(),
             }
 
         except Exception as e:
             self.logger.error(
-                "Failed to create playlist",
-                user_id=user_id,
-                error=str(e)
+                "Failed to create playlist", user_id=user_id, error=str(e)
             )
             raise
 
@@ -171,7 +179,7 @@ class PlaylistService:
         user_id: int,
         skip: int = 0,
         limit: Optional[int] = None,
-        include_deleted: bool = False
+        include_deleted: bool = False,
     ) -> List[Dict[str, Any]]:
         """Get playlists for a user.
 
@@ -186,10 +194,7 @@ class PlaylistService:
         """
         try:
             playlists = await self.playlist_repository.get_by_user_id(
-                user_id=user_id,
-                skip=skip,
-                limit=limit,
-                include_deleted=include_deleted
+                user_id=user_id, skip=skip, limit=limit, include_deleted=include_deleted
             )
 
             return [
@@ -202,20 +207,22 @@ class PlaylistService:
                     "track_count": p.track_count,
                     "created_at": p.created_at.isoformat(),
                     "updated_at": p.updated_at.isoformat(),
-                    "spotify_url": p.metadata.get("spotify_url") if p.metadata else None
+                    "spotify_url": p.metadata.get("spotify_url")
+                    if p.metadata
+                    else None,
                 }
                 for p in playlists
             ]
 
         except Exception as e:
             self.logger.error(
-                "Failed to get user playlists",
-                user_id=user_id,
-                error=str(e)
+                "Failed to get user playlists", user_id=user_id, error=str(e)
             )
             raise
 
-    async def get_playlist_by_id(self, playlist_id: int, user_id: int) -> Dict[str, Any]:
+    async def get_playlist_by_id(
+        self, playlist_id: int, user_id: int
+    ) -> Dict[str, Any]:
         """Get a specific playlist by ID.
 
         Args:
@@ -229,7 +236,9 @@ class PlaylistService:
             NotFoundException: If playlist not found or doesn't belong to user
         """
         try:
-            playlist = await self.playlist_repository.get_by_id_for_user(playlist_id, user_id)
+            playlist = await self.playlist_repository.get_by_id_for_user(
+                playlist_id, user_id
+            )
 
             if not playlist:
                 raise NotFoundException("Playlist", str(playlist_id))
@@ -248,8 +257,12 @@ class PlaylistService:
                 "mood_analysis_data": playlist.mood_analysis_data,
                 "spotify_playlist_id": playlist.spotify_playlist_id,
                 "error_message": playlist.error_message,
-                "created_at": playlist.created_at.isoformat() if playlist.created_at else None,
-                "updated_at": playlist.updated_at.isoformat() if playlist.updated_at else None,
+                "created_at": playlist.created_at.isoformat()
+                if playlist.created_at
+                else None,
+                "updated_at": playlist.updated_at.isoformat()
+                if playlist.updated_at
+                else None,
             }
 
             if cost_summary:
@@ -264,7 +277,7 @@ class PlaylistService:
                 "Failed to get playlist by ID",
                 playlist_id=playlist_id,
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise
 
@@ -273,7 +286,7 @@ class PlaylistService:
         playlist_id: int,
         user_id: int,
         name: Optional[str] = None,
-        description: Optional[str] = None
+        description: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Update playlist details.
 
@@ -311,9 +324,7 @@ class PlaylistService:
             await self.playlist_repository.update(playlist_id, **update_data)
 
             self.logger.info(
-                "Updated playlist details",
-                playlist_id=playlist_id,
-                user_id=user_id
+                "Updated playlist details", playlist_id=playlist_id, user_id=user_id
             )
 
             return await self.get_playlist_by_id(playlist_id, user_id)
@@ -325,7 +336,7 @@ class PlaylistService:
                 "Failed to update playlist details",
                 playlist_id=playlist_id,
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise
 
@@ -353,9 +364,7 @@ class PlaylistService:
             await self.playlist_repository.soft_delete(playlist_id)
 
             self.logger.info(
-                "Soft deleted playlist",
-                playlist_id=playlist_id,
-                user_id=user_id
+                "Soft deleted playlist", playlist_id=playlist_id, user_id=user_id
             )
 
             return True
@@ -367,11 +376,13 @@ class PlaylistService:
                 "Failed to delete playlist",
                 playlist_id=playlist_id,
                 user_id=user_id,
-                error=str(e)
+                error=str(e),
             )
             raise
 
-    async def get_playlist_count(self, user_id: int, include_deleted: bool = False) -> int:
+    async def get_playlist_count(
+        self, user_id: int, include_deleted: bool = False
+    ) -> int:
         """Get playlist count for a user.
 
         Args:
@@ -383,14 +394,11 @@ class PlaylistService:
         """
         try:
             return await self.playlist_repository.get_user_playlist_count(
-                user_id=user_id,
-                include_deleted=include_deleted
+                user_id=user_id, include_deleted=include_deleted
             )
 
         except Exception as e:
             self.logger.error(
-                "Failed to get playlist count",
-                user_id=user_id,
-                error=str(e)
+                "Failed to get playlist count", user_id=user_id, error=str(e)
             )
             raise

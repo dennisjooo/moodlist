@@ -7,10 +7,7 @@ class StrategyBuilder:
     """Builds default ordering strategies based on track characteristics."""
 
     def build_default_strategy(
-        self,
-        avg_energy: float,
-        energy_range: float,
-        track_count: int
+        self, avg_energy: float, energy_range: float, track_count: int
     ) -> Dict[str, Any]:
         """Get default ordering strategy based on track characteristics.
 
@@ -33,14 +30,10 @@ class StrategyBuilder:
             "reasoning": f"Default strategy based on avg_energy={avg_energy:.1f}, range={energy_range:.1f}",
             "phase_distribution": phase_dist,
             "special_considerations": [],
-            "transition_notes": "Smooth transitions based on audio feature similarity"
+            "transition_notes": "Smooth transitions based on audio feature similarity",
         }
 
-    def _determine_strategy_type(
-        self,
-        avg_energy: float,
-        energy_range: float
-    ) -> str:
+    def _determine_strategy_type(self, avg_energy: float, energy_range: float) -> str:
         """Determine the appropriate strategy type.
 
         Args:
@@ -60,9 +53,7 @@ class StrategyBuilder:
             return "classic_build"
 
     def _calculate_phase_distribution(
-        self,
-        strategy_name: str,
-        track_count: int
+        self, strategy_name: str, track_count: int
     ) -> Dict[str, int]:
         """Calculate phase distribution for a strategy.
 
@@ -88,7 +79,7 @@ class StrategyBuilder:
             "mid": max(3, track_count // 4),
             "high": max(4, track_count // 3),
             "descent": max(2, track_count // 8),
-            "closure": max(1, track_count // 15)
+            "closure": max(1, track_count // 15),
         }
 
     def _ambient_flow_distribution(self, track_count: int) -> Dict[str, int]:
@@ -99,7 +90,7 @@ class StrategyBuilder:
             "mid": max(5, track_count // 3),
             "high": max(2, track_count // 8),
             "descent": max(3, track_count // 5),
-            "closure": max(2, track_count // 6)
+            "closure": max(2, track_count // 6),
         }
 
     def _classic_build_distribution(self, track_count: int) -> Dict[str, int]:
@@ -110,6 +101,5 @@ class StrategyBuilder:
             "mid": max(4, track_count // 5),
             "high": max(3, track_count // 6),
             "descent": max(2, track_count // 8),
-            "closure": max(1, track_count // 10)
+            "closure": max(1, track_count // 10),
         }
-

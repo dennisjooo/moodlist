@@ -7,10 +7,10 @@ def get_strategy_decision_prompt(
     issues_summary: str,
     llm_assessment_reasoning: str,
     target_count: int,
-    iteration: int
+    iteration: int,
 ) -> str:
     """Get the prompt for deciding improvement strategies.
-    
+
     Args:
         mood_prompt: User's original mood request
         quality_evaluation: Quality evaluation results
@@ -18,7 +18,7 @@ def get_strategy_decision_prompt(
         llm_assessment_reasoning: LLM's reasoning about quality
         target_count: Target number of tracks
         iteration: Current iteration number
-        
+
     Returns:
         Prompt string for LLM strategy decision
     """
@@ -26,11 +26,11 @@ def get_strategy_decision_prompt(
 
 **Current Situation**:
 - Mood: "{mood_prompt}"
-- Current: {quality_evaluation['recommendations_count']} tracks
+- Current: {quality_evaluation["recommendations_count"]} tracks
 - Target: {target_count} tracks
-- Cohesion Score: {quality_evaluation['cohesion_score']:.2f}/1.0
-- Overall Score: {quality_evaluation['overall_score']:.2f}/1.0
-- Outliers: {len(quality_evaluation['outlier_tracks'])} tracks
+- Cohesion Score: {quality_evaluation["cohesion_score"]:.2f}/1.0
+- Overall Score: {quality_evaluation["overall_score"]:.2f}/1.0
+- Outliers: {len(quality_evaluation["outlier_tracks"])} tracks
 - Iteration: {iteration}/3
 
 **Issues**:
