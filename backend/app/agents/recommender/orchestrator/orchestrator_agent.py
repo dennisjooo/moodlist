@@ -608,26 +608,13 @@ class OrchestratorAgent(BaseAgent):
         """Enforce source ratio and final count limits."""
         playlist_target = state.metadata.get("playlist_target", {})
         target_count = playlist_target.get("target_count", 20)
-        max_count = playlist_target.get("max_count", 30)
 
-        # Aim for target_count, but allow flexibility up to max_count if needed
-        # If we're short of target, we'll try to fill to target
-        # If we're over target but under max, keep what we have
-        # If we're over max, cap at max
-        if len(state.recommendations) < target_count:
-            # Short of target - aim for target
-            final_limit = target_count
-        elif len(state.recommendations) <= max_count:
-            # Between target and max - keep what we have
-            final_limit = len(state.recommendations)
-        else:
-            # Over max - cap at max
-            final_limit = max_count
-
+        # Use target_count as the limit - we want variety, not always maxing out
+        # This allows playlists to be 17-25 tracks instead of always 24
         # Enforce 100% artist discovery ratio (Recobeat overflow only)
         state.recommendations = self.recommendation_processor.enforce_source_ratio(
             recommendations=state.recommendations,
-            max_count=final_limit,
+            target_count=target_count,
             artist_ratio=1.0,
         )
 

@@ -113,7 +113,7 @@ class RecommendationGeneratorAgent(BaseAgent):
             max_recommendations = self._get_max_recommendations(state)
             final_recommendations = self.recommendation_processor.enforce_source_ratio(
                 recommendations=processed_recommendations,
-                max_count=max_recommendations,
+                target_count=max_recommendations,
                 artist_ratio=1.0,
             )
 
@@ -224,10 +224,8 @@ class RecommendationGeneratorAgent(BaseAgent):
         """
         playlist_target = state.metadata.get("playlist_target", {})
         # Use target_count if available (this is the calculated "ideal" size)
-        # Fallback to max_count or global default if not set
-        return playlist_target.get(
-            "target_count", playlist_target.get("max_count", self.max_recommendations)
-        )
+        # Fallback to global default if not set
+        return playlist_target.get("target_count", self.max_recommendations)
 
     def _deduplicate_and_add_recommendations(
         self, recommendations: List[TrackRecommendation], state: AgentState

@@ -55,27 +55,27 @@ class RecommendationProcessor:
     def enforce_source_ratio(
         self,
         recommendations: List[TrackRecommendation],
-        max_count: int = 30,
+        target_count: int = 30,
         artist_ratio: float = 1.0,
     ) -> List[TrackRecommendation]:
         """Enforce source ratio between artist discovery and RecoBeat recommendations.
 
         Args:
             recommendations: List of track recommendations (assumed to be pre-deduplicated)
-            max_count: Maximum number of recommendations to return
+            target_count: Target number of recommendations to return
             artist_ratio: Ratio of artist recommendations (default 1.0 for 100% artist, Recobeat overflow only)
 
         Returns:
             List with enforced source ratio, sorted by confidence
         """
-        if not recommendations or max_count <= 0:
+        if not recommendations or target_count <= 0:
             return []
 
         # Separate recommendations by source
         source_groups = self.separate_by_source(recommendations)
 
         # Calculate limits for each source
-        source_limits = self.calculate_source_limits(max_count, artist_ratio)
+        source_limits = self.calculate_source_limits(target_count, artist_ratio)
 
         # Cap and sort each source
         capped_sources, overflow_sources = self.cap_and_sort_by_source(
@@ -86,12 +86,12 @@ class RecommendationProcessor:
         final_recommendations = self.combine_and_sort_final(
             capped_sources,
             len(recommendations),
-            max_count,
+            target_count,
         )
 
         # If we're still short of the desired count, top up from overflow pools
         final_recommendations = self.fill_with_overflow(
-            final_recommendations, overflow_sources, max_count
+            final_recommendations, overflow_sources, target_count
         )
 
         return final_recommendations
@@ -112,7 +112,7 @@ class RecommendationProcessor:
         return dict(source_groups)
 
     def calculate_source_limits(
-        self, max_count: int, artist_ratio: float
+        self, target_count: int, artist_ratio: float
     ) -> Dict[str, int]:
         """Calculate maximum counts for each source.
         `
@@ -120,7 +120,7 @@ class RecommendationProcessor:
         logic in cap_and_sort_by_source handles user-mentioned tracks specially
         (they don't count toward the limit).
         """
-        if max_count <= 0:
+        if target_count <= 0:
             return {
                 "anchor_track": 0,
                 "artist_discovery": 0,
@@ -128,9 +128,9 @@ class RecommendationProcessor:
             }
 
         max_anchor = min(
-            5, max_count
+            5, target_count
         )  # Base limit for non-user-mentioned anchor tracks
-        remaining = max(0, max_count - max_anchor)
+        remaining = max(0, target_count - max_anchor)
 
         artist_ratio = max(0.0, min(1.0, artist_ratio))
         max_artist = math.floor(remaining * artist_ratio)
@@ -226,7 +226,7 @@ class RecommendationProcessor:
         self,
         capped_sources: Dict[str, List[TrackRecommendation]],
         original_count: int,
-        max_count: int,
+        target_count: int,
     ) -> List[TrackRecommendation]:
         """Combine sources and sort final list.
 
@@ -249,15 +249,15 @@ class RecommendationProcessor:
         # Combine with anchors first (NEVER re-sort after this!)
         combined_recs = anchor_recs + artist_recs + reccobeat_recs
 
-        if len(combined_recs) > max_count:
-            trimmed = len(combined_recs) - max_count
+        if len(combined_recs) > target_count:
+            trimmed = len(combined_recs) - target_count
             logger.info(
                 "final_cap_applied",
-                requested=max_count,
+                requested=target_count,
                 current=len(combined_recs),
                 trimmed=trimmed,
             )
-            final_recs = combined_recs[:max_count]
+            final_recs = combined_recs[:target_count]
         else:
             final_recs = combined_recs
 
@@ -290,17 +290,17 @@ class RecommendationProcessor:
         self,
         recommendations: List[TrackRecommendation],
         overflow_sources: Dict[str, List[TrackRecommendation]],
-        max_count: int,
+        target_count: int,
     ) -> List[TrackRecommendation]:
         """Top up recommendations if capping left us short of the target size.
 
         We prioritise overflow anchors first (since they're closest to the user's
         intent), then artist discovery tracks, and finally RecoBeat fallbacks.
         """
-        if len(recommendations) >= max_count:
+        if len(recommendations) >= target_count:
             return recommendations
 
-        shortfall = max_count - len(recommendations)
+        shortfall = target_count - len(recommendations)
         if shortfall <= 0:
             return recommendations
 

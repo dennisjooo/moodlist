@@ -178,6 +178,6 @@ class MoodAnalyzerAgent(BaseAgent):
 
         logger.info(
             f"Playlist target: {playlist_target['target_count']} tracks "
-            f"(min: {playlist_target['min_count']}, max: {playlist_target['max_count']}) - "
+            f"(min: {playlist_target['min_count']}) - "
             f"{playlist_target['reasoning']}"
         )
