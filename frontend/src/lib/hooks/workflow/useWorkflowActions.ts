@@ -114,9 +114,12 @@ export function useWorkflowActions({
         setLoading(true, null);
 
         try {
-            logger.debug('[loadWorkflow] Fetching status', { component: 'useWorkflowActions', sessionId });
-            // Load workflow status once
-            const status = await api.loadWorkflowStatus(sessionId);
+            logger.debug('[loadWorkflow] Fetching status and cost in parallel', { component: 'useWorkflowActions', sessionId });
+            // Load workflow status and cost in parallel for better performance
+            const [status] = await Promise.all([
+                api.loadWorkflowStatus(sessionId),
+                loadWorkflowCost(sessionId),
+            ]);
 
             // Only load results if workflow is in terminal state (completed or failed)
             let results = null;
@@ -164,8 +167,6 @@ export function useWorkflowActions({
                     });
                 }, 0);
             }
-
-            await loadWorkflowCost(sessionId);
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to load workflow';

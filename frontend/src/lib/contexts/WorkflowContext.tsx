@@ -77,26 +77,6 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
     };
   }, [resetWorkflow]);
 
-  // Handle pathname changes - load workflow when navigating to create pages
-  useEffect(() => {
-    // Check if we're on a create page and need to load a workflow
-    const isCreatePage = pathname?.startsWith('/create/') && pathname.split('/').length === 3;
-    if (isCreatePage) {
-      const sessionId = pathname.split('/')[2];
-      // Only load if: different session OR (same session but no status loaded yet and not currently loading)
-      const needsLoad = sessionId && (
-        (workflowState.sessionId !== sessionId && !workflowState.isLoading) ||
-        (workflowState.sessionId === sessionId && workflowState.status === null && !workflowState.isLoading)
-      );
-      if (needsLoad) {
-        loadWorkflow(sessionId).catch(error => {
-          console.error('Failed to load workflow', error);
-        });
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname, workflowState.sessionId, workflowState.status, workflowState.isLoading]);
-
   const value: WorkflowContextType = {
     workflowState,
     startWorkflow,
