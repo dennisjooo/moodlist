@@ -1,20 +1,23 @@
 import { useCallback } from 'react';
 import { config } from '@/lib/config';
 import { logger } from '@/lib/utils/logger';
+import { encryptData, decryptData } from '@/lib/utils/encryption';
 import type { User, CachedAuthData } from '@/lib/types/auth';
 
 /**
  * Hook for managing authentication cache in sessionStorage
  */
 export function useAuthCache() {
-  const getCachedAuth = useCallback((): CachedAuthData | null => {
+  const getCachedAuth = useCallback(async (): Promise<CachedAuthData | null> => {
     if (typeof window === 'undefined') return null;
 
     try {
       const cached = sessionStorage.getItem(config.auth.cacheKey);
       if (!cached) return null;
 
-      const data: CachedAuthData = JSON.parse(cached);
+      const data = await decryptData<CachedAuthData>(cached);
+      if (!data) return null;
+
       const age = Date.now() - data.timestamp;
 
       // Check if cache is still valid (within TTL)
@@ -30,7 +33,7 @@ export function useAuthCache() {
     }
   }, []);
 
-  const setCachedAuth = useCallback((user: User): void => {
+  const setCachedAuth = useCallback(async (user: User): Promise<void> => {
     if (typeof window === 'undefined') return;
 
     try {
@@ -38,8 +41,11 @@ export function useAuthCache() {
         user,
         timestamp: Date.now(),
       };
-      sessionStorage.setItem(config.auth.cacheKey, JSON.stringify(data));
-      logger.debug('Auth cache updated', { component: 'useAuthCache', userId: user.id });
+      const encrypted = await encryptData(data);
+      if (encrypted) {
+        sessionStorage.setItem(config.auth.cacheKey, encrypted);
+        logger.debug('Auth cache updated', { component: 'useAuthCache', userId: user.id });
+      }
     } catch (error) {
       logger.warn('Failed to write auth cache', { component: 'useAuthCache', error });
     }

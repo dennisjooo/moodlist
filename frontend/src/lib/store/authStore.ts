@@ -2,6 +2,7 @@ import apiClient from '@/lib/axios';
 import { config } from '@/lib/config';
 import type { CachedAuthData, User } from '@/lib/types/auth';
 import { logger } from '@/lib/utils/logger';
+import { encryptData, decryptData } from '@/lib/utils/encryption';
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
@@ -28,14 +29,16 @@ function isUserDifferent(user1: User | null, user2: User | null): boolean {
     user1.profile_image_url !== user2.profile_image_url;
 }
 
-function getCachedAuth(): CachedAuthData | null {
+async function getCachedAuth(): Promise<CachedAuthData | null> {
   if (typeof window === 'undefined') return null;
 
   try {
     const cached = sessionStorage.getItem(config.auth.cacheKey);
     if (!cached) return null;
 
-    const data: CachedAuthData = JSON.parse(cached);
+    const data = await decryptData<CachedAuthData>(cached);
+    if (!data) return null;
+
     const age = Date.now() - data.timestamp;
 
     if (age > config.auth.cacheTTL) {
@@ -50,7 +53,7 @@ function getCachedAuth(): CachedAuthData | null {
   }
 }
 
-function setCachedAuth(user: User): void {
+async function setCachedAuth(user: User): Promise<void> {
   if (typeof window === 'undefined') return;
 
   try {
@@ -58,8 +61,11 @@ function setCachedAuth(user: User): void {
       user,
       timestamp: Date.now(),
     };
-    sessionStorage.setItem(config.auth.cacheKey, JSON.stringify(data));
-    logger.debug('Auth cache updated', { component: 'authStore', userId: user.id });
+    const encrypted = await encryptData(data);
+    if (encrypted) {
+      sessionStorage.setItem(config.auth.cacheKey, encrypted);
+      logger.debug('Auth cache updated', { component: 'authStore', userId: user.id });
+    }
   } catch (error) {
     logger.warn('Failed to write auth cache', { component: 'authStore', error });
   }
@@ -98,7 +104,7 @@ export const useAuthStore = create<AuthState>()(
 
           // Check cache first (unless explicitly skipped)
           if (!skipCache && retryCount === 0) {
-            const cached = getCachedAuth();
+            const cached = await getCachedAuth();
             if (cached && cached.user) {
               logger.debug('Using cached auth data', { component: 'authStore', display_name: cached.user.display_name });
               set({
@@ -262,18 +268,21 @@ if (typeof window !== 'undefined') {
   // Check cache first for instant user data (optimistic auth)
   // Note: We can't check for HttpOnly cookies with document.cookie,
   // so we rely on cache and backend verification
-  const cached = getCachedAuth();
-  if (cached) {
-    logger.debug('Optimistic auth: Using cached user data', { component: 'authStore' });
-    useAuthStore.setState({
-      user: cached.user,
-      isAuthenticated: true,
-      isValidated: true, // Trust cache initially to prevent redirects
-    });
-  }
-
-  // Always verify with backend (will use cache if available)
-  useAuthStore.getState().checkAuthStatus();
+  // Check cache first for instant user data (optimistic auth)
+  // Note: We can't check for HttpOnly cookies with document.cookie,
+  // so we rely on cache and backend verification
+  getCachedAuth().then((cached) => {
+    if (cached) {
+      logger.debug('Optimistic auth: Using cached user data', { component: 'authStore' });
+      useAuthStore.setState({
+        user: cached.user,
+        isAuthenticated: true,
+        isValidated: true, // Trust cache initially to prevent redirects
+      });
+    }
+    // Always verify with backend (will use cache if available)
+    useAuthStore.getState().checkAuthStatus();
+  });
 
   // Listen for auth update events (from callback page)
   const handleAuthUpdate = () => {
