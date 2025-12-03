@@ -102,6 +102,11 @@ export default function PlaylistResults() {
     setIsRemixing(true);
     try {
       const response = await startRemix(workflowState.sessionId, 'moodlist', moodPrompt);
+
+      if (!response?.session_id) {
+        throw new Error('Invalid response from server');
+      }
+
       success('Remix started!');
       setShowRemixDialog(false);
       // Redirect to the new session
@@ -166,6 +171,7 @@ export default function PlaylistResults() {
         open={showRemixDialog}
         onOpenChange={setShowRemixDialog}
         playlistName={workflowState.playlist?.name || workflowState.moodPrompt}
+        originalMoodPrompt={workflowState.moodPrompt}
         isRemixing={isRemixing}
         onConfirm={handleRemix}
       />

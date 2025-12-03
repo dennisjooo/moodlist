@@ -25,11 +25,7 @@ export function PlaylistResultsSkeleton() {
                         {/* Right side: Actions */}
                         <div className="flex flex-col gap-2 sm:justify-center sm:min-w-[200px]">
                             <Skeleton className="h-11 w-full" />
-                            <div className="flex gap-2">
-                                <Skeleton className="h-10 flex-1" />
-                                <Skeleton className="h-10 flex-1" />
-                                <Skeleton className="h-10 flex-1" />
-                            </div>
+                            <Skeleton className="h-10 w-full" />
                         </div>
                     </div>
                 </CardContent>

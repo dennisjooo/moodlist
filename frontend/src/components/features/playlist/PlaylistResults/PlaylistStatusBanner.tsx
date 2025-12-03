@@ -2,11 +2,17 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { motion } from '@/components/ui/lazy-motion';
 import { CARD_FADE_IN_UP_VARIANTS, GRADIENT_SCALE_VARIANTS } from '@/lib/constants/animations';
 import { cn } from '@/lib/utils';
 import { cleanText } from '@/lib/utils/text';
-import { Download, Edit, ExternalLink, Loader2, Music2, RefreshCw, Sparkles, Trash2, Shuffle } from 'lucide-react';
+import { Download, Edit, ExternalLink, Loader2, Music2, RefreshCw, Shuffle, Sparkles, Trash2 } from 'lucide-react';
 
 interface PlaylistStatusBannerProps {
   hasSavedToSpotify: boolean;
@@ -45,6 +51,16 @@ export default function PlaylistStatusBanner({
   onRemix,
   colorScheme,
 }: PlaylistStatusBannerProps) {
+  const fullTitle = hasSavedToSpotify ? (playlistName || 'Saved Playlist') : 'Your Draft Playlist';
+  let title = fullTitle;
+  let subtitle = '';
+
+  if (fullTitle.includes(':')) {
+    const splitIndex = fullTitle.indexOf(':');
+    title = fullTitle.substring(0, splitIndex).trim();
+    subtitle = fullTitle.substring(splitIndex + 1).trim();
+  }
+
   return (
     <motion.div
       variants={CARD_FADE_IN_UP_VARIANTS}
@@ -82,9 +98,16 @@ export default function PlaylistStatusBanner({
               </div>
 
               <div className="flex-1 min-w-0 flex flex-col justify-center">
-                <h3 className="font-bold text-xl sm:text-2xl truncate mb-1">
-                  {hasSavedToSpotify ? (playlistName || 'Saved Playlist') : 'Your Draft Playlist'}
-                </h3>
+                <div className="flex flex-col mb-1">
+                  <h3 className="font-bold text-xl sm:text-2xl truncate">
+                    {title}
+                  </h3>
+                  {subtitle && (
+                    <p className="text-base sm:text-lg text-muted-foreground truncate font-medium">
+                      {subtitle}
+                    </p>
+                  )}
+                </div>
                 <div className="flex items-start gap-1.5 mb-1.5">
                   <Sparkles className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground flex-1">
@@ -143,52 +166,38 @@ export default function PlaylistStatusBanner({
                 </Button>
               )}
 
-              {/* Secondary actions row */}
-              <div className="flex gap-2">
-                {hasSavedToSpotify && (
-                  <Button
-                    variant="outline"
-                    size="default"
-                    onClick={onSyncFromSpotify}
-                    disabled={isSyncing}
-                    className="flex-1 gap-2"
-                  >
-                    <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
-                    <span className="hidden sm:inline">Sync</span>
+              {/* Secondary actions dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="w-full">
+                    <span>More Options</span>
                   </Button>
-                )}
-
-                <Button
-                  variant="outline"
-                  size="default"
-                  onClick={onRemix}
-                  className="flex-1 gap-2"
-                >
-                  <Shuffle className="w-4 h-4" />
-                  <span className="hidden sm:inline">Remix</span>
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="default"
-                  onClick={onEdit}
-                  className="flex-1 gap-2"
-                >
-                  <Edit className="w-4 h-4" />
-                  <span className="hidden sm:inline">Edit</span>
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="default"
-                  onClick={onDelete}
-                  disabled={isDeleting}
-                  className="flex-1 gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span className="hidden sm:inline">Delete</span>
-                </Button>
-              </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64 sm:w">
+                  {hasSavedToSpotify && (
+                    <DropdownMenuItem onClick={onSyncFromSpotify} disabled={isSyncing} className="py-3 sm:py-1.5 cursor-pointer">
+                      <RefreshCw className={cn("w-4 h-4 mr-2", isSyncing && "animate-spin")} />
+                      Sync from Spotify
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={onRemix} className="py-3 sm:py-1.5 cursor-pointer">
+                    <Shuffle className="w-4 h-4 mr-2" />
+                    Create a Remix
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={onEdit} className="py-3 sm:py-1.5 cursor-pointer">
+                    <Edit className="w-4 h-4 mr-2" />
+                    Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={onDelete}
+                    disabled={isDeleting}
+                    className="text-destructive focus:text-destructive focus:bg-destructive/10 py-3 sm:py-1.5 cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </CardContent>
