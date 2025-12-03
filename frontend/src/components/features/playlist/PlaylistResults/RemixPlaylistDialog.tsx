@@ -53,7 +53,7 @@ export default function RemixPlaylistDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Remix Playlist</AlertDialogTitle>
           <AlertDialogDescription>
-            Create a new version of &quot;{playlistName}&quot; based on your mood.
+            Create a new version of this playlist based on your mood.
             The current tracks will be used as seeds.
             {originalMoodPrompt && (
               <>
