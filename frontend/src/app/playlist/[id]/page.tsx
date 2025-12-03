@@ -134,8 +134,6 @@ function PlaylistPageContent() {
             {showMoodBackground && (
                 <MoodBackground
                     colorScheme={colorScheme}
-                    style="linear-diagonal"
-                    opacity={0.2}
                 />
             )}
 
