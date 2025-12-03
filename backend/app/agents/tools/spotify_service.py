@@ -10,6 +10,7 @@ from .spotify.tools.user_data import GetUserTopTracksTool, GetUserTopArtistsTool
 from .spotify.tools.playlist_management import (
     CreatePlaylistTool,
     AddTracksToPlaylistTool,
+    GetPlaylistItemsTool,
 )
 from .spotify.tools.user_profile import GetUserProfileTool
 from .spotify.tools.artist_search import (
@@ -43,6 +44,7 @@ class SpotifyService:
             GetUserTopArtistsTool(),
             CreatePlaylistTool(),
             AddTracksToPlaylistTool(),
+            GetPlaylistItemsTool(),
             GetUserProfileTool(),
             SearchSpotifyArtistsTool(),
             GetSeveralSpotifyArtistsTool(),
@@ -243,6 +245,41 @@ class SpotifyService:
             return False
 
         return True
+
+    async def get_playlist_items(
+        self,
+        access_token: str,
+        playlist_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """Get items from a Spotify playlist.
+
+        Args:
+            access_token: Spotify access token
+            playlist_id: Spotify playlist ID
+            limit: Number of items to return
+            offset: Index of first item to return
+
+        Returns:
+            List of tracks
+        """
+        tool = self.tools.get_tool("get_playlist_items")
+        if not tool:
+            raise ValueError("Get playlist items tool not available")
+
+        result = await tool._run(
+            access_token=access_token,
+            playlist_id=playlist_id,
+            limit=limit,
+            offset=offset,
+        )
+
+        if not result.success:
+            logger.error(f"Failed to get playlist items: {result.error}")
+            return []
+
+        return result.data.get("tracks", [])
 
     async def search_spotify_artists(
         self, access_token: str, query: str, limit: int = 20

@@ -125,7 +125,11 @@ class WorkflowManager:
         await self.state_manager.update_state(session_id, state)
 
     async def start_workflow(
-        self, mood_prompt: str, user_id: str, spotify_user_id: Optional[str] = None
+        self,
+        mood_prompt: str,
+        user_id: str,
+        spotify_user_id: Optional[str] = None,
+        remix_tracks: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         """Start a new recommendation workflow.
 
@@ -133,6 +137,7 @@ class WorkflowManager:
             mood_prompt: User's mood description
             user_id: User identifier
             spotify_user_id: Optional Spotify user ID
+            remix_tracks: Optional list of tracks for remixing
 
         Returns:
             Workflow session ID
@@ -148,6 +153,13 @@ class WorkflowManager:
             current_step="initializing",
             status=RecommendationStatus.PENDING,
         )
+
+        # Store remix tracks in metadata if provided
+        if remix_tracks:
+            state.metadata["remix_playlist_tracks"] = remix_tracks
+            logger.info(
+                f"Workflow {session_id} initialized with {len(remix_tracks)} remix tracks"
+            )
 
         # Store workflow
         self.state_manager.active_workflows[session_id] = state

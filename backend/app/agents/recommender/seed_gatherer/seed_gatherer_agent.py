@@ -125,15 +125,24 @@ class SeedGathererAgent(BaseAgent):
             state.current_step = "gathering_seeds_fetching_top_tracks"
             await self._notify_progress(state)
 
-            # Optimization: Pass user_id to enable caching
-            step_start = time.time()
-            top_tracks = await self.spotify_service.get_user_top_tracks(
-                access_token=access_token,
-                limit=20,
-                time_range="medium_term",
-                user_id=state.user_id,
-            )
-            timing_metrics["fetch_top_tracks"] = time.time() - step_start
+            # Check for remix tracks first (passed from workflow start)
+            remix_tracks = state.metadata.get("remix_playlist_tracks")
+            
+            if remix_tracks:
+                logger.info(f"Using {len(remix_tracks)} remix tracks as seed source")
+                top_tracks = remix_tracks
+                # Mark as remix in metadata
+                state.metadata["is_remix"] = True
+            else:
+                # Optimization: Pass user_id to enable caching
+                step_start = time.time()
+                top_tracks = await self.spotify_service.get_user_top_tracks(
+                    access_token=access_token,
+                    limit=20,
+                    time_range="medium_term",
+                    user_id=state.user_id,
+                )
+                timing_metrics["fetch_top_tracks"] = time.time() - step_start
 
             # Progress update after fetching tracks
             state.current_step = "gathering_seeds_tracks_fetched"
