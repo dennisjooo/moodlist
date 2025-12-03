@@ -6,7 +6,7 @@ import { motion } from '@/components/ui/lazy-motion';
 import { CARD_FADE_IN_UP_VARIANTS, GRADIENT_SCALE_VARIANTS } from '@/lib/constants/animations';
 import { cn } from '@/lib/utils';
 import { cleanText } from '@/lib/utils/text';
-import { Download, Edit, ExternalLink, Loader2, Music2, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
+import { Download, Edit, ExternalLink, Loader2, Music2, RefreshCw, Sparkles, Trash2, Shuffle } from 'lucide-react';
 
 interface PlaylistStatusBannerProps {
   hasSavedToSpotify: boolean;
@@ -21,6 +21,7 @@ interface PlaylistStatusBannerProps {
   onSyncFromSpotify: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onRemix: () => void;
   colorScheme?: {
     primary: string;
     secondary: string;
@@ -41,6 +42,7 @@ export default function PlaylistStatusBanner({
   onSyncFromSpotify,
   onEdit,
   onDelete,
+  onRemix,
   colorScheme,
 }: PlaylistStatusBannerProps) {
   return (
@@ -155,6 +157,16 @@ export default function PlaylistStatusBanner({
                     <span className="hidden sm:inline">Sync</span>
                   </Button>
                 )}
+
+                <Button
+                  variant="outline"
+                  size="default"
+                  onClick={onRemix}
+                  className="flex-1 gap-2"
+                >
+                  <Shuffle className="w-4 h-4" />
+                  <span className="hidden sm:inline">Remix</span>
+                </Button>
 
                 <Button
                   variant="outline"

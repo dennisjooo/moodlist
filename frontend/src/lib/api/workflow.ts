@@ -214,6 +214,29 @@ class WorkflowAPI {
         );
     }
 
+    async remixPlaylist(request: {
+        playlist_id: string;
+        source: string;
+        mood_prompt?: string;
+    }): Promise<StartRecommendationResponse> {
+        logger.info('Starting remix workflow', { component: 'WorkflowAPI', ...request });
+        const params = new URLSearchParams({
+            playlist_id: request.playlist_id,
+            source: request.source,
+        });
+
+        if (request.mood_prompt) {
+            params.append('mood_prompt', request.mood_prompt);
+        }
+
+        return this.request<StartRecommendationResponse>(
+            `/api/agents/recommendations/remix?${params.toString()}`,
+            {
+                method: 'POST',
+            }
+        );
+    }
+
     async getWorkflowStatus(sessionId: string): Promise<WorkflowStatus> {
         return this.request<WorkflowStatus>(`/api/agents/recommendations/${sessionId}/status`);
     }

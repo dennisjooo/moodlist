@@ -26,6 +26,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
 
   const {
     startWorkflow,
+    startRemix,
     loadWorkflow,
     loadWorkflowCost,
     stopWorkflow,
@@ -80,6 +81,7 @@ export function WorkflowProvider({ children }: WorkflowProviderProps) {
   const value: WorkflowContextType = {
     workflowState,
     startWorkflow,
+    startRemix,
     loadWorkflow,
     loadWorkflowCost,
     stopWorkflow,
