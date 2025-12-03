@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Index
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, JSON, Index, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -32,6 +32,12 @@ class Playlist(Base):
     color_secondary = Column(String(7), nullable=True)  # Hex color code
     color_tertiary = Column(String(7), nullable=True)  # Hex color code
 
+    # Remix/Version Control Fields
+    parent_playlist_id = Column(Integer, ForeignKey("playlists.id"), nullable=True, index=True)
+    is_remix = Column(Boolean, default=False)  # True if this is a remix of another playlist
+    remix_parameters = Column(JSON, nullable=True)  # Store remix type and parameters (energy_adjustment, mood_shift, etc.)
+    remix_generation = Column(Integer, default=0)  # 0 = original, 1 = first remix, 2 = remix of remix, etc.
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -48,6 +54,15 @@ class Playlist(Base):
     llm_invocations = relationship(
         "LLMInvocation", back_populates="playlist", cascade="all, delete-orphan"
     )
+    
+    # Remix/Version Control Relationships
+    parent_playlist = relationship(
+        "Playlist",
+        remote_side=[id],
+        backref="remixes",
+        foreign_keys=[parent_playlist_id],
+        uselist=False
+    )
 
     # Composite indexes for common query patterns
     __table_args__ = (
@@ -63,6 +78,8 @@ class Playlist(Base):
         ),
         # Index for sorting by track count
         Index("ix_playlist_user_track_count", "user_id", "deleted_at", "track_count"),
+        # Index for remix queries (find all remixes of a playlist)
+        Index("ix_playlist_parent_remix", "parent_playlist_id", "is_remix"),
         # Optimization: GIN indexes for JSONB fields to improve search performance
         # These indexes significantly speed up JSON field searches and full-text queries
         Index("ix_playlist_data_gin", "playlist_data", postgresql_using="gin"),

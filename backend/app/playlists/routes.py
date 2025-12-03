@@ -608,3 +608,183 @@ async def sync_playlist_from_spotify(
     except Exception as e:
         logger.error(f"Error syncing playlist from Spotify: {str(e)}", exc_info=True)
         raise InternalServerError(f"Failed to sync playlist: {str(e)}")
+
+
+@router.get("/playlists/{playlist_id}/remix-options")
+async def get_remix_options(
+    playlist_id: int,
+    current_user: User = Depends(require_auth),
+    playlist_service: PlaylistService = Depends(get_playlist_service),
+):
+    """Get available remix types and parameters for a playlist.
+
+    Args:
+        playlist_id: ID of the playlist to remix
+        current_user: Authenticated user
+
+    Returns:
+        Available remix types and parameter options
+    """
+    try:
+        from ..services.remix_service import RemixService
+
+        remix_service = RemixService(playlist_service.playlist_repository)
+        options = await remix_service.get_remix_options(playlist_id, current_user.id)
+        return options
+
+    except NotFoundException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting remix options: {str(e)}", exc_info=True)
+        raise InternalServerError(f"Failed to get remix options: {str(e)}")
+
+
+@router.post("/playlists/{playlist_id}/create-remix")
+async def create_remix(
+    playlist_id: int,
+    remix_type: str,
+    remix_parameters: dict,
+    custom_mood: Optional[str] = None,
+    current_user: User = Depends(require_auth),
+    playlist_service: PlaylistService = Depends(get_playlist_service),
+):
+    """Create a remix of an existing playlist.
+
+    This creates a new playlist based on the original, starting a new workflow
+    with adjusted parameters.
+
+    Args:
+        playlist_id: ID of the playlist to remix
+        remix_type: Type of remix (energy, mood, tempo, genre, danceability)
+        remix_parameters: Parameters for the remix
+        custom_mood: Optional custom mood prompt for the remix
+        current_user: Authenticated user
+        playlist_service: Playlist service
+
+    Returns:
+        Remix metadata to initiate workflow
+    """
+    try:
+        from ..services.remix_service import RemixService
+
+        remix_service = RemixService(playlist_service.playlist_repository)
+        remix_data = await remix_service.create_remix(
+            playlist_id=playlist_id,
+            user_id=current_user.id,
+            remix_type=remix_type,
+            remix_parameters=remix_parameters,
+            new_mood_prompt=custom_mood,
+        )
+
+        logger.info(
+            "remix_created",
+            playlist_id=playlist_id,
+            remix_type=remix_type,
+            user_id=current_user.id,
+        )
+
+        return {
+            "remix_type": remix_data["remix_type"],
+            "mood_prompt": remix_data["mood_prompt"],
+            "original_mood_prompt": remix_data["original_mood_prompt"],
+            "parent_playlist_id": remix_data["parent_playlist_id"],
+            "remix_generation": remix_data["remix_generation"],
+            "message": "Remix created. Start workflow to generate new playlist.",
+        }
+
+    except NotFoundException:
+        raise
+    except ValidationException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating remix: {str(e)}", exc_info=True)
+        raise InternalServerError(f"Failed to create remix: {str(e)}")
+
+
+@router.get("/playlists/{playlist_id}/remix-chain")
+async def get_remix_chain(
+    playlist_id: int,
+    current_user: User = Depends(require_auth),
+    playlist_service: PlaylistService = Depends(get_playlist_service),
+):
+    """Get the remix chain/history for a playlist.
+
+    Shows the lineage: Original → Remix 1 → Remix of Remix, etc.
+
+    Args:
+        playlist_id: ID of any playlist in the chain
+        current_user: Authenticated user
+
+    Returns:
+        List of playlists in the remix chain
+    """
+    try:
+        from ..services.remix_service import RemixService
+
+        remix_service = RemixService(playlist_service.playlist_repository)
+        chain = await remix_service.get_remix_chain(playlist_id, current_user.id)
+        return {"remix_chain": chain}
+
+    except NotFoundException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting remix chain: {str(e)}", exc_info=True)
+        raise InternalServerError(f"Failed to get remix chain: {str(e)}")
+
+
+@router.get("/playlists/{playlist_id}/remixes")
+async def get_playlist_remixes(
+    playlist_id: int,
+    current_user: User = Depends(require_auth),
+    playlist_service: PlaylistService = Depends(get_playlist_service),
+):
+    """Get all remixes created from a specific playlist.
+
+    Shows what playlists were derived from this one.
+
+    Args:
+        playlist_id: ID of the original playlist
+        current_user: Authenticated user
+
+    Returns:
+        List of remixes derived from this playlist
+    """
+    try:
+        from ..services.remix_service import RemixService
+
+        remix_service = RemixService(playlist_service.playlist_repository)
+        remixes = await remix_service.get_playlist_remixes(playlist_id, current_user.id)
+        return {"remixes": remixes}
+
+    except NotFoundException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting remixes: {str(e)}", exc_info=True)
+        raise InternalServerError(f"Failed to get remixes: {str(e)}")
+
+
+@router.get("/remix-statistics")
+async def get_remix_statistics(
+    current_user: User = Depends(require_auth),
+    playlist_service: PlaylistService = Depends(get_playlist_service),
+):
+    """Get remix statistics for the current user.
+
+    Returns remix creation metrics and patterns.
+
+    Args:
+        current_user: Authenticated user
+
+    Returns:
+        User's remix statistics
+    """
+    try:
+        from ..services.remix_service import RemixService
+
+        remix_service = RemixService(playlist_service.playlist_repository)
+        stats = await remix_service.get_remix_statistics(current_user.id)
+        return stats
+
+    except Exception as e:
+        logger.error(f"Error getting remix statistics: {str(e)}", exc_info=True)
+        raise InternalServerError(f"Failed to get remix statistics: {str(e)}")
