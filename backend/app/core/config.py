@@ -110,6 +110,7 @@ class Settings(BaseSettings):
         default_factory=lambda: {
             "general": "100/minute",
             "workflow_start": "10/minute",
+            "workflow_remix": "5/minute",  # More restrictive for remix to prevent abuse
             "workflow_poll": "60/minute",
             "playlist_edit": "30/minute",
             "auth": "20/minute",

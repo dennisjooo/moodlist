@@ -134,13 +134,21 @@ class WorkflowManager:
         """Start a new recommendation workflow.
 
         Args:
-            mood_prompt: User's mood description
-            user_id: User identifier
+            mood_prompt: User's mood description for the playlist
+            user_id: Internal user identifier
             spotify_user_id: Optional Spotify user ID
-            remix_tracks: Optional list of tracks for remixing
+            remix_tracks: Optional list of track dicts for remixing existing playlists.
+                         Each track should contain:
+                         - id: Spotify track ID (required)
+                         - name: Track name (required)
+                         - artists: List of artist names (required)
+                         - spotify_uri: Spotify URI (required)
+                         - popularity: Track popularity 0-100 (optional, default 50)
+                         - preview_url: Track preview URL (optional)
+                         Recommended limit: 50 tracks or fewer for optimal performance.
 
         Returns:
-            Workflow session ID
+            Workflow session ID (UUID string)
         """
         session_id = str(uuid.uuid4())
 

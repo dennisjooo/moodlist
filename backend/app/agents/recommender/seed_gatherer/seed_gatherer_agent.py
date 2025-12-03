@@ -129,10 +129,10 @@ class SeedGathererAgent(BaseAgent):
             remix_tracks = state.metadata.get("remix_playlist_tracks")
             
             if remix_tracks:
+                # Mark as remix BEFORE using tracks to ensure atomicity
+                state.metadata["is_remix"] = True
                 logger.info(f"Using {len(remix_tracks)} remix tracks as seed source")
                 top_tracks = remix_tracks
-                # Mark as remix in metadata
-                state.metadata["is_remix"] = True
             else:
                 # Optimization: Pass user_id to enable caching
                 step_start = time.time()

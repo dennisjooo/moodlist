@@ -112,7 +112,7 @@ async def start_recommendation(
 
 
 @router.post("/recommendations/remix")
-@limiter.limit(settings.RATE_LIMITS.get("workflow_start", "10/minute"))
+@limiter.limit(settings.RATE_LIMITS.get("workflow_remix", "5/minute"))
 async def remix_playlist(
     request: Request,
     playlist_id: str = Query(..., description="ID of the playlist to remix"),
@@ -141,25 +141,39 @@ async def remix_playlist(
         )
 
         current_user = await refresh_spotify_token_if_expired(current_user, db)
+        if not current_user.access_token:
+            raise UnauthorizedException("Failed to obtain valid Spotify access token")
 
         remix_tracks = []
         original_mood = None
 
         if source.lower() == "moodlist":
-            # Lookup by session ID first
-            playlist = await playlist_repo.get_by_session_id(playlist_id)
-            if not playlist:
-                # Try by numeric ID
+            # Validate input length to prevent DoS
+            if len(playlist_id) > 100:
+                raise ValidationException("Invalid playlist ID format")
+            
+            # Try UUID format first (session ID)
+            playlist = None
+            try:
+                import uuid
+                uuid.UUID(playlist_id)
+                playlist = await playlist_repo.get_by_session_id(playlist_id)
+            except ValueError:
+                # Try numeric ID
                 if playlist_id.isdigit():
-                    playlist = await playlist_repo.get(int(playlist_id))
+                    try:
+                        playlist = await playlist_repo.get(int(playlist_id))
+                    except (ValueError, OverflowError):
+                        raise ValidationException("Playlist ID too large")
+                else:
+                    raise ValidationException("Invalid playlist ID format")
 
             if not playlist:
                 raise NotFoundException("Playlist", playlist_id)
 
-            # Check ownership (strict for now)
+            # Check ownership - ENFORCE AUTHORIZATION
             if playlist.user_id != current_user.id:
-                # TODO: Implement sharing logic or check if public
-                pass
+                raise UnauthorizedException("You do not have permission to access this playlist")
 
             # Extract tracks from recommendations_data
             if playlist.recommendations_data:
@@ -172,8 +186,8 @@ async def remix_playlist(
                             "name": rec.get("track_name"),
                             "artists": rec.get("artists"),
                             "spotify_uri": rec.get("spotify_uri"),
-                            "popularity": 50,  # Default
-                            "preview_url": None,
+                            "popularity": rec.get("popularity", 50),  # Preserve original popularity
+                            "preview_url": rec.get("preview_url"),  # Preserve preview URL
                         }
                     )
 
@@ -197,7 +211,7 @@ async def remix_playlist(
         # Determine mood prompt
         final_mood_prompt = mood_prompt if mood_prompt else original_mood
         if not final_mood_prompt:
-            final_mood_prompt = "Remix of playlist"
+            final_mood_prompt = f"Remix of {source} playlist {playlist_id}"
 
         # Start workflow
         session_id = await workflow_manager.start_workflow(
@@ -244,7 +258,7 @@ async def remix_playlist(
         logger.error(
             "Error starting remix workflow", error=str(exc), exc_info=True
         )
-        if isinstance(exc, (NotFoundException, ValidationException)):
+        if isinstance(exc, (NotFoundException, ValidationException, UnauthorizedException)):
             raise
         raise InternalServerError(f"Failed to start remix workflow: {exc}") from exc
 
