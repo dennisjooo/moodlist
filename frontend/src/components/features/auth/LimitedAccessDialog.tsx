@@ -53,9 +53,9 @@ export function LimitedAccessDialog({ open, onOpenChange }: LimitedAccessDialogP
                             <div className="rounded-lg border border-border/60 bg-muted/30 p-3 text-sm space-y-2">
                                 <div className="font-medium">Want access?</div>
                                 <div className="text-muted-foreground">
-                                    We currently don&apos; have a restriction from Spotify to 25 users.
+                                    We currently have a restriction from Spotify to 25 users.
                                     <br />
-                                    If you're interested in being added to the beta whitelist, please reach out to us.
+                                    If you&apos;re interested in being added to the beta whitelist, please reach out to us.
                                 </div>
                                 {betaContactUrl && (
                                     <Button

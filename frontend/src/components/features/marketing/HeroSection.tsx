@@ -95,7 +95,7 @@ export function HeroSection({ isLoggedIn: serverIsLoggedIn }: HeroSectionProps) 
                                 <SpotifyLoginButton />
                                 <p className="text-sm text-muted-foreground text-center max-w-sm">
                                     {config.access.isDevMode && config.access.showLimitedAccessNotice
-                                        ? 'We\'re in private beta for now. Let\'s hope give it a try if you\'re interested.'
+                                        ? 'We\'re in private beta for now. Let us know if you\'re interested and we\'ll add you to the waitlist.'
                                         :'Connect your Spotify account to get started'}
                                 </p>
                             </div>
