@@ -91,6 +91,7 @@ export const AnimatedThemeToggler = ({ className, onToggle }: Props) => {
       ref={buttonRef}
       onClick={toggleTheme}
       className={cn("flex items-center justify-center", className)}
+      aria-label="Toggle theme"
     >
       {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
     </button>
