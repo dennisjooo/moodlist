@@ -156,8 +156,6 @@ function EditPlaylistPageContent() {
         <div className="min-h-screen bg-background relative">
             <MoodBackground
                 colorScheme={colorScheme}
-                style="linear-diagonal"
-                opacity={0.2}
             />
 
             <div className="fixed inset-0 z-0 opacity-0 animate-[fadeInDelayed_1.8s_cubic-bezier(0.22,0.61,0.36,1)_forwards]">

@@ -17,7 +17,7 @@ interface MoodBackgroundProps {
 export default function MoodBackground({
     colorScheme,
     style = 'linear-diagonal',
-    opacity = 0.25
+    opacity = 0.3
 }: MoodBackgroundProps) {
     const [currentOpacity, setCurrentOpacity] = useState(0);
 

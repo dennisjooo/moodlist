@@ -34,7 +34,7 @@ export function CreateSessionLayout({
                 dimmed && 'pointer-events-none opacity-60'
             )}
         >
-            <MoodBackground colorScheme={colorScheme} style="linear-diagonal" opacity={0.18} />
+            <MoodBackground colorScheme={colorScheme}/>
 
             <div className="pointer-events-none fixed inset-0 -z-10 opacity-0 mix-blend-screen animate-[fadeInDelayed_1.2s_ease-in-out_forwards]">
                 <DotPattern
