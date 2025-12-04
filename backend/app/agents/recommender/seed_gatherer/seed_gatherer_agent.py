@@ -102,6 +102,15 @@ class SeedGathererAgent(BaseAgent):
             # Get intent analysis from state (set by IntentAnalyzerAgent)
             intent_analysis = state.metadata.get("intent_analysis", {})
 
+            # Check for remix tracks first (passed from workflow start)
+            remix_tracks = state.metadata.get("remix_playlist_tracks")
+            is_remix = bool(remix_tracks)
+            
+            if is_remix:
+                # Mark as remix BEFORE using tracks to ensure atomicity
+                state.metadata["is_remix"] = True
+                logger.info(f"Remix mode detected: optimizing seed gathering steps")
+
             # STEP 1: Search for user-mentioned tracks
             step_start = time.time()
             await self._search_user_mentioned_tracks(
@@ -111,13 +120,64 @@ class SeedGathererAgent(BaseAgent):
 
             # STEP 2: Select anchor tracks
             step_start = time.time()
-            await self._select_anchor_tracks(state, intent_analysis, access_token)
+            
+            if is_remix and remix_tracks:
+                logger.info("Remix mode: using source tracks as anchors (skipping search)")
+                # Use first 5 remix tracks as anchors
+                anchor_candidates = remix_tracks[:5]
+                
+                # Normalize to match expected anchor format
+                normalized_anchors = []
+                for track in anchor_candidates:
+                    # Handle different artist formats (list of strings vs list of dicts)
+                    raw_artists = track.get("artists", [])
+                    formatted_artists = []
+                    
+                    for artist in raw_artists:
+                        if isinstance(artist, str):
+                            formatted_artists.append({"name": artist})
+                        elif isinstance(artist, dict):
+                            formatted_artists.append(artist)
+                            
+                    normalized_anchors.append({
+                        "id": track.get("id"),
+                        "name": track.get("name"),
+                        "artists": formatted_artists,
+                        "spotify_uri": track.get("spotify_uri"),
+                        "anchor_type": "remix_source",
+                        "user_mentioned": False
+                    })
+                
+                state.metadata["anchor_tracks"] = normalized_anchors
+                state.metadata["anchor_track_ids"] = [t["id"] for t in normalized_anchors if t.get("id")]
+                logger.info(f"Set {len(normalized_anchors)} remix anchors")
+            else:
+                await self._select_anchor_tracks(
+                    state, 
+                    intent_analysis, 
+                    access_token
+                )
+            
             timing_metrics["select_anchor_tracks"] = time.time() - step_start
 
             # STEP 3: Discover and validate artists
             step_start = time.time()
+            # Optimization: Limit artist discovery for remixing
+            discovery_mood_analysis = state.mood_analysis
+            if is_remix and state.mood_analysis:
+                logger.info("Remix mode: limiting artist discovery scope")
+                # Create a shallow copy with limited inputs to reduce search volume
+                discovery_mood_analysis = state.mood_analysis.copy()
+                if "genre_keywords" in discovery_mood_analysis:
+                    discovery_mood_analysis["genre_keywords"] = discovery_mood_analysis["genre_keywords"][:2]
+                if "artist_recommendations" in discovery_mood_analysis:
+                    discovery_mood_analysis["artist_recommendations"] = discovery_mood_analysis["artist_recommendations"][:3]
+            
             await self._discover_and_validate_artists(
-                state, intent_analysis, access_token
+                state, 
+                intent_analysis, 
+                access_token,
+                mood_analysis_override=discovery_mood_analysis
             )
             timing_metrics["discover_artists"] = time.time() - step_start
 
@@ -125,14 +185,14 @@ class SeedGathererAgent(BaseAgent):
             state.current_step = "gathering_seeds_fetching_top_tracks"
             await self._notify_progress(state)
 
-            # Check for remix tracks first (passed from workflow start)
-            remix_tracks = state.metadata.get("remix_playlist_tracks")
-            
             if remix_tracks:
-                # Mark as remix BEFORE using tracks to ensure atomicity
-                state.metadata["is_remix"] = True
                 logger.info(f"Using {len(remix_tracks)} remix tracks as seed source")
-                top_tracks = remix_tracks
+                # Optimization: Limit remix tracks to reduce enrichment overhead
+                if len(remix_tracks) > 30:
+                    logger.info(f"Limiting remix tracks from {len(remix_tracks)} to 30 for processing")
+                    top_tracks = remix_tracks[:30]
+                else:
+                    top_tracks = remix_tracks
             else:
                 # Optimization: Pass user_id to enable caching
                 step_start = time.time()
@@ -154,9 +214,12 @@ class SeedGathererAgent(BaseAgent):
 
             # Optimization: Pass user_id to enable caching
             step_start = time.time()
+            # Optimization: Reduce top artist fetch for remixing
+            top_artist_limit = 5 if is_remix else 15
+            
             top_artists = await self.spotify_service.get_user_top_artists(
                 access_token=access_token,
-                limit=15,
+                limit=top_artist_limit,
                 time_range="medium_term",
                 user_id=state.user_id,
             )
@@ -231,7 +294,11 @@ class SeedGathererAgent(BaseAgent):
         state.metadata["user_mentioned_tracks_full"] = found_tracks
 
     async def _select_anchor_tracks(
-        self, state: AgentState, intent_analysis: dict, access_token: str
+        self, 
+        state: AgentState, 
+        intent_analysis: dict, 
+        access_token: str,
+        limit_override: int = None
     ) -> None:
         """Select anchor tracks using mood analysis and genre keywords.
 
@@ -239,6 +306,7 @@ class SeedGathererAgent(BaseAgent):
             state: Current agent state
             intent_analysis: Intent analysis
             access_token: Spotify access token
+            limit_override: Optional limit override for optimization
         """
         logger.info("Selecting anchor tracks")
         state.current_step = "gathering_seeds_selecting_anchors"
@@ -269,6 +337,10 @@ class SeedGathererAgent(BaseAgent):
             anchor_params = self._prepare_anchor_selection_params(
                 state, intent_analysis
             )
+            
+            # Apply limit override if provided
+            if limit_override:
+                anchor_params["limit"] = limit_override
 
             # Call anchor selection
             (
@@ -411,7 +483,11 @@ class SeedGathererAgent(BaseAgent):
         return anchor_limit
 
     async def _discover_and_validate_artists(
-        self, state: AgentState, intent_analysis: dict, access_token: str
+        self, 
+        state: AgentState, 
+        intent_analysis: dict, 
+        access_token: str,
+        mood_analysis_override: dict = None
     ) -> None:
         """Discover and validate artists for the mood.
 
@@ -419,13 +495,14 @@ class SeedGathererAgent(BaseAgent):
             state: Current agent state
             intent_analysis: Intent analysis
             access_token: Spotify access token
+            mood_analysis_override: Optional mood analysis override for optimization
         """
         logger.info("Discovering artists")
         state.current_step = "gathering_seeds_discovering_artists"
         await self._notify_progress(state)
 
         try:
-            mood_analysis = state.mood_analysis or {}
+            mood_analysis = mood_analysis_override or state.mood_analysis or {}
 
             # Discover artists using mood analysis
             await self.artist_discovery.discover_mood_artists(state, mood_analysis)

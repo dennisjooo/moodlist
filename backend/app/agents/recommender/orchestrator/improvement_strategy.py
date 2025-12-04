@@ -342,7 +342,7 @@ class ImprovementStrategy:
                 mood_prompt=state.mood_prompt,
                 quality_evaluation=quality_evaluation,
                 issues_summary=issues_summary,
-                llm_assessment_reasoning=llm_assessment.get("reasoning", "N/A"),
+                llm_assessment_reasoning=(llm_assessment or {}).get("reasoning", "N/A"),
                 target_count=target_count,
                 iteration=state.metadata.get("orchestration_iterations", 0),
             )
