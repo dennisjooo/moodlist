@@ -204,6 +204,22 @@ class SeedGathererAgent(BaseAgent):
                 )
                 timing_metrics["fetch_top_tracks"] = time.time() - step_start
 
+            # CRITICAL FIX: Merge user-mentioned tracks into top_tracks
+            # This ensures user-mentioned tracks get included in seed pool selection
+            user_mentioned_tracks_full = state.metadata.get("user_mentioned_tracks_full", [])
+            if user_mentioned_tracks_full:
+                # Deduplicate by track ID
+                existing_track_ids = {track["id"] for track in top_tracks if track.get("id")}
+                new_user_tracks = [
+                    track for track in user_mentioned_tracks_full 
+                    if track.get("id") and track["id"] not in existing_track_ids
+                ]
+                
+                if new_user_tracks:
+                    # Add user-mentioned tracks to the beginning (higher priority)
+                    top_tracks = new_user_tracks + top_tracks
+                    logger.info(f"Added {len(new_user_tracks)} user-mentioned tracks to seed pool")
+
             # Progress update after fetching tracks
             state.current_step = "gathering_seeds_tracks_fetched"
             await self._notify_progress(state)
@@ -509,7 +525,7 @@ class SeedGathererAgent(BaseAgent):
 
             # Build artist lists from user-mentioned and anchor tracks
             user_mentioned_tracks = state.metadata.get("user_mentioned_tracks_full", [])
-            user_mentioned_artists = [
+            user_mentioned_artists_from_tracks = [
                 {
                     "id": track.get("artist_id"),
                     "name": track.get("artist"),
@@ -519,6 +535,35 @@ class SeedGathererAgent(BaseAgent):
                 for track in user_mentioned_tracks
                 if track.get("artist_id")
             ]
+
+            # CRITICAL FIX: Also include artists mentioned by name (not just from tracks)
+            # Search for artists mentioned in intent_analysis
+            user_mentioned_artist_names = intent_analysis.get("user_mentioned_artists", [])
+            user_mentioned_artists_from_names = []
+            
+            if user_mentioned_artist_names:
+                # Search Spotify for these artist names
+                for artist_name in user_mentioned_artist_names:
+                    try:
+                        search_results = await self.spotify_service.search_spotify_artists(
+                            query=artist_name,
+                            access_token=access_token,
+                            limit=1
+                        )
+                        if search_results:
+                            artist = search_results[0]
+                            user_mentioned_artists_from_names.append({
+                                "id": artist.get("id"),
+                                "name": artist.get("name"),
+                                "popularity": artist.get("popularity", 50),
+                                "source": "user_mentioned",
+                            })
+                            logger.info(f"Found user-mentioned artist: {artist.get('name')}")
+                    except Exception as e:
+                        logger.warning(f"Failed to search for artist '{artist_name}': {e}")
+            
+            # Combine artists from both sources
+            user_mentioned_artists = user_mentioned_artists_from_tracks + user_mentioned_artists_from_names
 
             anchor_tracks = state.metadata.get("anchor_tracks", [])
             anchor_artists = [

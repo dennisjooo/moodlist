@@ -146,12 +146,33 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
         enhanced_track = track.copy()
         enhanced_track["audio_features"] = audio_features
 
-        return TrackRecommendationFactory.from_artist_top_track(
+        recommendation = TrackRecommendationFactory.from_artist_top_track(
             track_data=enhanced_track,
             artist_id="",  # We don't have the artist_id here, but the method doesn't require it
             confidence_score=cohesion_score,
             reasoning=f"From mood-matched artist (cohesion: {cohesion_score:.2f})",
         )
+
+        # Fix: Tag tracks from user-mentioned artists
+        if recommendation and hasattr(self, "_current_state"):
+            intent_analysis = self._current_state.metadata.get("intent_analysis", {})
+            user_mentioned_artists = {
+                artist.lower()
+                for artist in intent_analysis.get("user_mentioned_artists", [])
+                if isinstance(artist, str)
+            }
+            
+            if user_mentioned_artists:
+                # Check if any of the track's artists match user-mentioned artists
+                track_artists = {artist.lower() for artist in artists}
+                if track_artists & user_mentioned_artists:  # Set intersection
+                    recommendation.user_mentioned_artist = True
+                    logger.debug(
+                        f"Tagged '{track_name}' as user_mentioned_artist=True "
+                        f"(artist in user mentions)"
+                    )
+
+        return recommendation
 
     def _calculate_artist_track_score(
         self, audio_features: Any, target_features: Dict[str, Any]
