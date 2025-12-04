@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from dataclasses import dataclass
 
 import structlog
-from sqlalchemy import select, and_, asc, desc, func, or_, String, literal, cast
+from sqlalchemy import select, and_, asc, desc, func, or_, String, literal, cast, not_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.dialects.postgresql import JSONB
@@ -262,7 +262,25 @@ class PlaylistRepository(BaseRepository[Playlist]):
                 where_clauses.append(Playlist.deleted_at.is_(None))
 
             if status:
-                where_clauses.append(Playlist.status == status)
+                if status.lower() == "completed":
+                    where_clauses.append(
+                        and_(
+                            Playlist.status == status,
+                            func.coalesce(Playlist.track_count, 0) > 0,
+                        )
+                    )
+                elif status.lower() == "failed":
+                    where_clauses.append(
+                        or_(
+                            Playlist.status == status,
+                            and_(
+                                Playlist.status == "completed",
+                                func.coalesce(Playlist.track_count, 0) == 0,
+                            ),
+                        )
+                    )
+                else:
+                    where_clauses.append(Playlist.status == status)
             elif exclude_statuses:
                 # Validate all statuses are strings
                 for status_item in exclude_statuses:
@@ -272,11 +290,33 @@ class PlaylistRepository(BaseRepository[Playlist]):
                         raise ValidationException(
                             f"Status must be a string, got {type(status_item).__name__}"
                         )
-                where_clauses.append(
-                    func.lower(Playlist.status).not_in(
-                        [s.lower() for s in exclude_statuses]
-                    )
-                )
+
+                # Build exclusion clauses
+                for status_item in exclude_statuses:
+                    s_lower = status_item.lower()
+                    if s_lower == "completed":
+                        where_clauses.append(
+                            not_(
+                                and_(
+                                    Playlist.status == "completed",
+                                    func.coalesce(Playlist.track_count, 0) > 0,
+                                )
+                            )
+                        )
+                    elif s_lower == "failed":
+                        where_clauses.append(
+                            not_(
+                                or_(
+                                    Playlist.status == "failed",
+                                    and_(
+                                        Playlist.status == "completed",
+                                        func.coalesce(Playlist.track_count, 0) == 0,
+                                    ),
+                                )
+                            )
+                        )
+                    else:
+                        where_clauses.append(func.lower(Playlist.status) != s_lower)
 
             # Add search conditions if provided
             if search_query:
@@ -1463,7 +1503,21 @@ class PlaylistRepository(BaseRepository[Playlist]):
                     Playlist.playlist_data,
                     Playlist.mood_analysis_data,
                 )
-                .where(and_(Playlist.user_id == user_id, Playlist.deleted_at.is_(None)))
+                .where(
+                    and_(
+                        Playlist.user_id == user_id,
+                        Playlist.deleted_at.is_(None),
+                        not_(
+                            or_(
+                                Playlist.status == "failed",
+                                and_(
+                                    Playlist.status == "completed",
+                                    func.coalesce(Playlist.track_count, 0) == 0,
+                                ),
+                            )
+                        ),
+                    )
+                )
                 .order_by(desc(Playlist.created_at))
                 .limit(limit)
             )
