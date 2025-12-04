@@ -13,14 +13,17 @@ import PlaylistStatusBanner from './PlaylistStatusBanner';
 import MoodAnalysisCard from './MoodAnalysisCard';
 import TrackListView from './TrackListView';
 import DeletePlaylistDialog from './DeletePlaylistDialog';
+import RemixPlaylistDialog from './RemixPlaylistDialog';
 
 export default function PlaylistResults() {
   const router = useRouter();
-  const { workflowState, saveToSpotify, syncFromSpotify, resetWorkflow } = useWorkflow();
+  const { workflowState, saveToSpotify, syncFromSpotify, resetWorkflow, startRemix } = useWorkflow();
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isRemixing, setIsRemixing] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showRemixDialog, setShowRemixDialog] = useState(false);
   const { success, error: showError } = useToast();
 
   const handleSaveToSpotify = async () => {
@@ -93,6 +96,28 @@ export default function PlaylistResults() {
     }
   };
 
+  const handleRemix = async (moodPrompt?: string) => {
+    if (!workflowState.sessionId) return;
+
+    setIsRemixing(true);
+    try {
+      const response = await startRemix(workflowState.sessionId, 'moodlist', moodPrompt);
+
+      if (!response?.session_id) {
+        throw new Error('Invalid response from server');
+      }
+
+      success('Remix started!');
+      setShowRemixDialog(false);
+      // Redirect to the new session
+      router.push(`/create/${response.session_id}`);
+    } catch (error) {
+      logger.error('Failed to remix playlist', error, { component: 'PlaylistResults', sessionId: workflowState.sessionId });
+      showError(error instanceof Error ? error.message : 'Failed to remix playlist');
+      setIsRemixing(false);
+    }
+  };
+
   if (!workflowState.recommendations || workflowState.recommendations.length === 0) {
     return null;
   }
@@ -128,6 +153,7 @@ export default function PlaylistResults() {
         onSyncFromSpotify={handleSyncFromSpotify}
         onEdit={handleEditClick}
         onDelete={() => setShowDeleteDialog(true)}
+        onRemix={() => setShowRemixDialog(true)}
         colorScheme={colorScheme}
       />
 
@@ -138,6 +164,16 @@ export default function PlaylistResults() {
         playlistName={workflowState.playlist?.name || workflowState.moodPrompt}
         isDeleting={isDeleting}
         onConfirm={handleDelete}
+      />
+
+      {/* Remix Playlist Dialog */}
+      <RemixPlaylistDialog
+        open={showRemixDialog}
+        onOpenChange={setShowRemixDialog}
+        playlistName={workflowState.playlist?.name || workflowState.moodPrompt}
+        originalMoodPrompt={workflowState.moodPrompt}
+        isRemixing={isRemixing}
+        onConfirm={handleRemix}
       />
 
       {/* Mood Analysis */}

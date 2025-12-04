@@ -7,29 +7,30 @@ export function PlaylistResultsSkeleton() {
             {/* Status Banner Skeleton */}
             <Card className="relative overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-amber-500" />
-                <CardContent className="p-4 sm:p-6">
-                    <div className="flex flex-col sm:flex-row gap-4">
-                        {/* Left side: Icon + Info */}
-                        <div className="flex gap-3 sm:gap-4 flex-1 min-w-0">
-                            <Skeleton className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl flex-shrink-0" />
-                            <div className="flex-1 min-w-0 flex flex-col justify-center space-y-2">
-                                <Skeleton className="h-6 sm:h-7 w-48" />
-                                <div className="flex items-start gap-1.5">
-                                    <Skeleton className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                                    <Skeleton className="h-4 w-full max-w-xs" />
-                                </div>
-                                <Skeleton className="h-3 w-32 ml-5" />
-                            </div>
+                <CardContent className="p-6 sm:p-8">
+                    <div className="flex flex-col md:flex-row gap-6 items-start">
+                        {/* Icon */}
+                        <div className="flex-shrink-0">
+                            <Skeleton className="w-24 h-24 sm:w-32 sm:h-32 rounded-2xl" />
                         </div>
 
-                        {/* Right side: Actions */}
-                        <div className="flex flex-col gap-2 sm:justify-center sm:min-w-[200px]">
-                            <Skeleton className="h-11 w-full" />
-                            <div className="flex gap-2">
-                                <Skeleton className="h-10 flex-1" />
-                                <Skeleton className="h-10 flex-1" />
-                                <Skeleton className="h-10 flex-1" />
+                        {/* Content Info */}
+                        <div className="flex-1 min-w-0 space-y-3">
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <Skeleton className="h-5 w-24 rounded-full" />
+                                    <Skeleton className="h-4 w-16" />
+                                </div>
+                                <Skeleton className="h-8 sm:h-10 w-3/4" />
+                                <Skeleton className="h-6 w-1/2" />
                             </div>
+                            <Skeleton className="h-20 w-full max-w-2xl rounded-lg" />
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex flex-col gap-3 w-full md:w-auto md:min-w-[180px]">
+                            <Skeleton className="h-12 w-full" />
+                            <Skeleton className="h-12 w-full" />
                         </div>
                     </div>
                 </CardContent>
