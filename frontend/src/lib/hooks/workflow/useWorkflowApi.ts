@@ -98,8 +98,21 @@ export function useWorkflowApi() {
         return await workflowAPI.cancelWorkflow(sessionId);
     };
 
+    const remixPlaylist = async (request: {
+        playlist_id: string;
+        source: string;
+        mood_prompt?: string;
+    }) => {
+        logger.info('Starting remix workflow', {
+            component: 'useWorkflowApi',
+            ...request
+        });
+        return await workflowAPI.remixPlaylist(request);
+    };
+
     return useMemo(() => ({
         startWorkflow,
+        remixPlaylist,
         loadWorkflowStatus,
         loadWorkflowResults,
         loadWorkflowCost,

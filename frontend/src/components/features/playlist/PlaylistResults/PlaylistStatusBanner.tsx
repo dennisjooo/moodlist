@@ -2,11 +2,18 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { motion } from '@/components/ui/lazy-motion';
-import { CARD_FADE_IN_UP_VARIANTS, GRADIENT_SCALE_VARIANTS } from '@/lib/constants/animations';
+import { CARD_FADE_IN_UP_VARIANTS } from '@/lib/constants/animations';
 import { cn } from '@/lib/utils';
 import { cleanText } from '@/lib/utils/text';
-import { Download, Edit, ExternalLink, Loader2, Music2, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Download, Edit, ExternalLink, Loader2, MoreHorizontal, Music2, RefreshCw, Shuffle, Sparkles, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 
 interface PlaylistStatusBannerProps {
   hasSavedToSpotify: boolean;
@@ -21,6 +28,7 @@ interface PlaylistStatusBannerProps {
   onSyncFromSpotify: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onRemix: () => void;
   colorScheme?: {
     primary: string;
     secondary: string;
@@ -41,69 +49,128 @@ export default function PlaylistStatusBanner({
   onSyncFromSpotify,
   onEdit,
   onDelete,
+  onRemix,
   colorScheme,
 }: PlaylistStatusBannerProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const fullTitle = hasSavedToSpotify ? (playlistName || 'Saved Playlist') : 'Your Draft Playlist';
+  let title = fullTitle;
+  let subtitle = '';
+
+  if (fullTitle.includes(':')) {
+    const splitIndex = fullTitle.indexOf(':');
+    title = fullTitle.substring(0, splitIndex).trim();
+    subtitle = fullTitle.substring(splitIndex + 1).trim();
+  }
+
+  const cleanedPrompt = cleanText(moodPrompt);
+  const shouldTruncate = cleanedPrompt.length > 200;
+
   return (
     <motion.div
       variants={CARD_FADE_IN_UP_VARIANTS}
       initial="hidden"
       animate="visible"
+      className="w-full"
     >
-      <Card className="relative overflow-hidden">
-        {/* Subtle gradient background accent */}
-        {colorScheme && (
-          <motion.div
-            className="absolute top-0 left-0 right-0 h-1 origin-left"
-            style={{
-              background: `linear-gradient(90deg, ${colorScheme.primary}, ${colorScheme.secondary}, ${colorScheme.tertiary})`
-            }}
-            variants={GRADIENT_SCALE_VARIANTS}
-            initial="hidden"
-            animate="visible"
-          />
-        )}
+      <Card className="relative overflow-hidden border-0 shadow-lg">
+        {/* Dynamic Gradient Background */}
+        <div
+          className="absolute inset-0 opacity-10 dark:opacity-20"
+          style={colorScheme ? {
+            background: `linear-gradient(135deg, ${colorScheme.primary}, ${colorScheme.secondary}, ${colorScheme.tertiary})`
+          } : {
+            background: 'linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899)'
+          }}
+        />
 
-        <CardContent className="p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* Left side: Icon + Info */}
-            <div className="flex gap-3 sm:gap-4 flex-1 min-w-0">
+        {/* Glass effect overlay */}
+        <div className="absolute inset-0 bg-background/60 backdrop-blur-sm" />
+
+        <CardContent className="relative p-6 sm:p-8">
+          <div className="flex flex-col md:flex-row gap-6 items-start">
+
+            {/* Cover Art / Icon */}
+            <div className="flex-shrink-0">
               <div
                 className={cn(
-                  "w-16 h-16 sm:w-20 sm:h-20 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md",
+                  "w-24 h-24 sm:w-32 sm:h-32 rounded-2xl flex items-center justify-center shadow-xl ring-1 ring-black/5 dark:ring-white/10",
                   !colorScheme && (hasSavedToSpotify ? "bg-green-500" : "bg-orange-500")
                 )}
                 style={colorScheme ? {
                   background: `linear-gradient(135deg, ${colorScheme.primary}, ${colorScheme.secondary})`
                 } : undefined}
               >
-                <Music2 className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
-              </div>
-
-              <div className="flex-1 min-w-0 flex flex-col justify-center">
-                <h3 className="font-bold text-xl sm:text-2xl truncate mb-1">
-                  {hasSavedToSpotify ? (playlistName || 'Saved Playlist') : 'Your Draft Playlist'}
-                </h3>
-                <div className="flex items-start gap-1.5 mb-1.5">
-                  <Sparkles className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground flex-1">
-                    {cleanText(moodPrompt)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 text-xs ml-5">
-                  <span className="text-muted-foreground font-medium">{trackCount} {trackCount === 1 ? 'track' : 'tracks'}</span>
-                  <span className="text-muted-foreground">•</span>
-                  {hasSavedToSpotify ? (
-                    <span className="text-green-600 dark:text-green-400 font-medium">Saved to Spotify</span>
-                  ) : (
-                    <span className="text-orange-600 dark:text-orange-400 font-medium">Draft</span>
-                  )}
-                </div>
+                <Music2 className="w-12 h-12 sm:w-16 sm:h-16 text-white drop-shadow-md" />
               </div>
             </div>
 
-            {/* Right side: Actions */}
-            <div className="flex flex-col gap-2 sm:justify-center sm:min-w-[200px]">
-              {/* Primary action */}
+            {/* Content Info */}
+            <div className="flex-1 min-w-0 space-y-3">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  {hasSavedToSpotify ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                      Saved to Spotify
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
+                      Draft
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground font-medium">•</span>
+                  <span className="text-xs text-muted-foreground font-medium">{trackCount} tracks</span>
+                </div>
+
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight truncate">
+                  {title}
+                </h2>
+                {subtitle && (
+                  <p className="text-lg sm:text-xl text-muted-foreground font-medium truncate mt-0.5">
+                    {subtitle}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1 max-w-2xl">
+                <div className="flex items-start gap-2 text-sm text-muted-foreground bg-background/50 p-2.5 rounded-lg border border-border/50">
+                  <Sparkles className="w-4 h-4 flex-shrink-0 mt-0.5 text-primary" />
+                  <div className="flex-1">
+                    <motion.div
+                      initial={false}
+                      animate={{ height: isExpanded || !shouldTruncate ? "auto" : "4.5rem" }}
+                      className="overflow-hidden relative"
+                    >
+                      <p className="leading-relaxed">
+                        {cleanedPrompt}
+                      </p>
+                      {shouldTruncate && !isExpanded && (
+                        <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-background/10 to-transparent" />
+                      )}
+                    </motion.div>
+                  </div>
+                </div>
+                {shouldTruncate && (
+                  <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="self-start text-xs font-medium text-muted-foreground hover:text-foreground flex items-center gap-1 ml-1 transition-colors"
+                  >
+                    {isExpanded ? (
+                      <>
+                        Show Less <ChevronUp className="w-3 h-3" />
+                      </>
+                    ) : (
+                      <>
+                        Show More <ChevronDown className="w-3 h-3" />
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col gap-3 w-full md:w-auto md:min-w-[180px]">
               {hasSavedToSpotify && spotifyUrl ? (
                 <Button
                   asChild
@@ -116,7 +183,7 @@ export default function PlaylistStatusBanner({
                     rel="noopener noreferrer"
                     className="flex items-center justify-center gap-2"
                   >
-                    <ExternalLink className="w-4 h-4" />
+                    <ExternalLink className="w-5 h-5" />
                     Open in Spotify
                   </a>
                 </Button>
@@ -129,54 +196,50 @@ export default function PlaylistStatusBanner({
                 >
                   {isSaving ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
                       Saving...
                     </>
                   ) : (
                     <>
-                      <Download className="w-4 h-4 mr-2" />
+                      <Download className="w-5 h-5 mr-2" />
                       Save to Spotify
                     </>
                   )}
                 </Button>
               )}
 
-              {/* Secondary actions row */}
-              <div className="flex gap-2">
-                {hasSavedToSpotify && (
-                  <Button
-                    variant="outline"
-                    size="default"
-                    onClick={onSyncFromSpotify}
-                    disabled={isSyncing}
-                    className="flex-1 gap-2"
-                  >
-                    <RefreshCw className={cn("w-4 h-4", isSyncing && "animate-spin")} />
-                    <span className="hidden sm:inline">Sync</span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="lg" className="h-12 w-full bg-background/80 backdrop-blur-sm hover:bg-accent/50">
+                    <MoreHorizontal className="w-5 h-5 mr-2" />
+                    <span>More Options</span>
                   </Button>
-                )}
-
-                <Button
-                  variant="outline"
-                  size="default"
-                  onClick={onEdit}
-                  className="flex-1 gap-2"
-                >
-                  <Edit className="w-4 h-4" />
-                  <span className="hidden sm:inline">Edit</span>
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="default"
-                  onClick={onDelete}
-                  disabled={isDeleting}
-                  className="flex-1 gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span className="hidden sm:inline">Delete</span>
-                </Button>
-              </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {hasSavedToSpotify && (
+                    <DropdownMenuItem onClick={onSyncFromSpotify} disabled={isSyncing} className="cursor-pointer py-3">
+                      <RefreshCw className={cn("w-4 h-4 mr-2", isSyncing && "animate-spin")} />
+                      Sync from Spotify
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={onRemix} className="cursor-pointer py-3">
+                    <Shuffle className="w-4 h-4 mr-2" />
+                    Remix Playlist
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={onEdit} className="cursor-pointer py-3">
+                    <Edit className="w-4 h-4 mr-2" />
+                    Edit Details
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={onDelete}
+                    disabled={isDeleting}
+                    className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer py-3"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Playlist
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </CardContent>

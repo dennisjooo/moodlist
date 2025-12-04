@@ -85,6 +85,54 @@ export function useWorkflowActions({
         }
     }, [api, setWorkflowData]);
 
+    const startRemix = useCallback(async (playlistId: string, source: string, moodPrompt?: string) => {
+        setWorkflowData({
+            isLoading: true,
+            error: null,
+            moodPrompt: moodPrompt || '',
+            totalLLMCost: 0,
+            totalPromptTokens: 0,
+            totalCompletionTokens: 0,
+            totalTokens: 0,
+        });
+
+        try {
+            const response = await api.remixPlaylist({
+                playlist_id: playlistId,
+                source,
+                mood_prompt: moodPrompt
+            });
+
+            setWorkflowData({
+                sessionId: response.session_id,
+                status: response.status,
+                isLoading: true,
+                totalLLMCost: 0,
+                totalPromptTokens: 0,
+                totalCompletionTokens: 0,
+                totalTokens: 0,
+            });
+
+            setTimeout(() => {
+                workflowEvents.started({
+                    sessionId: response.session_id,
+                    status: response.status,
+                    moodPrompt: response.mood_prompt,
+                    startedAt: new Date().toISOString(),
+                });
+            }, 0);
+            
+            return response;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Failed to start remix';
+            setWorkflowData({
+                error: errorMessage,
+                isLoading: false,
+            });
+            throw error;
+        }
+    }, [api, setWorkflowData]);
+
     const loadWorkflow = useCallback(async (sessionId: string) => {
         logger.debug('[loadWorkflow] Called', {
             component: 'useWorkflowActions',
@@ -346,6 +394,7 @@ export function useWorkflowActions({
 
     return {
         startWorkflow,
+        startRemix,
         loadWorkflow,
         loadWorkflowCost,
         stopWorkflow,
