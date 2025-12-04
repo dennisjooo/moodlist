@@ -125,17 +125,30 @@ class WorkflowManager:
         await self.state_manager.update_state(session_id, state)
 
     async def start_workflow(
-        self, mood_prompt: str, user_id: str, spotify_user_id: Optional[str] = None
+        self,
+        mood_prompt: str,
+        user_id: str,
+        spotify_user_id: Optional[str] = None,
+        remix_tracks: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         """Start a new recommendation workflow.
 
         Args:
-            mood_prompt: User's mood description
-            user_id: User identifier
+            mood_prompt: User's mood description for the playlist
+            user_id: Internal user identifier
             spotify_user_id: Optional Spotify user ID
+            remix_tracks: Optional list of track dicts for remixing existing playlists.
+                         Each track should contain:
+                         - id: Spotify track ID (required)
+                         - name: Track name (required)
+                         - artists: List of artist names (required)
+                         - spotify_uri: Spotify URI (required)
+                         - popularity: Track popularity 0-100 (optional, default 50)
+                         - preview_url: Track preview URL (optional)
+                         Recommended limit: 50 tracks or fewer for optimal performance.
 
         Returns:
-            Workflow session ID
+            Workflow session ID (UUID string)
         """
         session_id = str(uuid.uuid4())
 
@@ -148,6 +161,13 @@ class WorkflowManager:
             current_step="initializing",
             status=RecommendationStatus.PENDING,
         )
+
+        # Store remix tracks in metadata if provided
+        if remix_tracks:
+            state.metadata["remix_playlist_tracks"] = remix_tracks
+            logger.info(
+                f"Workflow {session_id} initialized with {len(remix_tracks)} remix tracks"
+            )
 
         # Store workflow
         self.state_manager.active_workflows[session_id] = state

@@ -223,3 +223,122 @@ class AddTracksToPlaylistTool(RateLimitedTool):
                 f"Failed to add tracks to playlist: {str(e)}",
                 error_type=type(e).__name__,
             )
+
+
+class GetPlaylistItemsInput(BaseModel):
+    """Input schema for getting playlist items."""
+
+    access_token: str = Field(..., description="Spotify access token")
+    playlist_id: str = Field(..., description="Spotify playlist ID")
+    limit: int = Field(default=50, ge=1, le=100, description="Number of items to return")
+    offset: int = Field(default=0, ge=0, description="Index of first item to return")
+
+
+class GetPlaylistItemsTool(RateLimitedTool):
+    """Tool for getting items from a Spotify playlist."""
+
+    name: str = "get_playlist_items"
+    description: str = """
+    Get tracks from a Spotify playlist.
+    Use this to retrieve tracks for remixing or analysis.
+    """
+
+    def __init__(self):
+        """Initialize the get playlist items tool."""
+        super().__init__(
+            name="get_playlist_items",
+            description="Get tracks from Spotify playlist",
+            base_url="https://api.spotify.com/v1",
+            rate_limit_per_minute=60,
+        )
+
+    def _get_input_schema(self) -> Type[BaseModel]:
+        """Get the input schema for this tool."""
+        return GetPlaylistItemsInput
+
+    async def _run(
+        self,
+        access_token: str,
+        playlist_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> ToolResult:
+        """Get items from a Spotify playlist.
+
+        Args:
+            access_token: Spotify access token
+            playlist_id: Spotify playlist ID
+            limit: Number of items to return
+            offset: Index of first item to return
+
+        Returns:
+            ToolResult with playlist items or error
+        """
+        try:
+            logger.info(f"Getting items from playlist {playlist_id} (limit={limit}, offset={offset})")
+
+            # Make API request
+            response_data = await self._make_request(
+                method="GET",
+                endpoint=f"/playlists/{playlist_id}/tracks",
+                params={"limit": limit, "offset": offset, "fields": "items(track(id,name,artists(name),uri,popularity,preview_url)),total,limit,offset"},
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+
+            # Validate response structure
+            if not self._validate_response(response_data, ["items"]):
+                return ToolResult.error_result(
+                    "Invalid response structure from Spotify API",
+                    api_response=response_data,
+                )
+
+            # Parse tracks
+            tracks = []
+            for item in response_data["items"]:
+                track_data = item.get("track")
+                if not track_data:
+                    continue
+                    
+                try:
+                    track_info = {
+                        "id": track_data.get("id"),
+                        "name": track_data.get("name"),
+                        "artists": [
+                            artist.get("name")
+                            for artist in track_data.get("artists", [])
+                        ],
+                        "spotify_uri": track_data.get("uri"),
+                        "popularity": track_data.get("popularity", 50),
+                        "preview_url": track_data.get("preview_url"),
+                    }
+                    if track_info["id"]:  # Only add if ID exists
+                        tracks.append(track_info)
+
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to parse track data: {track_data}, error: {e}"
+                    )
+                    continue
+
+            logger.info(f"Successfully retrieved {len(tracks)} tracks from playlist {playlist_id}")
+
+            return ToolResult.success_result(
+                data={
+                    "tracks": tracks,
+                    "total_count": response_data.get("total", len(tracks)),
+                    "limit": response_data.get("limit", limit),
+                    "offset": response_data.get("offset", offset),
+                },
+                metadata={
+                    "source": "spotify",
+                    "api_endpoint": f"/playlists/{playlist_id}/tracks",
+                },
+            )
+
+        except Exception as e:
+            logger.error(f"Error getting playlist items: {str(e)}", exc_info=True)
+            return ToolResult.error_result(
+                f"Failed to get playlist items: {str(e)}",
+                error_type=type(e).__name__,
+            )
+

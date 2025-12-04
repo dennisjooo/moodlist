@@ -1,7 +1,7 @@
 """Recommendation workflow API endpoints."""
 
 import asyncio
-from typing import Any
+from typing import Any, List, Optional, Dict
 
 import structlog
 from fastapi import APIRouter, Depends, Query, Request, WebSocket
@@ -109,6 +109,158 @@ async def start_recommendation(
         raise InternalServerError(
             f"Failed to start recommendation workflow: {exc}"
         ) from exc
+
+
+@router.post("/recommendations/remix")
+@limiter.limit(settings.RATE_LIMITS.get("workflow_remix", "5/minute"))
+async def remix_playlist(
+    request: Request,
+    playlist_id: str = Query(..., description="ID of the playlist to remix"),
+    source: str = Query(
+        "spotify", description="Source of playlist (spotify or moodlist)"
+    ),
+    mood_prompt: Optional[str] = Query(
+        None, description="Optional new mood description"
+    ),
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+    playlist_repo=Depends(get_playlist_repository),
+    quota_service: QuotaService = Depends(get_quota_service),
+    _rate_limit_check: None = Depends(check_playlist_creation_rate_limit),
+    llm: Any = Depends(get_llm),
+    workflow_manager: WorkflowManager = Depends(get_workflow_manager),
+):
+    """Start a new workflow based on an existing playlist."""
+    try:
+        logger.info(
+            "Starting remix workflow",
+            user_id=current_user.id,
+            playlist_id=playlist_id,
+            source=source,
+            mood_prompt=mood_prompt,
+        )
+
+        current_user = await refresh_spotify_token_if_expired(current_user, db)
+        if not current_user.access_token:
+            raise UnauthorizedException("Failed to obtain valid Spotify access token")
+
+        remix_tracks = []
+        original_mood = None
+
+        if source.lower() == "moodlist":
+            # Validate input length to prevent DoS
+            if len(playlist_id) > 100:
+                raise ValidationException("Invalid playlist ID format")
+            
+            # Try UUID format first (session ID)
+            playlist = None
+            try:
+                import uuid
+                uuid.UUID(playlist_id)
+                playlist = await playlist_repo.get_by_session_id(playlist_id)
+            except ValueError:
+                # Try numeric ID
+                if playlist_id.isdigit():
+                    try:
+                        playlist = await playlist_repo.get(int(playlist_id))
+                    except (ValueError, OverflowError):
+                        raise ValidationException("Playlist ID too large")
+                else:
+                    raise ValidationException("Invalid playlist ID format")
+
+            if not playlist:
+                raise NotFoundException("Playlist", playlist_id)
+
+            # Check ownership - ENFORCE AUTHORIZATION
+            if playlist.user_id != current_user.id:
+                raise UnauthorizedException("You do not have permission to access this playlist")
+
+            # Extract tracks from recommendations_data
+            if playlist.recommendations_data:
+                # Transform to SpotifyService track format
+                remix_tracks = []
+                for rec in playlist.recommendations_data:
+                    remix_tracks.append(
+                        {
+                            "id": rec.get("track_id"),
+                            "name": rec.get("track_name"),
+                            "artists": rec.get("artists"),
+                            "spotify_uri": rec.get("spotify_uri"),
+                            "popularity": rec.get("popularity", 50),  # Preserve original popularity
+                            "preview_url": rec.get("preview_url"),  # Preserve preview URL
+                        }
+                    )
+
+            original_mood = playlist.mood_prompt
+
+        elif source.lower() == "spotify":
+            spotify_service = SpotifyService()
+            remix_tracks = await spotify_service.get_playlist_items(
+                access_token=current_user.access_token,
+                playlist_id=playlist_id,
+                limit=50,  # Reasonable limit for seed tracks
+            )
+            original_mood = f"Remix of Spotify Playlist {playlist_id}"
+
+        else:
+            raise ValidationException(f"Invalid source: {source}")
+
+        if not remix_tracks:
+            raise ValidationException("No tracks found in the source playlist to remix")
+
+        # Determine mood prompt
+        final_mood_prompt = mood_prompt if mood_prompt else original_mood
+        if not final_mood_prompt:
+            final_mood_prompt = f"Remix of {source} playlist {playlist_id}"
+
+        # Start workflow
+        session_id = await workflow_manager.start_workflow(
+            mood_prompt=final_mood_prompt.strip(),
+            user_id=str(current_user.id),
+            spotify_user_id=current_user.spotify_id,
+            remix_tracks=remix_tracks,
+        )
+
+        state = workflow_manager.get_workflow_state(session_id)
+        if state:
+            state.metadata["spotify_access_token"] = current_user.access_token
+
+        playlist = await playlist_repo.create_playlist_for_session(
+            user_id=current_user.id,
+            session_id=session_id,
+            mood_prompt=final_mood_prompt,
+            status=PlaylistStatus.PENDING,
+            commit=True,
+        )
+
+        llm.set_context(
+            user_id=current_user.id,
+            playlist_id=playlist.id,
+            session_id=session_id,
+        )
+
+        logger.info(
+            "Created playlist record for remix",
+            playlist_id=playlist.id,
+            session_id=session_id,
+        )
+        await quota_service.increment_daily_usage(current_user.id)
+
+        return {
+            "session_id": session_id,
+            "status": "started",
+            "mood_prompt": final_mood_prompt,
+            "message": "Remix workflow started successfully",
+            "source_tracks_count": len(remix_tracks),
+        }
+
+    except Exception as exc:
+        logger.error(
+            "Error starting remix workflow", error=str(exc), exc_info=True
+        )
+        if isinstance(exc, (NotFoundException, ValidationException, UnauthorizedException)):
+            raise
+        raise InternalServerError(f"Failed to start remix workflow: {exc}") from exc
 
 
 @router.get("/recommendations/{session_id}/status")
