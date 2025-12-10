@@ -7,7 +7,7 @@ import { AILoadingSpinner } from '@/components/shared/LoadingStates';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useCreatePageLogic } from '@/lib/hooks';
 import { CreatePageLayout } from '@/components/features/create/layout/CreatePageLayout';
 import { CreatePageHeader } from '@/components/features/create/layout/CreatePageHeader';
@@ -59,17 +59,30 @@ function CreatePageContent() {
   } = useCreatePageLogic();
 
   const [quotaLoading, setQuotaLoading] = useState(true);
+  const [contentVisible, setContentVisible] = useState(false);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setContentVisible(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  const entryAnimation = cn(
+    'transform-gpu transition-all duration-700 ease-out',
+    contentVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
+  );
 
   // Show editor if workflow is awaiting user input
   if (workflowState.awaitingInput && workflowState.recommendations.length > 0 && workflowState.sessionId) {
     return (
       <CreatePageLayout>
-        <PlaylistEditor
-          sessionId={workflowState.sessionId}
-          recommendations={workflowState.recommendations}
-          onSave={handleEditComplete}
-          onCancel={handleEditCancel}
-        />
+        <div className={entryAnimation}>
+          <PlaylistEditor
+            sessionId={workflowState.sessionId}
+            recommendations={workflowState.recommendations}
+            onSave={handleEditComplete}
+            onCancel={handleEditCancel}
+          />
+        </div>
       </CreatePageLayout>
     );
   }
@@ -78,7 +91,9 @@ function CreatePageContent() {
   if (workflowState.status === 'completed' && workflowState.recommendations.length > 0) {
     return (
       <CreatePageLayout>
-        <PlaylistResults />
+        <div className={entryAnimation}>
+          <PlaylistResults />
+        </div>
       </CreatePageLayout>
     );
   }
@@ -88,31 +103,33 @@ function CreatePageContent() {
       {/* Login Dialog */}
       <LoginRequiredDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
 
-      <CreatePageHeader />
+      <div className={entryAnimation}>
+        <CreatePageHeader />
 
-      {/* Loading Spinner - show while waiting for session redirect */}
-      {/* Only show when we're starting a new workflow, not during cleanup */}
-      {workflowState.isLoading && !workflowState.sessionId && workflowState.moodPrompt && (
-        <AILoadingSpinner />
-      )}
+        {/* Loading Spinner - show while waiting for session redirect */}
+        {/* Only show when we're starting a new workflow, not during cleanup */}
+        {workflowState.isLoading && !workflowState.sessionId && workflowState.moodPrompt && (
+          <AILoadingSpinner />
+        )}
 
-      {/* Mood Input - only show if no active workflow */}
-      {!workflowState.sessionId && (
-        <div className="flex justify-center">
-          <div className="w-full max-w-md space-y-3">
-            <div className={workflowState.isLoading ? 'hidden' : ''}>
-              <QuotaDisplay onLoadingChange={setQuotaLoading} />
+        {/* Mood Input - only show if no active workflow */}
+        {!workflowState.sessionId && (
+          <div className="flex justify-center">
+            <div className="w-full max-w-md space-y-3">
+              <div className={workflowState.isLoading ? 'hidden' : ''}>
+                <QuotaDisplay onLoadingChange={setQuotaLoading} />
+              </div>
+              {!workflowState.isLoading && (
+                <MoodInput
+                  onSubmit={handleMoodSubmit}
+                  initialMood={selectedMood || undefined}
+                  loading={quotaLoading}
+                />
+              )}
             </div>
-            {!workflowState.isLoading && (
-              <MoodInput
-                onSubmit={handleMoodSubmit}
-                initialMood={selectedMood || undefined}
-                loading={quotaLoading}
-              />
-            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </CreatePageLayout>
   );
 }
