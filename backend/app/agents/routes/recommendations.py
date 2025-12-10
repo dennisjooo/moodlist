@@ -1,7 +1,7 @@
 """Recommendation workflow API endpoints."""
 
 import asyncio
-from typing import Any, List, Optional, Dict
+from typing import Any, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, Query, Request, WebSocket
@@ -24,13 +24,13 @@ from ...core.exceptions import (
 )
 from ...core.limiter import limiter
 from ...dependencies import get_playlist_repository, get_quota_service
-from ...repositories.playlist_repository import PlaylistRepository
 from ...models.playlist import Playlist
 from ...models.user import User
+from ...repositories.playlist_repository import PlaylistRepository
 from ...services.quota_service import QuotaService
 from ..core.cache import cache_manager
-from ..tools.spotify_service import SpotifyService
 from ..tools.reccobeat_service import RecoBeatService
+from ..tools.spotify_service import SpotifyService
 from ..workflows.workflow_manager import WorkflowManager
 from .dependencies import get_llm, get_workflow_manager
 from .serializers import serialize_playlist_status, serialize_workflow_state
@@ -151,11 +151,12 @@ async def remix_playlist(
             # Validate input length to prevent DoS
             if len(playlist_id) > 100:
                 raise ValidationException("Invalid playlist ID format")
-            
+
             # Try UUID format first (session ID)
             playlist = None
             try:
                 import uuid
+
                 uuid.UUID(playlist_id)
                 playlist = await playlist_repo.get_by_session_id(playlist_id)
             except ValueError:
@@ -173,7 +174,9 @@ async def remix_playlist(
 
             # Check ownership - ENFORCE AUTHORIZATION
             if playlist.user_id != current_user.id:
-                raise UnauthorizedException("You do not have permission to access this playlist")
+                raise UnauthorizedException(
+                    "You do not have permission to access this playlist"
+                )
 
             # Extract tracks from recommendations_data
             if playlist.recommendations_data:
@@ -186,8 +189,12 @@ async def remix_playlist(
                             "name": rec.get("track_name"),
                             "artists": rec.get("artists"),
                             "spotify_uri": rec.get("spotify_uri"),
-                            "popularity": rec.get("popularity", 50),  # Preserve original popularity
-                            "preview_url": rec.get("preview_url"),  # Preserve preview URL
+                            "popularity": rec.get(
+                                "popularity", 50
+                            ),  # Preserve original popularity
+                            "preview_url": rec.get(
+                                "preview_url"
+                            ),  # Preserve preview URL
                         }
                     )
 
@@ -255,10 +262,10 @@ async def remix_playlist(
         }
 
     except Exception as exc:
-        logger.error(
-            "Error starting remix workflow", error=str(exc), exc_info=True
-        )
-        if isinstance(exc, (NotFoundException, ValidationException, UnauthorizedException)):
+        logger.error("Error starting remix workflow", error=str(exc), exc_info=True)
+        if isinstance(
+            exc, (NotFoundException, ValidationException, UnauthorizedException)
+        ):
             raise
         raise InternalServerError(f"Failed to start remix workflow: {exc}") from exc
 

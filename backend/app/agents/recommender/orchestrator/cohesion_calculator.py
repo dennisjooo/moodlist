@@ -1,7 +1,8 @@
 """Cohesion calculator for evaluating track cohesion against target mood."""
 
-import structlog
 from typing import Any, Dict, List, Optional
+
+import structlog
 
 from ...states.agent_state import TrackRecommendation
 from ..utils.audio_feature_matcher import AudioFeatureMatcher

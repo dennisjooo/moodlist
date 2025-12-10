@@ -5,16 +5,18 @@ This script creates the database on RDS if it doesn't exist.
 """
 
 import asyncio
-import asyncpg
 import sys
 from pathlib import Path
+
+import asyncpg
 
 # Add the backend directory to Python path
 backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from app.core.config import settings  # noqa: E402
 import structlog  # noqa: E402
+
+from app.core.config import settings  # noqa: E402
 
 logger = structlog.get_logger(__name__)
 

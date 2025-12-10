@@ -1,6 +1,6 @@
 """Playlist validator component for validating playlist creation requirements."""
 
-from typing import List, TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from ...states.agent_state import AgentState

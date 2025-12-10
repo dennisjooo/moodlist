@@ -2,7 +2,6 @@
 
 import asyncio
 import hashlib
-import structlog
 from typing import (
     Any,
     Awaitable,
@@ -15,18 +14,19 @@ from typing import (
     TypeVar,
 )
 
-from .agent_tools import AgentTools
-from .reccobeat.track_recommendations import TrackRecommendationsTool
-from .reccobeat.track_info import GetMultipleTracksTool, GetTrackAudioFeaturesTool
-from .reccobeat.artist_info import (
-    SearchArtistTool,
-    GetMultipleArtistsTool,
-    GetArtistTracksTool,
-)
-from ..core.cache import cache_manager
-from ..core.seed_guardrails import SeedGuardrails
-from ..core.id_registry import RecoBeatIDRegistry
+import structlog
 
+from ..core.cache import cache_manager
+from ..core.id_registry import RecoBeatIDRegistry
+from ..core.seed_guardrails import SeedGuardrails
+from .agent_tools import AgentTools
+from .reccobeat.artist_info import (
+    GetArtistTracksTool,
+    GetMultipleArtistsTool,
+    SearchArtistTool,
+)
+from .reccobeat.track_info import GetMultipleTracksTool, GetTrackAudioFeaturesTool
+from .reccobeat.track_recommendations import TrackRecommendationsTool
 
 logger = structlog.get_logger(__name__)
 

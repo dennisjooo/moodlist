@@ -1,6 +1,6 @@
 """Prompt for batch artist validation and filtering."""
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 
 def get_batch_artist_validation_prompt(

@@ -7,14 +7,14 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
+from app.agents.routes import router as agent_router
+from app.auth.routes import router as auth_router
 from app.core.config import settings
 from app.core.lifespan import lifespan
-from app.core.middleware import LoggingMiddleware, InvocationStatusMiddleware
 from app.core.limiter import limiter
-from app.auth.routes import router as auth_router
-from app.spotify.routes import router as spotify_router
-from app.agents.routes import router as agent_router
+from app.core.middleware import InvocationStatusMiddleware, LoggingMiddleware
 from app.playlists.routes import router as playlist_router
+from app.spotify.routes import router as spotify_router
 
 logger = structlog.get_logger(__name__)
 

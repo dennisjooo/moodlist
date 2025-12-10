@@ -3,7 +3,7 @@
 This module provides backward compatibility while using the new modular anchor selection engine.
 """
 
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 from ...utils.config import config
 from .selection_engine import AnchorSelectionEngine

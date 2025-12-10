@@ -1,8 +1,8 @@
 """Mood analysis engine for LLM-based and fallback mood analysis."""
 
-import structlog
-from typing import Any, Dict, Optional, Union, List
+from typing import Any, Dict, List, Optional, Union
 
+import structlog
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages import AIMessage
 

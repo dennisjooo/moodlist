@@ -11,7 +11,6 @@ import structlog
 
 from ...states.agent_state import AgentState
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -57,20 +56,20 @@ class RemixHandler:
                 elif isinstance(artist, dict):
                     formatted_artists.append(artist)
 
-            normalized_anchors.append({
-                "id": track.get("id"),
-                "name": track.get("name"),
-                "artists": formatted_artists,
-                "spotify_uri": track.get("spotify_uri"),
-                "anchor_type": "remix_source",
-                "user_mentioned": False,
-            })
+            normalized_anchors.append(
+                {
+                    "id": track.get("id"),
+                    "name": track.get("name"),
+                    "artists": formatted_artists,
+                    "spotify_uri": track.get("spotify_uri"),
+                    "anchor_type": "remix_source",
+                    "user_mentioned": False,
+                }
+            )
 
         return normalized_anchors
 
-    def get_optimized_mood_analysis(
-        self, state: AgentState, is_remix: bool
-    ) -> dict:
+    def get_optimized_mood_analysis(self, state: AgentState, is_remix: bool) -> dict:
         """Get mood analysis for artist discovery, with optimization for remix mode.
 
         Args:
@@ -87,9 +86,13 @@ class RemixHandler:
             # Create a shallow copy with limited inputs to reduce search volume
             limited_analysis = mood_analysis.copy()
             if "genre_keywords" in limited_analysis:
-                limited_analysis["genre_keywords"] = limited_analysis["genre_keywords"][:2]
+                limited_analysis["genre_keywords"] = limited_analysis["genre_keywords"][
+                    :2
+                ]
             if "artist_recommendations" in limited_analysis:
-                limited_analysis["artist_recommendations"] = limited_analysis["artist_recommendations"][:3]
+                limited_analysis["artist_recommendations"] = limited_analysis[
+                    "artist_recommendations"
+                ][:3]
             return limited_analysis
 
         return mood_analysis
@@ -105,7 +108,9 @@ class RemixHandler:
             Limited track list
         """
         if len(remix_tracks) > max_tracks:
-            logger.info(f"Limiting remix tracks from {len(remix_tracks)} to {max_tracks} for processing")
+            logger.info(
+                f"Limiting remix tracks from {len(remix_tracks)} to {max_tracks} for processing"
+            )
             return remix_tracks[:max_tracks]
         return remix_tracks
 

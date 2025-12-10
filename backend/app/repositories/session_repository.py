@@ -1,10 +1,10 @@
 """Session repository for session-specific database operations."""
 
-from typing import List, Optional
 from datetime import datetime, timezone
+from typing import List, Optional
 
 import structlog
-from sqlalchemy import select, desc, delete, and_, func
+from sqlalchemy import and_, delete, desc, func, select
 from sqlalchemy.orm import selectinload
 
 from app.models.session import Session

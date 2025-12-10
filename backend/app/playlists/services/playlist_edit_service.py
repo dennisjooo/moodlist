@@ -1,21 +1,21 @@
 """Service for editing completed/saved playlists."""
 
 import asyncio
-import structlog
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
-from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from ...models.playlist import Playlist
 from ...agents.states.agent_state import TrackRecommendation
 from ...core.exceptions import (
-    NotFoundException,
     ForbiddenException,
+    NotFoundException,
     ValidationException,
 )
+from ...models.playlist import Playlist
 from .spotify_edit_service import SpotifyEditService
 
 logger = structlog.get_logger(__name__)

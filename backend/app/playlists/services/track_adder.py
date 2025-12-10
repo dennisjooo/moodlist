@@ -1,8 +1,9 @@
 """Track adder component for adding tracks to Spotify playlists."""
 
 import asyncio
-import structlog
 from typing import TYPE_CHECKING
+
+import structlog
 
 if TYPE_CHECKING:
     from ...agents.states.agent_state import AgentState

@@ -8,8 +8,8 @@ from typing import Dict, Iterable, List
 import structlog
 
 from ...states.agent_state import TrackRecommendation
-from ..utils.track_deduplicator import deduplicate_track_recommendations
 from ..recommendation_generator.handlers.diversity import DiversityManager
+from ..utils.track_deduplicator import deduplicate_track_recommendations
 
 logger = structlog.get_logger(__name__)
 

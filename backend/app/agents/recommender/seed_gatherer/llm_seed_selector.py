@@ -1,7 +1,8 @@
 """LLM-based seed selector for intelligent seed selection."""
 
-import structlog
 from typing import Any, Dict, List
+
+import structlog
 
 from ..utils.llm_response_parser import LLMResponseParser
 from .prompts.seed_selection import get_seed_selection_prompt

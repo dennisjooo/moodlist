@@ -1,36 +1,36 @@
-import structlog
-
 from typing import Optional
+
+import structlog
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.security import HTTPBearer
 
-from app.core.constants import SessionConstants
-from app.core.exceptions import UnauthorizedException, InternalServerError
-from app.models.user import User
-from app.auth.security import create_access_token, create_refresh_token, verify_token
+from app.agents.core.cache import cache_manager
+from app.auth.cookie_utils import delete_session_cookie, set_session_cookie
 from app.auth.dependencies import require_auth
-from app.auth.cookie_utils import set_session_cookie, delete_session_cookie
 from app.auth.schemas import (
+    AuthResponse,
+    RefreshTokenRequest,
+    TokenResponse,
     UserCreate,
     UserResponse,
-    TokenResponse,
-    RefreshTokenRequest,
-    AuthResponse,
 )
-from app.repositories.user_repository import UserRepository
-from app.repositories.session_repository import SessionRepository
-from app.repositories.playlist_repository import PlaylistRepository
-from app.services.quota_service import QuotaService
-from app.services.auth_service import AuthService
+from app.auth.security import create_access_token, create_refresh_token, verify_token
+from app.core.constants import SessionConstants
+from app.core.exceptions import InternalServerError, UnauthorizedException
+from app.core.limiter import limiter
 from app.dependencies import (
-    get_user_repository,
-    get_session_repository,
+    get_auth_service,
     get_playlist_repository,
     get_quota_service,
-    get_auth_service,
+    get_session_repository,
+    get_user_repository,
 )
-from app.agents.core.cache import cache_manager
-from app.core.limiter import limiter
+from app.models.user import User
+from app.repositories.playlist_repository import PlaylistRepository
+from app.repositories.session_repository import SessionRepository
+from app.repositories.user_repository import UserRepository
+from app.services.auth_service import AuthService
+from app.services.quota_service import QuotaService
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()

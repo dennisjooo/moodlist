@@ -1,11 +1,12 @@
 """Service for syncing playlist data from Spotify."""
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 import structlog
 
 from app.clients.spotify_client import SpotifyAPIClient
-from app.repositories.playlist_repository import PlaylistRepository
 from app.core.exceptions import NotFoundException, SpotifyAPIException
+from app.repositories.playlist_repository import PlaylistRepository
 
 logger = structlog.get_logger(__name__)
 
@@ -228,8 +229,8 @@ class PlaylistSyncService:
             )
 
             # Import required services
-            from app.services.cover_image_generator import CoverImageGenerator
             from app.agents.tools.spotify_service import SpotifyService
+            from app.services.cover_image_generator import CoverImageGenerator
 
             # Generate cover image
             cover_generator = CoverImageGenerator()

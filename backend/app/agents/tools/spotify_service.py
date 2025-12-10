@@ -1,26 +1,26 @@
 """Spotify API service that coordinates all Spotify tools."""
 
 import asyncio
+from typing import Any, Dict, List, Optional
+
 import structlog
-from typing import Dict, List, Optional, Any
 
 from ..core.cache import cache_manager
 from .agent_tools import AgentTools
-from .spotify.tools.user_data import GetUserTopTracksTool, GetUserTopArtistsTool
+from .spotify.tools.artist_search import (
+    BatchGetArtistTopTracksTool,
+    GetArtistTopTracksTool,
+    GetSeveralSpotifyArtistsTool,
+    SearchSpotifyArtistsTool,
+)
 from .spotify.tools.playlist_management import (
-    CreatePlaylistTool,
     AddTracksToPlaylistTool,
+    CreatePlaylistTool,
     GetPlaylistItemsTool,
 )
-from .spotify.tools.user_profile import GetUserProfileTool
-from .spotify.tools.artist_search import (
-    SearchSpotifyArtistsTool,
-    GetSeveralSpotifyArtistsTool,
-    GetArtistTopTracksTool,
-    BatchGetArtistTopTracksTool,
-)
 from .spotify.tools.track_search import SearchSpotifyTracksTool
-
+from .spotify.tools.user_data import GetUserTopArtistsTool, GetUserTopTracksTool
+from .spotify.tools.user_profile import GetUserProfileTool
 
 logger = structlog.get_logger(__name__)
 
@@ -775,8 +775,9 @@ class SpotifyService:
         Returns:
             Whether the upload was successful
         """
-        import aiohttp
         import asyncio
+
+        import aiohttp
 
         url = f"https://api.spotify.com/v1/playlists/{playlist_id}/images"
         headers = {

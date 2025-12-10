@@ -1,11 +1,12 @@
 """Application lifespan management."""
 
-import structlog
 from contextlib import asynccontextmanager
+
+import structlog
 from fastapi import FastAPI
 
 from app.core.config import settings
-from app.core.database import engine, Base
+from app.core.database import Base, engine
 from app.core.validation import validate_required_secrets
 
 logger = structlog.get_logger(__name__)

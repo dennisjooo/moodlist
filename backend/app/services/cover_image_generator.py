@@ -1,9 +1,10 @@
 """Service for generating playlist cover images based on mood colors."""
 
-import io
 import base64
+import io
+from typing import Literal, Tuple
+
 import structlog
-from typing import Tuple, Literal
 from PIL import Image, ImageDraw, ImageFilter
 
 logger = structlog.get_logger(__name__)

@@ -1,10 +1,11 @@
 """Fallback strategy for generating recommendations when no seeds are available."""
 
-import structlog
 from typing import Any, Dict, List
 
-from ....tools.reccobeat_service import RecoBeatService
+import structlog
+
 from ....states.agent_state import AgentState
+from ....tools.reccobeat_service import RecoBeatService
 from .base_strategy import RecommendationStrategy
 
 logger = structlog.get_logger(__name__)

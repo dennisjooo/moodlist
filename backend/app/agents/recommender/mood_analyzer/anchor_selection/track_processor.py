@@ -1,7 +1,8 @@
 """Track processing utilities for anchor track selection."""
 
-import structlog
 from typing import Any, Dict, List, Optional, Tuple
+
+import structlog
 
 from ...utils.temporal_filter import check_temporal_match
 

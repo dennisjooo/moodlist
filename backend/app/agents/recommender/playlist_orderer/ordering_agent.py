@@ -1,26 +1,26 @@
 """Playlist ordering agent for creating energy flow arcs."""
 
 import asyncio
-import structlog
 from typing import Any, Dict, List
 
+import structlog
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from ...core.base_agent import BaseAgent
-from ...states.agent_state import AgentState, TrackRecommendation, RecommendationStatus
+from ...states.agent_state import AgentState, RecommendationStatus, TrackRecommendation
 from ..utils.config import config
 from ..utils.llm_response_parser import LLMResponseParser
 from ..utils.track_deduplicator import deduplicate_track_recommendations
-from .prompts import (
-    get_track_energy_analysis_system_prompt,
-    get_track_energy_analysis_user_prompt,
-    get_ordering_strategy_system_prompt,
-    get_ordering_strategy_user_prompt,
-)
+from .energy_analyzer import EnergyAnalyzer
 from .phase_assigner import PhaseAssigner
 from .phase_sorter import PhaseSorter
-from .energy_analyzer import EnergyAnalyzer
+from .prompts import (
+    get_ordering_strategy_system_prompt,
+    get_ordering_strategy_user_prompt,
+    get_track_energy_analysis_system_prompt,
+    get_track_energy_analysis_user_prompt,
+)
 from .strategy_builder import StrategyBuilder
 
 logger = structlog.get_logger(__name__)

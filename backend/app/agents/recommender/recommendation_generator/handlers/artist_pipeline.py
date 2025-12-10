@@ -7,12 +7,13 @@ between artist_based.py and artist_discovery_strategy.py.
 
 import asyncio
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
 import structlog
 
-from ....states.agent_state import AgentState, TrackRecommendation
-from ....tools.spotify_service import SpotifyService
-from ....tools.reccobeat_service import RecoBeatService
 from ....core.cache import cache_manager
+from ....states.agent_state import AgentState, TrackRecommendation
+from ....tools.reccobeat_service import RecoBeatService
+from ....tools.spotify_service import SpotifyService
 from ...utils.config import config
 from .audio_features import AudioFeaturesHandler
 from .token import TokenManager

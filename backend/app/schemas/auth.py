@@ -1,7 +1,8 @@
 """Shared authentication schemas exposed to the public API."""
 
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
 from pydantic import BaseModel, EmailStr, Field
 
 from .user import UserResponse

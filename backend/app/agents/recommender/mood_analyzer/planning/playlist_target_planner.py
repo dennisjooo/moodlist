@@ -1,8 +1,9 @@
 """Playlist target planner for determining playlist size and quality thresholds."""
 
 import random
-import structlog
 from typing import Any, Dict
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 

@@ -1,6 +1,6 @@
 """Strategy builder for determining ordering strategies."""
 
-from typing import Dict, Any
+from typing import Any, Dict
 
 
 class StrategyBuilder:

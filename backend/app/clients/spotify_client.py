@@ -1,26 +1,27 @@
 """Centralized Spotify API client with built-in error handling and retry logic."""
 
 import asyncio
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 import httpx
 import structlog
 from tenacity import (
+    before_sleep_log,
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
-    before_sleep_log,
 )
 
-from app.core.config import settings
 from app.agents.core.cache import cache_manager
-from app.core.constants import SpotifyEndpoints, HTTPTimeouts
+from app.core.config import settings
+from app.core.constants import HTTPTimeouts, SpotifyEndpoints
 from app.core.exceptions import (
+    SpotifyAPIException,
     SpotifyAuthError,
+    SpotifyConnectionError,
     SpotifyRateLimitError,
     SpotifyServerError,
-    SpotifyConnectionError,
-    SpotifyAPIException,
 )
 
 logger = structlog.get_logger(__name__)

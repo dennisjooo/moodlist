@@ -1,13 +1,12 @@
 """Spotify user profile tools for the agentic system."""
 
-import structlog
 from typing import Type
 
+import structlog
 from pydantic import BaseModel, Field
 
 from .....core.constants import SpotifyEndpoints
 from ...agent_tools import RateLimitedTool, ToolResult
-
 
 logger = structlog.get_logger(__name__)
 

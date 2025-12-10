@@ -1,25 +1,14 @@
 """Playlist CRUD routes for managing user playlists."""
 
-import structlog
-from typing import Optional, Literal
 from datetime import datetime, timezone
+from typing import Literal, Optional
 
+import structlog
 from fastapi import APIRouter, Depends, Query
-from app.core.llm_factory import create_logged_llm
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.database import get_db
-from ..core.exceptions import (
-    NotFoundException,
-    ForbiddenException,
-    ValidationException,
-    InternalServerError,
-)
-from ..dependencies import get_playlist_service
-from ..services.playlist_service import PlaylistService
-from ..auth.dependencies import require_auth, refresh_spotify_token_if_expired
-from ..models.user import User
-from ..agents.workflows.workflow_manager import WorkflowManager
+from app.core.llm_factory import create_logged_llm
+
 from ..agents.states.agent_state import (
     AgentState,
     RecommendationStatus,
@@ -27,9 +16,20 @@ from ..agents.states.agent_state import (
 )
 from ..agents.tools.reccobeat_service import RecoBeatService
 from ..agents.tools.spotify_service import SpotifyService
+from ..agents.workflows.workflow_manager import WorkflowManager
+from ..auth.dependencies import refresh_spotify_token_if_expired, require_auth
 from ..core.config import settings
+from ..core.database import get_db
+from ..core.exceptions import (
+    ForbiddenException,
+    InternalServerError,
+    NotFoundException,
+    ValidationException,
+)
+from ..dependencies import get_playlist_service
+from ..models.user import User
+from ..services.playlist_service import PlaylistService
 from .services import CompletedPlaylistEditor, PlaylistCreationService
-
 
 logger = structlog.get_logger(__name__)
 
@@ -589,6 +589,7 @@ async def sync_playlist_from_spotify(
         # Import dependencies
         from app.clients.spotify_client import SpotifyAPIClient
         from app.repositories.playlist_repository import PlaylistRepository
+
         from .services.playlist_sync_service import PlaylistSyncService
 
         # Initialize services

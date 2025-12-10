@@ -1,7 +1,8 @@
 """Factory for creating TrackRecommendation objects from various data sources."""
 
-import structlog
 from typing import Any, Dict, List, Optional
+
+import structlog
 
 from ...states.agent_state import TrackRecommendation
 

@@ -5,9 +5,10 @@ combinations and provides intelligent fallback strategies.
 """
 
 import hashlib
-import structlog
-from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timezone
+from typing import Dict, List, Optional, Tuple
+
+import structlog
 
 from .cache import cache_manager
 

@@ -6,12 +6,12 @@ import structlog
 from fastapi import APIRouter, Depends, Query
 
 from ...core.exceptions import InternalServerError
+from ..core.cache import cache_manager
+from ..core.id_registry import RecoBeatIDRegistry
+from ..core.profiling import PerformanceProfiler
 from ..tools.reccobeat_service import RecoBeatService
 from ..tools.spotify_service import SpotifyService
 from ..workflows.workflow_manager import WorkflowManager
-from ..core.profiling import PerformanceProfiler
-from ..core.cache import cache_manager
-from ..core.id_registry import RecoBeatIDRegistry
 from .dependencies import (
     get_agents,
     get_reccobeat_service,

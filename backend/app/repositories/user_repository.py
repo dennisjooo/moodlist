@@ -1,12 +1,12 @@
 """User repository for user-specific database operations."""
 
-from typing import List, Optional
 from datetime import datetime
+from typing import List, Optional
 
 import structlog
-from sqlalchemy import select, and_, or_, desc, func
-from sqlalchemy.orm import selectinload
+from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import selectinload
 
 from app.models.user import User
 from app.repositories.base_repository import BaseRepository

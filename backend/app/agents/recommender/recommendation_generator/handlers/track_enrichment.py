@@ -1,7 +1,9 @@
 """Service for enriching recommendations with missing Spotify data."""
 
+from typing import Any, Dict, List, Optional
+
 import structlog
-from typing import List, Dict, Any, Optional
+
 from ....states.agent_state import TrackRecommendation
 from ....tools.spotify_service import SpotifyService
 

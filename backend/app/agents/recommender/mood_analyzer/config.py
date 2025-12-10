@@ -2,7 +2,6 @@
 
 from typing import Any, Dict, List, Set
 
-
 # Text processing constants
 STOP_WORDS: Set[str] = {
     "for",

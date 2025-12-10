@@ -1,7 +1,8 @@
 """Audio features handling for track analysis."""
 
-import structlog
 from typing import Any, Dict, List, Optional, Tuple
+
+import structlog
 
 from ....tools.reccobeat_service import RecoBeatService
 

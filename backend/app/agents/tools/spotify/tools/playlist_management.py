@@ -1,12 +1,11 @@
 """Spotify playlist management tools for the agentic system."""
 
-import structlog
 from typing import List, Optional, Type
 
+import structlog
 from pydantic import BaseModel, Field
 
 from ...agent_tools import RateLimitedTool, ToolResult
-
 
 logger = structlog.get_logger(__name__)
 
@@ -230,7 +229,9 @@ class GetPlaylistItemsInput(BaseModel):
 
     access_token: str = Field(..., description="Spotify access token")
     playlist_id: str = Field(..., description="Spotify playlist ID")
-    limit: int = Field(default=50, ge=1, le=100, description="Number of items to return")
+    limit: int = Field(
+        default=50, ge=1, le=100, description="Number of items to return"
+    )
     offset: int = Field(default=0, ge=0, description="Index of first item to return")
 
 
@@ -275,13 +276,19 @@ class GetPlaylistItemsTool(RateLimitedTool):
             ToolResult with playlist items or error
         """
         try:
-            logger.info(f"Getting items from playlist {playlist_id} (limit={limit}, offset={offset})")
+            logger.info(
+                f"Getting items from playlist {playlist_id} (limit={limit}, offset={offset})"
+            )
 
             # Make API request
             response_data = await self._make_request(
                 method="GET",
                 endpoint=f"/playlists/{playlist_id}/tracks",
-                params={"limit": limit, "offset": offset, "fields": "items(track(id,name,artists(name),uri,popularity,preview_url)),total,limit,offset"},
+                params={
+                    "limit": limit,
+                    "offset": offset,
+                    "fields": "items(track(id,name,artists(name),uri,popularity,preview_url)),total,limit,offset",
+                },
                 headers={"Authorization": f"Bearer {access_token}"},
             )
 
@@ -298,7 +305,7 @@ class GetPlaylistItemsTool(RateLimitedTool):
                 track_data = item.get("track")
                 if not track_data:
                     continue
-                    
+
                 try:
                     track_info = {
                         "id": track_data.get("id"),
@@ -320,7 +327,9 @@ class GetPlaylistItemsTool(RateLimitedTool):
                     )
                     continue
 
-            logger.info(f"Successfully retrieved {len(tracks)} tracks from playlist {playlist_id}")
+            logger.info(
+                f"Successfully retrieved {len(tracks)} tracks from playlist {playlist_id}"
+            )
 
             return ToolResult.success_result(
                 data={
@@ -341,4 +350,3 @@ class GetPlaylistItemsTool(RateLimitedTool):
                 f"Failed to get playlist items: {str(e)}",
                 error_type=type(e).__name__,
             )
-

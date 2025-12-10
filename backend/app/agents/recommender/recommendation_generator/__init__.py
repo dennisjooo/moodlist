@@ -1,12 +1,12 @@
 """Recommendation generator package for creating mood-based track recommendations."""
 
-from .core import RecommendationGeneratorAgent, RecommendationEngine
+from .core import RecommendationEngine, RecommendationGeneratorAgent
 from .handlers import (
-    TokenManager,
     AudioFeaturesHandler,
-    TrackFilter,
-    ScoringEngine,
     DiversityManager,
+    ScoringEngine,
+    TokenManager,
+    TrackFilter,
 )
 
 __all__ = [

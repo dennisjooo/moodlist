@@ -1,7 +1,8 @@
 """Intent data validation logic."""
 
+from typing import Any, Dict
+
 import structlog
-from typing import Dict, Any
 
 logger = structlog.get_logger(__name__)
 

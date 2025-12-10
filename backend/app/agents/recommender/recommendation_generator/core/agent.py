@@ -1,20 +1,20 @@
 """Main recommendation generator agent."""
 
-import structlog
 from typing import Any, Dict, List
+
+import structlog
 
 from ....core.base_agent import BaseAgent
 from ....states.agent_state import AgentState, RecommendationStatus, TrackRecommendation
 from ....tools.reccobeat_service import RecoBeatService
 from ....tools.spotify_service import SpotifyService
 from ...orchestrator.recommendation_processor import RecommendationProcessor
-from ..handlers.token import TokenManager
 from ..handlers.audio_features import AudioFeaturesHandler
-from ..handlers.track_filter import TrackFilter
-from ..handlers.scoring import ScoringEngine
 from ..handlers.diversity import DiversityManager
+from ..handlers.scoring import ScoringEngine
+from ..handlers.token import TokenManager
+from ..handlers.track_filter import TrackFilter
 from .engine import RecommendationEngine
-
 
 logger = structlog.get_logger(__name__)
 

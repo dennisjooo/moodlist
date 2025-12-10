@@ -1,9 +1,9 @@
 """LLM response parsing utilities."""
 
 import json
-import structlog
 from typing import Any, Dict, Optional, Union
 
+import structlog
 from langchain_core.messages import AIMessage
 
 logger = structlog.get_logger(__name__)

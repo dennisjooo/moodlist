@@ -1,13 +1,13 @@
 """Rate limiting utilities for the agentic system."""
 
 import time
-from typing import Dict, Optional, Tuple
 from collections import defaultdict, deque
+from typing import Dict, Optional, Tuple
+
 import structlog
-
 from fastapi import Request
-from app.core.exceptions import RateLimitException
 
+from app.core.exceptions import RateLimitException
 
 logger = structlog.get_logger(__name__)
 

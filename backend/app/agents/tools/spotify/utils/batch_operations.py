@@ -4,11 +4,12 @@ This module provides utilities for batch fetching and processing
 Spotify API data to reduce API calls and respect rate limits.
 """
 
-import structlog
-from typing import List, Dict, Any, Set, Callable, Awaitable, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set
 
-from .track_parsing import parse_track_data
+import structlog
+
 from .params_utils import build_market_params
+from .track_parsing import parse_track_data
 
 logger = structlog.get_logger(__name__)
 

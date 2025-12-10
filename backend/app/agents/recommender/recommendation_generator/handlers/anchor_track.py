@@ -1,7 +1,8 @@
 """Handler for anchor track inclusion in recommendations."""
 
-import structlog
 from typing import Any, Dict, List
+
+import structlog
 
 from ....states.agent_state import AgentState, TrackRecommendation
 

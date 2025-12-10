@@ -5,10 +5,10 @@ with appropriate retry logic and backoff strategies.
 """
 
 import asyncio
-import structlog
-from typing import Tuple, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import httpx
+import structlog
 
 if TYPE_CHECKING:
     from .agent_tools import APIError

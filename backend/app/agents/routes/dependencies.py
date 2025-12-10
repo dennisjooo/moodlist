@@ -5,9 +5,6 @@ from functools import lru_cache
 from typing import Any, Dict
 
 from ...core.llm_factory import create_logged_llm
-from ..tools.reccobeat_service import RecoBeatService
-from ..tools.spotify_service import SpotifyService
-from ..workflows.workflow_manager import WorkflowConfig, WorkflowManager
 from ..recommender import (
     IntentAnalyzerAgent,
     MoodAnalyzerAgent,
@@ -17,6 +14,9 @@ from ..recommender import (
 )
 from ..recommender.playlist_orderer import PlaylistOrderingAgent
 from ..recommender.utils.config import config
+from ..tools.reccobeat_service import RecoBeatService
+from ..tools.spotify_service import SpotifyService
+from ..workflows.workflow_manager import WorkflowConfig, WorkflowManager
 
 
 @dataclass(frozen=True)

@@ -1,12 +1,12 @@
 """Improvement strategy for deciding and applying playlist improvements."""
 
-import structlog
 from typing import Any, Dict, List, Optional
 
+import structlog
 from langchain_core.language_models.base import BaseLanguageModel
 
-from ...states.agent_state import AgentState
 from ...core.base_agent import BaseAgent
+from ...states.agent_state import AgentState
 from ..utils.llm_response_parser import LLMResponseParser
 from .prompts import get_strategy_decision_prompt
 

@@ -5,8 +5,9 @@ separated from the main artist search tool for better modularity.
 """
 
 import random
+from typing import Any, Callable, Dict, List, Optional, Set
+
 import structlog
-from typing import List, Dict, Any, Set, Callable, Optional
 
 from .batch_operations import batch_fetch_tracks, create_popularity_filter
 from .params_utils import build_market_params

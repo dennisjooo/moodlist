@@ -1,35 +1,35 @@
 """Auth service for authentication business logic."""
 
 import time
-from typing import Dict, Any, Optional, Tuple
-from datetime import datetime, timezone, timedelta
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional, Tuple
 
 import structlog
-import uuid
 
-from app.clients.spotify_client import SpotifyAPIClient
-from app.repositories.user_repository import UserRepository
-from app.repositories.session_repository import SessionRepository
-from app.core.exceptions import (
-    UnauthorizedException,
-    ValidationException,
-    NotFoundException,
-    SpotifyAuthError,
-    InternalServerError,
-)
-from app.core.constants import SessionConstants
+from app.agents.core.cache import cache_manager
+from app.auth.schemas import AuthResponse, UserResponse
 from app.auth.security import (
-    generate_session_token,
     create_access_token,
     create_refresh_token,
+    generate_session_token,
 )
 from app.auth.whitelist import (
-    is_whitelist_error,
-    handle_whitelist_error,
     NOT_WHITELISTED_MESSAGE,
+    handle_whitelist_error,
+    is_whitelist_error,
 )
-from app.auth.schemas import UserResponse, AuthResponse
-from app.agents.core.cache import cache_manager
+from app.clients.spotify_client import SpotifyAPIClient
+from app.core.constants import SessionConstants
+from app.core.exceptions import (
+    InternalServerError,
+    NotFoundException,
+    SpotifyAuthError,
+    UnauthorizedException,
+    ValidationException,
+)
+from app.repositories.session_repository import SessionRepository
+from app.repositories.user_repository import UserRepository
 
 logger = structlog.get_logger(__name__)
 
@@ -334,6 +334,7 @@ class AuthService:
         """
         try:
             import httpx
+
             from app.core.config import settings
 
             data = {

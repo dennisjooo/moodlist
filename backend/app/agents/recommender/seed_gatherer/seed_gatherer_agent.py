@@ -10,24 +10,22 @@ Refactored for better separation of concerns.
 """
 
 import time
-from typing import List
 
 import structlog
 
 from ...core.base_agent import BaseAgent
 from ...states.agent_state import AgentState, RecommendationStatus
 from ...tools.spotify_service import SpotifyService
-from ..utils.artist_utils import ArtistDeduplicator
 from ..mood_analyzer.anchor_selection import AnchorTrackSelector
 from ..mood_analyzer.discovery import ArtistDiscovery
-from .seed_selector import SeedSelector
+from ..utils.artist_utils import ArtistDeduplicator
+from .anchor_track_manager import AnchorTrackManager
 from .audio_enricher import AudioEnricher
 from .llm_seed_selector import LLMSeedSelector
-from .user_track_searcher import UserTrackSearcher
-from .anchor_track_manager import AnchorTrackManager
 from .remix_handler import RemixHandler
+from .seed_selector import SeedSelector
 from .user_data_fetcher import UserDataFetcher
-
+from .user_track_searcher import UserTrackSearcher
 
 logger = structlog.get_logger(__name__)
 
@@ -107,14 +105,21 @@ class SeedGathererAgent(BaseAgent):
 
             # STEP 2: Select anchor tracks
             timing_metrics["select_anchor_tracks"] = await self._timed_step(
-                self._handle_anchor_selection(state, intent_analysis, access_token, is_remix, remix_tracks)
+                self._handle_anchor_selection(
+                    state, intent_analysis, access_token, is_remix, remix_tracks
+                )
             )
 
             # STEP 3: Discover and validate artists
-            discovery_mood_analysis = self.remix_handler.get_optimized_mood_analysis(state, is_remix)
+            discovery_mood_analysis = self.remix_handler.get_optimized_mood_analysis(
+                state, is_remix
+            )
             timing_metrics["discover_artists"] = await self._timed_step(
                 self._discover_and_validate_artists(
-                    state, intent_analysis, access_token, mood_analysis_override=discovery_mood_analysis
+                    state,
+                    intent_analysis,
+                    access_token,
+                    mood_analysis_override=discovery_mood_analysis,
                 )
             )
 
@@ -124,9 +129,11 @@ class SeedGathererAgent(BaseAgent):
             )
             if fetch_time is not None:
                 timing_metrics["fetch_top_tracks"] = fetch_time
-            
+
             # Merge user-mentioned tracks into top tracks
-            top_tracks = self.user_data_fetcher.merge_user_mentioned_tracks(state, top_tracks)
+            top_tracks = self.user_data_fetcher.merge_user_mentioned_tracks(
+                state, top_tracks
+            )
 
             # STEP 5: Fetch top artists
             step_start = time.time()
@@ -155,13 +162,13 @@ class SeedGathererAgent(BaseAgent):
 
     def _get_access_token(self, state: AgentState) -> str:
         """Get Spotify access token from state.
-        
+
         Args:
             state: Current agent state
-            
+
         Returns:
             Spotify access token
-            
+
         Raises:
             ValueError: If no access token is available
         """
@@ -172,14 +179,12 @@ class SeedGathererAgent(BaseAgent):
             return access_token
         return state.access_token
 
-
-
     async def _timed_step(self, coroutine) -> float:
         """Execute a step and return its execution time.
-        
+
         Args:
             coroutine: Async operation to time
-            
+
         Returns:
             Execution time in seconds
         """
@@ -196,7 +201,7 @@ class SeedGathererAgent(BaseAgent):
         remix_tracks: list,
     ) -> None:
         """Handle anchor track selection for both remix and normal modes.
-        
+
         Args:
             state: Current agent state
             intent_analysis: Intent analysis data
@@ -206,10 +211,12 @@ class SeedGathererAgent(BaseAgent):
         """
         state.current_step = "gathering_seeds_selecting_anchors"
         await self._notify_progress(state)
-        
+
         if is_remix and remix_tracks:
             logger.info("Remix mode: using source tracks as anchors (skipping search)")
-            normalized_anchors = self.remix_handler.normalize_remix_anchors(remix_tracks[:5])
+            normalized_anchors = self.remix_handler.normalize_remix_anchors(
+                remix_tracks[:5]
+            )
             state.metadata["anchor_tracks"] = normalized_anchors
             state.metadata["anchor_track_ids"] = [
                 t["id"] for t in normalized_anchors if t.get("id")
@@ -220,17 +227,11 @@ class SeedGathererAgent(BaseAgent):
                 state, intent_analysis, access_token
             )
 
-
-
-
-
-
-
     def _log_timing_metrics(
         self, state: AgentState, timing_metrics: dict, start_time: float
     ) -> None:
         """Log timing metrics and store in state.
-        
+
         Args:
             state: Current agent state
             timing_metrics: Dict of timing measurements
@@ -284,11 +285,11 @@ class SeedGathererAgent(BaseAgent):
         state.metadata["user_mentioned_tracks_full"] = found_tracks
 
     async def _discover_and_validate_artists(
-        self, 
-        state: AgentState, 
-        intent_analysis: dict, 
+        self,
+        state: AgentState,
+        intent_analysis: dict,
         access_token: str,
-        mood_analysis_override: dict = None
+        mood_analysis_override: dict = None,
     ) -> None:
         """Discover and validate artists for the mood.
 
@@ -323,32 +324,42 @@ class SeedGathererAgent(BaseAgent):
 
             # CRITICAL FIX: Also include artists mentioned by name (not just from tracks)
             # Search for artists mentioned in intent_analysis
-            user_mentioned_artist_names = intent_analysis.get("user_mentioned_artists", [])
+            user_mentioned_artist_names = intent_analysis.get(
+                "user_mentioned_artists", []
+            )
             user_mentioned_artists_from_names = []
-            
+
             if user_mentioned_artist_names:
                 # Search Spotify for these artist names
                 for artist_name in user_mentioned_artist_names:
                     try:
-                        search_results = await self.spotify_service.search_spotify_artists(
-                            query=artist_name,
-                            access_token=access_token,
-                            limit=1
+                        search_results = (
+                            await self.spotify_service.search_spotify_artists(
+                                query=artist_name, access_token=access_token, limit=1
+                            )
                         )
                         if search_results:
                             artist = search_results[0]
-                            user_mentioned_artists_from_names.append({
-                                "id": artist.get("id"),
-                                "name": artist.get("name"),
-                                "popularity": artist.get("popularity", 50),
-                                "source": "user_mentioned",
-                            })
-                            logger.info(f"Found user-mentioned artist: {artist.get('name')}")
+                            user_mentioned_artists_from_names.append(
+                                {
+                                    "id": artist.get("id"),
+                                    "name": artist.get("name"),
+                                    "popularity": artist.get("popularity", 50),
+                                    "source": "user_mentioned",
+                                }
+                            )
+                            logger.info(
+                                f"Found user-mentioned artist: {artist.get('name')}"
+                            )
                     except Exception as e:
-                        logger.warning(f"Failed to search for artist '{artist_name}': {e}")
-            
+                        logger.warning(
+                            f"Failed to search for artist '{artist_name}': {e}"
+                        )
+
             # Combine artists from both sources
-            user_mentioned_artists = user_mentioned_artists_from_tracks + user_mentioned_artists_from_names
+            user_mentioned_artists = (
+                user_mentioned_artists_from_tracks + user_mentioned_artists_from_names
+            )
 
             anchor_tracks = state.metadata.get("anchor_tracks", [])
             anchor_artists = [

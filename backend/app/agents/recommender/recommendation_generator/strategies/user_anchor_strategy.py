@@ -1,12 +1,13 @@
 """User anchor strategy for recommendations based on user-mentioned tracks."""
 
 import asyncio
-import structlog
 from typing import Any, Dict, List, Optional, Tuple
 
+import structlog
+
 from ....states.agent_state import AgentState
-from ...utils.temporal_filter import check_temporal_match
 from ...utils.config import config
+from ...utils.temporal_filter import check_temporal_match
 from .base_strategy import RecommendationStrategy
 
 logger = structlog.get_logger(__name__)

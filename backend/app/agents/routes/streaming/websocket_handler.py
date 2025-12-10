@@ -7,9 +7,9 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from ....core.constants import PlaylistStatus
 from ...workflows.workflow_manager import WorkflowManager
+from ..serializers import serialize_workflow_state
 from .streaming_utils import is_forward_progress
 from .websocket_auth import authenticate_websocket
-from ..serializers import serialize_workflow_state
 
 logger = structlog.get_logger(__name__)
 

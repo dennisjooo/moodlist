@@ -5,9 +5,10 @@ that require special handling to avoid hitting rate limits.
 """
 
 import asyncio
-import structlog
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 

@@ -1,21 +1,20 @@
 """Playlist repository for playlist-specific database operations."""
 
-from typing import List, Optional, Dict, Iterable, Any, Tuple
-from datetime import datetime, timezone
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import structlog
-from sqlalchemy import select, and_, asc, desc, func, or_, String, literal, cast, not_
-from sqlalchemy.orm import selectinload
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import String, and_, asc, cast, desc, func, literal, not_, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
-
-from app.models.playlist import Playlist
-from app.repositories.base_repository import BaseRepository
-from app.core.exceptions import InternalServerError, ValidationException
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import selectinload
 
 # Import cache manager for query result caching
 from app.agents.core.cache import cache_manager
+from app.core.exceptions import InternalServerError, ValidationException
+from app.models.playlist import Playlist
+from app.repositories.base_repository import BaseRepository
 
 logger = structlog.get_logger(__name__)
 
@@ -655,8 +654,9 @@ class PlaylistRepository(BaseRepository[Playlist]):
             True if deleted, False if not found
         """
         try:
-            from sqlalchemy import update
             from datetime import datetime, timezone
+
+            from sqlalchemy import update
 
             query = (
                 update(Playlist)
@@ -1012,6 +1012,7 @@ class PlaylistRepository(BaseRepository[Playlist]):
         """
         try:
             from datetime import datetime, timezone
+
             from app.core.constants import PlaylistStatus
 
             # Build playlist data

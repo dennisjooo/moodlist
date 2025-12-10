@@ -3,18 +3,18 @@
 import asyncio
 import json
 import os
-import structlog
 import uuid
-from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+import structlog
 
 from ...core.config import settings
 from ..core.base_agent import BaseAgent
 from ..states.agent_state import AgentState, RecommendationStatus
 from ..tools.agent_tools import AgentTools
-from .workflow_state_manager import WorkflowStateManager, StateChangeCallback
 from .workflow_executor import WorkflowExecutor
-
+from .workflow_state_manager import StateChangeCallback, WorkflowStateManager
 
 logger = structlog.get_logger(__name__)
 

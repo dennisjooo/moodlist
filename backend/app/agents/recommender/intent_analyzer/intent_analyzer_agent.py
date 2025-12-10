@@ -3,17 +3,17 @@
 Refactored for better separation of concerns.
 """
 
-import structlog
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
+import structlog
 from langchain_core.language_models.base import BaseLanguageModel
 
 from ...core.base_agent import BaseAgent
 from ...states.agent_state import AgentState, RecommendationStatus
 from ..utils.llm_response_parser import LLMResponseParser
-from .prompts import get_intent_analysis_prompt
-from .intent_validator import IntentValidator
 from .intent_fallback import IntentFallbackAnalyzer
+from .intent_validator import IntentValidator
+from .prompts import get_intent_analysis_prompt
 
 logger = structlog.get_logger(__name__)
 

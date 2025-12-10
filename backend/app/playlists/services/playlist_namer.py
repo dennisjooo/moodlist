@@ -1,10 +1,10 @@
 """Playlist namer component for generating creative playlist names."""
 
-import structlog
 import random
 import re
 from typing import Optional
 
+import structlog
 from langchain_core.language_models.base import BaseLanguageModel
 
 from .prompts import get_playlist_naming_prompt

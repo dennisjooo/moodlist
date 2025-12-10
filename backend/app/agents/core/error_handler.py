@@ -1,13 +1,12 @@
 """Enhanced error handling for the agentic system."""
 
-import structlog
 import traceback
-from typing import Any, Dict, Optional
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Any, Dict, Optional
 
+import structlog
 from fastapi import HTTPException
-
 
 logger = structlog.get_logger(__name__)
 

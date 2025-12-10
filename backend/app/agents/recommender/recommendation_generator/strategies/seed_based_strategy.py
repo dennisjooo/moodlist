@@ -1,16 +1,17 @@
 """Strategy for generating recommendations from seed tracks."""
 
 import asyncio
-import structlog
 from typing import Any, Dict, List
 
-from ....tools.reccobeat_service import RecoBeatService
+import structlog
+
 from ....states.agent_state import AgentState
+from ....tools.reccobeat_service import RecoBeatService
 from ...utils import TrackRecommendationFactory
 from ...utils.config import config
 from ..handlers.audio_features import AudioFeaturesHandler
-from ..handlers.track_filter import TrackFilter
 from ..handlers.scoring import ScoringEngine
+from ..handlers.track_filter import TrackFilter
 from .base_strategy import RecommendationStrategy
 
 logger = structlog.get_logger(__name__)

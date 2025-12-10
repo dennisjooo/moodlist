@@ -1,32 +1,32 @@
 import hashlib
-import structlog
-import jwt
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import jwt
+import structlog
 from fastapi import Depends, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.security import verify_token
-from app.core.exceptions import (
-    UnauthorizedException,
-    InternalServerError,
-    SpotifyAuthError,
-    RateLimitException,
-)
 from app.clients import SpotifyAPIClient
+from app.core.config import settings
+from app.core.exceptions import (
+    InternalServerError,
+    RateLimitException,
+    SpotifyAuthError,
+    UnauthorizedException,
+)
+from app.dependencies import (
+    get_quota_service,
+    get_session_repository,
+    get_user_repository,
+)
 from app.models.session import Session
 from app.models.user import User
-from app.core.config import settings
-from app.repositories.user_repository import UserRepository
 from app.repositories.session_repository import SessionRepository
+from app.repositories.user_repository import UserRepository
 from app.services.quota_service import QuotaService
-from app.dependencies import (
-    get_user_repository,
-    get_session_repository,
-    get_quota_service,
-)
 
 logger = structlog.get_logger(__name__)
 security = HTTPBearer(auto_error=False)

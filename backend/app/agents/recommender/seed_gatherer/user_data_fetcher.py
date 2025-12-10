@@ -13,7 +13,6 @@ import structlog
 from ...states.agent_state import AgentState
 from ...tools.spotify_service import SpotifyService
 
-
 logger = structlog.get_logger(__name__)
 
 
@@ -55,7 +54,9 @@ class UserDataFetcher:
             logger.info(f"Using {len(remix_tracks)} remix tracks as seed source")
             # Optimization: Limit remix tracks to reduce enrichment overhead
             if len(remix_tracks) > 30:
-                logger.info(f"Limiting remix tracks from {len(remix_tracks)} to 30 for processing")
+                logger.info(
+                    f"Limiting remix tracks from {len(remix_tracks)} to 30 for processing"
+                )
                 top_tracks = remix_tracks[:30]
             else:
                 top_tracks = remix_tracks
@@ -87,20 +88,25 @@ class UserDataFetcher:
         Returns:
             Merged track list with user-mentioned tracks at the beginning
         """
-        user_mentioned_tracks_full = state.metadata.get("user_mentioned_tracks_full", [])
+        user_mentioned_tracks_full = state.metadata.get(
+            "user_mentioned_tracks_full", []
+        )
         if not user_mentioned_tracks_full:
             return top_tracks
 
         # Deduplicate by track ID
         existing_track_ids = {track["id"] for track in top_tracks if track.get("id")}
         new_user_tracks = [
-            track for track in user_mentioned_tracks_full
+            track
+            for track in user_mentioned_tracks_full
             if track.get("id") and track["id"] not in existing_track_ids
         ]
 
         if new_user_tracks:
             # Add user-mentioned tracks to the beginning (higher priority)
-            logger.info(f"Added {len(new_user_tracks)} user-mentioned tracks to seed pool")
+            logger.info(
+                f"Added {len(new_user_tracks)} user-mentioned tracks to seed pool"
+            )
             return new_user_tracks + top_tracks
 
         return top_tracks

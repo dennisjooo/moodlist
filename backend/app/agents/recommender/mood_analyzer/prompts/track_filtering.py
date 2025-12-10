@@ -1,6 +1,6 @@
 """Prompts for LLM-based track and artist filtering."""
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 
 def get_artist_validation_prompt(

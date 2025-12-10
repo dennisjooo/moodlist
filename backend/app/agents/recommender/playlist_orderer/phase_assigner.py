@@ -1,7 +1,8 @@
 """Phase assignment logic for playlist ordering."""
 
-import structlog
 from typing import Any, Dict, List
+
+import structlog
 
 from ...states.agent_state import TrackRecommendation
 

@@ -1,13 +1,13 @@
 """Token service for token refresh and validation logic."""
 
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Any
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict
 
 import structlog
 
 from app.clients.spotify_client import SpotifyAPIClient
-from app.repositories.user_repository import UserRepository
 from app.core.exceptions import ValidationException
+from app.repositories.user_repository import UserRepository
 
 logger = structlog.get_logger(__name__)
 

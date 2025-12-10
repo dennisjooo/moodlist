@@ -1,7 +1,8 @@
 """Temporal filtering utilities for track recommendations."""
 
-import structlog
 from typing import Any, Dict, Optional, Tuple
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 

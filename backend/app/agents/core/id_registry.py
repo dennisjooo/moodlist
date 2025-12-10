@@ -4,9 +4,10 @@ Maintains a local registry of Spotify IDs that are known to be missing
 or invalid in RecoBeat to skip futile API calls.
 """
 
-import structlog
-from typing import Optional
 from datetime import datetime, timezone
+from typing import Optional
+
+import structlog
 
 from .cache import cache_manager
 

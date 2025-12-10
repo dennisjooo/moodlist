@@ -2,8 +2,8 @@
 
 import logging
 import logging.config
-from typing import Dict, Any
 from datetime import datetime, timezone
+from typing import Any, Dict
 
 
 def setup_agent_logging(

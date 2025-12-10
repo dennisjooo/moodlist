@@ -4,7 +4,7 @@ This module provides utilities for parsing and formatting track data
 from Spotify API responses into a consistent format.
 """
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 
 def parse_track_data(track_data: Dict[str, Any]) -> Dict[str, Any]:

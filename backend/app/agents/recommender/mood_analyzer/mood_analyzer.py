@@ -1,18 +1,16 @@
 """Mood analyzer agent for understanding user mood prompts."""
 
-import structlog
 from typing import Optional
 
+import structlog
 from langchain_core.language_models.base import BaseLanguageModel
 
 from ...core.base_agent import BaseAgent
 from ...states.agent_state import AgentState, RecommendationStatus
-from . import (
-    MoodAnalysisEngine,
-    FeatureExtractor,
-    PlaylistTargetPlanner,
-    KeywordExtractor,
-)
+from .analysis import MoodAnalysisEngine
+from .features import FeatureExtractor
+from .planning import PlaylistTargetPlanner
+from .text import KeywordExtractor
 
 logger = structlog.get_logger(__name__)
 

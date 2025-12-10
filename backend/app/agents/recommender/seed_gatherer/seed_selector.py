@@ -1,7 +1,8 @@
 """Seed selector for choosing the best tracks as seeds."""
 
-import structlog
 from typing import Any, Dict, List, Optional
+
+import structlog
 
 from .feature_matcher import FeatureMatcher
 

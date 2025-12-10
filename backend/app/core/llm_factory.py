@@ -1,6 +1,7 @@
 """Factory for creating logged LLM instances."""
 
 from typing import Optional
+
 from langchain_openai import ChatOpenAI
 
 from app.core.config import settings

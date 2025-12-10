@@ -1,7 +1,8 @@
 """Feature extractor for audio feature extraction and weighting."""
 
-import structlog
 from typing import Any, Dict
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 

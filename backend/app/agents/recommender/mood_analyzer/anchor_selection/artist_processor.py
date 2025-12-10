@@ -1,8 +1,9 @@
 """Artist processing utilities for anchor track selection."""
 
 import asyncio
-import structlog
 from typing import Any, Dict, List, Optional
+
+import structlog
 
 from ...utils.config import config
 from .track_processor import TrackProcessor

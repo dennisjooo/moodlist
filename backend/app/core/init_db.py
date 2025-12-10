@@ -12,8 +12,9 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from app.core.database import engine, Base  # noqa: E402
 import structlog  # noqa: E402
+
+from app.core.database import Base, engine  # noqa: E402
 
 logger = structlog.get_logger(__name__)
 

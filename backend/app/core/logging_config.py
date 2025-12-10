@@ -1,8 +1,9 @@
 """Central logging configuration for the application."""
 
 import logging
-import sys
 import os
+import sys
+
 import structlog
 
 

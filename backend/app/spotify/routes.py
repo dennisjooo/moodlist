@@ -1,20 +1,20 @@
+import httpx
+import structlog
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-import structlog
-import httpx
 
-from app.core.database import get_db
+from app.auth.dependencies import refresh_spotify_token_if_expired, require_auth
+from app.clients import SpotifyAPIClient
 from app.core.config import settings
 from app.core.constants import SpotifyEndpoints
+from app.core.database import get_db
 from app.core.exceptions import (
-    ValidationException,
     InternalServerError,
-    SpotifyAuthError,
     SpotifyAPIException,
+    SpotifyAuthError,
+    ValidationException,
 )
-from app.clients import SpotifyAPIClient
 from app.models.user import User
-from app.auth.dependencies import require_auth, refresh_spotify_token_if_expired
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()

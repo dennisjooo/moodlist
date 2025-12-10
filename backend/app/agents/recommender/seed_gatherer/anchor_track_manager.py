@@ -15,7 +15,6 @@ from ...core.cache import cache_manager
 from ...states.agent_state import AgentState
 from ..mood_analyzer.anchor_selection import AnchorTrackSelector
 
-
 logger = structlog.get_logger(__name__)
 
 

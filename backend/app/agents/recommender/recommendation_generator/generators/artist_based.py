@@ -1,13 +1,14 @@
 """Artist-based recommendation generator."""
 
-import structlog
 from typing import Any, Dict, List, Optional
 
+import structlog
+
 from ....states.agent_state import AgentState, TrackRecommendation
-from ....tools.spotify_service import SpotifyService
 from ....tools.reccobeat_service import RecoBeatService
-from ..handlers.scoring import ScoringEngine
+from ....tools.spotify_service import SpotifyService
 from ..handlers.artist_pipeline import ArtistRecommendationPipeline
+from ..handlers.scoring import ScoringEngine
 
 logger = structlog.get_logger(__name__)
 

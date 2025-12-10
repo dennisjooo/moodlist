@@ -6,18 +6,19 @@ import pickle
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse, urlunparse
+
 import structlog
 from tenacity import (
+    before_sleep_log,
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
-    before_sleep_log,
 )
 
 try:
     import redis.asyncio as redis
-    from redis.exceptions import RedisError, ConnectionError, TimeoutError
+    from redis.exceptions import ConnectionError, RedisError, TimeoutError
 
     REDIS_AVAILABLE = True
 except ImportError:

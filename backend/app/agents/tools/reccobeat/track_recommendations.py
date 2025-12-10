@@ -1,15 +1,14 @@
 """RecoBeat track recommendations tool."""
 
 import asyncio
-import structlog
 from typing import Dict, List, Optional, Type
 
+import structlog
 from pydantic import BaseModel, Field
 
-from ...states.agent_state import TrackRecommendation
 from ...core.seed_guardrails import SeedGuardrails
+from ...states.agent_state import TrackRecommendation
 from ..agent_tools import RateLimitedTool, ToolResult
-
 
 logger = structlog.get_logger(__name__)
 

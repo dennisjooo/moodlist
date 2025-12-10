@@ -1,26 +1,25 @@
 """Base repository class with common database operations."""
 
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar, List, Optional, Any, Dict
+from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 import structlog
-
+from sqlalchemy import and_, asc, delete, desc, func, select
+from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, and_, desc, asc, func
 from sqlalchemy.orm import selectinload
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError, OperationalError, DBAPIError
 from tenacity import (
+    before_sleep_log,
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
-    before_sleep_log,
 )
 
 from app.core.exceptions import (
+    InternalServerError,
     NotFoundException,
     ValidationException,
-    InternalServerError,
 )
 
 T = TypeVar("T")

@@ -1,8 +1,9 @@
 """User-mentioned track search handler."""
 
 import asyncio
+from typing import Any, Dict, List, Optional, Tuple
+
 import structlog
-from typing import List, Dict, Any, Optional, Tuple
 
 logger = structlog.get_logger(__name__)
 

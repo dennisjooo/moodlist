@@ -1,15 +1,15 @@
 """Artist discovery component for Spotify artist search and filtering."""
 
 import asyncio
-import structlog
 from collections import Counter
 from typing import Any, Dict, List, Optional, Set
 
+import structlog
 from langchain_core.language_models.base import BaseLanguageModel
 
-from ...utils.llm_response_parser import LLMResponseParser
-from ...utils.config import config
 from ...utils.artist_utils import ArtistDeduplicator
+from ...utils.config import config
+from ...utils.llm_response_parser import LLMResponseParser
 from ...utils.regional_filter import RegionalFilter
 from ..prompts import (
     get_artist_filtering_prompt,

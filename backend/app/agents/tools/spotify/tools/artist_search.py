@@ -1,18 +1,17 @@
 """Spotify artist search and discovery tools."""
 
 import asyncio
-import structlog
-from typing import List, Type, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Type
 
+import structlog
 from pydantic import BaseModel, Field
 
 from ...agent_tools import RateLimitedTool, ToolResult
-from ..utils.rate_limiting import wait_for_artist_top_tracks_rate_limit
-from ..utils.track_parsing import parse_track_data
-from ..utils.params_utils import build_market_params, get_market_label
 from ..utils.album_operations import get_artist_albums, sample_album_tracks
+from ..utils.params_utils import build_market_params, get_market_label
+from ..utils.rate_limiting import wait_for_artist_top_tracks_rate_limit
 from ..utils.track_operations import search_artist_tracks
-
+from ..utils.track_parsing import parse_track_data
 
 logger = structlog.get_logger(__name__)
 

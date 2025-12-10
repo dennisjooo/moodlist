@@ -1,7 +1,7 @@
 """Type definitions for anchor track selection."""
 
-from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 
 @dataclass

@@ -56,9 +56,9 @@ def deduplicate_track_recommendations(
         title_artist_key = _normalize_title_artist_key(rec.track_name, rec.artists)
 
         is_duplicate = (
-            rec.track_id in seen_track_ids or
-            (spotify_uri and spotify_uri in seen_spotify_uris) or
-            title_artist_key in seen_title_artist_keys
+            rec.track_id in seen_track_ids
+            or (spotify_uri and spotify_uri in seen_spotify_uris)
+            or title_artist_key in seen_title_artist_keys
         )
 
         if is_duplicate:

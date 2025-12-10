@@ -1,8 +1,9 @@
 """Whitelist checking utilities for Spotify dev mode."""
 
-import structlog
 from typing import Optional
-from sqlalchemy import select, or_
+
+import structlog
+from sqlalchemy import or_, select
 
 from app.core.config import settings
 from app.core.exceptions import SpotifyAuthError

@@ -1,15 +1,14 @@
 """Base agent class for the mood-based playlist generation system."""
 
-import structlog
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
+import structlog
 from langchain_core.language_models.base import BaseLanguageModel
 from langchain_core.tools import BaseTool
 
 from ..states.agent_state import AgentState
-
 
 logger = structlog.get_logger(__name__)
 

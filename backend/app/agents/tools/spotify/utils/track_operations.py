@@ -4,11 +4,12 @@ This module provides utilities for fetching track information,
 separated from the main artist search tool for better modularity.
 """
 
-import structlog
-from typing import Dict, Any, Optional, Callable
+from typing import Any, Callable, Dict, Optional
 
-from .track_parsing import parse_track_data
+import structlog
+
 from .params_utils import build_market_params
+from .track_parsing import parse_track_data
 
 logger = structlog.get_logger(__name__)
 

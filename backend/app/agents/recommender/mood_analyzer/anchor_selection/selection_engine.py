@@ -1,13 +1,14 @@
 """Main anchor selection engine coordinating all components."""
 
 import asyncio
-import structlog
 from typing import Any, Dict, List, Optional, Tuple
 
+import structlog
+
 from ...utils.config import config
-from .track_processor import TrackProcessor
 from .artist_processor import ArtistProcessor
 from .llm_services import LLMServices
+from .track_processor import TrackProcessor
 
 logger = structlog.get_logger(__name__)
 

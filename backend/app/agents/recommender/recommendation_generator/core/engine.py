@@ -1,14 +1,15 @@
 """Recommendation generation engine."""
 
 import asyncio
-import structlog
 from typing import Any, Dict, List
 
+import structlog
+
+from ....states.agent_state import AgentState
 from ....tools.reccobeat_service import RecoBeatService
 from ....tools.spotify_service import SpotifyService
-from ....states.agent_state import AgentState
-from ..generators.seed_based import SeedBasedGenerator
 from ..generators.artist_based import ArtistBasedGenerator
+from ..generators.seed_based import SeedBasedGenerator
 from ..handlers.anchor_track import AnchorTrackHandler
 
 logger = structlog.get_logger(__name__)

@@ -1,12 +1,11 @@
 """Spotify track search tools."""
 
-import structlog
 from typing import Optional, Type
 
+import structlog
 from pydantic import BaseModel, Field
 
 from ...agent_tools import RateLimitedTool, ToolResult
-
 
 logger = structlog.get_logger(__name__)
 

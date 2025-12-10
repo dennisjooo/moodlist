@@ -1,7 +1,8 @@
 """Playlist API schemas for requests, responses, and data projections."""
 
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 

@@ -1,15 +1,16 @@
-import time
 import json
+import time
+from typing import Any, Callable, Dict, Optional
+
 import jwt
-from typing import Callable, Optional, Dict, Any
-from fastapi import Request, Response, HTTPException
+import structlog
+from fastapi import HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
-import structlog
 
-from app.models.user import User
 from app.auth.security import verify_token
+from app.models.user import User
 from app.repositories.user_repository import UserRepository
 
 logger = structlog.get_logger(__name__)

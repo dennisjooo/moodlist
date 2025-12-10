@@ -1,16 +1,17 @@
 """Repository for LLM invocation logging and querying."""
 
-from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
 import structlog
-from sqlalchemy import select, and_, desc, func as sql_func
-from sqlalchemy.orm import selectinload
+from sqlalchemy import and_, desc, select
+from sqlalchemy import func as sql_func
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import selectinload
 
+from app.core.exceptions import InternalServerError
 from app.models.llm_invocation import LLMInvocation
 from app.repositories.base_repository import BaseRepository
-from app.core.exceptions import InternalServerError
 
 logger = structlog.get_logger(__name__)
 

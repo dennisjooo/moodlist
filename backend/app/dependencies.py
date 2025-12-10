@@ -1,22 +1,22 @@
 """Dependency injection functions for FastAPI routes."""
 
 from typing import Optional
+
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.clients.spotify_client import SpotifyAPIClient
 from app.core.database import get_db
-from app.repositories.playlist_repository import PlaylistRepository
-from app.repositories.user_repository import UserRepository
-from app.repositories.session_repository import SessionRepository
 from app.repositories.invocation_repository import InvocationRepository
 from app.repositories.llm_invocation_repository import LLMInvocationRepository
-from app.clients.spotify_client import SpotifyAPIClient
+from app.repositories.playlist_repository import PlaylistRepository
+from app.repositories.session_repository import SessionRepository
+from app.repositories.user_repository import UserRepository
+from app.services.auth_service import AuthService
 from app.services.playlist_service import PlaylistService
 from app.services.quota_service import QuotaService
 from app.services.token_service import TokenService
 from app.services.workflow_state_service import WorkflowStateService
-from app.services.auth_service import AuthService
-
 
 # Singletons
 _spotify_client: Optional[SpotifyAPIClient] = None

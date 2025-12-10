@@ -1,28 +1,28 @@
 """Wrapper for LangChain LLMs to log invocations to database."""
 
 import time
-from typing import Any, Dict, List, Optional, Union
 from contextvars import ContextVar
+from typing import Any, Dict, List, Optional, Union
 
 import structlog
-from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import BaseMessage, AIMessage
-from langchain_core.outputs import ChatResult, ChatGeneration
 from langchain_core.callbacks import CallbackManagerForLLMRun
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-    before_sleep_log,
-    wait_exponential_jitter,
-)
-from sqlalchemy.exc import OperationalError, DBAPIError
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 from openai import (
-    RateLimitError,
     APIConnectionError,
     APITimeoutError,
     InternalServerError,
+    RateLimitError,
+)
+from sqlalchemy.exc import DBAPIError, OperationalError
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+    wait_exponential_jitter,
 )
 
 from app.repositories.llm_invocation_repository import LLMInvocationRepository
@@ -205,7 +205,7 @@ class LoggingChatModel(BaseChatModel):
             return input_messages
 
         # Convert dictionaries to BaseMessage objects
-        from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
         messages = []
         for msg_dict in input_messages:

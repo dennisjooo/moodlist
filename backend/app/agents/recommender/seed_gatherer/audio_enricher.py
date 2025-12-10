@@ -1,7 +1,8 @@
 """Audio enricher for enhancing tracks with audio features from external services."""
 
-import structlog
 from typing import Any, Dict, List
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 

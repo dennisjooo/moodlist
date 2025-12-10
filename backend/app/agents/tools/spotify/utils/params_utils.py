@@ -4,7 +4,7 @@ This module provides helper functions for building request parameters
 consistently across the codebase, especially for optional parameters like market.
 """
 
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 
 def build_market_params(

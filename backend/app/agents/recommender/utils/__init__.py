@@ -1,11 +1,11 @@
 """Shared utilities for the recommender package."""
 
-from .llm_response_parser import LLMResponseParser
-from .token_service import TokenService
 from .config import RecommenderConfig, config
-from .track_recommendation_factory import TrackRecommendationFactory
+from .llm_response_parser import LLMResponseParser
 from .recommendation_validator import RecommendationValidator, ValidationResult
+from .token_service import TokenService
 from .track_deduplicator import deduplicate_track_recommendations
+from .track_recommendation_factory import TrackRecommendationFactory
 
 __all__ = [
     "LLMResponseParser",

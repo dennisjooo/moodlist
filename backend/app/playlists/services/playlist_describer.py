@@ -1,9 +1,9 @@
 """Playlist describer component for generating playlist descriptions."""
 
-import structlog
 import re
 from typing import Optional
 
+import structlog
 from langchain_core.language_models.base import BaseLanguageModel
 
 from .prompts import get_playlist_description_prompt

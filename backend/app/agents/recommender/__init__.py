@@ -2,9 +2,9 @@
 
 from .intent_analyzer import IntentAnalyzerAgent
 from .mood_analyzer import MoodAnalyzerAgent
-from .seed_gatherer import SeedGathererAgent
-from .recommendation_generator import RecommendationGeneratorAgent
 from .orchestrator import OrchestratorAgent
+from .recommendation_generator import RecommendationGeneratorAgent
+from .seed_gatherer import SeedGathererAgent
 
 __all__ = [
     "IntentAnalyzerAgent",

@@ -1,6 +1,6 @@
 """Playlist summarizer component for generating playlist summaries."""
 
-from typing import Any, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict
 
 if TYPE_CHECKING:
     from ...agents.states.agent_state import AgentState

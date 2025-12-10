@@ -1,6 +1,6 @@
 import ast
 import json
-from typing import List, Optional, Dict, Union
+from typing import Dict, List, Optional, Union
 from urllib.parse import urlparse
 
 from pydantic import Field, field_validator

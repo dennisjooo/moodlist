@@ -1,15 +1,15 @@
 """Centralized token management service for Spotify API access."""
 
-import structlog
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
+import structlog
 from sqlalchemy import select
 
+from ....clients.spotify_client import SpotifyAPIClient
 from ....core.database import async_session_factory
 from ....models.user import User
-from ....clients.spotify_client import SpotifyAPIClient
 from ...states.agent_state import AgentState
 
 logger = structlog.get_logger(__name__)

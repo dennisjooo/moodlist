@@ -1,11 +1,12 @@
 """Strategy for generating recommendations from mood-matched artists."""
 
-import structlog
 from typing import Any, Dict, List, Optional
 
+import structlog
+
+from ....states.agent_state import AgentState, TrackRecommendation
 from ....tools.reccobeat_service import RecoBeatService
 from ....tools.spotify_service import SpotifyService
-from ....states.agent_state import AgentState, TrackRecommendation
 from ...utils import TrackRecommendationFactory
 from ...utils.audio_feature_matcher import AudioFeatureMatcher
 from ..handlers.artist_pipeline import ArtistRecommendationPipeline
@@ -161,7 +162,7 @@ class ArtistDiscoveryStrategy(RecommendationStrategy):
                 for artist in intent_analysis.get("user_mentioned_artists", [])
                 if isinstance(artist, str)
             }
-            
+
             if user_mentioned_artists:
                 # Check if any of the track's artists match user-mentioned artists
                 track_artists = {artist.lower() for artist in artists}

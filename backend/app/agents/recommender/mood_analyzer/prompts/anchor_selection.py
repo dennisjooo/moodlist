@@ -1,6 +1,6 @@
 """Prompts for LLM-guided anchor track selection."""
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 
 def get_anchor_strategy_prompt(

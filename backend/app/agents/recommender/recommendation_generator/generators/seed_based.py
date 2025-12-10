@@ -1,15 +1,16 @@
 """Seed-based recommendation generator."""
 
 import asyncio
-import structlog
 from typing import Any, Dict, List, Optional
+
+import structlog
 
 from ....states.agent_state import AgentState, TrackRecommendation
 from ....tools.reccobeat_service import RecoBeatService
 from ...utils.config import config
 from ..handlers.audio_features import AudioFeaturesHandler
-from ..handlers.track_filter import TrackFilter
 from ..handlers.scoring import ScoringEngine
+from ..handlers.track_filter import TrackFilter
 
 logger = structlog.get_logger(__name__)
 

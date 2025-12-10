@@ -1,15 +1,15 @@
 """Quality evaluator for assessing playlist quality against mood criteria."""
 
-import structlog
 from typing import Any, Dict, Optional
 
+import structlog
 from langchain_core.language_models.base import BaseLanguageModel
 
 from ...states.agent_state import AgentState
+from ..recommendation_generator.handlers.diversity import DiversityManager
 from ..utils.llm_response_parser import LLMResponseParser
 from .cohesion_calculator import CohesionCalculator
 from .prompts import get_quality_evaluation_prompt
-from ..recommendation_generator.handlers.diversity import DiversityManager
 
 logger = structlog.get_logger(__name__)
 

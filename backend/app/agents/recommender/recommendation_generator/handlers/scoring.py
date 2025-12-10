@@ -1,8 +1,9 @@
 """Scoring engine for confidence calculation and mood matching."""
 
 import math
-import structlog
 from typing import Any, Dict, Optional
+
+import structlog
 
 from ....states.agent_state import AgentState
 

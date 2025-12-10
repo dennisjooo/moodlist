@@ -4,10 +4,10 @@ import structlog
 from fastapi import WebSocket
 
 from ....core.database import async_session_factory
+from ....models.user import User
 from ....repositories.playlist_repository import PlaylistRepository
 from ....repositories.session_repository import SessionRepository
 from ....repositories.user_repository import UserRepository
-from ....models.user import User
 
 logger = structlog.get_logger(__name__)
 

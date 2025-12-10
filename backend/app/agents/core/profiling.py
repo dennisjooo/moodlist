@@ -7,11 +7,12 @@ and detect regressions.
 import asyncio
 import functools
 import time
-import structlog
-from contextlib import asynccontextmanager, contextmanager
-from typing import Any, Callable, Dict, List, Optional
-from datetime import datetime, timezone
 from collections import defaultdict
+from contextlib import asynccontextmanager, contextmanager
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, List, Optional
+
+import structlog
 
 from .cache import cache_manager
 
