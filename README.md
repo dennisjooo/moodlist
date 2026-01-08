@@ -264,5 +264,4 @@ Once the backend is running, visit:
 - [RecoBeat](https://reccobeat.com/) for advanced music recommendations
 - [Tailwind CSS](https://tailwindcss.com/) & [Radix UI](https://www.radix-ui.com/) for beautiful UI components
 - [shadcn/ui](https://ui.shadcn.com/) for accessible and customizable React components
-- [Magic UI](https://magicui.design/) for animated components and effects
-- [ReactBits](https://reactbits.dev/) for React and Next.js tutorials and resources
+- [Magic UI](https://magicui.design/) and [ReactBits](https://reactbits.dev/) for animated components and effects
